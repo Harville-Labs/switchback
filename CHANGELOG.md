@@ -19,6 +19,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Requires Bun 1.4+
 
 ### Fixed
+- **Security:** on Windows, file tools accepted paths outside the workspace (the escape check assumed `/` separators)
 - The `bash` tool now works on Windows: Git Bash when installed (never the WSL launcher), otherwise PowerShell, otherwise cmd; the system prompt names the shell
 - Sessions were kept in memory only in the CLI; they now persist to the data directory
 - Session titles were lost on disk (the header was written before the first prompt)

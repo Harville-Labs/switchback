@@ -2,8 +2,9 @@
 import { fileURLToPath } from 'node:url';
 import { configJsonSchema } from '@harness/engine';
 
-export const SCHEMA_PATH = new URL('../apps/vscode/schemas/config.schema.json', import.meta.url)
-  .pathname;
+export const SCHEMA_PATH = fileURLToPath(
+  new URL('../apps/vscode/schemas/config.schema.json', import.meta.url),
+);
 export const renderSchema = () => `${JSON.stringify(configJsonSchema(), null, 2)}\n`;
 
 if (import.meta.main) {

@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { ToolSpec } from '@harness/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
@@ -74,7 +74,8 @@ export function resolveInWorkspace(root: string, path: string): string {
   while (!existsSync(existing) && dirname(existing) !== existing) existing = dirname(existing);
   const canonical = resolve(realpathSync(existing), relative(existing, target));
   const rel = relative(realRoot, canonical);
-  if (rel === '..' || rel.startsWith(`..${'/'}`) || isAbsolute(rel)) {
+  // `relative` uses the platform separator (`..\` on Windows).
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw new ToolError(`path "${path}" is outside the workspace`);
   }
   return canonical;
