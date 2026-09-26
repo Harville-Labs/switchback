@@ -7,6 +7,7 @@
  * imports to the top of a compiled bundle, which would make every run fail, so
  * we replace the module with an empty stub instead.
  */
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const { values } = parseArgs({
@@ -18,7 +19,7 @@ const { values } = parseArgs({
 });
 
 const result = await Bun.build({
-  entrypoints: [new URL('../src/main.ts', import.meta.url).pathname],
+  entrypoints: [fileURLToPath(new URL('../src/main.ts', import.meta.url))],
   compile: {
     outfile: values.outfile,
     ...(values.target ? { target: values.target as Bun.Build.CompileTarget } : {}),
