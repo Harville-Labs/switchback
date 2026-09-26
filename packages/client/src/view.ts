@@ -36,6 +36,8 @@ export interface PendingPermission {
   sessionId: string;
   tool: string;
   summary: string;
+  /** Unified diff for edits. */
+  preview?: string;
 }
 
 export interface PendingEscalation {
@@ -117,6 +119,7 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
           sessionId: event.sessionId,
           tool: event.tool,
           summary: event.summary,
+          ...(event.preview ? { preview: event.preview } : {}),
         },
       ],
     };

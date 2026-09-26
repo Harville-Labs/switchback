@@ -488,8 +488,11 @@ export class Engine {
 
       let output: string;
       let isError = false;
-      if (!(await this.checkPermission(s, tool, parsed.data, signal))) {
-        output = 'The user denied this action. Do not retry it; ask the user how to proceed.';
+      const permission = await this.checkPermission(s, tool, parsed.data, ctx, signal);
+      if (!permission.allowed) {
+        output =
+          permission.error ??
+          'The user denied this action. Do not retry it; ask the user how to proceed.';
         isError = true;
       } else {
         try {
@@ -579,18 +582,31 @@ export class Engine {
   // Permissions and escalation prompts
   // -------------------------------------------------------------------------
 
+  /**
+   * Decide whether a tool call may run. `allowed: false` with an `error` means
+   * the call would fail anyway (found while building the preview), so the
+   * user is never asked about it.
+   */
   private async checkPermission(
     s: LiveSession,
     tool: Tool,
     input: unknown,
+    ctx: ToolContext,
     signal: AbortSignal,
-  ): Promise<boolean> {
-    if (tool.permission === 'none') return true;
+  ): Promise<{ allowed: boolean; error?: string }> {
+    if (tool.permission === 'none') return { allowed: true };
     const level = this.options.config.permissions[tool.permission];
-    if (level === 'allow' || this.alwaysAllowed.has(tool.permission)) return true;
-    if (level === 'deny') return false;
+    if (level === 'allow' || this.alwaysAllowed.has(tool.permission)) return { allowed: true };
+    if (level === 'deny') return { allowed: false };
     const mode = this.options.interaction ?? 'prompt';
-    if (mode !== 'prompt') return mode === 'approve';
+    if (mode !== 'prompt') return { allowed: mode === 'approve' };
+
+    let preview: string | undefined;
+    try {
+      preview = await tool.preview?.(input, ctx);
+    } catch (err) {
+      return { allowed: false, error: (err as Error).message };
+    }
 
     const requestId = `perm_${crypto.randomUUID().slice(0, 8)}`;
     const decision = await this.waitFor(
@@ -606,10 +622,11 @@ export class Engine {
           tool: tool.name,
           summary: tool.summarize(input),
           input,
+          ...(preview ? { preview } : {}),
         }),
     );
     if (decision === 'allow_always') this.alwaysAllowed.add(tool.permission);
-    return decision !== 'deny';
+    return { allowed: decision !== 'deny' };
   }
 
   private async askEscalation(

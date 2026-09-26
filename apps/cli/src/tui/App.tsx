@@ -16,7 +16,7 @@ import type {
   SessionSummary,
   UsageReport,
 } from '@harness/protocol';
-import { Box, Static, Text, useApp, useInput } from 'ink';
+import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -39,6 +39,7 @@ Keys: esc cancels the running turn; y/a/n answer permission prompts.`;
 
 export function App({ client, init, initialSession, initialRoute, warnings }: Props) {
   const { exit } = useApp();
+  const { stdout } = useStdout();
   const [session, setSession] = useState(initialSession);
   const [view, setView] = useState<ViewState>(() =>
     warnings.reduce((v, w) => addInfo(v, `agent skipped: ${w}`), initialView(initialSession.id)),
@@ -195,6 +196,9 @@ export function App({ client, init, initialSession, initialRoute, warnings }: Pr
           <Text>
             Allow <Text bold>{permission.summary}</Text>?
           </Text>
+          {permission.preview ? (
+            <DiffView diff={permission.preview} maxLines={Math.max(6, (stdout.rows ?? 30) - 12)} />
+          ) : null}
           <Text dimColor>[y] once [a] always this session [n] deny</Text>
         </Box>
       )}
@@ -247,6 +251,37 @@ function StatusBar({
           ? ` · today $${usage.budget.spentTodayUsd.toFixed(2)}${usage.budget.dailyUsd ? `/$${usage.budget.dailyUsd.toFixed(2)}` : ''} · saved ~$${usage.estimatedSavingsUsd.toFixed(2)}`
           : ''}
       </Text>
+    </Box>
+  );
+}
+
+/** Colored unified diff, cut to fit the terminal. */
+function DiffView({ diff, maxLines }: { diff: string; maxLines: number }) {
+  const lines = diff.split('\n').filter((l) => !l.startsWith('---') && !l.startsWith('+++'));
+  const shown = lines.slice(0, maxLines);
+  return (
+    <Box flexDirection="column" marginY={1}>
+      {shown.map((line, i) => (
+        <Text
+          // biome-ignore lint/suspicious/noArrayIndexKey: static snapshot of diff lines
+          key={i}
+          color={
+            line.startsWith('+')
+              ? 'green'
+              : line.startsWith('-')
+                ? 'red'
+                : line.startsWith('@@')
+                  ? 'cyan'
+                  : undefined
+          }
+          dimColor={!/^[-+@]/.test(line)}
+        >
+          {line || ' '}
+        </Text>
+      ))}
+      {lines.length > shown.length ? (
+        <Text dimColor>… {lines.length - shown.length} more lines</Text>
+      ) : null}
     </Box>
   );
 }

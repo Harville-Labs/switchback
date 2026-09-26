@@ -21,7 +21,7 @@ The `bash` tool runs with the workspace as its working directory but isn't sandb
 | `bash` | bash | `ask` |
 | (none) | task | always allowed; the subagent's own tools are checked individually |
 
-With `ask`, the engine emits `permission.requested` and waits. Clients offer:
+With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show in the prompt. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked. Clients offer:
 
 - **Allow once**: this call only.
 - **Always**: every call in this category for the rest of the engine's lifetime.

@@ -166,6 +166,52 @@ describe('Engine', () => {
     expect(events.some((e) => e.type === 'permission.requested')).toBe(true);
   });
 
+  test('edit permission prompts carry a unified diff preview', async () => {
+    const { engine, events } = setup(
+      [
+        {
+          toolCalls: [
+            { name: 'edit', input: { path: 'hello.txt', oldString: 'world', newString: 'there' } },
+          ],
+        },
+        { text: 'done' },
+      ],
+      [],
+      { config: { permissions: { edit: 'ask' } } },
+    );
+    engine.subscribe((e) => {
+      if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'allow_once');
+    });
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'edit it');
+    const req = events.find((e) => e.type === 'permission.requested');
+    expect(req && 'preview' in req && req.preview).toContain('-hello world\n+hello there');
+    expect(readFileSync(join(root, 'hello.txt'), 'utf8')).toBe('hello there\n');
+  });
+
+  test('an edit that would fail is reported to the model without asking the user', async () => {
+    const { engine, events, lp } = setup(
+      [
+        {
+          toolCalls: [
+            { name: 'edit', input: { path: 'hello.txt', oldString: 'nope', newString: 'x' } },
+          ],
+        },
+        { text: 'ok' },
+      ],
+      [],
+      { config: { permissions: { edit: 'ask' } } },
+    );
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'edit it');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    const result = lp.requests[1]?.messages.at(-1)?.parts[0] as {
+      content: string;
+      isError: boolean;
+    };
+    expect(result).toMatchObject({ isError: true, content: 'oldString not found in file' });
+  });
+
   test('denied tools return an error result to the model', async () => {
     const { engine, lp } = setup(
       [{ toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] }, { text: 'ok' }],

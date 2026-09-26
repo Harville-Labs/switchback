@@ -1,6 +1,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { ToolSpec } from '@harness/providers';
+import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
 
 /** Which permission setting governs a tool. `none` tools never prompt. */
@@ -31,6 +32,12 @@ export interface Tool<I = unknown> {
   mutating: boolean;
   /** One-line human summary for permission prompts and UI. */
   summarize(input: I): string;
+  /**
+   * What the call would change, as a unified diff, shown in permission
+   * prompts. Must not have side effects. Return undefined when there's
+   * nothing useful to show; throw ToolError when the call would fail anyway.
+   */
+  preview?(input: I, ctx: ToolContext): Promise<string | undefined>;
   run(input: I, ctx: ToolContext): Promise<string>;
 }
 
@@ -77,4 +84,16 @@ export function truncate(text: string, max = 30_000): string {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
   return `${head}\n\n[truncated ${text.length - max} characters]`;
+}
+
+/** Unified diff limited to a readable size for prompts. */
+export function diffPreview(path: string, before: string, after: string, maxLines = 400): string {
+  const patch = createTwoFilesPatch(`a/${path}`, `b/${path}`, before, after, undefined, undefined, {
+    context: 3,
+  });
+  // Drop the "Index:" / "====" preamble jsdiff emits; keep ---/+++ and hunks.
+  const lines = patch.split('\n').filter((l) => !l.startsWith('Index:') && !/^=+$/.test(l));
+  while (lines.at(-1) === '') lines.pop();
+  if (lines.length <= maxLines) return lines.join('\n');
+  return `${lines.slice(0, maxLines).join('\n')}\n… ${lines.length - maxLines} more diff lines`;
 }

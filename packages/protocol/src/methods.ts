@@ -160,6 +160,8 @@ export type EngineEvent =
       tool: string;
       summary: string;
       input: unknown;
+      /** Unified diff of what the call would change, for edits. */
+      preview?: string;
     } & SessionScoped)
   | ({
       type: 'escalation.requested';

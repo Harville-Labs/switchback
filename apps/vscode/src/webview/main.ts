@@ -42,6 +42,10 @@ app.innerHTML = `
   .info { opacity: .7; white-space: pre-wrap; }
   .prompt { border: 1px solid var(--vscode-focusBorder); border-radius: 4px; padding: 8px; margin: 6px 10px; }
   .prompt button { margin: 6px 6px 0 0; }
+  .diff { font-family: var(--vscode-editor-font-family); font-size: .85em; max-height: 45vh; overflow: auto; margin: 6px 0; white-space: pre; border: 1px solid var(--vscode-panel-border); }
+  .diff .add { background: var(--vscode-diffEditor-insertedLineBackground, rgba(0,160,0,.15)); }
+  .diff .del { background: var(--vscode-diffEditor-removedLineBackground, rgba(200,0,0,.15)); }
+  .diff .hunk { color: var(--vscode-textLink-foreground); opacity: .8; }
   footer { border-top: 1px solid var(--vscode-panel-border); padding: 6px 10px; }
   textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 56px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); padding: 6px; font: inherit; }
   .bar { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: .85em; opacity: .85; gap: 6px; }
@@ -103,6 +107,23 @@ function renderItem(item: ViewItem): string {
   }
 }
 
+function renderDiff(diff: string): string {
+  const rows = diff
+    .split('\n')
+    .filter((l) => !l.startsWith('---') && !l.startsWith('+++'))
+    .map((l) => {
+      const cls = l.startsWith('+')
+        ? 'add'
+        : l.startsWith('-')
+          ? 'del'
+          : l.startsWith('@@')
+            ? 'hunk'
+            : '';
+      return `<div class="${cls}">${esc(l) || '&nbsp;'}</div>`;
+    });
+  return `<div class="diff">${rows.join('')}</div>`;
+}
+
 function render() {
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.innerHTML = view.items.map(renderItem).join('');
@@ -111,7 +132,7 @@ function render() {
   const perm = view.permissions[0];
   const escl = view.escalations[0];
   prompts.innerHTML = perm
-    ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?<br><button data-perm="allow_once">Allow once</button><button data-perm="allow_always" class="secondary">Always this session</button><button data-perm="deny" class="secondary">Deny</button></div>`
+    ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${perm.preview ? renderDiff(perm.preview) : '<br>'}<button data-perm="allow_once">Allow once</button><button data-perm="allow_always" class="secondary">Always this session</button><button data-perm="deny" class="secondary">Deny</button></div>`
     : escl
       ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>? ${esc(escl.reason)}<br><button data-esc="1">Use remote</button><button data-esc="0" class="secondary">Stay local</button></div>`
       : '';

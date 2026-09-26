@@ -2,7 +2,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, relative } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
-import { defineTool, resolveInWorkspace, ToolError, truncate } from './tool.ts';
+import { defineTool, diffPreview, resolveInWorkspace, ToolError, truncate } from './tool.ts';
 
 const IGNORED = /(^|\/)(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)(\/|$)/;
 
@@ -50,6 +50,11 @@ export const writeTool = defineTool({
   permission: 'edit',
   mutating: true,
   summarize: (i) => `write ${i.path} (${i.content.length} chars)`,
+  async preview(input, ctx) {
+    const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
+    const before = await readFile(file, 'utf8').catch(() => '');
+    return diffPreview(input.path, before, input.content);
+  },
   async run(input, ctx) {
     const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
     await mkdir(dirname(file), { recursive: true });
@@ -57,6 +62,29 @@ export const writeTool = defineTool({
     return `wrote ${input.path}`;
   },
 });
+
+interface EditInput {
+  path: string;
+  oldString: string;
+  newString: string;
+  replaceAll?: boolean | undefined;
+}
+
+/** Read the file and compute the edited text, or throw the error the model should see. */
+async function applyEdit(input: EditInput, root: string) {
+  const file = resolveInWorkspace(root, input.path);
+  const before = await readFile(file, 'utf8').catch(() => {
+    throw new ToolError(`${input.path} does not exist`);
+  });
+  const count = before.split(input.oldString).length - 1;
+  if (count === 0) throw new ToolError('oldString not found in file');
+  if (count > 1 && !input.replaceAll)
+    throw new ToolError(`oldString matches ${count} times; add context or set replaceAll`);
+  const after = input.replaceAll
+    ? before.split(input.oldString).join(input.newString)
+    : before.replace(input.oldString, () => input.newString);
+  return { file, before, after, replacements: input.replaceAll ? count : 1 };
+}
 
 export const editTool = defineTool({
   name: 'edit',
@@ -71,20 +99,14 @@ export const editTool = defineTool({
   permission: 'edit',
   mutating: true,
   summarize: (i) => `edit ${i.path}`,
+  async preview(input, ctx) {
+    const { before, after } = await applyEdit(input, ctx.workspaceRoot);
+    return diffPreview(input.path, before, after);
+  },
   async run(input, ctx) {
-    const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
-    const text = await readFile(file, 'utf8').catch(() => {
-      throw new ToolError(`${input.path} does not exist`);
-    });
-    const count = text.split(input.oldString).length - 1;
-    if (count === 0) throw new ToolError('oldString not found in file');
-    if (count > 1 && !input.replaceAll)
-      throw new ToolError(`oldString matches ${count} times; add context or set replaceAll`);
-    const next = input.replaceAll
-      ? text.split(input.oldString).join(input.newString)
-      : text.replace(input.oldString, () => input.newString);
-    await writeFile(file, next);
-    return `edited ${input.path} (${input.replaceAll ? count : 1} replacement${count > 1 && input.replaceAll ? 's' : ''})`;
+    const { file, after, replacements } = await applyEdit(input, ctx.workspaceRoot);
+    await writeFile(file, after);
+    return `edited ${input.path} (${replacements} replacement${replacements > 1 ? 's' : ''})`;
   },
 });
 
