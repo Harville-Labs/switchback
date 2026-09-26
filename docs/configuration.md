@@ -7,22 +7,39 @@ Layers deep-merge in this order, with later layers winning:
 1. Built-in defaults (below)
 2. `~/.config/harness/config.json` (user; respects `XDG_CONFIG_HOME`)
 3. `.harness/config.json` in the workspace (project)
-4. Command-line layers (`--mock`)
+4. `--mock` (any command) then swaps every provider for a scripted mock
 
 Files are JSON with `//` and `/* */` comments allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `harness doctor` shows which files were loaded.
 
 `HARNESS_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/agents/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
+## Setting up
+
+```sh
+harness init              # interactive: detect local servers, choose models, budgets
+harness init --yes --local-model <name> --remote anthropic   # unattended
+harness config path       # where config files live and which exist
+harness config show       # effective merged config (secrets redacted)
+harness config edit       # open the user config in $EDITOR (--scope project for the project file)
+harness config schema     # JSON Schema for editor validation
+```
+
+`harness init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It merges into an existing file, keeping unrelated keys, and saves the previous version as `config.json.bak` (comments are not preserved). Every prompt has a flag; see `harness --help`.
+
+Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config.
+
+The VS Code extension validates both files against the schema and offers autocomplete. Other editors can use the output of `harness config schema`.
+
 ## Built-in defaults
+
+There is **no default local provider or model**. Until you configure one, turns route remotely and `doctor` reports the missing local model. The only defaults are Claude on the Anthropic API, so Claude Code agent aliases resolve:
 
 ```jsonc
 {
   "providers": {
-    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1", "tier": "local" },
     "anthropic": { "type": "anthropic" }
   },
   "models": {
-    "local":  { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 32768 },
     "remote": { "provider": "anthropic", "model": "claude-opus-5", "contextWindow": 1000000, "maxOutputTokens": 32000 },
     "opus":   { "provider": "anthropic", "model": "claude-opus-5", "contextWindow": 1000000, "maxOutputTokens": 32000 },
     "sonnet": { "provider": "anthropic", "model": "claude-sonnet-5", "contextWindow": 1000000, "maxOutputTokens": 32000 },
@@ -30,6 +47,12 @@ Files are JSON with `//` and `/* */` comments allowed. Any string of the form `{
   }
 }
 ```
+
+With no local model:
+
+- `auto` routing sends turns remote, and the route line says so.
+- Agents pinned to `local` (such as `explore`) route normally instead of failing.
+- `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `harness init`.
 
 ## Keys
 

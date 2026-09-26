@@ -12,6 +12,17 @@ const VERSION = '0.1.0';
 // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code variable syntax, not a JS template.
 const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
 
+/** The configured harness executable and leading args, with `${workspaceFolder}` expanded. */
+function harnessCommand(root: string): { command: string; args: string[] } {
+  const cfg = vscode.workspace.getConfiguration('harness');
+  // VS Code does not expand variables in extension settings; support the common one.
+  const expand = (v: string) => v.replaceAll(WORKSPACE_FOLDER_VAR, root);
+  return {
+    command: expand(cfg.get<string>('executablePath', 'harness')),
+    args: cfg.get<string[]>('executableArgs', []).map(expand),
+  };
+}
+
 class EngineConnection implements vscode.Disposable {
   client: HarnessClient | undefined;
   init: InitializeResult | undefined;
@@ -39,11 +50,8 @@ class EngineConnection implements vscode.Disposable {
   }
 
   async start(): Promise<void> {
-    const cfg = vscode.workspace.getConfiguration('harness');
-    // VS Code does not expand variables in extension settings; support the common one.
-    const expand = (v: string) => v.replaceAll(WORKSPACE_FOLDER_VAR, this.root);
-    const command = expand(cfg.get<string>('executablePath', 'harness'));
-    const args = [...cfg.get<string[]>('executableArgs', []).map(expand), 'serve', '--stdio'];
+    const { command, args: baseArgs } = harnessCommand(this.root);
+    const args = [...baseArgs, 'serve', '--stdio'];
     this.log.appendLine(`starting: ${command} ${args.join(' ')} (cwd ${this.root})`);
     const transport = spawnEngine({
       command,
@@ -226,6 +234,14 @@ export async function activate(context: vscode.ExtensionContext) {
     engine.onMessage((m) => chat.post(m));
     try {
       await engine.start();
+      // Local models are user-configured; nudge toward setup when there isn't one.
+      if (!engine.init?.models.some((m) => m.tier === 'local')) {
+        const pick = await vscode.window.showInformationMessage(
+          'Harness has no local model configured, so every turn runs remotely.',
+          'Set Up Models',
+        );
+        if (pick) vscode.commands.executeCommand('harness.runSetup');
+      }
     } catch (err) {
       const message = (err as Error).message;
       log.appendLine(`failed to start engine: ${message}`);
@@ -249,6 +265,25 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
     vscode.commands.registerCommand('harness.restartEngine', start),
+    vscode.commands.registerCommand('harness.runSetup', () => {
+      if (!root) return;
+      // Setup is interactive and shared with the CLI, so run `harness init` in a terminal
+      // and restart the engine when it closes to pick up the new config.
+      const { command, args } = harnessCommand(root);
+      const terminal = vscode.window.createTerminal({
+        name: 'Harness Setup',
+        cwd: root,
+        shellPath: command,
+        shellArgs: [...args, 'init'],
+      });
+      const sub = vscode.window.onDidCloseTerminal((t) => {
+        if (t !== terminal) return;
+        sub.dispose();
+        void start();
+      });
+      context.subscriptions.push(sub);
+      terminal.show();
+    }),
     vscode.commands.registerCommand('harness.showLogs', () => log.show()),
     vscode.commands.registerCommand('harness.setRoute', async () => {
       const pick = await vscode.window.showQuickPick(

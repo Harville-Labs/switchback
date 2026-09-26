@@ -19,7 +19,9 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | 4 | `context-overflow` | Estimated input tokens exceed `escalation.contextHeadroom` × the local model's `contextWindow` | remote (counts as an escalation) |
 | 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` model calls | remote |
 | 6 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
-| 7 | `default` | Nothing else matched | local |
+| 7 | `default` | Nothing else matched | local (remote if no local model is configured) |
+
+A tier pin in an agent definition (`route: local`) is a preference: if that tier has no model configured, the router skips the pin. A user override (`--route local`) or `mode: local-only` with no local model is blocked with a pointer to `harness init`.
 
 Two guards then run on the chosen target:
 

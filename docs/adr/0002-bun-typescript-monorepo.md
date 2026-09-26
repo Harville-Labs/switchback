@@ -17,4 +17,4 @@ The VS Code extension must be TypeScript. The CLI needs fast startup, good TUI l
 ## Consequences
 
 - Engine code may use Bun APIs (`Bun.spawn`, `Bun.Glob`) because it only runs inside the harness binary.
-- Contributors need Bun 1.3+.
+- Contributors need Bun 1.4+ (enforced by `engines` and a startup check in the CLI).

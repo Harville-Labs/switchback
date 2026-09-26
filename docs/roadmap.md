@@ -10,7 +10,8 @@ Engine/client split, protocol, router with escalation signals and budgets, OpenA
 
 Make the local path excellent, since it's where users spend most of their time.
 
-- `harness init`: detect Ollama, LM Studio, and llama.cpp; suggest and pull a tool-capable model; write config
+- ~~`harness init`: detect local servers, choose models, write config~~ (done)
+- Offer `ollama pull` for a recommended tool-capable model when none is installed
 - Session list and resume in the TUI and VS Code
 - Multi-line input, input history, `@file` mentions with completion
 - Markdown and code rendering in the TUI

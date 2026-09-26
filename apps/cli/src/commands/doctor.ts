@@ -29,13 +29,19 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   out('\nRouting');
   const r = config.routing;
   out(
-    `  mode ${r.mode}; local=${r.local} (${config.models[r.local]?.model ?? 'missing'}), remote=${r.remote} (${config.models[r.remote]?.model ?? 'missing'})`,
+    `  mode ${r.mode}; local=${r.local} (${config.models[r.local]?.model ?? 'not configured'}), remote=${r.remote} (${config.models[r.remote]?.model ?? 'not configured'})`,
   );
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,
   );
-  if (!config.models[r.local]) problems++;
-  if (!config.models[r.remote]) problems++;
+  if (!config.models[r.local] && r.mode !== 'remote-only') {
+    problems++;
+    out('  ✗ no local model configured; run `harness init` to pick one');
+  }
+  if (!config.models[r.remote] && r.mode !== 'local-only') {
+    problems++;
+    out('  ✗ no remote model configured; run `harness init`');
+  }
 
   out('\nAgents');
   for (const a of engine.listAgents())

@@ -4,5 +4,6 @@ export * from './engine.ts';
 export * from './ledger.ts';
 export * from './paths.ts';
 export * from './server.ts';
+export * from './setup.ts';
 export * from './store.ts';
 export * from './tools/index.ts';

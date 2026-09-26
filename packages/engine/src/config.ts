@@ -71,16 +71,18 @@ export class ConfigError extends Error {
   }
 }
 
-/** Defaults that make a fresh install work with Ollama locally and Claude remotely. */
+/**
+ * Built-in defaults. There is deliberately no local provider or `local` model:
+ * which server and model a machine runs is the user's choice, made with
+ * `harness init`. Remote defaults exist so Claude Code agent aliases resolve.
+ */
 export function defaultConfig(): Record<string, unknown> {
   return {
     providers: {
-      ollama: { type: 'openai-compatible', baseUrl: 'http://localhost:11434/v1', tier: 'local' },
       // Credentials resolve through the SDK chain (ANTHROPIC_API_KEY, `ant auth login`, ...).
       anthropic: { type: 'anthropic' },
     },
     models: {
-      local: { provider: 'ollama', model: 'qwen3-coder:30b', contextWindow: 32_768 },
       remote: {
         provider: 'anthropic',
         model: 'claude-opus-5',
@@ -134,13 +136,20 @@ export function loadConfig(
     throw new ConfigError(`invalid configuration:\n${issues}`, sources.at(-1));
   }
   const config = result.data;
-  for (const [alias, m] of Object.entries(config.models)) {
-    if (!config.providers[m.provider])
-      throw new ConfigError(`models.${alias} references unknown provider "${m.provider}"`);
-  }
+  const problem = referenceProblem(config);
+  if (problem) throw new ConfigError(problem, sources.at(-1));
   const prices: Record<string, Price> = {};
   for (const m of Object.values(config.models)) if (m.price) prices[m.model] = m.price;
   return { config, sources, prices };
+}
+
+/** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */
+export function referenceProblem(config: HarnessConfig): string | undefined {
+  for (const [alias, m] of Object.entries(config.models)) {
+    if (!config.providers[m.provider])
+      return `models.${alias} references unknown provider "${m.provider}"`;
+  }
+  return undefined;
 }
 
 export function deepMerge(
@@ -195,4 +204,34 @@ export function stripJsonComments(text: string): string {
     }
   }
   return out;
+}
+
+/** JSON Schema for config files (input shape: everything with a default is optional). */
+export function configJsonSchema(): Record<string, unknown> {
+  const schema = z.toJSONSchema(HarnessConfig, { io: 'input', unrepresentable: 'any' }) as Record<
+    string,
+    unknown
+  >;
+  return {
+    ...schema,
+    title: 'Harness configuration',
+    description:
+      'See docs/configuration.md. String values may reference environment variables as {env:NAME}.',
+  };
+}
+
+/** Copy of a config with secret-looking values replaced, for display. */
+export function redactConfig(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactConfig);
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [
+        k,
+        /key|token|secret|password/i.test(k) && typeof v === 'string' && v
+          ? '<redacted>'
+          : redactConfig(v),
+      ]),
+    );
+  }
+  return value;
 }

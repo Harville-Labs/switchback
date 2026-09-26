@@ -177,4 +177,26 @@ describe('Router', () => {
     ).decide(input());
     expect(d.kind).toBe('block');
   });
+
+  describe('with no local model configured', () => {
+    const remoteOnly = () =>
+      new Router(RoutingConfig.parse({}), (alias) => (alias === 'remote' ? REMOTE : undefined));
+
+    test('routes remote by default and says why', () => {
+      const d = routed(remoteOnly().decide(input()));
+      expect(d.model.alias).toBe('remote');
+      expect(d.reason).toContain('harness init');
+    });
+
+    test('a local-pinned agent (explore) still runs instead of failing', () => {
+      const d = routed(remoteOnly().decide(input({ agent: { name: 'explore', route: 'local' } })));
+      expect(d.model.alias).toBe('remote');
+    });
+
+    test('an explicit local request is blocked with setup guidance', () => {
+      const d = remoteOnly().decide(input({ preference: 'local' }));
+      expect(d.kind).toBe('block');
+      expect(d.kind === 'block' && d.reason).toContain('harness init');
+    });
+  });
 });

@@ -2,6 +2,10 @@
 
 `harness` with no arguments opens the TUI in the current directory. It's built with [Ink](https://github.com/vadimdemedes/ink) and runs the engine in-process over a transport pair, which is the same protocol VS Code uses.
 
+## First run
+
+With no config file anywhere, `harness` offers to run `harness init` before opening the UI. Declining opens the UI anyway; turns run remotely until a local model is configured.
+
 ## Screen
 
 ```

@@ -236,7 +236,7 @@ export class AnthropicProvider implements Provider {
 }
 
 /** Mirrors the SDK's credential chain closely enough to warn before the first request. */
-function hasAnthropicCredentials(): boolean {
+export function hasAnthropicCredentials(): boolean {
   const env = process.env;
   if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_PROFILE) return true;
   if (env.ANTHROPIC_FEDERATION_RULE_ID) return true;

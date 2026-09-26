@@ -2,6 +2,10 @@
   "name": "harness",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -13,12 +17,16 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "check": "bun run lint && bun run typecheck && bun run test",
-    "build": "bun run --cwd apps/cli build && bun run --cwd apps/vscode build"
+    "build": "bun run --cwd apps/cli build && bun run --cwd apps/vscode build",
+    "schema": "bun scripts/gen-schema.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
     "@types/bun": "^1.4.2",
     "@types/vscode": "1.95.0",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@harness/engine": "workspace:*"
   }
 }

@@ -73,6 +73,11 @@
         "command": "harness.showLogs",
         "title": "Show Engine Logs",
         "category": "Harness"
+      },
+      {
+        "command": "harness.runSetup",
+        "title": "Set Up Models",
+        "category": "Harness"
       }
     ],
     "menus": {
@@ -119,7 +124,16 @@
           "description": "Routing for new prompts. `auto` follows your harness config."
         }
       }
-    }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "**/.harness/config.json",
+          "**/.config/harness/config.json"
+        ],
+        "url": "./schemas/config.schema.json"
+      }
+    ]
   },
   "scripts": {
     "build": "bun build src/extension.ts --target=node --format=cjs --external vscode --outfile dist/extension.js && bun build src/webview/main.ts --target=browser --outfile dist/webview.js",

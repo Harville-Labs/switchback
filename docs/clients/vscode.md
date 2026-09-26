@@ -9,7 +9,9 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 - **Status bar**: current route preference, last tier used (`$(home)` local, `$(cloud)` remote), and session cost.
 - **Ask About Selection** (editor context menu) pre-fills the chat with the selected code and its location.
 - **Permission and escalation prompts** appear inline in the chat.
-- Commands: New Session, Cancel, Show Usage and Savings, Restart Engine, Show Engine Logs.
+- **Setup**: if no local model is configured, the extension offers **Set Up Models**, which runs `harness init` in a terminal and restarts the engine when it closes.
+- **Config validation**: `.harness/config.json` and `~/.config/harness/config.json` are validated and autocompleted against the bundled schema.
+- Commands: Set Up Models, New Session, Cancel, Show Usage and Savings, Restart Engine, Show Engine Logs.
 
 ## Settings
 

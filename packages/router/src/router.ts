@@ -75,7 +75,7 @@ export class Router {
         : ({
             kind: 'block',
             rule,
-            reason: `${reason}, but no model is configured for it`,
+            reason: `${reason}, but no model is configured for it; run \`harness init\``,
           } as const);
 
     // 1. Explicit user override for this turn always wins.
@@ -95,9 +95,11 @@ export class Router {
       if (pinned)
         return route(pinned, 'agent-pin', `agent "${input.agent.name}" pins ${pinned.alias}`);
     }
-    if (input.agent.route === 'local')
+    // A tier pin is a preference: if that tier isn't configured, route normally
+    // rather than failing (e.g. `explore` on a remote-only setup).
+    if (input.agent.route === 'local' && local)
       return route(local, 'agent-pin', `agent "${input.agent.name}" runs local`);
-    if (input.agent.route === 'remote')
+    if (input.agent.route === 'remote' && remote)
       return route(remote, 'agent-pin', `agent "${input.agent.name}" runs remote`);
 
     // 4. Hard limits: the local model cannot take this turn at all.
@@ -134,7 +136,7 @@ export class Router {
     return route(
       local ?? remote,
       'default',
-      local ? 'local by default' : 'no local model configured',
+      local ? 'local by default' : 'no local model configured (run `harness init`)',
     );
   }
 

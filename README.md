@@ -10,22 +10,23 @@ A local-first coding agent from Harville Labs. Most of the work runs on a model 
 
 ## Quick start
 
-Requires [Bun](https://bun.sh) 1.3+.
+Requires [Bun](https://bun.sh) 1.4+.
 
 ```sh
 bun install
 bun run dev -- --mock          # try the TUI with scripted models, no setup needed
 ```
 
-With real models:
+With real models, start a local model server (Ollama, LM Studio, llama.cpp, or vLLM) with a model that supports tool calling, then:
 
 ```sh
-ollama pull qwen3-coder:30b    # or any local model; see docs/providers.md
-export ANTHROPIC_API_KEY=...   # or `ant auth login`, or configure Bedrock/Vertex
+bun run dev -- init            # detects your local server, picks models, writes the config
 bun run dev -- doctor          # check config, providers, and agents
 bun run dev                    # open the TUI in the current directory
 bun run dev -- run "explain src/index.ts"   # headless, one prompt
 ```
+
+Harness ships with no default local model. Which server and model your machine runs is your choice, and `harness init` sets it up. Running `harness` for the first time with no config offers to run setup.
 
 In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/usage` shows spend and savings, and `esc` cancels.
 
@@ -45,12 +46,15 @@ Budget and availability guards then apply. Over budget means staying local; a pr
 
 ## Configuration
 
-Harness works with no config file (Ollama on `localhost:11434` plus Claude). To customize, create `.harness/config.json` in your project or `~/.config/harness/config.json`:
+`harness init` writes `~/.config/harness/config.json` (this machine) or `.harness/config.json` (this project). You can also edit these files directly: `harness config edit` opens one, `harness config show` prints the merged result, and the VS Code extension validates and autocompletes both. A typical file:
 
 ```jsonc
 {
+  "providers": {
+    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" }
+  },
   "models": {
-    "local": { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 65536 },
+    "local": { "provider": "ollama", "model": "<your model>", "contextWindow": 32768 },
     "remote": { "provider": "anthropic", "model": "claude-opus-5" }
   },
   "routing": {

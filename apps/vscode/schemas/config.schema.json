@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "providers": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "openai-compatible"
+              },
+              "baseUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "apiKey": {
+                "type": "string"
+              },
+              "tier": {
+                "default": "local",
+                "type": "string",
+                "enum": ["local", "remote"]
+              },
+              "headers": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["type", "baseUrl"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "anthropic"
+              },
+              "apiKey": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "bedrock"
+              },
+              "region": {
+                "type": "string"
+              },
+              "profile": {
+                "type": "string"
+              },
+              "eagerToolInputStreaming": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "vertex"
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "region": {
+                "default": "global",
+                "type": "string"
+              }
+            },
+            "required": ["type", "projectId"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "mock"
+              },
+              "tier": {
+                "default": "local",
+                "type": "string",
+                "enum": ["local", "remote"]
+              }
+            },
+            "required": ["type"]
+          }
+        ]
+      }
+    },
+    "models": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "contextWindow": {
+            "default": 32768,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxOutputTokens": {
+            "default": 16000,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "effort": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "xhigh", "max"]
+          },
+          "price": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "number"
+              },
+              "output": {
+                "type": "number"
+              },
+              "cacheRead": {
+                "type": "number"
+              },
+              "cacheWrite": {
+                "type": "number"
+              }
+            },
+            "required": ["input", "output"]
+          }
+        },
+        "required": ["provider", "model"]
+      }
+    },
+    "routing": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "mode": {
+          "default": "auto",
+          "type": "string",
+          "enum": ["auto", "local-only", "remote-only"]
+        },
+        "local": {
+          "default": "local",
+          "type": "string"
+        },
+        "remote": {
+          "default": "remote",
+          "type": "string"
+        },
+        "escalation": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "policy": {
+              "default": "auto",
+              "type": "string",
+              "enum": ["auto", "ask", "off"]
+            },
+            "maxConsecutiveToolErrors": {
+              "default": 3,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "maxMalformedToolCalls": {
+              "default": 2,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "loopThreshold": {
+              "default": 3,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "contextHeadroom": {
+              "default": 0.85,
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 1
+            },
+            "stickyTurns": {
+              "default": 2,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "budget": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "dailyUsd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "monthlyUsd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "onExceeded": {
+              "default": "local",
+              "type": "string",
+              "enum": ["local", "block"]
+            }
+          }
+        },
+        "fallback": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "onLocalUnavailable": {
+              "default": "remote",
+              "type": "string",
+              "enum": ["remote", "fail"]
+            },
+            "onRemoteUnavailable": {
+              "default": "local",
+              "type": "string",
+              "enum": ["local", "fail"]
+            }
+          }
+        }
+      }
+    },
+    "permissions": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "read": {
+          "default": "allow",
+          "type": "string",
+          "enum": ["allow", "ask", "deny"]
+        },
+        "edit": {
+          "default": "ask",
+          "type": "string",
+          "enum": ["allow", "ask", "deny"]
+        },
+        "bash": {
+          "default": "ask",
+          "type": "string",
+          "enum": ["allow", "ask", "deny"]
+        }
+      }
+    },
+    "defaultAgent": {
+      "default": "build",
+      "type": "string"
+    },
+    "subagents": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "maxConcurrent": {
+          "default": 4,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxDepth": {
+          "default": 2,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "maxStepsPerTurn": {
+      "default": 50,
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    }
+  },
+  "title": "Harness configuration",
+  "description": "See docs/configuration.md. String values may reference environment variables as {env:NAME}."
+}

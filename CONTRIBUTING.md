@@ -5,7 +5,7 @@ Harness is developed by Harville Labs. This guide covers the workflow for employ
 ## Setup
 
 ```sh
-bun install          # Bun 1.3+
+bun install          # Bun 1.4+
 bun run check        # must pass before you start and before you push
 ```
 

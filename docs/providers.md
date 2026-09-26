@@ -14,14 +14,16 @@ Any server exposing `/v1/chat/completions` with SSE streaming and function calli
   "vllm":     { "type": "openai-compatible", "baseUrl": "http://gpu-box:8000/v1", "apiKey": "{env:VLLM_KEY}" }
 },
 "models": {
-  "local": { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 65536 }
+  "local": { "provider": "ollama", "model": "<model name>", "contextWindow": 32768 }
 }
 ```
+
+`harness init` detects these servers and fills this in for you. There is no default local model.
 
 Choosing a local model:
 
 - It must support **tool calling** through the chat completions API. Models without it will trip the malformed-tool-call signal and escalate constantly.
-- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama's default `num_ctx` is small; raise it in a Modelfile or with `OLLAMA_CONTEXT_LENGTH`.
+- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `harness init` reads the effective value from each server.
 - Reasoning output (`reasoning_content` / `reasoning`) is shown in the UI but never sent back to the server.
 
 Health is checked with `GET {baseUrl}/models` (2-second timeout, cached for 30 seconds). If it fails, routing falls back to remote.

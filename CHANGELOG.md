@@ -4,6 +4,17 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- `harness init` setup wizard: detects Ollama, LM Studio, llama.cpp, and vLLM, reads tool support and effective context size, configures Anthropic, Bedrock, or Vertex, escalation policy, and budgets; fully scriptable with flags
+- `harness config path|show|schema|edit`
+- First-run setup offer in the TUI; "Set Up Models" in VS Code
+- Config JSON Schema with validation and autocomplete in VS Code
+
+### Changed
+- **Breaking:** no default local provider or model. Configure one with `harness init`. Without one, turns route remotely and local-only requests are refused with guidance.
+- Agents pinned to `local` fall back to normal routing when no local model is configured
+- Requires Bun 1.4+
+
 ## [0.1.0] - 2026-09-26
 
 ### Added

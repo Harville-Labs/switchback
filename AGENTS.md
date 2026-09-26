@@ -61,9 +61,11 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 
 **Change agent definitions.** Built-ins live in `packages/engine/src/agents.ts`. The file format must stay compatible with Claude Code's `.claude/agents/*.md`. See [docs/subagents.md](docs/subagents.md).
 
+**Add a config key.** Add it to the Zod schema in `packages/engine/src/config.ts` with a default, run `bun run schema` (a test fails if the shipped schema is stale), document it in [docs/configuration.md](docs/configuration.md), and, if users choose it during setup, add a prompt and flag to `harness init`. Never add a default local provider or model: local setup is the user's choice.
+
 ## Conventions
 
-- TypeScript strict mode, ESM, Bun runtime. Import workspace files with explicit `.ts` extensions.
+- TypeScript strict mode, ESM, Bun 1.4+ runtime. Import workspace files with explicit `.ts` extensions.
 - Biome formats and lints (single quotes, 2 spaces, 100 columns). Run `bun run format` rather than hand-formatting.
 - Validate external input with Zod at the boundary (config files, protocol params, tool inputs, model output). Trust internal types after that.
 - Test with `bun:test`, colocated as `*.test.ts`. Use `ScriptedProvider` for engine behavior. Tests never call real model APIs or need Ollama running.
