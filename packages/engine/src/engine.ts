@@ -45,6 +45,7 @@ import {
   type SessionStore,
 } from './store.ts';
 import { type Tool, type ToolContext, toolSpec, toolsFor } from './tools/index.ts';
+import { currentShell } from './tools/shell.ts';
 
 export const ENGINE_VERSION = '0.1.0';
 
@@ -737,7 +738,7 @@ export class Engine {
   private systemPrompt(agent: AgentDefinition): string {
     const sections = [
       agent.prompt,
-      `# Environment\nWorkspace root: ${this.options.workspaceRoot}\nPlatform: ${process.platform}\nFile paths in tool calls are relative to the workspace root.`,
+      `# Environment\nWorkspace root: ${this.options.workspaceRoot}\nPlatform: ${process.platform}\nShell for the bash tool: ${currentShell().name}\nFile paths in tool calls are relative to the workspace root.`,
     ];
     if (this.options.instructions)
       sections.push(`# Project instructions\n${this.options.instructions.trim()}`);

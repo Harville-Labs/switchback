@@ -212,6 +212,23 @@ describe('Engine', () => {
     expect(result).toMatchObject({ isError: true, content: 'oldString not found in file' });
   });
 
+  test('the bash tool runs a real command in the workspace', async () => {
+    const { engine, lp } = setup(
+      [{ toolCalls: [{ name: 'bash', input: { command: 'echo harness-ok' } }] }, { text: 'ran' }],
+      [],
+      { config: { permissions: { bash: 'allow' } } },
+    );
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'run it');
+    const result = lp.requests[1]?.messages.at(-1)?.parts[0] as {
+      content: string;
+      isError?: boolean;
+    };
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toContain('harness-ok');
+    expect(result.content).toContain('exit code: 0');
+  });
+
   test('denied tools return an error result to the model', async () => {
     const { engine, lp } = setup(
       [{ toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] }, { text: 'ok' }],
