@@ -38,7 +38,12 @@ import type { HarnessConfig } from './config.ts';
 import { UsageLedger } from './ledger.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
 import { Semaphore } from './semaphore.ts';
-import { MemorySessionStore, type SessionHeader, type SessionStore } from './store.ts';
+import {
+  FileSessionStore,
+  MemorySessionStore,
+  type SessionHeader,
+  type SessionStore,
+} from './store.ts';
 import { type Tool, type ToolContext, toolSpec, toolsFor } from './tools/index.ts';
 
 export const ENGINE_VERSION = '0.1.0';
@@ -66,6 +71,7 @@ export interface EngineOptions {
 interface LiveSession {
   header: SessionHeader;
   messages: Message[];
+  updatedAt: string;
   signals: SignalTracker;
   depth: number;
   controller?: AbortController;
@@ -129,6 +135,7 @@ export class Engine {
       agents,
       ...(instructions ? { instructions } : {}),
       ledgerFile: hp.usageFile,
+      store: new FileSessionStore(hp.sessionsDir),
       ...extra,
     });
     return { engine, agentErrors: errors };
@@ -195,6 +202,7 @@ export class Engine {
     const live: LiveSession = {
       header,
       messages: [],
+      updatedAt: now,
       signals: new SignalTracker(this.options.config.routing.escalation),
       depth: parent ? parent.depth + 1 : 0,
     };
@@ -202,11 +210,15 @@ export class Engine {
     return this.summary(live);
   }
 
+  /** Top-level sessions in this workspace, most recently updated first. */
   listSessions(): SessionSummary[] {
     return this.store
       .list()
-      .filter((h) => !h.parentId)
-      .map((h) => this.summary(this.live(h.id)));
+      .filter(
+        ({ header }) => !header.parentId && header.workspaceRoot === this.options.workspaceRoot,
+      )
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map(({ header, updatedAt }) => this.summaryOf(header, updatedAt));
   }
 
   getSession(sessionId: string): SessionGetResult {
@@ -678,6 +690,7 @@ export class Engine {
     const live: LiveSession = {
       header: stored.header,
       messages: stored.messages,
+      updatedAt: this.now().toISOString(),
       signals: new SignalTracker(this.options.config.routing.escalation),
       depth: parent ? parent.depth + 1 : stored.header.parentId ? 1 : 0,
     };
@@ -687,6 +700,7 @@ export class Engine {
 
   private append(s: LiveSession, message: Message): void {
     s.messages.push(message);
+    s.updatedAt = this.now().toISOString();
     this.store.append(s.header.id, message);
   }
 
@@ -703,14 +717,18 @@ export class Engine {
   }
 
   private summary(s: LiveSession): SessionSummary {
-    const cost = this.ledger.sessionCost(s.header.id);
+    return this.summaryOf(s.header, s.updatedAt);
+  }
+
+  private summaryOf(header: SessionHeader, updatedAt: string): SessionSummary {
+    const cost = this.ledger.sessionCost(header.id);
     return {
-      id: s.header.id,
-      title: s.header.title,
-      agent: s.header.agent,
-      ...(s.header.parentId ? { parentId: s.header.parentId } : {}),
-      createdAt: s.header.createdAt,
-      updatedAt: this.now().toISOString(),
+      id: header.id,
+      title: header.title,
+      agent: header.agent,
+      ...(header.parentId ? { parentId: header.parentId } : {}),
+      createdAt: header.createdAt,
+      updatedAt,
       usage: cost.usage,
       costUsd: cost.costUsd,
     };

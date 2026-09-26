@@ -1,22 +1,42 @@
-import type { RoutePreference } from '@harness/protocol';
+import { fromTranscript, type ViewState } from '@harness/client';
+import type { RoutePreference, SessionSummary } from '@harness/protocol';
 import { render } from 'ink';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 import { App } from './App.tsx';
 
 export async function tui(
-  opts: CommonFlags & { route: RoutePreference; agent?: string },
+  opts: CommonFlags & {
+    route: RoutePreference;
+    agent?: string;
+    /** `latest` for --continue, or a session id. */
+    resume?: string;
+  },
 ): Promise<number> {
   if (!process.stdin.isTTY) {
     process.stderr.write('harness: the terminal UI needs a TTY; use `harness run` for scripts\n');
     return 2;
   }
   const { client, init, agentErrors } = await connectInProcess(opts, 'prompt', 'harness-tui');
-  const session = await client.request('session.create', opts.agent ? { agent: opts.agent } : {});
+  let session: SessionSummary | undefined;
+  let history: ViewState | undefined;
+  if (opts.resume) {
+    const id =
+      opts.resume === 'latest' ? (await client.request('session.list', {}))[0]?.id : opts.resume;
+    if (id) {
+      const got = await client.request('session.get', { sessionId: id });
+      session = got.session;
+      history = fromTranscript(got.session, got.messages);
+    } else {
+      process.stderr.write('harness: no saved session in this workspace; starting a new one\n');
+    }
+  }
+  session ??= await client.request('session.create', opts.agent ? { agent: opts.agent } : {});
   const app = render(
     <App
       client={client}
       init={init}
       initialSession={session}
+      {...(history ? { initialView: history } : {})}
       initialRoute={opts.route}
       warnings={agentErrors}
     />,

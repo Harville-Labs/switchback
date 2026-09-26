@@ -9,12 +9,17 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - `harness config path|show|schema|edit`
 - First-run setup offer in the TUI; "Set Up Models" in VS Code
 - Config JSON Schema with validation and autocomplete in VS Code
+- Session resume: `harness --continue`, `--session <id>`, `/sessions`, `/resume`; shared `fromTranscript` view rebuild
 - Diff previews in edit/write permission prompts (TUI and VS Code); doomed edits fail without prompting
 
 ### Changed
 - **Breaking:** no default local provider or model. Configure one with `harness init`. Without one, turns route remotely and local-only requests are refused with guidance.
 - Agents pinned to `local` fall back to normal routing when no local model is configured
 - Requires Bun 1.4+
+
+### Fixed
+- Sessions were kept in memory only in the CLI; they now persist to the data directory
+- Session titles were lost on disk (the header was written before the first prompt)
 
 ## [0.1.0] - 2026-09-26
 

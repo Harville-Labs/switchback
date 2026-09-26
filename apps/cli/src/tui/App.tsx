@@ -1,6 +1,7 @@
 import {
   addInfo,
   addUserPrompt,
+  fromTranscript,
   type HarnessClient,
   initialView,
   reduce,
@@ -24,6 +25,8 @@ interface Props {
   client: HarnessClient;
   init: InitializeResult;
   initialSession: SessionSummary;
+  /** Present when resuming: the rebuilt history of `initialSession`. */
+  initialView?: ViewState;
   initialRoute: RoutePreference;
   warnings: string[];
 }
@@ -33,17 +36,32 @@ const HELP = `Commands
   /agent <name>            start a new session with an agent
   /agents                  list agents
   /new                     start a new session
+  /sessions                list saved sessions in this workspace
+  /resume <n|id>           switch to a saved session
   /usage                   spend, budget, and savings
   /exit                    quit
 Keys: esc cancels the running turn; y/a/n answer permission prompts.`;
 
-export function App({ client, init, initialSession, initialRoute, warnings }: Props) {
+export function App({
+  client,
+  init,
+  initialSession,
+  initialView: resumed,
+  initialRoute,
+  warnings,
+}: Props) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const [session, setSession] = useState(initialSession);
   const [view, setView] = useState<ViewState>(() =>
-    warnings.reduce((v, w) => addInfo(v, `agent skipped: ${w}`), initialView(initialSession.id)),
+    warnings.reduce(
+      (v, w) => addInfo(v, `agent skipped: ${w}`),
+      resumed
+        ? addInfo(resumed, `resumed "${initialSession.title || initialSession.id}"`)
+        : initialView(initialSession.id),
+    ),
   );
+  const [listed, setListed] = useState<SessionSummary[]>([]);
   // Items before this index are final and rendered once via <Static>.
   const [committed, setCommitted] = useState(0);
   const [route, setRoute] = useState<RoutePreference>(initialRoute);
@@ -79,6 +97,52 @@ export function App({ client, init, initialSession, initialRoute, warnings }: Pr
     }
   };
 
+  const resume = async (which: string | undefined) => {
+    const target = which && /^\d+$/.test(which) ? listed[Number(which) - 1]?.id : which;
+    if (!target) {
+      setView((v) => addInfo(v, 'usage: /resume <number from /sessions | session id>'));
+      return;
+    }
+    if (target === session.id) {
+      setView((v) => addInfo(v, 'already in that session'));
+      return;
+    }
+    try {
+      const { session: s, messages } = await client.request('session.get', { sessionId: target });
+      const history = fromTranscript(s, messages);
+      setSession(s);
+      setView((v) => ({
+        ...history,
+        items: [
+          ...v.items,
+          {
+            kind: 'info',
+            id: `resume-${s.id}-${v.items.length}`,
+            text: `── resumed "${s.title || s.id}" ──`,
+          },
+          ...history.items,
+        ],
+      }));
+    } catch (err) {
+      setView((v) => addInfo(v, (err as Error).message));
+    }
+  };
+
+  const listSessions = async () => {
+    const all = await client.request('session.list', {});
+    setListed(all);
+    const text = all.length
+      ? all
+          .slice(0, 20)
+          .map(
+            (x, i) =>
+              `${String(i + 1).padStart(2)}. ${x.id === session.id ? '* ' : ''}${x.title || '(untitled)'}  ${x.agent} · ${ago(x.updatedAt)} · $${x.costUsd.toFixed(3)}`,
+          )
+          .join('\n') + '\n/resume <number> to switch'
+      : 'no saved sessions in this workspace yet';
+    setView((v) => addInfo(v, text));
+  };
+
   const submit = async (raw: string) => {
     const text = raw.trim();
     setInput('');
@@ -109,6 +173,10 @@ export function App({ client, init, initialSession, initialRoute, warnings }: Pr
           return;
         case 'new':
           return newSession();
+        case 'sessions':
+          return listSessions();
+        case 'resume':
+          return resume(args[0]);
         case 'usage': {
           const u = await client.request('usage.get', {});
           setUsage(u);
@@ -292,7 +360,7 @@ function quietRoutes(items: ViewItem[]): Set<string> {
   let current: string | undefined;
   for (const it of items) {
     if (it.kind !== 'route') continue;
-    if ((it.rule === 'default' || it.rule === 'sticky') && it.model.model === current)
+    if (['default', 'sticky', 'history'].includes(it.rule) && it.model.model === current)
       quiet.add(it.id);
     current = it.model.model;
   }
@@ -367,6 +435,14 @@ function Item({ item, hidden }: { item: ViewItem; hidden: boolean }) {
     case 'error':
       return <Text color="red">error: {item.message}</Text>;
   }
+}
+
+function ago(iso: string): string {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (s < 90) return 'just now';
+  if (s < 5400) return `${Math.round(s / 60)}m ago`;
+  if (s < 129600) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
 }
 
 function formatUsage(u: UsageReport): string {

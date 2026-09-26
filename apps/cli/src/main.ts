@@ -21,6 +21,8 @@ Options
   --cwd <dir>        Workspace root (default: current directory)
   --route <r>        auto | local | remote (default: auto)
   --agent <name>     Agent to start with (default: config defaultAgent)
+  -c, --continue     Resume the most recent session in this workspace
+  --session <id>     Resume a specific session
   --yes              run: approve tool permissions; init: no prompts
   --json             run/usage: machine-readable output
   --mock             Use scripted mock providers (no models needed)
@@ -89,6 +91,8 @@ async function main(argv: string[]): Promise<number> {
       json: { type: 'boolean', default: false },
       mock: { type: 'boolean', default: false },
       stdio: { type: 'boolean', default: false },
+      continue: { type: 'boolean', short: 'c', default: false },
+      session: { type: 'string' },
       scope: { type: 'string' },
       'local-url': { type: 'string' },
       'local-model': { type: 'string' },
@@ -132,6 +136,11 @@ async function main(argv: string[]): Promise<number> {
         ...common,
         route: route.data,
         ...(values.agent ? { agent: values.agent } : {}),
+        ...(values.session
+          ? { resume: values.session }
+          : values.continue
+            ? { resume: 'latest' }
+            : {}),
       });
     }
     case 'init': {

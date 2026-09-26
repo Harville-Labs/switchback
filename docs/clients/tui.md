@@ -6,6 +6,10 @@
 
 With no config file anywhere, `harness` offers to run `harness init` before opening the UI. Declining opens the UI anyway; turns run remotely until a local model is configured.
 
+## Resuming
+
+Sessions are saved as you go. `harness --continue` (`-c`) reopens the most recent session in this workspace, and `harness --session <id>` opens a specific one. Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).
+
 ## Screen
 
 ```
@@ -32,6 +36,8 @@ Retries live in src/http/client.ts:88 ...
 | `/agent <name>` | New session with that agent |
 | `/agents` | List agents and where they came from |
 | `/new` | New session with the default agent |
+| `/sessions` | Saved sessions in this workspace, newest first |
+| `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
 | `/usage` | Spend, budget, savings |
 | `/help`, `/exit` | |
 | `esc` | Cancel the running turn |

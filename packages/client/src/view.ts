@@ -3,7 +3,14 @@
  * TUI and the VS Code webview both render from this reducer, so they cannot
  * disagree about what happened in a session.
  */
-import type { EngineEvent, ModelRef, PermissionDecision, Tier } from '@harness/protocol';
+import type {
+  EngineEvent,
+  Message,
+  ModelRef,
+  PermissionDecision,
+  SessionSummary,
+  Tier,
+} from '@harness/protocol';
 
 export type ViewItem =
   | { kind: 'user'; id: string; text: string }
@@ -58,6 +65,62 @@ export interface ViewState {
 
 export function initialView(sessionId: string): ViewState {
   return { sessionId, items: [], running: false, permissions: [], escalations: [], costUsd: 0 };
+}
+
+/**
+ * Rebuild a view from a stored transcript, for resuming a session. Routing
+ * rows use the rule `history`; reasoning is not replayed into the view.
+ */
+export function fromTranscript(session: SessionSummary, messages: Message[]): ViewState {
+  const items: ViewItem[] = [];
+  const tools = new Map<string, Extract<ViewItem, { kind: 'tool' }>>();
+  messages.forEach((m, mi) => {
+    if (m.role === 'user') {
+      for (const p of m.parts) {
+        if (p.type === 'text') items.push({ kind: 'user', id: `h${mi}u`, text: p.text });
+        else if (p.type === 'tool_result') {
+          const t = tools.get(p.callId);
+          if (t) {
+            t.status = p.isError ? 'error' : 'ok';
+            t.output = p.content;
+          }
+        }
+      }
+      return;
+    }
+    if (m.meta) {
+      items.push({
+        kind: 'route',
+        id: `h${mi}r`,
+        tier: m.meta.tier,
+        model: m.meta.model,
+        rule: 'history',
+        reason: m.meta.routeReason ?? '',
+      });
+    }
+    m.parts.forEach((p, pi) => {
+      if (p.type === 'text' && p.text)
+        items.push({ kind: 'assistant', id: `h${mi}a${pi}`, text: p.text, reasoning: '' });
+      else if (p.type === 'tool_call') {
+        const t = {
+          kind: 'tool' as const,
+          id: p.id,
+          name: p.name,
+          input: p.input,
+          status: 'error' as 'running' | 'ok' | 'error',
+        };
+        tools.set(p.id, t);
+        items.push(t);
+      }
+    });
+  });
+  const lastRoute = items.findLast((i) => i.kind === 'route');
+  return {
+    ...initialView(session.id),
+    items,
+    costUsd: session.costUsd,
+    ...(lastRoute?.kind === 'route' ? { lastTier: lastRoute.tier } : {}),
+  };
 }
 
 export function addInfo(state: ViewState, text: string): ViewState {
