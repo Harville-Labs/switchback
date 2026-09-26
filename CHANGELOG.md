@@ -10,6 +10,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - First-run setup offer in the TUI; "Set Up Models" in VS Code
 - Config JSON Schema with validation and autocomplete in VS Code
 - Session resume: `harness --continue`, `--session <id>`, `/sessions`, `/resume`; shared `fromTranscript` view rebuild
+- Release workflow: tag `v*` builds 5 platform binaries plus the `.vsix`, with checksums and changelog notes; `scripts/release.ts` keeps versions in sync
 - Diff previews in edit/write permission prompts (TUI and VS Code); doomed edits fail without prompting
 
 ### Changed

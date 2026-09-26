@@ -36,4 +36,21 @@ bun run check        # must pass before you start and before you push
 
 ## Releases
 
-Versions follow SemVer. Until 1.0, minor versions may break config or protocol, and such changes are called out in the changelog. The CLI and VS Code extension are released together with matching versions.
+Versions follow SemVer. Until 1.0, minor versions may break config or protocol, and such changes are called out in the changelog. The CLI, engine, and VS Code extension always share one version (a test enforces it).
+
+To cut a release:
+
+```sh
+bun scripts/release.ts prepare 0.2.0   # bumps every version, moves Unreleased notes under [0.2.0]
+# review CHANGELOG.md, commit "chore(release): v0.2.0", push
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+The tag runs `.github/workflows/release.yml`:
+
+1. `bun run check`, then `release.ts verify` (all versions and the changelog entry match the tag).
+2. Binaries for linux-x64, darwin-arm64, and windows-x64 are built and smoke-tested on native runners. linux-arm64 and darwin-x64 are cross-compiled and format-checked.
+3. The `.vsix` is built.
+4. A GitHub Release is created with the binaries, the `.vsix`, `SHA256SUMS`, and the changelog section as notes. 0.x and `-pre` versions are marked prerelease.
+
+Code signing, notarization, and Marketplace publishing are tracked in #33 and #30.

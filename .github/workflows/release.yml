@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  BUN_VERSION: 1.4.2
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun scripts/release.ts verify "$GITHUB_REF_NAME"
+      - id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  binaries:
+    needs: verify
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # native: build and run on the target platform
+          - { os: ubuntu-latest, target: bun-linux-x64, platform: linux-x64, native: true }
+          - { os: macos-latest, target: bun-darwin-arm64, platform: darwin-arm64, native: true }
+          - { os: windows-latest, target: bun-windows-x64, platform: windows-x64, native: true, ext: .exe }
+          # cross-compiled: no hosted runner guaranteed for these on private repos
+          - { os: ubuntu-latest, target: bun-linux-arm64, platform: linux-arm64, native: false }
+          - { os: macos-latest, target: bun-darwin-x64, platform: darwin-x64, native: false }
+    runs-on: ${{ matrix.os }}
+    env:
+      OUT: dist/harness-${{ needs.verify.outputs.version }}-${{ matrix.platform }}${{ matrix.ext }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun apps/cli/scripts/build.ts --target ${{ matrix.target }} --outfile "$OUT"
+        shell: bash
+      - name: Smoke test
+        if: matrix.native
+        shell: bash
+        run: |
+          export HARNESS_HOME="$RUNNER_TEMP/harness-home"
+          test "$("./$OUT" --version)" = "${{ needs.verify.outputs.version }}"
+          "./$OUT" run --mock "ping" | grep -q "You said: ping"
+      - name: Check binary format
+        if: ${{ !matrix.native }}
+        shell: bash
+        run: file "$OUT" | tee /dev/stderr | grep -Eq "Mach-O|ELF"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.platform }}
+          path: ${{ env.OUT }}
+          if-no-files-found: error
+
+  vsix:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd apps/vscode build
+      - run: bunx @vscode/vsce package --no-dependencies --allow-missing-repository -o "../../dist/harness-vscode-${{ needs.verify.outputs.version }}.vsix"
+        working-directory: apps/vscode
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: dist/*.vsix
+          if-no-files-found: error
+
+  publish:
+    needs: [verify, binaries, vsix]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Release notes
+        run: |
+          {
+            bun scripts/release.ts notes "${{ needs.verify.outputs.version }}"
+            echo
+            echo "### Install"
+            echo "Download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`harness\`. Then run \`harness init\`."
+            echo "Install the VS Code extension with \`code --install-extension harness-vscode-${{ needs.verify.outputs.version }}.vsix\`."
+            echo
+            echo "Binaries are not yet signed or notarized (tracked for 1.0). On macOS, clear the quarantine flag with \`xattr -d com.apple.quarantine harness\`."
+          } > notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ needs.verify.outputs.version }}"
+          prerelease=""
+          case "$version" in 0.*|*-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Harness $version" --notes-file notes.md $prerelease

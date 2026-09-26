@@ -24,8 +24,8 @@ const result = await Bun.build({
     outfile: values.outfile,
     ...(values.target ? { target: values.target as Bun.Build.CompileTarget } : {}),
   },
-  minify: true,
-  sourcemap: 'linked',
+  // Keep identifiers so customer stack traces stay readable without shipping sourcemaps.
+  minify: { whitespace: true, syntax: true, identifiers: false },
   plugins: [
     {
       name: 'stub-react-devtools',
