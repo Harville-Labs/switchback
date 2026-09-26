@@ -1,0 +1,13 @@
+{
+  "name": "@harness/router",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@harness/protocol": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

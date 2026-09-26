@@ -1,0 +1,132 @@
+{
+  "name": "harness-vscode",
+  "displayName": "Harness",
+  "description": "Local-first coding agent that escalates to Claude only when it needs to.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "harville-labs",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "harness",
+          "title": "Harness",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "harness": [
+        {
+          "type": "webview",
+          "id": "harness.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "harness.newSession",
+        "title": "New Session",
+        "category": "Harness",
+        "icon": "$(add)"
+      },
+      {
+        "command": "harness.cancel",
+        "title": "Cancel Running Turn",
+        "category": "Harness"
+      },
+      {
+        "command": "harness.setRoute",
+        "title": "Set Routing (auto / local / remote)",
+        "category": "Harness"
+      },
+      {
+        "command": "harness.showUsage",
+        "title": "Show Usage and Savings",
+        "category": "Harness"
+      },
+      {
+        "command": "harness.askAboutSelection",
+        "title": "Ask About Selection",
+        "category": "Harness"
+      },
+      {
+        "command": "harness.restartEngine",
+        "title": "Restart Engine",
+        "category": "Harness"
+      },
+      {
+        "command": "harness.showLogs",
+        "title": "Show Engine Logs",
+        "category": "Harness"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "harness.newSession",
+          "when": "view == harness.chat",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "harness.askAboutSelection",
+          "when": "editorHasSelection",
+          "group": "harness"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Harness",
+      "properties": {
+        "harness.executablePath": {
+          "type": "string",
+          "default": "harness",
+          "description": "Path to the harness executable. The extension runs `<path> serve --stdio`.",
+          "scope": "machine-overridable"
+        },
+        "harness.executableArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Arguments inserted before `serve --stdio` (e.g. a script path when executablePath is `bun`)."
+        },
+        "harness.defaultRoute": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "local",
+            "remote"
+          ],
+          "default": "auto",
+          "description": "Routing for new prompts. `auto` follows your harness config."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "bun build src/extension.ts --target=node --format=cjs --external vscode --outfile dist/extension.js && bun build src/webview/main.ts --target=browser --outfile dist/webview.js",
+    "package": "bun run build && bunx @vscode/vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@harness/client": "workspace:*",
+    "@harness/protocol": "workspace:*"
+  }
+}

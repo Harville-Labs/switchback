@@ -1,0 +1,34 @@
+# VS Code extension
+
+The extension (`apps/vscode`) is a thin client. On activation it spawns `harness serve --stdio` in the first workspace folder and relays everything through the protocol. It contains no agent logic.
+
+## Features
+
+- **Chat view** in the activity bar. It renders from the same view-model reducer as the TUI, so both show the same routing lines, tool rows, subagent rows, and prompts.
+- **Routing control**: a dropdown in the chat, the status bar item (click to change), and the **Harness: Set Routing** command.
+- **Status bar**: current route preference, last tier used (`$(home)` local, `$(cloud)` remote), and session cost.
+- **Ask About Selection** (editor context menu) pre-fills the chat with the selected code and its location.
+- **Permission and escalation prompts** appear inline in the chat.
+- Commands: New Session, Cancel, Show Usage and Savings, Restart Engine, Show Engine Logs.
+
+## Settings
+
+| Setting | Default | |
+|---|---|---|
+| `harness.executablePath` | `harness` | The binary to run. The extension runs `<path> [args] serve --stdio`. |
+| `harness.executableArgs` | `[]` | Extra leading args (e.g. a script path when the path is `bun`) |
+| `harness.defaultRoute` | `auto` | Initial routing preference |
+
+Project behavior (models, routing, permissions, agents) comes from the same `.harness/config.json` the CLI uses. There are deliberately no VS Code settings for it, so the two clients can't be configured differently.
+
+## Development
+
+1. `bun install`
+2. Open the repo in VS Code and run **Run Extension** (F5). It builds `apps/vscode/dist` and opens this repo in an Extension Development Host. The repo's `.vscode/settings.json` points `harness.executablePath` at `bun` and `harness.executableArgs` at `apps/cli/src/main.ts`, so the extension runs the dev CLI from source.
+3. To work without models, add `"--mock"` to `harness.executableArgs`. `${workspaceFolder}` is expanded in both settings.
+
+Build a `.vsix` with `bun run --cwd apps/vscode package`.
+
+## Planned
+
+Inline diff review for edits, editor context (open files, diagnostics, selection) as prompt attachments, Markdown rendering, a session history view, attaching to a shared engine daemon so the TUI and VS Code can share a live session, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).

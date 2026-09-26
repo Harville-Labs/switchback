@@ -1,0 +1,16 @@
+{
+  "name": "@harness/providers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.33.8",
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@anthropic-ai/vertex-sdk": "^0.19.11",
+    "@harness/protocol": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

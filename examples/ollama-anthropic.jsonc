@@ -1,0 +1,15 @@
+{
+  "providers": {
+    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" },
+    "anthropic": { "type": "anthropic", "apiKey": "{env:ANTHROPIC_API_KEY}" }
+  },
+  "models": {
+    // Match contextWindow to the num_ctx Ollama actually loads.
+    "local": { "provider": "ollama", "model": "qwen3-coder:30b", "contextWindow": 65536 },
+    "remote": { "provider": "anthropic", "model": "claude-opus-5", "contextWindow": 1000000 }
+  },
+  "routing": {
+    "escalation": { "policy": "ask" },
+    "budget": { "dailyUsd": 5, "monthlyUsd": 60 }
+  }
+}

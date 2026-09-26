@@ -1,0 +1,24 @@
+{
+  "name": "@harness/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "harness": "./src/main.ts"
+  },
+  "scripts": {
+    "build": "bun scripts/build.ts --outfile dist/harness"
+  },
+  "dependencies": {
+    "@harness/client": "workspace:*",
+    "@harness/engine": "workspace:*",
+    "@harness/protocol": "workspace:*",
+    "@harness/providers": "workspace:*",
+    "ink": "^7.1.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0"
+  }
+}

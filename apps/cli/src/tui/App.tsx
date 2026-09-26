@@ -1,0 +1,344 @@
+import {
+  addInfo,
+  addUserPrompt,
+  type HarnessClient,
+  initialView,
+  reduce,
+  resolveEscalation,
+  resolvePermission,
+  toolLabel,
+  type ViewItem,
+  type ViewState,
+} from '@harness/client';
+import type {
+  InitializeResult,
+  RoutePreference,
+  SessionSummary,
+  UsageReport,
+} from '@harness/protocol';
+import { Box, Static, Text, useApp, useInput } from 'ink';
+import TextInput from 'ink-text-input';
+import { useCallback, useEffect, useState } from 'react';
+
+interface Props {
+  client: HarnessClient;
+  init: InitializeResult;
+  initialSession: SessionSummary;
+  initialRoute: RoutePreference;
+  warnings: string[];
+}
+
+const HELP = `Commands
+  /local  /remote  /auto   route the next prompts
+  /agent <name>            start a new session with an agent
+  /agents                  list agents
+  /new                     start a new session
+  /usage                   spend, budget, and savings
+  /exit                    quit
+Keys: esc cancels the running turn; y/a/n answer permission prompts.`;
+
+export function App({ client, init, initialSession, initialRoute, warnings }: Props) {
+  const { exit } = useApp();
+  const [session, setSession] = useState(initialSession);
+  const [view, setView] = useState<ViewState>(() =>
+    warnings.reduce((v, w) => addInfo(v, `agent skipped: ${w}`), initialView(initialSession.id)),
+  );
+  // Items before this index are final and rendered once via <Static>.
+  const [committed, setCommitted] = useState(0);
+  const [route, setRoute] = useState<RoutePreference>(initialRoute);
+  const [input, setInput] = useState('');
+  const [usage, setUsage] = useState<UsageReport | undefined>();
+
+  const refreshUsage = useCallback(() => {
+    client.request('usage.get', {}).then(setUsage, () => {});
+  }, [client]);
+
+  useEffect(() => {
+    refreshUsage();
+    return client.on((event) => {
+      setView((v) => reduce(v, event));
+      if (event.type === 'turn.completed' && event.sessionId === session.id) refreshUsage();
+    });
+  }, [client, session.id, refreshUsage]);
+
+  // Commit finished turns so Ink stops re-rendering them.
+  useEffect(() => {
+    if (!view.running) setCommitted(view.items.length);
+  }, [view.running, view.items.length]);
+
+  const newSession = async (agent?: string) => {
+    try {
+      const s = await client.request('session.create', agent ? { agent } : {});
+      setSession(s);
+      setView((v) =>
+        addInfo({ ...initialView(s.id), items: v.items }, `new session · agent ${s.agent}`),
+      );
+    } catch (err) {
+      setView((v) => addInfo(v, (err as Error).message));
+    }
+  };
+
+  const submit = async (raw: string) => {
+    const text = raw.trim();
+    setInput('');
+    if (!text) return;
+    if (text.startsWith('/')) {
+      const [cmd, ...args] = text.slice(1).split(/\s+/);
+      switch (cmd) {
+        case 'local':
+        case 'remote':
+        case 'auto':
+          setRoute(cmd);
+          setView((v) => addInfo(v, `routing: ${cmd}`));
+          return;
+        case 'agent':
+          return newSession(args[0]);
+        case 'agents':
+          setView((v) =>
+            addInfo(
+              v,
+              init.agents
+                .map(
+                  (a) =>
+                    `${a.name} [${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}]: ${a.description}`,
+                )
+                .join('\n'),
+            ),
+          );
+          return;
+        case 'new':
+          return newSession();
+        case 'usage': {
+          const u = await client.request('usage.get', {});
+          setUsage(u);
+          setView((v) => addInfo(v, formatUsage(u)));
+          return;
+        }
+        case 'help':
+          setView((v) => addInfo(v, HELP));
+          return;
+        case 'exit':
+        case 'quit':
+          exit();
+          return;
+        default:
+          setView((v) => addInfo(v, `unknown command /${cmd}; try /help`));
+          return;
+      }
+    }
+    if (view.running) return;
+    setView((v) => addUserPrompt(v, text));
+    client.request('session.prompt', { sessionId: session.id, text, route }).catch((err) => {
+      setView((v) => addInfo({ ...v, running: false }, `error: ${(err as Error).message}`));
+    });
+  };
+
+  const permission = view.permissions[0];
+  const escalation = view.escalations[0];
+
+  useInput((ch, key) => {
+    if (permission) {
+      const decision =
+        ch === 'y'
+          ? 'allow_once'
+          : ch === 'a'
+            ? 'allow_always'
+            : ch === 'n' || key.escape
+              ? 'deny'
+              : undefined;
+      if (!decision) return;
+      client
+        .request('permission.respond', { requestId: permission.requestId, decision })
+        .catch(() => {});
+      setView((v) => resolvePermission(v, permission.requestId, decision));
+      return;
+    }
+    if (escalation) {
+      const approve = ch === 'y' ? true : ch === 'n' || key.escape ? false : undefined;
+      if (approve === undefined) return;
+      client
+        .request('escalation.respond', { requestId: escalation.requestId, approve })
+        .catch(() => {});
+      setView((v) => resolveEscalation(v, escalation.requestId));
+      return;
+    }
+    if (key.escape && view.running)
+      client.request('session.cancel', { sessionId: session.id }).catch(() => {});
+  });
+
+  const hidden = quietRoutes(view.items);
+  const done = view.items.slice(0, committed);
+  const live = view.items.slice(committed);
+
+  return (
+    <Box flexDirection="column">
+      <Static items={[{ kind: 'header' as const, id: 'header' }, ...done]}>
+        {(item) =>
+          item.kind === 'header' ? (
+            <Box key="header" flexDirection="column" marginBottom={1}>
+              <Text bold>
+                harness <Text dimColor>{init.engineVersion}</Text>
+              </Text>
+              <Text dimColor>{init.workspaceRoot} · /help for commands</Text>
+            </Box>
+          ) : (
+            <Item key={item.id} item={item} hidden={hidden.has(item.id)} />
+          )
+        }
+      </Static>
+      {live.map((item) => (
+        <Item key={item.id} item={item} hidden={hidden.has(item.id)} />
+      ))}
+
+      {permission && (
+        <Box borderStyle="round" borderColor="yellow" paddingX={1} flexDirection="column">
+          <Text>
+            Allow <Text bold>{permission.summary}</Text>?
+          </Text>
+          <Text dimColor>[y] once [a] always this session [n] deny</Text>
+        </Box>
+      )}
+      {escalation && !permission && (
+        <Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
+          <Text>
+            Escalate to <Text bold>{escalation.target.model}</Text>? {escalation.reason}
+          </Text>
+          <Text dimColor>[y] use remote for this turn [n] stay local</Text>
+        </Box>
+      )}
+
+      <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
+        <Text color="cyan">{view.running ? '… ' : '❯ '}</Text>
+        <TextInput
+          value={input}
+          onChange={setInput}
+          onSubmit={submit}
+          focus={!permission && !escalation}
+          placeholder={view.running ? 'working (esc to cancel)' : 'Ask anything, or /help'}
+        />
+      </Box>
+      <StatusBar session={session} route={route} view={view} usage={usage} />
+    </Box>
+  );
+}
+
+function StatusBar({
+  session,
+  route,
+  view,
+  usage,
+}: {
+  session: SessionSummary;
+  route: RoutePreference;
+  view: ViewState;
+  usage?: UsageReport;
+}) {
+  const tier = view.lastTier;
+  return (
+    <Box justifyContent="space-between" paddingX={1}>
+      <Text dimColor>
+        {session.agent} · route {route}
+        {tier ? ' · last ' : ''}
+        {tier ? <Text color={tier === 'local' ? 'green' : 'yellow'}>{tier}</Text> : null}
+      </Text>
+      <Text dimColor>
+        session ${view.costUsd.toFixed(4)}
+        {usage
+          ? ` · today $${usage.budget.spentTodayUsd.toFixed(2)}${usage.budget.dailyUsd ? `/$${usage.budget.dailyUsd.toFixed(2)}` : ''} · saved ~$${usage.estimatedSavingsUsd.toFixed(2)}`
+          : ''}
+      </Text>
+    </Box>
+  );
+}
+
+/** Route rows that add nothing: a default/sticky decision for the model already in use. */
+function quietRoutes(items: ViewItem[]): Set<string> {
+  const quiet = new Set<string>();
+  let current: string | undefined;
+  for (const it of items) {
+    if (it.kind !== 'route') continue;
+    if ((it.rule === 'default' || it.rule === 'sticky') && it.model.model === current)
+      quiet.add(it.id);
+    current = it.model.model;
+  }
+  return quiet;
+}
+
+function Item({ item, hidden }: { item: ViewItem; hidden: boolean }) {
+  if (hidden) return null;
+  switch (item.kind) {
+    case 'user':
+      return (
+        <Box marginTop={1}>
+          <Text bold color="cyan">
+            ❯ {item.text}
+          </Text>
+        </Box>
+      );
+    case 'info':
+      return <Text dimColor>{item.text}</Text>;
+    case 'route': {
+      const color = item.tier === 'local' ? 'green' : 'yellow';
+      return (
+        <Text color={color} dimColor={item.rule === 'default'}>
+          {item.tier === 'local' ? '⌂' : '☁'} {item.model.model}
+          <Text dimColor> · {item.reason}</Text>
+        </Text>
+      );
+    }
+    case 'assistant':
+      return (
+        <Box flexDirection="column">
+          {item.reasoning && !item.text ? (
+            <Text dimColor italic>
+              ✻ {item.reasoning.slice(-200).replace(/\s+/g, ' ')}
+            </Text>
+          ) : null}
+          {item.text ? <Text>{item.text}</Text> : null}
+        </Box>
+      );
+    case 'tool': {
+      const icon = item.status === 'running' ? '●' : item.status === 'ok' ? '✓' : '✗';
+      const color = item.status === 'running' ? 'yellow' : item.status === 'ok' ? 'green' : 'red';
+      return (
+        <Box flexDirection="column">
+          <Text>
+            <Text color={color}>{icon}</Text> {toolLabel(item.name, item.input)}
+          </Text>
+          {item.status === 'error' && item.output ? (
+            <Text color="red" dimColor>
+              {' '}
+              {item.output.split('\n')[0]}
+            </Text>
+          ) : null}
+        </Box>
+      );
+    }
+    case 'subagent': {
+      const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
+      return (
+        <Text>
+          <Text color="magenta">
+            ↳ {icon} {item.agent}
+          </Text>{' '}
+          {item.task}
+          <Text dimColor>
+            {item.tier ? ` · ${item.tier}` : ''} · {item.toolCalls} tool calls
+            {item.status === 'running' && item.activity ? ` · ${item.activity}` : ''}
+          </Text>
+        </Text>
+      );
+    }
+    case 'error':
+      return <Text color="red">error: {item.message}</Text>;
+  }
+}
+
+function formatUsage(u: UsageReport): string {
+  const $ = (n: number) => `$${n.toFixed(2)}`;
+  return [
+    `This month: remote ${$(u.byTier.remote.costUsd)} · local ${u.byTier.local.usage.outputTokens.toLocaleString()} output tokens (free)`,
+    `Saved ~${$(u.estimatedSavingsUsd)} vs. all-remote`,
+    `Budget: today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''} · month ${$(u.budget.spentMonthUsd)}${u.budget.monthlyUsd ? ` of ${$(u.budget.monthlyUsd)}` : ''}`,
+  ].join('\n');
+}

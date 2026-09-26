@@ -1,0 +1,41 @@
+# Terminal UI
+
+`harness` with no arguments opens the TUI in the current directory. It's built with [Ink](https://github.com/vadimdemedes/ink) and runs the engine in-process over a transport pair, which is the same protocol VS Code uses.
+
+## Screen
+
+```
+❯ where is the retry logic?
+☁ claude-opus-5 · context-overflow: ~29000 tokens exceeds 85% of local's 32768 window
+↳ ✓ explore find retry logic · local · 6 tool calls
+Retries live in src/http/client.ts:88 ...
+╭────────────────────────────────────────────╮
+│ ❯ Ask anything, or /help                   │
+╰────────────────────────────────────────────╯
+ build · route auto · last remote     session $0.0142 · today $0.31/$5.00 · saved ~$4.12
+```
+
+- `⌂` lines are local routing decisions and `☁` lines are remote. Plain default decisions for the model already in use are hidden to reduce noise.
+- `●`/`✓`/`✗` mark tool calls: running, succeeded, failed.
+- `↳` rows are subagents, showing their tier, tool-call count, and current activity.
+- The status bar shows the agent, route preference, last tier used, session cost, today's spend against budget, and month-to-date savings.
+
+## Commands and keys
+
+| Input | Effect |
+|---|---|
+| `/local`, `/remote`, `/auto` | Route the following prompts |
+| `/agent <name>` | New session with that agent |
+| `/agents` | List agents and where they came from |
+| `/new` | New session with the default agent |
+| `/usage` | Spend, budget, savings |
+| `/help`, `/exit` | |
+| `esc` | Cancel the running turn |
+| `y` / `a` / `n` | Answer a permission prompt: once, always, deny |
+| `y` / `n` | Answer an escalation prompt |
+| `ctrl+c` | Quit |
+
+## Implementation notes
+
+- Finished items render through Ink's `<Static>`, so long sessions don't re-render history.
+- All display state comes from `reduce()` in `@harness/client/view`. If something looks wrong in both clients, fix it there.

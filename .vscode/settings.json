@@ -1,0 +1,7 @@
+{
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "harness.executablePath": "bun",
+  "harness.executableArgs": ["${workspaceFolder}/apps/cli/src/main.ts"]
+}

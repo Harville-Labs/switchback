@@ -1,0 +1,27 @@
+{
+  "providers": {
+    "llamacpp": { "type": "openai-compatible", "baseUrl": "http://localhost:8080/v1" },
+    "bedrock": { "type": "bedrock", "region": "us-east-1", "eagerToolInputStreaming": true }
+  },
+  "models": {
+    "local": { "provider": "llamacpp", "model": "default", "contextWindow": 32768 },
+    // Bedrock bills separately from the first-party API; set prices for accurate savings.
+    "remote": {
+      "provider": "bedrock",
+      "model": "anthropic.claude-opus-5",
+      "contextWindow": 1000000,
+      "price": { "input": 5, "output": 25 }
+    },
+    "opus": { "provider": "bedrock", "model": "anthropic.claude-opus-5", "contextWindow": 1000000 },
+    "sonnet": {
+      "provider": "bedrock",
+      "model": "anthropic.claude-sonnet-5",
+      "contextWindow": 1000000
+    },
+    "haiku": {
+      "provider": "bedrock",
+      "model": "anthropic.claude-haiku-4-5",
+      "contextWindow": 200000
+    }
+  }
+}

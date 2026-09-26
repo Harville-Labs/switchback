@@ -1,0 +1,13 @@
+{
+  "name": "@harness/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./view": "./src/view.ts"
+  },
+  "dependencies": {
+    "@harness/protocol": "workspace:*"
+  }
+}

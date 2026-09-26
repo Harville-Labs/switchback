@@ -1,0 +1,14 @@
+{
+  "providers": {
+    "lmstudio": { "type": "openai-compatible", "baseUrl": "http://localhost:1234/v1" },
+    "vertex": { "type": "vertex", "projectId": "my-gcp-project", "region": "global" }
+  },
+  "models": {
+    "local": { "provider": "lmstudio", "model": "qwen3-coder-30b", "contextWindow": 32768 },
+    "remote": { "provider": "vertex", "model": "claude-opus-5", "contextWindow": 1000000 },
+    "opus": { "provider": "vertex", "model": "claude-opus-5", "contextWindow": 1000000 },
+    "sonnet": { "provider": "vertex", "model": "claude-sonnet-5", "contextWindow": 1000000 },
+    "haiku": { "provider": "vertex", "model": "claude-haiku-4-5", "contextWindow": 200000 }
+  },
+  "routing": { "escalation": { "stickyTurns": 3 } }
+}
