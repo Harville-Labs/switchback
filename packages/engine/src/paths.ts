@@ -28,5 +28,7 @@ export function projectPaths(root: string) {
     /** Claude Code compatibility: agents defined for Claude Code work unchanged. */
     claudeAgentsDir: join(root, '.claude', 'agents'),
     instructionFiles: [join(root, 'AGENTS.md'), join(root, 'CLAUDE.md')],
+    /** Claude Code compatibility: project MCP servers. */
+    mcpJson: join(root, '.mcp.json'),
   };
 }

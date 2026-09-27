@@ -142,6 +142,17 @@ export interface UsageRow {
   savingsUsd: number;
 }
 
+export interface McpServerInfo {
+  name: string;
+  state: 'connected' | 'failed' | 'disabled' | 'untrusted';
+  tools: number;
+  error?: string;
+}
+
+export interface McpListResult {
+  servers: McpServerInfo[];
+}
+
 export interface UsageReport {
   period: { from: string; to: string };
   byTier: Record<Tier, { usage: Usage; costUsd: number }>;
@@ -169,6 +180,8 @@ export interface Methods {
   'escalation.respond': { params: EscalationRespondParams; result: { ok: true } };
   'agents.list': { params: Record<string, never>; result: AgentSummary[] };
   'usage.get': { params: UsageGetParams; result: UsageReport };
+  /** MCP servers: connection state and tool counts, plus project servers awaiting trust. */
+  'mcp.list': { params: Record<string, never>; result: McpListResult };
   shutdown: { params: Record<string, never>; result: { ok: true } };
 }
 

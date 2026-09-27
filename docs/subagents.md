@@ -37,7 +37,7 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 |---|---|---|
 | `name` | string | Defaults to the file name |
 | `description` | string, required | Shown to the parent agent to decide when to delegate. Write it as "what + when". |
-| `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and harness names (`read`, `grep`, ...) both work. Omit for all tools. |
+| `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and harness names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`haiku`, `sonnet`, `opus`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Harness extension; same effect as `model: local`/`remote` |
 

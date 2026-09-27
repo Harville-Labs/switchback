@@ -63,6 +63,7 @@ export function createEngine(
     const loaded = load(flags);
     const { engine, agentErrors } = Engine.fromWorkspace(flags.cwd, loaded.config, {
       prices: loaded.prices,
+      untrustedMcp: loaded.untrustedMcp,
       ...(interaction ? { interaction } : {}),
       ...(loaded.org ? { org: loaded.org } : {}),
     });
@@ -161,7 +162,8 @@ export function needsSetup(cwd: string): boolean {
   try {
     // Signed in to an organization counts as configured.
     if (readAuth()) return false;
-    return loadConfig(cwd, process.env).sources.length === 0;
+    // A repository's .mcp.json alone doesn't mean this machine is set up.
+    return !loadConfig(cwd, process.env).sources.some((s) => !s.endsWith('.mcp.json'));
   } catch {
     return false; // a broken config is reported by the command that loads it
   }

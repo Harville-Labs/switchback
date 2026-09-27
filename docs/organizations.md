@@ -46,6 +46,7 @@ After signing in, the org's policy applies to the TUI, VS Code, and `harness run
     "allowRemote": true,                            // false: remove all remote providers, route local-only
     "allowedProviderTypes": ["openai-compatible", "openai"],
     "allowUserProviders": false,                    // only providers defined in this policy
+    "allowUserMcpServers": false,                   // only MCP servers defined in this policy
     "maxDailyUsd": 10,                              // users may set lower budgets, never higher
     "maxMonthlyUsd": 150
   },
@@ -66,7 +67,7 @@ Config layers merge in this order, lowest first:
 5. command-line layers
 6. org `enforced`
 
-Then `restrictions` run on the result and *remove* anything not allowed: disallowed providers and the models that use them, and remote routing when `allowRemote` is false. Budgets are capped. `harness doctor` and `harness whoami` list exactly what the policy changed.
+Then `restrictions` run on the result and *remove* anything not allowed: disallowed providers and the models that use them, remote routing when `allowRemote` is false, and MCP servers the org didn't define when `allowUserMcpServers` is false. To block MCP tools entirely, enforce `permissions.mcp: "deny"`. Budgets are capped. `harness doctor` and `harness whoami` list exactly what the policy changed.
 
 ## Server API
 

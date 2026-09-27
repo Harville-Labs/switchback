@@ -37,6 +37,8 @@ export const OrgPolicy = z.object({
       allowedProviderTypes: z.array(z.enum(PROVIDER_TYPES)).optional(),
       /** false: only providers defined by the org policy may be used. */
       allowUserProviders: z.boolean().default(true),
+      /** false: only MCP servers defined by the org policy may run. */
+      allowUserMcpServers: z.boolean().default(true),
       /** Per-user remote spend caps; users may set lower budgets, never higher. */
       maxDailyUsd: z.number().positive().optional(),
       maxMonthlyUsd: z.number().positive().optional(),
@@ -97,6 +99,17 @@ export function applyRestrictions(
     if (providers[m.provider]) models[alias] = m;
   }
 
+  const orgMcp = new Set([
+    ...Object.keys((policy.defaults.mcpServers as Record<string, unknown>) ?? {}),
+    ...Object.keys((policy.enforced.mcpServers as Record<string, unknown>) ?? {}),
+  ]);
+  const mcpServers: HarnessConfig['mcpServers'] = {};
+  for (const [name, server] of Object.entries(config.mcpServers)) {
+    if (r.allowUserMcpServers || orgMcp.has(name)) mcpServers[name] = server;
+    else
+      notes.push(`MCP server "${name}" removed: only organization-defined MCP servers are allowed`);
+  }
+
   const routing = structuredClone(config.routing);
   if (!r.allowRemote) {
     if (routing.mode !== 'local-only') notes.push('routing forced to local-only');
@@ -119,5 +132,5 @@ export function applyRestrictions(
     ...(daily !== undefined ? { dailyUsd: daily } : {}),
     ...(monthly !== undefined ? { monthlyUsd: monthly } : {}),
   };
-  return { config: { ...config, providers, models, routing }, notes };
+  return { config: { ...config, providers, models, routing, mcpServers }, notes };
 }

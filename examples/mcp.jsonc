@@ -1,0 +1,16 @@
+// MCP servers next to your models. Tools show up as mcp__<server>__<tool>.
+// Project-level servers (.harness/config.json or .mcp.json) need `harness mcp trust`.
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_TOKEN}" }
+    },
+    "docs": {
+      "url": "https://mcp.example.com/docs",
+      "permission": "allow"
+    }
+  },
+  "permissions": { "mcp": "ask" }
+}

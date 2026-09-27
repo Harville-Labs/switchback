@@ -61,6 +61,25 @@ describe('restrictions', () => {
     expect(Object.keys(orgOnly.config.providers)).toEqual(['gpu']);
   });
 
+  test('org-only MCP servers', () => {
+    const withMcp = HarnessConfig.parse({
+      ...base,
+      mcpServers: { jira: { url: 'https://mcp.acme.internal/jira' }, mine: { command: 'x' } },
+    });
+    const r = applyRestrictions(
+      withMcp,
+      policy({
+        defaults: { mcpServers: { jira: { url: 'https://mcp.acme.internal/jira' } } },
+        restrictions: { allowUserMcpServers: false },
+      }),
+    );
+    expect(Object.keys(r.config.mcpServers)).toEqual(['jira']);
+    expect(r.notes).toContain(
+      'MCP server "mine" removed: only organization-defined MCP servers are allowed',
+    );
+    expect(Object.keys(applyRestrictions(withMcp, policy({})).config.mcpServers)).toHaveLength(2);
+  });
+
   test('budget caps only ever lower the budget', () => {
     const capped = applyRestrictions(
       base,

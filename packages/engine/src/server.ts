@@ -99,6 +99,8 @@ export function serve(
         engine.respondEscalation(p.requestId, p.approve);
         return { ok: true };
       }
+      case 'mcp.list':
+        return engine.mcpStatus();
       case 'agents.list':
         return engine.listAgents();
       case 'usage.get':

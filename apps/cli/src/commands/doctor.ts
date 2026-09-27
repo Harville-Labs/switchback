@@ -1,4 +1,5 @@
 /** `harness doctor`: explain the effective configuration and check every provider. */
+import { formatMcpServers } from '@harness/client';
 import { createProvider, tierOf } from '@harness/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
@@ -77,6 +78,14 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     problems++;
     out('  ✗ no remote model configured; run `harness init`');
   }
+
+  const { servers } = await engine.mcpStatus();
+  if (servers.length) {
+    out('\nMCP servers');
+    out(formatMcpServers(servers));
+    problems += servers.filter((s) => s.state === 'failed' || s.state === 'untrusted').length;
+  }
+  await engine.shutdown();
 
   out('\nAgents');
   for (const a of engine.listAgents())

@@ -11,4 +11,5 @@
 | [lmstudio-vertex.jsonc](lmstudio-vertex.jsonc) | LM Studio locally, Claude on Vertex AI |
 | [vllm-openrouter.jsonc](vllm-openrouter.jsonc) | A vLLM box locally, any OpenRouter model remotely |
 | [multi-provider.jsonc](multi-provider.jsonc) | Two local servers (laptop and GPU box) and three hosted providers as ordered fallbacks |
+| [mcp.jsonc](mcp.jsonc) | MCP servers (stdio and HTTP) alongside your models |
 | [agents/](agents/) | Agent definitions (Claude Code compatible) |

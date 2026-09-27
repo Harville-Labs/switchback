@@ -15,6 +15,7 @@ Usage
   harness run "<prompt>"          Run one prompt headlessly and print the answer
   harness config [action]         path | show | schema | edit
   harness doctor                  Check configuration, providers, and agents
+  harness mcp [trust [name...]]   Show MCP servers; trust a project's servers
   harness usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
   harness login [--server <url>]  Sign in to your organization (applies its policy)
@@ -231,6 +232,10 @@ async function main(argv: string[]): Promise<number> {
         throw new UsageError('a shared daemon never runs mock providers; use --stdio with --mock');
       const { serve } = await import('./commands/serve.ts');
       return serve({ ...common, socket: values.socket });
+    }
+    case 'mcp': {
+      const { mcp } = await import('./commands/mcp.ts');
+      return mcp(rest[0], rest.slice(1), common);
     }
     case 'doctor': {
       const { doctor } = await import('./commands/doctor.ts');

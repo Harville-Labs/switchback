@@ -10,6 +10,8 @@ import { type Price, ProviderConfig } from '@harness/providers';
 import { RoutingConfig } from '@harness/router';
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
+import { McpServerConfig, McpServerName } from './mcp/config.ts';
+import { isTrusted } from './mcp/trust.ts';
 import { applyRestrictions, leafPaths, type OrgPolicy, type OrgStatus } from './org/policy.ts';
 import { readCachedPolicy } from './org/store.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
@@ -48,8 +50,12 @@ export const HarnessConfig = z.object({
       read: PermissionLevel.default('allow'),
       edit: PermissionLevel.default('ask'),
       bash: PermissionLevel.default('ask'),
+      /** Tools from MCP servers; each server can override it with `permission`. */
+      mcp: PermissionLevel.default('ask'),
     })
     .prefault({}),
+  /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
+  mcpServers: z.record(McpServerName, McpServerConfig).default({}),
   defaultAgent: z.string().default('build'),
   subagents: z
     .object({
@@ -80,6 +86,8 @@ export interface LoadedConfig {
   prices: Record<string, Price>;
   /** Present when an organization policy applied. */
   org?: OrgStatus;
+  /** Project-defined MCP servers left out until trusted (`harness mcp trust`). */
+  untrustedMcp: { name: string; source: string; definition: unknown }[];
 }
 
 export class ConfigError extends Error {
@@ -113,23 +121,60 @@ export function loadConfig(
   extra: Record<string, unknown>[] = [],
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
-  const files = [harnessPaths(env).configFile, projectPaths(workspaceRoot).configFile];
+  const pp = projectPaths(workspaceRoot);
+  // Claude Code's .mcp.json sits between the user and project files; only its
+  // `mcpServers` is read.
+  const files: { file: string; project: boolean; only?: 'mcpServers' }[] = [
+    { file: harnessPaths(env).configFile, project: false },
+    { file: pp.mcpJson, project: true, only: 'mcpServers' },
+    { file: pp.configFile, project: true },
+  ];
+  /** Where each MCP server's effective definition came from. */
+  const mcpSource = new Map<string, { project: boolean; file: string }>();
+  const noteMcp = (layer: unknown, project: boolean, file: string) => {
+    const servers = (layer as { mcpServers?: unknown } | undefined)?.mcpServers;
+    if (servers && typeof servers === 'object')
+      for (const name of Object.keys(servers)) mcpSource.set(name, { project, file });
+  };
   let merged: Record<string, unknown> = defaultConfig();
-  if (org) merged = deepMerge(merged, org.defaults);
+  if (org) {
+    merged = deepMerge(merged, org.defaults);
+    noteMcp(org.defaults, false, 'organization policy');
+  }
   const sources: string[] = [];
-  for (const file of files) {
+  for (const { file, project, only } of files) {
     if (!existsSync(file)) continue;
-    let parsed: unknown;
+    let parsed: Record<string, unknown>;
     try {
-      parsed = parseJsonc(readFileSync(file, 'utf8'));
+      parsed = parseJsonc(readFileSync(file, 'utf8')) as Record<string, unknown>;
     } catch (err) {
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
-    merged = deepMerge(merged, parsed as Record<string, unknown>);
+    if (only) parsed = { [only]: parsed[only] ?? {} };
+    noteMcp(parsed, project, file);
+    merged = deepMerge(merged, parsed);
     sources.push(file);
   }
-  for (const layer of extra) merged = deepMerge(merged, layer);
-  if (org) merged = deepMerge(merged, org.enforced);
+  for (const layer of extra) {
+    merged = deepMerge(merged, layer);
+    noteMcp(layer, false, 'command line');
+  }
+  if (org) {
+    merged = deepMerge(merged, org.enforced);
+    noteMcp(org.enforced, false, 'organization policy');
+  }
+
+  // A repository can't run commands on this machine until the user trusts it.
+  const untrustedMcp: LoadedConfig['untrustedMcp'] = [];
+  const servers = { ...((merged.mcpServers as Record<string, unknown> | undefined) ?? {}) };
+  for (const [name, def] of Object.entries(servers)) {
+    const source = mcpSource.get(name);
+    if (source?.project && !isTrusted(workspaceRoot, name, def, env)) {
+      delete servers[name];
+      untrustedMcp.push({ name, source: source.file, definition: def });
+    }
+  }
+  merged = { ...merged, mcpServers: servers };
 
   const result = HarnessConfig.safeParse(resolveEnv(merged, env));
   if (!result.success) {
@@ -156,7 +201,7 @@ export function loadConfig(
   }
   const prices: Record<string, Price> = {};
   for (const m of Object.values(config.models)) if (m.price) prices[m.model] = m.price;
-  return { config, sources, prices, ...(orgStatus ? { org: orgStatus } : {}) };
+  return { config, sources, prices, untrustedMcp, ...(orgStatus ? { org: orgStatus } : {}) };
 }
 
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */

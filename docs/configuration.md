@@ -101,8 +101,38 @@ See [routing.md](routing.md#configuration-reference).
 | `read` | `allow` | `read`, `glob`, `grep` |
 | `edit` | `ask` | `write`, `edit` |
 | `bash` | `ask` | `bash` |
+| `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
 
 Values are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md).
+
+### `mcpServers.<name>`
+
+Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. The format is the same as Claude Code's `.mcp.json`, and a project's `.mcp.json` is read too.
+
+```jsonc
+"mcpServers": {
+  "github": {                                   // stdio: Harness starts the process
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "env": { "GITHUB_TOKEN": "{env:GITHUB_TOKEN}" }
+  },
+  "tickets": {                                  // streamable HTTP (or "type": "sse")
+    "url": "https://mcp.example.com/tickets",
+    "headers": { "Authorization": "Bearer {env:TICKETS_TOKEN}" },
+    "permission": "allow"                       // read-only server: don't ask
+  }
+}
+```
+
+| Key | Default | |
+|---|---|---|
+| `command`, `args`, `env`, `cwd` | | stdio servers. The process gets a minimal environment plus `env`, not your whole shell environment, and runs in the workspace unless `cwd` is set |
+| `url`, `headers`, `type` | `type: http` | Remote servers over streamable HTTP; `type: "sse"` for older servers |
+| `permission` | `permissions.mcp` | `allow`, `ask`, or `deny` for this server's tools |
+| `enabled` | `true` | Keep a definition without starting it |
+| `timeoutMs` | 60000 | Per tool call |
+
+**Project servers need trust.** A server defined in a project's `.harness/config.json` or `.mcp.json` runs a command from the repository, so it doesn't start until you approve it with `harness mcp trust` (or `harness mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `harness mcp` and `harness doctor` show every server's state and tool count.
 
 ### Other keys
 

@@ -97,7 +97,12 @@ export function parseAgentFile(
     const list = (Array.isArray(rawTools) ? rawTools : rawTools.split(','))
       .map((t) => String(t).trim())
       .filter(Boolean);
-    tools = [...new Set(list.map((t) => TOOL_ALIASES[t] ?? t.toLowerCase()))];
+    // MCP tool names (`mcp__server__tool`) are case-sensitive; built-in names aren't.
+    tools = [
+      ...new Set(
+        list.map((t) => (t.startsWith('mcp__') ? t : (TOOL_ALIASES[t] ?? t.toLowerCase()))),
+      ),
+    ];
   }
 
   // `model` accepts Claude Code values (sonnet/opus/haiku/inherit), harness tiers

@@ -10,6 +10,7 @@ import {
   type EngineEvent,
   ErrorCode,
   type InitializeResult,
+  type McpListResult,
   type Message,
   type ModelRef,
   type PermissionDecision,
@@ -48,6 +49,7 @@ import {
 import type { HarnessConfig } from './config.ts';
 import { estimateEscalationCost } from './estimate.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
+import { allowsMcpTool, McpHub } from './mcp/hub.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import type { OrgStatus } from './org/policy.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
@@ -95,6 +97,8 @@ export interface EngineOptions {
   interaction?: 'prompt' | 'approve' | 'deny';
   /** Organization policy in effect, reported to clients. */
   org?: OrgStatus;
+  /** Project MCP servers held back until trusted (from `loadConfig`). */
+  untrustedMcp?: { name: string; source: string }[];
   now?: () => Date;
 }
 
@@ -153,6 +157,7 @@ export class Engine {
   private readonly store: SessionStore;
   private readonly agents: Map<string, AgentDefinition>;
   private readonly now: () => Date;
+  private mcp: McpHub | undefined;
 
   constructor(private readonly options: EngineOptions) {
     const { config } = options;
@@ -167,6 +172,30 @@ export class Engine {
     this.store = options.store ?? new MemorySessionStore();
     this.agents = options.agents ?? loadAgents([]).agents;
     this.now = options.now ?? (() => new Date());
+    this.mcp = this.startMcp(config);
+  }
+
+  private startMcp(config: HarnessConfig): McpHub | undefined {
+    if (!Object.keys(config.mcpServers).length) return undefined;
+    return new McpHub(config.mcpServers, this.options.workspaceRoot, (level, message) =>
+      this.notify(level, message),
+    );
+  }
+
+  /** `mcp.list`: waits briefly for servers still connecting. */
+  async mcpStatus(): Promise<McpListResult> {
+    if (this.mcp) await Promise.race([this.mcp.ready, Bun.sleep(5_000)]);
+    return {
+      servers: [
+        ...(this.mcp?.status() ?? []),
+        ...(this.options.untrustedMcp ?? []).map((u) => ({
+          name: u.name,
+          state: 'untrusted' as const,
+          tools: 0,
+          error: `defined in ${u.source}; run \`harness mcp trust\` to allow it`,
+        })),
+      ],
+    };
   }
 
   /** Build an engine from disk: agents, instructions, persistent store, and ledger. */
@@ -395,6 +424,7 @@ export class Engine {
     config: HarnessConfig;
     prices?: Record<string, Price>;
     org?: OrgStatus;
+    untrustedMcp?: { name: string; source: string }[];
   }): void {
     const injected = this.options.providers;
     for (const id of [...this.providers.keys()]) {
@@ -413,8 +443,13 @@ export class Engine {
     }
     this.detectedContext.clear();
     this.alwaysAllowed.clear(); // grants were made under the old policy
+    if (JSON.stringify(next.config.mcpServers) !== JSON.stringify(this.options.config.mcpServers)) {
+      void this.mcp?.close();
+      this.mcp = this.startMcp(next.config);
+    }
     this.options.config = next.config;
     if (next.org) this.options.org = next.org;
+    if (next.untrustedMcp) this.options.untrustedMcp = next.untrustedMcp;
     this.router = new Router(next.config.routing, (alias) => this.modelInfo(alias));
     this.ledger.setPricing(next.prices ?? {}, referenceModel(next.config));
     this.emit({
@@ -437,6 +472,7 @@ export class Engine {
 
   async shutdown(): Promise<void> {
     for (const s of this.sessions.values()) s.controller?.abort();
+    await this.mcp?.close();
   }
 
   // -------------------------------------------------------------------------
@@ -449,6 +485,8 @@ export class Engine {
     turnId: string,
     signal: AbortSignal,
   ): Promise<StopReason> {
+    // The first turn waits for MCP servers, so the tool list is complete and stable.
+    if (this.mcp) await Promise.race([this.mcp.ready, Bun.sleep(20_000)]);
     const { agent, tools, catalog, specs, specsJson } = this.toolSetup(s);
     let escalationApproved = false;
     let forceLocal = false;
@@ -702,7 +740,13 @@ export class Engine {
     const agent = this.agents.get(s.header.agent);
     if (!agent) throw new Error(`agent "${s.header.agent}" no longer exists`);
     const canDelegate = s.depth < this.options.config.subagents.maxDepth;
-    const tools = toolsFor(agent.tools).filter((t) => t.name !== 'task' || canDelegate);
+    const mcpTools = (this.mcp?.tools() ?? []).filter(
+      (t) => !agent.tools || allowsMcpTool(agent.tools, t.name),
+    );
+    // Built-ins first in their fixed order, then MCP tools by name: a stable cache prefix.
+    const tools = [...toolsFor(agent.tools), ...mcpTools].filter(
+      (t) => t.name !== 'task' || canDelegate,
+    );
     const catalog = [...this.agents.values()]
       .filter((a) => a.name !== s.header.agent || s.depth === 0)
       .map((a) => ({ name: a.name, description: a.description }));
@@ -1032,10 +1076,14 @@ export class Engine {
     signal: AbortSignal,
   ): Promise<{ allowed: boolean; error?: string }> {
     if (tool.permission === 'none') return { allowed: true };
-    const level = this.options.config.permissions[tool.permission];
-    // deny first: an org can enforce it, and no session grant may override that.
+    const category = this.options.config.permissions[tool.permission];
+    // deny first: an org can enforce it, and neither a per-server setting nor a
+    // session grant may override that.
+    if (category === 'deny') return { allowed: false };
+    const level = tool.permissionLevel ?? category;
     if (level === 'deny') return { allowed: false };
-    if (level === 'allow' || this.alwaysAllowed.has(tool.permission)) return { allowed: true };
+    const key = tool.permissionKey ?? tool.permission;
+    if (level === 'allow' || this.alwaysAllowed.has(key)) return { allowed: true };
     const mode = this.options.interaction ?? 'prompt';
     if (mode !== 'prompt') return { allowed: mode === 'approve' };
 
@@ -1066,7 +1114,7 @@ export class Engine {
     );
     // Every client clears the prompt, whichever one answered (or none, on cancel).
     this.emit({ type: 'permission.resolved', ...this.scope(s), requestId, decision });
-    if (decision === 'allow_always') this.alwaysAllowed.add(tool.permission);
+    if (decision === 'allow_always') this.alwaysAllowed.add(tool.permissionKey ?? tool.permission);
     return { allowed: decision !== 'deny' };
   }
 

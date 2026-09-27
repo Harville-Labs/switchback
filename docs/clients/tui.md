@@ -40,6 +40,7 @@ Retries live in src/http/client.ts:88 ...
 | `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
 | `/subagents` | This session's subagents as a numbered tree |
 | `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
+| `/mcp` | MCP servers: connected, failed, or waiting for `harness mcp trust`, with tool counts |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/help`, `/exit` | |

@@ -43,6 +43,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`) | `{ ok }` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
+| `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, and error |
 | `usage.get` | `period?`: `today` \| `week` \| `month` (default) | Spend, savings, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
 

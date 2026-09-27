@@ -5,6 +5,7 @@
  */
 import type {
   EngineEvent,
+  McpServerInfo,
   Message,
   ModelRef,
   PermissionDecision,
@@ -517,4 +518,16 @@ export function describeSession(state: ViewState, indent = ''): string {
     }
   }
   return lines.join('\n');
+}
+
+/** `harness mcp`, doctor, and the TUI's `/mcp`. */
+export function formatMcpServers(servers: McpServerInfo[]): string {
+  if (!servers.length)
+    return 'No MCP servers configured. Add them under `mcpServers` (see docs/configuration.md).';
+  return servers
+    .map((s) => {
+      const icon = s.state === 'connected' ? '✓' : s.state === 'disabled' ? '-' : '✗';
+      return `  ${icon} ${s.name}: ${s.state}${s.state === 'connected' ? `, ${s.tools} tools` : ''}${s.error ? ` (${s.error})` : ''}`;
+    })
+    .join('\n');
 }

@@ -4,6 +4,7 @@ import {
   childView,
   describeSession,
   estimateLabel,
+  formatMcpServers,
   formatUsage,
   fromTranscript,
   type HarnessClient,
@@ -48,6 +49,7 @@ const HELP = `Commands
   /subagents               list this session's subagents as a tree
   /subagent <n>            show what a subagent did: routes, tools, report
   /usage [rule|agent|model] this week's spend, savings, and why
+  /mcp                     MCP servers and their tools
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
 Input: @ mentions a file (its contents are attached); ↑/↓ browse history;
@@ -230,6 +232,11 @@ export function App({
                 : 'usage: /subagent <number from /subagents>',
             ),
           );
+          return;
+        }
+        case 'mcp': {
+          const { servers } = await client.request('mcp.list', {});
+          setView((v) => addInfo(v, `MCP servers\n${formatMcpServers(servers)}`));
           return;
         }
         case 'compact': {

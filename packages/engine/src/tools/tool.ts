@@ -5,7 +5,7 @@ import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
 
 /** Which permission setting governs a tool. `none` tools never prompt. */
-export type PermissionCategory = 'read' | 'edit' | 'bash' | 'none';
+export type PermissionCategory = 'read' | 'edit' | 'bash' | 'mcp' | 'none';
 
 export interface SubagentResult {
   ok: boolean;
@@ -36,6 +36,12 @@ export interface Tool<I = unknown> {
   description: string;
   schema: z.ZodType<I>;
   permission: PermissionCategory;
+  /** What "always allow" is remembered for; defaults to the category (MCP: per server). */
+  permissionKey?: string;
+  /** Overrides the configured level for the category (MCP servers' `permission`). */
+  permissionLevel?: 'allow' | 'ask' | 'deny';
+  /** JSON Schema sent to models, when it doesn't come from `schema` (MCP tools). */
+  inputSchema?: Record<string, unknown>;
   /** Safe to run concurrently with other non-mutating calls. */
   mutating: boolean;
   /** One-line human summary for permission prompts and UI. */
@@ -54,7 +60,9 @@ export function defineTool<S extends z.ZodType>(tool: Tool<z.infer<S>> & { schem
 }
 
 export function toolSpec(tool: Tool, ctx?: Pick<ToolContext, 'agentCatalog'>): ToolSpec {
-  const schema = z.toJSONSchema(tool.schema, { target: 'draft-7' }) as Record<string, unknown>;
+  const schema = tool.inputSchema
+    ? { ...tool.inputSchema }
+    : (z.toJSONSchema(tool.schema, { target: 'draft-7' }) as Record<string, unknown>);
   delete schema.$schema;
   let description = tool.description;
   if (tool.name === 'task' && ctx) {
