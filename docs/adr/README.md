@@ -9,3 +9,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0003](0003-neutral-append-only-transcript.md) | Provider-neutral, append-only transcript | Accepted |
 | [0004](0004-pure-router.md) | Routing is a pure, explainable function | Accepted |
 | [0005](0005-claude-code-agent-compat.md) | Agent definitions are compatible with Claude Code | Accepted |
+| [0006](0006-provider-neutrality.md) | No default vendor; every provider gets equal treatment | Accepted |

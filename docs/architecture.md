@@ -21,8 +21,8 @@
                │  └────────────┘     └───┬───┴────┬─────┘       │
                └─────────────────────────┼────────┼─────────────┘
                                          │        │
-                          Ollama / llama.cpp /    Anthropic API / Bedrock /
-                          LM Studio / vLLM        Vertex AI
+                          Ollama / llama.cpp /    OpenAI / Anthropic / DeepSeek /
+                          LM Studio / vLLM        Bedrock / Vertex / any OpenAI-compatible
 ```
 
 The engine is the product. Clients are views. That split is what lets the terminal and VS Code experiences stay consistent: there's exactly one implementation of routing, tools, permissions, and agents, and both clients fold the same event stream through the same reducer ([ADR 0001](adr/0001-engine-client-split.md)).
@@ -32,7 +32,7 @@ The engine is the product. Clients are views. That split is what lets the termin
 | Package | Responsibility |
 |---|---|
 | `@harness/protocol` | The contract. Transcript types (`Message`, `Part`), JSON-RPC framing, every method and event, transports. No dependencies on other workspace packages. |
-| `@harness/providers` | Talks to models. Each adapter translates the neutral transcript to a wire format and streams back `ChatEvent`s. Also holds pricing. |
+| `@harness/providers` | Talks to models. Each adapter translates the neutral transcript to a wire format and streams back `ChatEvent`s. Also holds the model catalog, pricing, and local-server detection. No provider is privileged ([ADR 0006](adr/0006-provider-neutrality.md)). |
 | `@harness/router` | Decides local vs. remote for each model call. Pure functions over a snapshot. |
 | `@harness/engine` | Runs agents. Owns all state and all side effects. Exposes itself via `serve(engine, transport)`. |
 | `@harness/client` | What clients import: `HarnessClient`, `spawnEngine`, and the view-model reducer. |

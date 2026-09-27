@@ -1,9 +1,9 @@
 # Harness
 
-A local-first coding agent from Harville Labs. Most of the work runs on a model on your own machine; Harness escalates the hard parts to Claude and shows you exactly when and why it did.
+A local-first coding agent from Harville Labs. Most of the work runs on a model on your own machine; Harness escalates the hard parts to the hosted model of your choice (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) and shows you exactly when and why it did.
 
-- **Local by default, remote when it matters.** A transparent router sends each model call to your local model (Ollama, llama.cpp, LM Studio, vLLM) and escalates to Claude on the Anthropic API, Amazon Bedrock, or Vertex AI when the local model is struggling, the context won't fit, or you ask. Budgets cap remote spend.
-- **Subagents that save money.** Delegate searches and side tasks to parallel subagents, each with its own context and routing. The built-in `explore` agent always runs locally. Agent definitions are compatible with Claude Code's `.claude/agents/*.md`.
+- **Local by default, remote when it matters.** A transparent router sends each model call to your local model (Ollama, llama.cpp, LM Studio, vLLM) and escalates to your remote provider (OpenAI, Anthropic, DeepSeek, Bedrock, Vertex, or any OpenAI-compatible API) when the local model is struggling, the context won't fit, or you ask. No vendor is a default, and every provider gets the same features. Budgets cap remote spend.
+- **Subagents that save money.** Delegate searches and side tasks to parallel subagents, each with its own context and routing. The built-in `explore` agent always runs locally. Agent definitions are compatible with Claude Code's `.claude/agents/*.md`, and their `opus`/`sonnet`/`haiku` model names map to your provider's large/medium/small models.
 - **Terminal and VS Code, same engine.** The TUI and the VS Code extension are thin clients of one engine and one protocol, and they render from the same view model, so they can't drift apart.
 
 > Status: pre-release (v0.1). Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/harness/issues) and the [roadmap](docs/roadmap.md).
@@ -51,11 +51,12 @@ Budget and availability guards then apply. Over budget means staying local; a pr
 ```jsonc
 {
   "providers": {
-    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" }
+    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" },
+    "openai": { "type": "openai" }
   },
   "models": {
     "local": { "provider": "ollama", "model": "<your model>", "contextWindow": 32768 },
-    "remote": { "provider": "anthropic", "model": "claude-opus-5" }
+    "remote": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000 }
   },
   "routing": {
     "escalation": { "policy": "ask" },

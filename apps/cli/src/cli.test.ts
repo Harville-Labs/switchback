@@ -35,7 +35,7 @@ test('serve --stdio completes a turn for an out-of-process client', async () => 
   await client.request('session.prompt', { sessionId: session.id, text: 'ping', route: 'remote' });
   await done;
   const text = events.flatMap((e) => (e.type === 'text.delta' ? [e.text] : [])).join('');
-  expect(text).toBe('[mock anthropic] You said: ping');
+  expect(text).toBe('[mock mock-remote] You said: ping');
   expect(events.find((e) => e.type === 'route.decided')).toMatchObject({
     tier: 'remote',
     rule: 'user-override',

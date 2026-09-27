@@ -1,0 +1,21 @@
+{
+  "providers": {
+    "gpu": { "type": "openai-compatible", "baseUrl": "http://gpu-box:8000/v1" },
+    "openrouter": {
+      "type": "openai-compatible",
+      "tier": "remote",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "{env:OPENROUTER_API_KEY}"
+    }
+  },
+  "models": {
+    "local": { "provider": "gpu", "model": "<served model>" },
+    // Set price for accurate cost tracking; OpenRouter models aren't in the built-in catalog.
+    "remote": {
+      "provider": "openrouter",
+      "model": "<provider/model>",
+      "contextWindow": 200000,
+      "price": { "input": 1, "output": 4 }
+    }
+  }
+}

@@ -1,11 +1,11 @@
 # Harness for VS Code
 
-Local-first coding agent from Harville Labs. Most turns run on a model on your machine; Harness escalates to Claude only when the local model needs help, and shows you why.
+Local-first coding agent from Harville Labs. Most turns run on a model on your machine; Harness escalates to your chosen hosted model (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) only when the local model needs help, and shows you why.
 
 ## Requirements
 
 - The `harness` CLI on your PATH (or set `harness.executablePath`)
-- A local model server (Ollama, LM Studio, llama.cpp, or vLLM) and/or Claude credentials
+- A local model server (Ollama, LM Studio, llama.cpp, or vLLM) and/or an API key for a hosted provider
 
 Run **Harness: Set Up Models** from the command palette to configure both.
 

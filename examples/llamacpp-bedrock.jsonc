@@ -4,7 +4,7 @@
     "bedrock": { "type": "bedrock", "region": "us-east-1", "eagerToolInputStreaming": true }
   },
   "models": {
-    "local": { "provider": "llamacpp", "model": "default", "contextWindow": 32768 },
+    "local": { "provider": "llamacpp", "model": "<served model>" },
     // Bedrock bills separately from the first-party API; set prices for accurate savings.
     "remote": {
       "provider": "bedrock",

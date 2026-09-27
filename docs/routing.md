@@ -3,7 +3,7 @@
 Harness sends every model call to one of two tiers:
 
 - **local**: a model on the user's machine or network, reached through an OpenAI-compatible server. It costs nothing per token.
-- **remote**: Claude through the Anthropic API, Amazon Bedrock, or Vertex AI. It's billed per token.
+- **remote**: a hosted model you choose: OpenAI, Anthropic, DeepSeek, Amazon Bedrock, Vertex AI, or any OpenAI-compatible API. It's billed per token.
 
 The goal is to do most of the work locally and pay only for the calls that need a stronger model. The router makes that decision for each step of the agent loop, not once per session, and tells the user why.
 
@@ -53,13 +53,13 @@ Signals reset after an escalation and when a new user prompt starts (except stic
 
 Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`, which is what the same tokens would have cost on the configured remote model (`routing.remote`). `harness usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
 
-Prices come from `DEFAULT_PRICES` in `packages/providers/src/pricing.ts` (first-party Claude API list prices). Bedrock and Vertex bill differently, so override per model with `models.<alias>.price` when accuracy matters.
+Prices come from the model catalog (`packages/providers/src/catalog.ts`: list prices for Anthropic, OpenAI, and DeepSeek models). Bedrock, Vertex, resellers, and DeepSeek off-peak pricing differ, so override per model with `models.<alias>.price` when accuracy matters.
 
 ## Switching models mid-session
 
 A session's transcript is provider-neutral and append-only. When a turn moves between models:
 
-- **Reasoning** (thinking blocks) is replayed only to the exact provider and model that produced it. Other models don't receive it, because they would ignore it or reject it.
+- **Reasoning** (Claude thinking blocks, DeepSeek `reasoning_content`) is replayed only to the exact provider and model that produced it. Other models never receive it.
 - **Tool call IDs** from local servers are normalized for the Messages API (`[a-zA-Z0-9_-]`) when translated.
 - **Prompt caching** is per model. Switching from local to remote pays for the full prefix once. Stickiness (`stickyTurns`) exists partly so a session doesn't pay that cost on every alternate step. The system prompt and tool list are frozen per session to keep the cached prefix stable.
 

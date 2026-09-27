@@ -76,39 +76,12 @@ export class ConfigError extends Error {
 }
 
 /**
- * Built-in defaults. There is deliberately no local provider or `local` model:
- * which server and model a machine runs is the user's choice, made with
- * `harness init`. Remote defaults exist so Claude Code agent aliases resolve.
+ * Built-in defaults: none. Harness doesn't pick a model vendor for anyone.
+ * `harness init` writes the providers and models the user chooses, local and
+ * remote alike.
  */
 export function defaultConfig(): Record<string, unknown> {
-  return {
-    providers: {
-      // Credentials resolve through the SDK chain (ANTHROPIC_API_KEY, `ant auth login`, ...).
-      anthropic: { type: 'anthropic' },
-    },
-    models: {
-      remote: {
-        provider: 'anthropic',
-        model: 'claude-opus-5',
-        contextWindow: 1_000_000,
-        maxOutputTokens: 32_000,
-      },
-      // Aliases used by Claude Code agent definitions (`model: sonnet`).
-      opus: {
-        provider: 'anthropic',
-        model: 'claude-opus-5',
-        contextWindow: 1_000_000,
-        maxOutputTokens: 32_000,
-      },
-      sonnet: {
-        provider: 'anthropic',
-        model: 'claude-sonnet-5',
-        contextWindow: 1_000_000,
-        maxOutputTokens: 32_000,
-      },
-      haiku: { provider: 'anthropic', model: 'claude-haiku-4-5', contextWindow: 200_000 },
-    },
-  };
+  return { providers: {}, models: {} };
 }
 
 export function loadConfig(

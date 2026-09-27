@@ -32,27 +32,12 @@ The VS Code extension validates both files against the schema and offers autocom
 
 ## Built-in defaults
 
-There is **no default local provider or model**. Until you configure one, turns route remotely and `doctor` reports the missing local model. The only defaults are Claude on the Anthropic API, so Claude Code agent aliases resolve:
+There are **no default providers or models**, local or remote. Harness doesn't choose a vendor for you; `harness init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `harness` offers setup.
 
-```jsonc
-{
-  "providers": {
-    "anthropic": { "type": "anthropic" }
-  },
-  "models": {
-    "remote": { "provider": "anthropic", "model": "claude-opus-5", "contextWindow": 1000000, "maxOutputTokens": 32000 },
-    "opus":   { "provider": "anthropic", "model": "claude-opus-5", "contextWindow": 1000000, "maxOutputTokens": 32000 },
-    "sonnet": { "provider": "anthropic", "model": "claude-sonnet-5", "contextWindow": 1000000, "maxOutputTokens": 32000 },
-    "haiku":  { "provider": "anthropic", "model": "claude-haiku-4-5", "contextWindow": 200000 }
-  }
-}
-```
+If only one tier is configured:
 
-With no local model:
-
-- `auto` routing sends turns remote, and the route line says so.
-- Agents pinned to `local` (such as `explore`) route normally instead of failing.
-- `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `harness init`.
+- With no local model, `auto` routing sends turns remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing. `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `harness init`.
+- With no remote model, turns stay local and escalation is unavailable.
 
 ## Keys
 
@@ -61,6 +46,8 @@ With no local model:
 | `type` | Fields |
 |---|---|
 | `openai-compatible` | `baseUrl` (required), `apiKey`, `tier` (`local`\|`remote`, default `local`), `headers` |
+| `openai` | `apiKey` (default `$OPENAI_API_KEY`), `baseUrl` (default `https://api.openai.com/v1`), `organization` |
+| `deepseek` | `apiKey` (default `$DEEPSEEK_API_KEY`), `baseUrl` (default `https://api.deepseek.com`) |
 | `anthropic` | `apiKey`, `baseUrl` |
 | `bedrock` | `region`, `profile`, `eagerToolInputStreaming` (default `false`) |
 | `vertex` | `projectId` (required), `region` (default `global`) |
@@ -72,9 +59,9 @@ With no local model:
 |---|---|---|
 | `provider` | required | A key of `providers` |
 | `model` | required | The provider's model ID |
-| `contextWindow` | detected | Tokens the server loads; used by the context-overflow rule. For local models it can be omitted, and the engine asks the server (Ollama, LM Studio, llama.cpp, vLLM). If the server can't say, it assumes 8,192 and `doctor` flags it. |
+| `contextWindow` | detected / catalog | Tokens the model accepts; used by the context-overflow rule. Setup fills it from the catalog for hosted models. For local models it can be omitted, and the engine asks the server (Ollama, LM Studio, llama.cpp, vLLM). If the server can't say, it assumes 8,192 and `doctor` flags it. |
 | `maxOutputTokens` | 16000 | `max_tokens` per call |
-| `effort` | unset | `low`\|`medium`\|`high`\|`xhigh`\|`max`, sent as `output_config.effort` on Claude |
+| `effort` | unset | `low`\|`medium`\|`high`\|`xhigh`\|`max`. Sent as `output_config.effort` (Anthropic), `reasoning_effort` (OpenAI), or thinking plus `reasoning_effort` (DeepSeek, where it turns thinking on). |
 | `price` | built-in table | `{ input, output, cacheRead?, cacheWrite? }` in USD per million tokens |
 
 ### `routing`
@@ -106,6 +93,8 @@ Values are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md).
 |---|---|
 | `HARNESS_HOME` | Relocate all config and data |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME` | Standard base directories |
+| `OPENAI_API_KEY` | OpenAI credentials |
+| `DEEPSEEK_API_KEY` | DeepSeek credentials |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_PROFILE` | Anthropic credentials (SDK chain) |
 | `AWS_REGION`, `AWS_PROFILE`, ... | Bedrock credentials (AWS chain) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Vertex credentials (ADC) |

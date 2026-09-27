@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" },
+    "openai": { "type": "openai" }
+  },
+  "models": {
+    // Omit contextWindow for local models and Harness asks the server.
+    "local": { "provider": "ollama", "model": "<your model>" },
+    "remote": {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "contextWindow": 1050000,
+      "effort": "medium"
+    },
+    "opus": { "provider": "openai", "model": "gpt-6-astra", "contextWindow": 1050000 },
+    "sonnet": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000 },
+    "haiku": { "provider": "openai", "model": "gpt-6-luna", "contextWindow": 1050000 }
+  },
+  "routing": { "budget": { "dailyUsd": 5 } }
+}

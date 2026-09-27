@@ -28,46 +28,94 @@ Choosing a local model:
 
 Health is checked with `GET {baseUrl}/models` (2-second timeout, cached for 30 seconds). If it fails, routing falls back to remote.
 
-## Remote: Claude
+## Remote providers
 
-All three platforms use the same adapter (the Anthropic Messages API through the official SDKs) with different client construction.
+Harness treats hosted providers equally. None is a default: `harness init` asks which one to use, and you can configure several (for example OpenAI as `remote` and DeepSeek for a cheap subagent alias). Known models and list prices live in `packages/providers/src/catalog.ts`. Anything else works when configured by hand.
+
+| Type | Models offered by `harness init` | Credentials |
+|---|---|---|
+| `anthropic` | Claude Opus 5, Sonnet 5, Haiku 4.5 | `ANTHROPIC_API_KEY`, `ant auth login`, or `apiKey` |
+| `openai` | GPT-6 Astra, Sol, Luna | `OPENAI_API_KEY` or `apiKey` |
+| `deepseek` | DeepSeek V4 Pro, V4.1 Flash | `DEEPSEEK_API_KEY` or `apiKey` |
+| `bedrock` | Claude models on AWS | AWS credential chain |
+| `vertex` | Claude models on Google Cloud | Application Default Credentials |
+| `openai-compatible` with `tier: remote` | Any model: OpenRouter, Together, Groq, Fireworks, a vLLM cluster | `apiKey` (use `{env:NAME}`) |
+
+### Model aliases are tiers
+
+Agent definitions can say `model: opus`, `model: sonnet`, or `model: haiku`. The names come from Claude Code agent files, but in Harness they mean the **large, medium, and small** model of whichever remote provider you chose. Setup maps them from the catalog:
+
+| Alias | Anthropic | OpenAI | DeepSeek |
+|---|---|---|---|
+| `opus` (large) | claude-opus-5 | gpt-6-astra | deepseek-v4-pro |
+| `sonnet` (medium) | claude-sonnet-5 | gpt-6-sol | deepseek-v4-pro (no medium; next larger) |
+| `haiku` (small) | claude-haiku-4-5 | gpt-6-luna | deepseek-flash |
+
+Point any alias at any provider in config. If an agent names an alias that isn't configured, the pin is ignored and normal routing applies.
+
+### OpenAI
+
+```jsonc
+"providers": { "openai": { "type": "openai" } },
+"models": { "remote": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000, "effort": "medium" } }
+```
+
+Uses Chat Completions with streaming and function calling. Sends `max_completion_tokens` (OpenAI's reasoning models reject `max_tokens`) and passes `effort` through as `reasoning_effort`. Cached prompt tokens (`prompt_tokens_details.cached_tokens`) are priced at the cached rate. Optional: `baseUrl` (Azure OpenAI or a proxy) and `organization`.
+
+### DeepSeek
+
+```jsonc
+"providers": { "deepseek": { "type": "deepseek" } },
+"models": { "remote": { "provider": "deepseek", "model": "deepseek-v4-pro", "contextWindow": 1000000, "effort": "high" } }
+```
+
+Setting `effort` turns on DeepSeek's thinking mode (`thinking: {type: enabled}` plus `reasoning_effort`, where `medium` maps to `high` and `xhigh` to `max`). In thinking mode with tools, DeepSeek requires earlier reasoning to be sent back, so the adapter replays `reasoning_content`, but only reasoning that the same DeepSeek model produced. Cache hits (`prompt_cache_hit_tokens`) are priced at the cache rate. Catalog prices are DeepSeek's peak-hour rates, so reported costs are upper bounds (off-peak is half).
 
 ### Anthropic API
 
 ```jsonc
-"providers": { "anthropic": { "type": "anthropic" } }
+"providers": { "anthropic": { "type": "anthropic" } },
+"models": { "remote": { "provider": "anthropic", "model": "claude-opus-5", "contextWindow": 1000000 } }
 ```
 
-Credentials resolve through the SDK chain: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, an `ant auth login` profile, or workload identity federation. You can also set `"apiKey": "{env:MY_VAR}"`.
+Uses the official Anthropic SDK. Credentials resolve through its chain: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, an `ant auth login` profile, or workload identity federation.
 
-### Amazon Bedrock
+### Amazon Bedrock and Google Vertex AI
 
 ```jsonc
-"providers": { "bedrock": { "type": "bedrock", "region": "us-east-1", "profile": "work" } },
+"providers": {
+  "bedrock": { "type": "bedrock", "region": "us-east-1", "profile": "work" },
+  "vertex": { "type": "vertex", "projectId": "my-project", "region": "global" }
+},
 "models": {
   "remote": { "provider": "bedrock", "model": "anthropic.claude-opus-5", "contextWindow": 1000000,
               "price": { "input": 5, "output": 25 } }
 }
 ```
 
-Uses the Mantle client from `@anthropic-ai/bedrock-sdk` and standard AWS credentials (environment, profile, SSO, instance role). Model IDs take the `anthropic.` prefix. `eagerToolInputStreaming` is off by default because older Bedrock deployments reject it; turn it on for current models.
+Bedrock uses the Mantle client from `@anthropic-ai/bedrock-sdk` with standard AWS credentials; model IDs take the `anthropic.` prefix, and `eagerToolInputStreaming` is off by default because older deployments reject it. Vertex uses Application Default Credentials. Both bill differently from the first-party API, so set `price` for accurate savings.
 
-### Google Vertex AI
+### Any other OpenAI-compatible API
 
 ```jsonc
-"providers": { "vertex": { "type": "vertex", "projectId": "my-project", "region": "global" } },
-"models": { "remote": { "provider": "vertex", "model": "claude-opus-5", "contextWindow": 1000000 } }
+"providers": {
+  "openrouter": { "type": "openai-compatible", "tier": "remote",
+                  "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "{env:OPENROUTER_API_KEY}" }
+},
+"models": {
+  "remote": { "provider": "openrouter", "model": "qwen/qwen3-coder", "contextWindow": 262144,
+              "price": { "input": 0.4, "output": 1.6 } }
+}
 ```
 
-Uses Application Default Credentials (`gcloud auth application-default login`).
+### Behavior common to every remote
 
-### What the adapter does
-
-- Streams with adaptive thinking (summarized display) on models that support it. Haiku 4.5 runs without thinking.
-- Sets `cache_control` at the top level so the stable prefix (system prompt, tools, earlier turns) is cached automatically.
-- Streams tool inputs eagerly where supported. The engine validates every tool input against its schema before running it, and never runs tools from a response cut off by `max_tokens` or `refusal`.
-- Sets `output_config.effort` when the model config has `effort`.
-- Maps rate limits, 5xx errors, and connection failures to retryable errors so the router can fall back.
+- Streaming output and tool calls, normalized into one transcript format, so a session can move between providers mid-turn.
+- Reasoning is kept in the transcript with the model that produced it and is only ever sent back to that model (Claude thinking signatures, DeepSeek `reasoning_content`).
+- Prompt caching: Claude gets a top-level `cache_control` breakpoint; OpenAI and DeepSeek cache automatically. The engine keeps the system prompt and tool list byte-stable to make all three effective.
+- `effort` maps to each provider's control: `output_config.effort` (Claude), `reasoning_effort` (OpenAI), thinking plus `reasoning_effort` (DeepSeek).
+- Rate limits, 5xx errors, and connection failures are retryable, so the router can fall back.
+- The engine validates every tool input against its schema and never runs tools from a response cut off by `max_tokens` or a refusal.
 
 ## Mock
 
@@ -75,4 +123,4 @@ Uses Application Default Credentials (`gcloud auth application-default login`).
 
 ## Adding a provider
 
-See "Add a provider" in [AGENTS.md](../AGENTS.md). Candidates on the roadmap: OpenAI, Gemini, Claude Platform on AWS (`@anthropic-ai/aws-sdk`), Microsoft Foundry, and MLX.
+See "Add a provider" in [AGENTS.md](../AGENTS.md). Candidates on the roadmap: Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry, and MLX. A new provider must get the same treatment as the existing ones: a catalog entry, setup support, pricing, and tests ([ADR 0006](adr/0006-provider-neutrality.md)).

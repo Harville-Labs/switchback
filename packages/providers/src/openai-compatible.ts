@@ -1,9 +1,15 @@
 /**
- * Adapter for OpenAI-compatible chat completion servers. This is the local
- * inference path: Ollama, llama.cpp `llama-server`, LM Studio, vLLM, and MLX
- * servers all expose `/v1/chat/completions` with SSE streaming.
+ * Adapter for Chat Completions APIs. It serves three kinds of provider:
+ *
+ * - local servers (Ollama, llama.cpp, LM Studio, vLLM, MLX), flavor `generic`
+ * - OpenAI, flavor `openai`: `max_completion_tokens`, `reasoning_effort`
+ * - DeepSeek, flavor `deepseek`: thinking mode, and reasoning replayed to the
+ *   same model on later turns (the API rejects tool-call histories without it)
+ *
+ * plus any other hosted OpenAI-compatible API (OpenRouter, Together, Groq,
+ * Fireworks, ...) as `generic` with `tier: remote`.
  */
-import type { Part, StopReason, Tier, Usage } from '@harness/protocol';
+import type { ModelRef, Part, StopReason, Tier, Usage } from '@harness/protocol';
 import { probeContextWindow } from './local-detect.ts';
 import {
   type ChatEvent,
@@ -13,11 +19,16 @@ import {
   ProviderError,
 } from './types.ts';
 
+export type ChatFlavor = 'generic' | 'openai' | 'deepseek';
+
 export interface OpenAICompatibleOptions {
   id: string;
   baseUrl: string;
   apiKey?: string;
   tier: Tier;
+  flavor?: ChatFlavor;
+  /** Shown when a hosted provider has no key, e.g. "set OPENAI_API_KEY". */
+  missingKeyHint?: string;
   headers?: Record<string, string>;
   /** Injected for tests. */
   fetch?: typeof fetch;
@@ -28,6 +39,7 @@ type WireMessage =
   | {
       role: 'assistant';
       content: string | null;
+      reasoning_content?: string;
       tool_calls?: {
         id: string;
         type: 'function';
@@ -36,7 +48,15 @@ type WireMessage =
     }
   | { role: 'tool'; tool_call_id: string; content: string };
 
-export function toWireMessages(system: string, messages: ChatRequest['messages']): WireMessage[] {
+/**
+ * Translate the neutral transcript. Reasoning is sent back only when
+ * `replayReasoningFor` is given, and only reasoning that model produced.
+ */
+export function toWireMessages(
+  system: string,
+  messages: ChatRequest['messages'],
+  replayReasoningFor?: ModelRef,
+): WireMessage[] {
   const out: WireMessage[] = [];
   if (system) out.push({ role: 'system', content: system });
   for (const m of messages) {
@@ -53,15 +73,26 @@ export function toWireMessages(system: string, messages: ChatRequest['messages']
       }
       if (text.length) out.push({ role: 'user', content: text.join('\n') });
     } else {
-      // Reasoning from any model is never replayed to an OpenAI-style server.
       const text = m.parts
         .filter((p) => p.type === 'text')
         .map((p) => p.text)
         .join('');
+      const reasoning = replayReasoningFor
+        ? m.parts
+            .filter(
+              (p) =>
+                p.type === 'reasoning' &&
+                p.origin.provider === replayReasoningFor.provider &&
+                p.origin.model === replayReasoningFor.model,
+            )
+            .map((p) => (p.type === 'reasoning' ? p.text : ''))
+            .join('')
+        : '';
       const calls = m.parts.filter((p) => p.type === 'tool_call');
       out.push({
         role: 'assistant',
         content: text || null,
+        ...(reasoning ? { reasoning_content: reasoning } : {}),
         ...(calls.length
           ? {
               tool_calls: calls.map((c) => ({
@@ -75,6 +106,35 @@ export function toWireMessages(system: string, messages: ChatRequest['messages']
     }
   }
   return out;
+}
+
+/** DeepSeek accepts low/high/max. */
+const DEEPSEEK_EFFORT = {
+  low: 'low',
+  medium: 'high',
+  high: 'high',
+  xhigh: 'max',
+  max: 'max',
+} as const;
+
+/**
+ * Normalize usage so `inputTokens` excludes cache hits, matching how cost is
+ * computed (cache reads are priced separately).
+ */
+export function normalizeUsage(u: {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number } | null;
+  prompt_cache_hit_tokens?: number;
+}): Usage {
+  const prompt = u.prompt_tokens ?? 0;
+  const cached = u.prompt_cache_hit_tokens ?? u.prompt_tokens_details?.cached_tokens ?? 0;
+  return {
+    inputTokens: Math.max(0, prompt - cached),
+    outputTokens: u.completion_tokens ?? 0,
+    cacheReadTokens: cached,
+    cacheWriteTokens: 0,
+  };
 }
 
 /** Parse a `text/event-stream` body into `data:` payloads. */
@@ -123,7 +183,14 @@ export class OpenAICompatibleProvider implements Provider {
     };
   }
 
+  private get flavor(): ChatFlavor {
+    return this.options.flavor ?? 'generic';
+  }
+
   async health(signal?: AbortSignal): Promise<HealthStatus> {
+    if (this.tier === 'remote' && !this.options.apiKey && this.options.missingKeyHint) {
+      return { ok: false, detail: `no API key (${this.options.missingKeyHint})` };
+    }
     const started = performance.now();
     try {
       const res = await this.fetchImpl(`${this.baseUrl}/models`, {
@@ -139,17 +206,34 @@ export class OpenAICompatibleProvider implements Provider {
     }
   }
 
-  contextWindow(model: string) {
+  async contextWindow(model: string) {
+    // Local servers can say what they load; hosted APIs are configured from the catalog.
+    if (this.tier === 'remote') return undefined;
     return probeContextWindow(this.baseUrl, model, { fetch: this.fetchImpl });
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatEvent> {
+    const flavor = this.flavor;
+    const origin: ModelRef = { provider: this.id, model: request.model };
+    const effort = request.effort;
     const body = {
       model: request.model,
       stream: true,
       stream_options: { include_usage: true },
-      max_tokens: request.maxTokens,
-      messages: toWireMessages(request.system, request.messages),
+      // OpenAI's reasoning models reject max_tokens.
+      ...(flavor === 'openai'
+        ? { max_completion_tokens: request.maxTokens }
+        : { max_tokens: request.maxTokens }),
+      ...(effort && flavor === 'deepseek'
+        ? { reasoning_effort: DEEPSEEK_EFFORT[effort], thinking: { type: 'enabled' } }
+        : effort
+          ? { reasoning_effort: effort }
+          : {}),
+      messages: toWireMessages(
+        request.system,
+        request.messages,
+        flavor === 'deepseek' ? origin : undefined,
+      ),
       ...(request.tools.length
         ? {
             tools: request.tools.map((t) => ({
@@ -182,6 +266,7 @@ export class OpenAICompatibleProvider implements Provider {
     }
 
     let text = '';
+    let reasoningText = '';
     const calls = new Map<number, { id: string; name: string; args: string }>();
     let usage: Usage = { inputTokens: 0, outputTokens: 0 };
     let finish: string | undefined;
@@ -202,24 +287,22 @@ export class OpenAICompatibleProvider implements Provider {
           };
           finish_reason?: string | null;
         }[];
-        usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+        usage?: Parameters<typeof normalizeUsage>[0] | null;
       };
       try {
         chunk = JSON.parse(data);
       } catch {
         continue;
       }
-      if (chunk.usage) {
-        usage = {
-          inputTokens: chunk.usage.prompt_tokens ?? 0,
-          outputTokens: chunk.usage.completion_tokens ?? 0,
-        };
-      }
+      if (chunk.usage) usage = normalizeUsage(chunk.usage);
       const choice = chunk.choices?.[0];
       if (!choice) continue;
       const delta = choice.delta ?? {};
       const reasoning = delta.reasoning_content ?? delta.reasoning;
-      if (reasoning) yield { type: 'reasoning.delta', text: reasoning };
+      if (reasoning) {
+        reasoningText += reasoning;
+        yield { type: 'reasoning.delta', text: reasoning };
+      }
       if (delta.content) {
         text += delta.content;
         yield { type: 'text.delta', text: delta.content };
@@ -235,6 +318,8 @@ export class OpenAICompatibleProvider implements Provider {
     }
 
     const parts: Part[] = [];
+    // Kept in the transcript with its origin; only DeepSeek gets it back.
+    if (reasoningText) parts.push({ type: 'reasoning', text: reasoningText, origin });
     if (text) parts.push({ type: 'text', text });
     for (const [index, call] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
       let input: unknown;

@@ -35,8 +35,11 @@ init options (all optional; prompts cover anything not given)
   --local-model <name>     Local model name as the server lists it
   --context-window <n>     Tokens the local server loads
   --no-local               Remote only
-  --remote <r>             anthropic | bedrock | vertex | none
-  --remote-model <m>       claude-opus-5 | claude-sonnet-5 | claude-haiku-4-5
+  --remote <r>             anthropic | openai | deepseek | bedrock | vertex |
+                           openai-compatible | none
+  --remote-model <m>       Model ID (see \`harness init\` for each provider's list)
+  --remote-url <url>       openai-compatible: API base URL
+  --remote-key-env <var>   openai-compatible: env var holding the API key
   --region <r>             Bedrock or Vertex region
   --profile <p>            AWS profile (Bedrock)
   --project-id <id>        GCP project (Vertex)
@@ -100,6 +103,8 @@ async function main(argv: string[]): Promise<number> {
       'no-local': { type: 'boolean', default: false },
       remote: { type: 'string' },
       'remote-model': { type: 'string' },
+      'remote-url': { type: 'string' },
+      'remote-key-env': { type: 'string' },
       region: { type: 'string' },
       profile: { type: 'string' },
       'project-id': { type: 'string' },
@@ -145,13 +150,9 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'init': {
       const { init } = await import('./commands/init.ts');
+      const { REMOTE_KINDS } = await import('@harness/engine');
       const contextWindow = positive('context-window', values['context-window']);
-      const remote = oneOf('remote', values.remote, [
-        'anthropic',
-        'bedrock',
-        'vertex',
-        'none',
-      ] as const);
+      const remote = oneOf('remote', values.remote, [...REMOTE_KINDS, 'none'] as const);
       const policy = oneOf('policy', values.policy, ['auto', 'ask', 'off'] as const);
       const dailyBudget = positive('daily-budget', values['daily-budget']);
       const monthlyBudget = positive('monthly-budget', values['monthly-budget']);
@@ -165,6 +166,8 @@ async function main(argv: string[]): Promise<number> {
         ...(contextWindow ? { contextWindow } : {}),
         ...(remote ? { remote } : {}),
         ...(values['remote-model'] ? { remoteModel: values['remote-model'] } : {}),
+        ...(values['remote-url'] ? { remoteUrl: values['remote-url'] } : {}),
+        ...(values['remote-key-env'] ? { remoteKeyEnv: values['remote-key-env'] } : {}),
         ...(values.region ? { region: values.region } : {}),
         ...(values.profile ? { profile: values.profile } : {}),
         ...(values['project-id'] ? { projectId: values['project-id'] } : {}),

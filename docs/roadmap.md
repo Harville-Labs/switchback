@@ -23,10 +23,10 @@ Make the local path excellent, since it's where users spend most of their time.
 
 Escalate less often and more precisely.
 
-- Real token counting (Claude `count_tokens`, local tokenizer) instead of the 4-chars heuristic
+- Real token counting (provider token-count endpoints and local tokenizers) instead of the 4-chars heuristic
 - Pre-routing difficulty classifier (a small local model scores the prompt before the first call)
 - Cost preview on escalation prompts ("≈ $0.04")
-- Refusal handling: Claude server-side fallbacks on first-party API; router-level fallback chain elsewhere
+- Refusal handling: a router-level fallback chain for every provider, plus provider-native fallbacks where offered
 - Prompt cache verification and cache-aware stickiness
 - Append-only context compaction for long sessions
 - Routing analytics: escalation reasons over time, savings by agent
@@ -37,9 +37,9 @@ Escalate less often and more precisely.
 - Background subagents that report later
 - Git worktree isolation for parallel editing subagents
 - MCP client support (tools and resources from MCP servers)
-- External agent runtimes as subagents: Claude Agent SDK, Claude Managed Agents, Amazon Bedrock AgentCore
+- External agent runtimes as subagents: Claude Agent SDK, Claude Managed Agents, OpenAI Agents SDK, Amazon Bedrock AgentCore
 - Per-agent budgets
-- More providers: Claude Platform on AWS, Microsoft Foundry, OpenAI, Gemini
+- More providers: Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry
 
 ## v0.5 VS Code
 

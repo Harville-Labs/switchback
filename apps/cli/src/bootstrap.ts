@@ -20,7 +20,7 @@ export interface CommonFlags {
 
 /**
  * Swap every configured provider for the scripted mock (keeping its tier) and
- * add a mock local model if none is configured, for demos and UI work with no
+ * add mock local/remote models where none are configured, for demos and UI work with no
  * model running.
  */
 export function mockify(config: HarnessConfig): HarnessConfig {
@@ -28,11 +28,13 @@ export function mockify(config: HarnessConfig): HarnessConfig {
   for (const [id, pc] of Object.entries(config.providers))
     providers[id] = { type: 'mock', tier: tierOf(pc) };
   const models = { ...config.models };
-  if (!models[config.routing.local]) {
-    providers['mock-local'] = { type: 'mock', tier: 'local' };
-    models[config.routing.local] = {
-      provider: 'mock-local',
-      model: 'mock-local',
+  for (const tier of ['local', 'remote'] as const) {
+    const alias = config.routing[tier];
+    if (models[alias]) continue;
+    providers[`mock-${tier}`] = { type: 'mock', tier };
+    models[alias] = {
+      provider: `mock-${tier}`,
+      model: `mock-${tier}`,
       contextWindow: 32_768,
       maxOutputTokens: 16_000,
     };

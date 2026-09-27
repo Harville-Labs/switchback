@@ -110,6 +110,55 @@ describe('buildSetupConfig', () => {
     expect(parsed.providers.ollama).toMatchObject({ type: 'openai-compatible', tier: 'local' });
   });
 
+  test('every hosted provider gets the same treatment', () => {
+    for (const [kind, model] of [
+      ['anthropic', 'claude-sonnet-5'],
+      ['openai', 'gpt-6-sol'],
+      ['deepseek', 'deepseek-flash'],
+    ] as const) {
+      const parsed = HarnessConfig.parse(
+        buildSetupConfig({ local, remote: { kind, model }, escalationPolicy: 'auto' }),
+      );
+      expect(parsed.providers[kind]?.type).toBe(kind);
+      expect(parsed.models.remote).toMatchObject({ provider: kind, model });
+      for (const alias of ['opus', 'sonnet', 'haiku'])
+        expect(parsed.models[alias]?.provider).toBe(kind);
+    }
+  });
+
+  test('DeepSeek models get an effort so thinking mode is on', () => {
+    const layer = buildSetupConfig({
+      remote: { kind: 'deepseek', model: 'deepseek-v4-pro' },
+      escalationPolicy: 'auto',
+    });
+    expect((layer.models as Record<string, { effort?: string }>).remote?.effort).toBe('high');
+  });
+
+  test('any OpenAI-compatible API can be the remote', () => {
+    const parsed = HarnessConfig.parse(
+      buildSetupConfig({
+        local,
+        remote: {
+          kind: 'openai-compatible',
+          baseUrl: 'https://openrouter.ai/api/v1',
+          model: 'qwen/qwen3-coder',
+          apiKeyEnv: 'OPENROUTER_API_KEY',
+          contextWindow: 262144,
+        },
+        escalationPolicy: 'auto',
+      }),
+    );
+    expect(parsed.providers.remote).toMatchObject({
+      type: 'openai-compatible',
+      tier: 'remote',
+      apiKey: '{env:OPENROUTER_API_KEY}',
+    });
+    expect(parsed.models.remote).toMatchObject({
+      model: 'qwen/qwen3-coder',
+      contextWindow: 262144,
+    });
+  });
+
   test('remote-only and local-only set the routing mode', () => {
     const remoteOnly = buildSetupConfig({
       remote: { kind: 'anthropic', model: 'claude-opus-5' },

@@ -17,6 +17,19 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     headers: z.record(z.string(), z.string()).optional(),
   }),
   z.object({
+    type: z.literal('openai'),
+    /** Defaults to $OPENAI_API_KEY. */
+    apiKey: Secret.optional(),
+    baseUrl: z.url().default('https://api.openai.com/v1'),
+    organization: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('deepseek'),
+    /** Defaults to $DEEPSEEK_API_KEY. */
+    apiKey: Secret.optional(),
+    baseUrl: z.url().default('https://api.deepseek.com'),
+  }),
+  z.object({
     type: z.literal('anthropic'),
     apiKey: Secret.optional(),
     baseUrl: z.url().optional(),
@@ -43,6 +56,13 @@ export function tierOf(config: ProviderConfig): Tier {
   return config.type === 'openai-compatible' || config.type === 'mock' ? config.tier : 'remote';
 }
 
+/** Credential env var for each hosted provider type, for setup and diagnostics. */
+export const CREDENTIAL_ENV: Partial<Record<ProviderConfig['type'], string>> = {
+  openai: 'OPENAI_API_KEY',
+  deepseek: 'DEEPSEEK_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+};
+
 const NO_THINKING = ['claude-haiku-4-5', 'anthropic.claude-haiku-4-5'];
 
 export function createProvider(id: string, config: ProviderConfig): Provider {
@@ -52,9 +72,33 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         id,
         baseUrl: config.baseUrl,
         tier: config.tier,
+        ...(config.tier === 'remote' ? { missingKeyHint: 'set providers.<id>.apiKey' } : {}),
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
         ...(config.headers ? { headers: config.headers } : {}),
       });
+    case 'openai': {
+      const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+      return new OpenAICompatibleProvider({
+        id,
+        baseUrl: config.baseUrl,
+        tier: 'remote',
+        flavor: 'openai',
+        missingKeyHint: 'set OPENAI_API_KEY or providers.<id>.apiKey',
+        ...(apiKey ? { apiKey } : {}),
+        ...(config.organization ? { headers: { 'OpenAI-Organization': config.organization } } : {}),
+      });
+    }
+    case 'deepseek': {
+      const apiKey = config.apiKey || process.env.DEEPSEEK_API_KEY;
+      return new OpenAICompatibleProvider({
+        id,
+        baseUrl: config.baseUrl,
+        tier: 'remote',
+        flavor: 'deepseek',
+        missingKeyHint: 'set DEEPSEEK_API_KEY or providers.<id>.apiKey',
+        ...(apiKey ? { apiKey } : {}),
+      });
+    }
     case 'anthropic':
       return new AnthropicProvider({
         id,

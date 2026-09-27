@@ -1,7 +1,7 @@
 {
   "name": "harness-vscode",
   "displayName": "Harness",
-  "description": "Local-first coding agent that escalates to Claude only when it needs to.",
+  "description": "Local-first coding agent that escalates to a hosted model (OpenAI, Anthropic, DeepSeek, ...) only when it needs to.",
   "version": "0.1.0",
   "private": true,
   "publisher": "harville-labs",

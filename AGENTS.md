@@ -4,7 +4,7 @@ Guide for AI coding agents (Claude Code, Harness itself, Codex, Cursor, and othe
 
 ## What this repo is
 
-Harness is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider (Claude through the Anthropic API, Amazon Bedrock, or Vertex AI). It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
+Harness is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Bedrock, Vertex, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
 
 Design docs live in [docs/](docs/README.md). Start with [docs/architecture.md](docs/architecture.md).
 
@@ -42,12 +42,13 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 1. **Clients are thin.** The TUI and VS Code extension talk to the engine only through `@harness/client` and the protocol. Neither imports `@harness/engine` internals for behavior. The TUI runs the engine in-process, but still through a transport pair, not a private fast path. If a client needs something, add a protocol method or event.
 2. **One view model.** Both clients render from `reduce()` in `packages/client/src/view.ts`. Fix display logic there, not in one client.
 3. **The router is pure.** `Router.decide()` has no I/O, no clock, and no randomness. The engine gathers health, spend, and signals, then passes them in. Every decision carries a `rule` and a human-readable `reason` that the UI shows.
-4. **Transcripts are append-only.** Never rewrite or delete earlier messages in a session. Provider prompt caches and Claude's thinking-block validation both depend on stable prefixes. Anything that changes history (compaction, redaction) is a new, explicit feature with its own design.
+4. **Transcripts are append-only.** Never rewrite or delete earlier messages in a session. Provider prompt caches and reasoning replay (Claude thinking signatures, DeepSeek `reasoning_content`) depend on stable prefixes. Anything that changes history (compaction, redaction) is a new, explicit feature with its own design.
 5. **Reasoning is only replayed to the model that produced it.** `ReasoningPart.origin` records the provider and model. Adapters drop reasoning from other models when translating.
 6. **Tool inputs are untrusted.** Validate with the tool's Zod schema, confine paths with `resolveInWorkspace`, and never run tool calls from a response that stopped on `max_tokens` or `refusal`.
 7. **Stable prompt prefix.** The system prompt is frozen when a session is created, and the tool list order is fixed (`ALL_TOOLS`). Don't put timestamps or per-request data in either.
 8. **stdout is for protocol only** in `serve --stdio`. Logs go to stderr or `log` events.
-9. **Local never silently costs money.** Remote spend happens only through a routing decision the user can see, within budget, or on an explicit `remote` request.
+9. **Provider neutrality.** No vendor is a default and none gets features the others don't. Provider-specific behavior lives only in `packages/providers`. When you add something for one provider (a catalog entry, a setup option, pricing, docs), do it for all of them or say in the PR why it can't apply. See [ADR 0006](docs/adr/0006-provider-neutrality.md).
+10. **Local never silently costs money.** Remote spend happens only through a routing decision the user can see, within budget, or on an explicit `remote` request.
 
 ## How to make common changes
 
@@ -71,7 +72,7 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 - Test with `bun:test`, colocated as `*.test.ts`. Use `ScriptedProvider` for engine behavior. Tests never call real model APIs or need Ollama running.
 - Comments explain *why*: a constraint, an invariant, a non-obvious tradeoff. Don't narrate what the code does.
 - Errors are specific and actionable: say what was wrong and how to fix it (`models.local references unknown provider "olama"`).
-- Model IDs: use exact IDs (`claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`) without date suffixes. Bedrock IDs carry an `anthropic.` prefix.
+- Model IDs and prices live in `packages/providers/src/catalog.ts`, the single source for every provider. Use exact provider IDs (`gpt-6-sol`, `deepseek-flash`, `claude-sonnet-5`) with no date suffixes; Bedrock IDs carry an `anthropic.` prefix. Note the date you checked prices.
 
 ## Workflow
 

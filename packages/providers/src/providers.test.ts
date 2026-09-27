@@ -102,7 +102,7 @@ describe('openai-compatible', () => {
         { type: 'text', text: 'Hello' },
         { type: 'tool_call', id: 'c1', name: 'read', input: { path: 'a' } },
       ],
-      usage: { inputTokens: 12, outputTokens: 5 },
+      usage: { inputTokens: 12, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0 },
       stopReason: 'tool_use',
     });
   });

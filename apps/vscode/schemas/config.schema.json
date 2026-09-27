@@ -49,6 +49,45 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "openai"
+              },
+              "apiKey": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "default": "https://api.openai.com/v1",
+                "type": "string",
+                "format": "uri"
+              },
+              "organization": {
+                "type": "string"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "deepseek"
+              },
+              "apiKey": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "default": "https://api.deepseek.com",
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "anthropic"
               },
               "apiKey": {

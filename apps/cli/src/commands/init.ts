@@ -6,15 +6,22 @@
 import { existsSync } from 'node:fs';
 import {
   buildSetupConfig,
+  catalogFor,
   type DetectedServer,
   detectLocalServers,
   harnessPaths,
   projectPaths,
-  REMOTE_MODELS,
+  REMOTE_KINDS,
+  type RemoteKind,
   type SetupAnswers,
   writeConfigLayer,
 } from '@harness/engine';
-import { hasAnthropicCredentials } from '@harness/providers';
+import {
+  CATALOG,
+  CREDENTIAL_ENV,
+  type HostedProviderKind,
+  hasAnthropicCredentials,
+} from '@harness/providers';
 import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 import { doctor } from './doctor.ts';
 
@@ -26,8 +33,11 @@ export interface InitFlags {
   localModel?: string;
   contextWindow?: number;
   noLocal: boolean;
-  remote?: 'anthropic' | 'bedrock' | 'vertex' | 'none';
+  remote?: RemoteKind | 'none';
   remoteModel?: string;
+  /** openai-compatible remote only. */
+  remoteUrl?: string;
+  remoteKeyEnv?: string;
   region?: string;
   profile?: string;
   projectId?: string;
@@ -293,65 +303,107 @@ function normalizeUrl(url: string): string {
 // Remote
 // ---------------------------------------------------------------------------
 
+const REMOTE_LABELS: Record<RemoteKind, string> = {
+  anthropic: 'Anthropic API (Claude)',
+  openai: 'OpenAI API (GPT)',
+  deepseek: 'DeepSeek API',
+  bedrock: 'Amazon Bedrock (Claude)',
+  vertex: 'Google Vertex AI (Claude)',
+  'openai-compatible': 'Other OpenAI-compatible API (OpenRouter, Together, Groq, ...)',
+};
+
+function credentialHint(kind: RemoteKind): string {
+  switch (kind) {
+    case 'anthropic':
+      return hasAnthropicCredentials()
+        ? 'credentials found'
+        : 'needs ANTHROPIC_API_KEY or `ant auth login`';
+    case 'openai':
+    case 'deepseek': {
+      const env = CREDENTIAL_ENV[kind] as string;
+      return process.env[env] ? 'credentials found' : `needs ${env}`;
+    }
+    case 'bedrock':
+      return 'AWS credentials';
+    case 'vertex':
+      return 'gcloud application-default credentials';
+    case 'openai-compatible':
+      return 'base URL and API key';
+  }
+}
+
 async function chooseRemote(
   flags: InitFlags,
   p: Prompter | undefined,
 ): Promise<SetupAnswers['remote']> {
   const env = process.env;
-  const hasKey = hasAnthropicCredentials();
-  const kind =
+  const kind: RemoteKind | 'none' | undefined =
     flags.remote ??
     (p
       ? await p.select(`\n${bold('Remote model')}\nWhere should escalated turns run?`, [
-          {
-            label: 'Claude via the Anthropic API',
-            value: 'anthropic' as const,
-            hint: hasKey ? 'credentials found' : 'needs ANTHROPIC_API_KEY or `ant auth login`',
-          },
-          { label: 'Claude on Amazon Bedrock', value: 'bedrock' as const, hint: 'AWS credentials' },
-          {
-            label: 'Claude on Google Vertex AI',
-            value: 'vertex' as const,
-            hint: 'gcloud application-default credentials',
-          },
+          ...REMOTE_KINDS.map((k) => ({
+            label: REMOTE_LABELS[k],
+            value: k,
+            hint: credentialHint(k),
+          })),
           { label: 'None: local only', value: 'none' as const },
         ])
-      : 'anthropic');
+      : undefined);
+  if (!kind)
+    throw new SetupError(
+      'pass --remote (anthropic, openai, deepseek, bedrock, vertex, openai-compatible, none)',
+    );
   if (kind === 'none') return { kind };
 
+  if (kind === 'openai-compatible') {
+    const baseUrl =
+      flags.remoteUrl ??
+      (p ? await p.text('API base URL (e.g. https://openrouter.ai/api/v1)') : undefined);
+    const model = flags.remoteModel ?? (p ? await p.text('Model ID') : undefined);
+    if (!baseUrl || !model)
+      throw new SetupError('--remote-url and --remote-model are required for openai-compatible');
+    const apiKeyEnv =
+      flags.remoteKeyEnv ??
+      (p ? await p.text('Environment variable holding the API key') : undefined);
+    const contextWindow =
+      flags.contextWindow ??
+      (p ? await p.number('Context window (tokens)', 128_000) : undefined) ??
+      128_000;
+    return {
+      kind,
+      baseUrl: baseUrl.replace(/\/+$/, ''),
+      model,
+      contextWindow,
+      ...(apiKeyEnv ? { apiKeyEnv } : {}),
+    };
+  }
+
+  const catalog = CATALOG[catalogFor(kind) as HostedProviderKind];
   const model =
     flags.remoteModel ??
     (p
-      ? await p.select('Model for escalated turns:', [
-          {
-            label: 'Claude Opus 5',
-            value: 'claude-opus-5',
-            hint: 'most capable; $5 / $25 per M tokens',
-          },
-          {
-            label: 'Claude Sonnet 5',
-            value: 'claude-sonnet-5',
-            hint: 'balanced; $2 / $10 per M tokens',
-          },
-          {
-            label: 'Claude Haiku 4.5',
-            value: 'claude-haiku-4-5',
-            hint: 'fastest; $1 / $5 per M tokens',
-          },
-        ])
-      : 'claude-opus-5');
-  if (!(REMOTE_MODELS as readonly string[]).includes(model)) {
-    throw new SetupError(`--remote-model must be one of ${REMOTE_MODELS.join(', ')}`);
+      ? await p.select(
+          'Model for escalated turns:',
+          catalog.models.map((m) => ({
+            label: m.label,
+            value: m.id,
+            hint: `${m.size}; $${m.price.input} / $${m.price.output} per M tokens${m.note ? ` (${m.note})` : ''}`,
+          })),
+        )
+      : catalog.models[0]?.id);
+  if (!model || !catalog.models.some((m) => m.id === model)) {
+    throw new SetupError(
+      `--remote-model must be one of ${catalog.models.map((m) => m.id).join(', ')}`,
+    );
   }
+  const hint = credentialHint(kind);
+  if (hint.startsWith('needs'))
+    console.log(yellow(`  ${REMOTE_LABELS[kind]} ${hint} before escalating.`));
 
   switch (kind) {
     case 'anthropic':
-      if (!hasKey)
-        console.log(
-          yellow(
-            '  No Anthropic credentials found. Set ANTHROPIC_API_KEY or run `ant auth login` before escalating.',
-          ),
-        );
+    case 'openai':
+    case 'deepseek':
       return { kind, model };
     case 'bedrock': {
       const region =
@@ -383,16 +435,14 @@ async function chooseRemote(
   }
 }
 
-/** First-run prompt before the TUI opens. Declining continues with built-in defaults. */
+/** First-run prompt before the TUI opens. */
 export async function offerSetup(cwd: string): Promise<number> {
   const p = new Prompter();
   const yes = await p.confirm(`${bold('No Harness configuration found.')} Set up your models now?`);
   p.close();
   if (!yes) {
     console.log(
-      dim(
-        'Continuing without a local model; turns will run remotely. Run `harness init` any time.\n',
-      ),
+      dim('Continuing without configured models. Run `harness init` any time to choose them.\n'),
     );
     return 0;
   }

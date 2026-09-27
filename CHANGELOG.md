@@ -5,6 +5,8 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 ## [Unreleased]
 
 ### Added
+- First-class OpenAI and DeepSeek providers alongside Anthropic: OpenAI uses `max_completion_tokens` and `reasoning_effort`; DeepSeek gets thinking mode and same-model `reasoning_content` replay; cached tokens are priced correctly for both
+- Model catalog (IDs, tiers, context windows, list prices) shared by setup and pricing; ADR 0006 on provider neutrality
 - `harness init` setup wizard: detects Ollama, LM Studio, llama.cpp, and vLLM, reads tool support and effective context size, configures Anthropic, Bedrock, or Vertex, escalation policy, and budgets; fully scriptable with flags
 - `harness config path|show|schema|edit`
 - First-run setup offer in the TUI; "Set Up Models" in VS Code
@@ -18,6 +20,8 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Diff previews in edit/write permission prompts (TUI and VS Code); doomed edits fail without prompting
 
 ### Changed
+- **Breaking:** no default providers or models at all. Harness doesn't pick a vendor; `harness init` asks, offering OpenAI, Anthropic, DeepSeek, Bedrock, Vertex, and any OpenAI-compatible API on equal terms
+- `opus`/`sonnet`/`haiku` agent aliases mean large/medium/small on the chosen provider
 - **Breaking:** no default local provider or model. Configure one with `harness init`. Without one, turns route remotely and local-only requests are refused with guidance.
 - Agents pinned to `local` fall back to normal routing when no local model is configured
 - Requires Bun 1.4+

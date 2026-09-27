@@ -6,6 +6,12 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
+  aliasModels,
+  CATALOG,
+  type CatalogModel,
+  type HostedProviderKind,
+} from '@harness/providers';
+import {
   deepMerge,
   defaultConfig,
   HarnessConfig,
@@ -26,7 +32,23 @@ export {
 // Answers -> config
 // ---------------------------------------------------------------------------
 
-export const REMOTE_MODELS = ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'] as const;
+/** Hosted providers setup offers, in the order shown. All are treated the same. */
+export const REMOTE_KINDS = [
+  'anthropic',
+  'openai',
+  'deepseek',
+  'bedrock',
+  'vertex',
+  'openai-compatible',
+] as const;
+export type RemoteKind = (typeof REMOTE_KINDS)[number];
+
+/** Which catalog a remote kind draws its models from. */
+export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
+  if (kind === 'bedrock' || kind === 'vertex') return 'anthropic';
+  if (kind === 'openai-compatible') return undefined;
+  return kind;
+}
 
 export interface SetupAnswers {
   local?: {
@@ -38,18 +60,19 @@ export interface SetupAnswers {
   };
   remote:
     | { kind: 'none' }
-    | { kind: 'anthropic'; model: string }
+    | { kind: 'anthropic' | 'openai' | 'deepseek'; model: string }
     | { kind: 'bedrock'; model: string; region: string; profile?: string }
-    | { kind: 'vertex'; model: string; projectId: string; region: string };
+    | { kind: 'vertex'; model: string; projectId: string; region: string }
+    | {
+        kind: 'openai-compatible';
+        model: string;
+        baseUrl: string;
+        apiKeyEnv?: string;
+        contextWindow: number;
+      };
   escalationPolicy: 'auto' | 'ask' | 'off';
   budget?: { dailyUsd?: number; monthlyUsd?: number };
 }
-
-const CONTEXT: Record<string, number> = {
-  'claude-opus-5': 1_000_000,
-  'claude-sonnet-5': 1_000_000,
-  'claude-haiku-4-5': 200_000,
-};
 
 /** Build the config layer described by the answers. */
 export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
@@ -75,27 +98,37 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   }
 
   const r = a.remote;
-  if (r.kind !== 'none') {
+  if (r.kind === 'openai-compatible') {
+    providers.remote = {
+      type: 'openai-compatible',
+      baseUrl: r.baseUrl,
+      tier: 'remote',
+      ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
+    };
+    models.remote = { provider: 'remote', model: r.model, contextWindow: r.contextWindow };
+  } else if (r.kind !== 'none') {
     const id = r.kind;
     providers[id] =
-      r.kind === 'anthropic'
-        ? { type: 'anthropic' }
-        : r.kind === 'bedrock'
-          ? { type: 'bedrock', region: r.region, ...(r.profile ? { profile: r.profile } : {}) }
-          : { type: 'vertex', projectId: r.projectId, region: r.region };
-    // Bedrock model IDs carry the `anthropic.` prefix; the API and Vertex use bare IDs.
+      r.kind === 'bedrock'
+        ? { type: 'bedrock', region: r.region, ...(r.profile ? { profile: r.profile } : {}) }
+        : r.kind === 'vertex'
+          ? { type: 'vertex', projectId: r.projectId, region: r.region }
+          : { type: r.kind };
+    const catalog = catalogFor(r.kind) as HostedProviderKind;
+    // Bedrock model IDs carry the `anthropic.` prefix; everywhere else uses bare IDs.
     const wire = (m: string) => (r.kind === 'bedrock' ? `anthropic.${m}` : m);
-    const entry = (m: string) => ({
+    const entry = (m: CatalogModel) => ({
       provider: id,
-      model: wire(m),
-      contextWindow: CONTEXT[m] ?? 200_000,
-      ...(m === 'claude-haiku-4-5' ? {} : { maxOutputTokens: 32_000 }),
+      model: wire(m.id),
+      contextWindow: m.contextWindow,
+      maxOutputTokens: m.maxOutputTokens,
+      // DeepSeek only thinks (and handles tools well) with an effort set.
+      ...(catalog === 'deepseek' ? { effort: 'high' } : {}),
     });
-    models.remote = entry(r.model);
-    // Claude Code agent aliases follow the chosen platform.
-    models.opus = entry('claude-opus-5');
-    models.sonnet = entry('claude-sonnet-5');
-    models.haiku = entry('claude-haiku-4-5');
+    const chosen = CATALOG[catalog].models.find((m) => m.id === r.model);
+    models.remote = chosen ? entry(chosen) : { provider: id, model: wire(r.model) };
+    // Agent aliases (`model: opus|sonnet|haiku`) mean large/medium/small on the chosen provider.
+    for (const [alias, m] of Object.entries(aliasModels(catalog))) models[alias] = entry(m);
   }
 
   // Always explicit, so re-running setup replaces a previous mode.

@@ -10,7 +10,7 @@ Many prospective customers already maintain subagents in `.claude/agents/*.md` a
 
 - Agent files use Markdown with YAML frontmatter (`name`, `description`, `tools`, `model`), the same format Claude Code uses.
 - We load `.claude/agents/` alongside our own `.harness/agents/` (ours win on name conflicts).
-- Claude Code tool names map to ours (`Read` → `read`, `Task` → `task`). `model: sonnet|opus|haiku|inherit` map to configurable model aliases.
+- Claude Code tool names map to ours (`Read` → `read`, `Task` → `task`). `model: sonnet|opus|haiku|inherit` map to configurable model aliases, which mean medium/large/small on whichever provider the user chose ([ADR 0006](0006-provider-neutrality.md)).
 - We extend the format only with optional fields (`route`, `model: local|remote`) that Claude Code ignores.
 - Project instructions come from `AGENTS.md`, falling back to `CLAUDE.md`.
 

@@ -8,7 +8,7 @@ Subagents are both a quality feature and a cost feature:
 
 - **Context isolation.** A subagent reads fifty files and returns a ten-line summary. The parent's context, and the size of every later remote call, stays small.
 - **Parallelism.** Several `task` calls in one response run concurrently, up to `subagents.maxConcurrent` per depth level.
-- **Per-agent routing.** Each subagent has its own routing. The built-in `explore` agent is pinned to `local`, so broad codebase searches never cost anything, even when the parent is running on Claude.
+- **Per-agent routing.** Each subagent has its own routing. The built-in `explore` agent is pinned to `local`, so broad codebase searches never cost anything, even when the parent is running on a remote model.
 
 ## Built-in agents
 
@@ -54,23 +54,9 @@ Later locations override earlier ones by name:
 
 Files that fail to parse are skipped and reported by `harness doctor` and at startup. They never prevent the engine from starting.
 
-### Model aliases for Claude Code compatibility
+### Model aliases
 
-Claude Code agents use `model: sonnet|opus|haiku`. Harness defines these aliases by default:
-
-| Alias | Default model |
-|---|---|
-| `opus` | `claude-opus-5` |
-| `sonnet` | `claude-sonnet-5` |
-| `haiku` | `claude-haiku-4-5` |
-
-On Bedrock or Vertex, point the aliases at that provider in config:
-
-```jsonc
-"models": {
-  "sonnet": { "provider": "bedrock", "model": "anthropic.claude-sonnet-5", "contextWindow": 1000000 }
-}
-```
+Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the large, medium, and small model of the remote provider you chose in `harness init`, whether that's Anthropic, OpenAI, DeepSeek, or another. So a `.claude/agents` file with `model: haiku` runs on `gpt-6-luna` or `deepseek-flash` just as well as on Claude Haiku. See [providers.md](providers.md#model-aliases-are-tiers) for the mapping, and point any alias at any model in config. An alias that isn't configured is ignored and normal routing applies.
 
 ## The `task` tool
 

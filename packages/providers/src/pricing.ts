@@ -1,4 +1,5 @@
 import type { Usage } from '@harness/protocol';
+import { catalogPrices } from './catalog.ts';
 
 /** USD per million tokens. */
 export interface Price {
@@ -9,15 +10,15 @@ export interface Price {
 }
 
 /**
- * First-party Claude API list prices. Bedrock and Vertex bill separately; users
- * override per model in config (`models.<alias>.price`). Local models cost 0.
+ * List prices for known hosted models (see catalog.ts), plus a few models that
+ * are priced but not offered in setup. Platform billing can differ (Bedrock,
+ * Vertex, resellers); override per model in config (`models.<alias>.price`).
+ * Local models cost 0.
  */
 export const DEFAULT_PRICES: Record<string, Price> = {
+  ...catalogPrices(),
   'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.25 },
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2 },
-  'claude-opus-5': { input: 5, output: 25 },
-  'claude-sonnet-5': { input: 2, output: 10 },
-  'claude-haiku-4-5': { input: 1, output: 5 },
 };
 
 /** Look up a price, tolerating platform prefixes such as Bedrock's `anthropic.`. */

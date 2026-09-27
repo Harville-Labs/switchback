@@ -12,12 +12,11 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('config', () => {
-  test('defaults have no local model; the user sets that up', () => {
+  test('defaults choose no vendor: no providers, no models', () => {
     const { config, sources } = loadConfig(dir, { HARNESS_HOME: join(dir, 'home') });
     expect(sources).toEqual([]);
-    expect(config.models.local).toBeUndefined();
-    expect(Object.values(config.providers).some((p) => p.type === 'openai-compatible')).toBe(false);
-    expect(config.models.remote?.model).toBe('claude-opus-5');
+    expect(config.providers).toEqual({});
+    expect(config.models).toEqual({});
     expect(config.routing.escalation.policy).toBe('auto');
   });
 
@@ -28,12 +27,12 @@ describe('config', () => {
       `{
         // comments are allowed
         "providers": {
-          "anthropic": { "type": "anthropic", "apiKey": "{env:MY_KEY}" },
+          "deepseek": { "type": "deepseek", "apiKey": "{env:MY_KEY}" },
           "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" }
         },
         "models": {
           "local": { "provider": "ollama", "model": "llama3.3" },
-          "remote": { "model": "claude-sonnet-5" }
+          "remote": { "provider": "deepseek", "model": "deepseek-flash", "contextWindow": 1000000 }
         },
         "routing": { "budget": { "dailyUsd": 2 } }
       }`,
@@ -44,13 +43,8 @@ describe('config', () => {
     });
     expect(sources).toHaveLength(1);
     expect(config.models.local).toMatchObject({ provider: 'ollama', model: 'llama3.3' });
-    // Deep merge: only the model changed; the default provider and window remain.
-    expect(config.models.remote).toMatchObject({
-      provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      contextWindow: 1_000_000,
-    });
-    expect(config.providers.anthropic).toMatchObject({ apiKey: 'sk-test' });
+    expect(config.providers.deepseek).toMatchObject({ baseUrl: 'https://api.deepseek.com' });
+    expect(config.providers.deepseek).toMatchObject({ apiKey: 'sk-test' });
     expect(config.routing.budget.dailyUsd).toBe(2);
   });
 
