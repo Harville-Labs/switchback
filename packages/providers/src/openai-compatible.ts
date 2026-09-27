@@ -4,6 +4,7 @@
  * servers all expose `/v1/chat/completions` with SSE streaming.
  */
 import type { Part, StopReason, Tier, Usage } from '@harness/protocol';
+import { probeContextWindow } from './local-detect.ts';
 import {
   type ChatEvent,
   type ChatRequest,
@@ -136,6 +137,10 @@ export class OpenAICompatibleProvider implements Provider {
     } catch (err) {
       return { ok: false, detail: `unreachable at ${this.baseUrl}: ${(err as Error).message}` };
     }
+  }
+
+  contextWindow(model: string) {
+    return probeContextWindow(this.baseUrl, model, { fetch: this.fetchImpl });
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatEvent> {

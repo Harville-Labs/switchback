@@ -42,6 +42,8 @@ export interface Provider {
   /** Cheap reachability check. Local providers are probed before routing to them. */
   health(signal?: AbortSignal): Promise<HealthStatus>;
   stream(request: ChatRequest): AsyncIterable<ChatEvent>;
+  /** The context window the server loads for `model`, when it can tell. */
+  contextWindow?(model: string): Promise<{ contextWindow: number; source: string } | undefined>;
 }
 
 /** Thrown for failures the router may recover from by falling back to another model. */

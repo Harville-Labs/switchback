@@ -84,6 +84,9 @@ interface TurnResult {
 }
 
 const HEALTH_TTL_OK_MS = 30_000;
+/** Assumed when neither config nor server says; small on purpose so we escalate rather than truncate. */
+const UNKNOWN_LOCAL_CONTEXT = 8_192;
+const UNKNOWN_REMOTE_CONTEXT = 200_000;
 const HEALTH_TTL_FAIL_MS = 5_000;
 
 export class Engine {
@@ -91,6 +94,8 @@ export class Engine {
   private sessions = new Map<string, LiveSession>();
   private providers = new Map<string, Provider>();
   private health = new Map<string, { ok: boolean; at: number }>();
+  /** Context windows reported by servers; null means asked and got no answer. */
+  private detectedContext = new Map<string, number | null>();
   private pendingPermissions = new Map<string, (d: PermissionDecision) => void>();
   private pendingEscalations = new Map<string, (approve: boolean) => void>();
   private alwaysAllowed = new Set<string>();
@@ -757,9 +762,40 @@ export class Engine {
       alias,
       ref: { provider: m.provider, model: m.model },
       tier: this.tierOfProvider(m.provider),
-      contextWindow: m.contextWindow,
+      contextWindow: this.contextWindowOf(alias),
       available: this.health.get(m.provider)?.ok ?? true,
     };
+  }
+
+  /** Configured window, else what the server reported, else a conservative guess. */
+  private contextWindowOf(alias: string): number {
+    const m = this.options.config.models[alias];
+    if (m?.contextWindow) return m.contextWindow;
+    const detected = this.detectedContext.get(alias);
+    if (detected) return detected;
+    return m && this.tierOfProvider(m.provider) === 'local'
+      ? UNKNOWN_LOCAL_CONTEXT
+      : UNKNOWN_REMOTE_CONTEXT;
+  }
+
+  /** Ask servers for the context window of models whose config leaves it out (once each). */
+  private async detectContextWindows(): Promise<void> {
+    await Promise.all(
+      Object.entries(this.options.config.models).map(async ([alias, m]) => {
+        if (m.contextWindow || this.detectedContext.has(alias)) return;
+        if (!this.health.get(m.provider)?.ok) return;
+        const provider = this.providers.get(m.provider);
+        const found = await provider?.contextWindow?.(m.model).catch(() => undefined);
+        this.detectedContext.set(alias, found?.contextWindow ?? null);
+        this.emit({
+          type: 'log',
+          level: found ? 'info' : 'warn',
+          message: found
+            ? `${alias}: context window ${found.contextWindow} (from ${found.source})`
+            : `${alias}: context window unknown; assuming ${this.contextWindowOf(alias)}. Set models.${alias}.contextWindow.`,
+        });
+      }),
+    );
   }
 
   private async refreshHealth(signal: AbortSignal): Promise<void> {
@@ -775,5 +811,6 @@ export class Engine {
         this.health.set(id, { ok: status.ok, at: Date.now() });
       }),
     );
+    await this.detectContextWindows();
   }
 }

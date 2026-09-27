@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { probeContextWindow } from '@harness/providers';
 import { HarnessConfig, loadConfig } from './config.ts';
 import {
   buildSetupConfig,
@@ -42,8 +43,20 @@ describe('detectLocalServers', () => {
     const [ollama] = servers;
     expect(ollama?.baseUrl).toBe('http://localhost:11434/v1');
     expect(ollama?.models).toEqual([
-      { id: 'coder:7b', contextWindow: 32768, maxContext: 131072, tools: true },
-      { id: 'chat:3b', contextWindow: OLLAMA_DEFAULT_CONTEXT, maxContext: 8192, tools: false },
+      {
+        id: 'coder:7b',
+        contextWindow: 32768,
+        maxContext: 131072,
+        tools: true,
+        contextSource: 'Ollama num_ctx',
+      },
+      {
+        id: 'chat:3b',
+        contextWindow: OLLAMA_DEFAULT_CONTEXT,
+        maxContext: 8192,
+        tools: false,
+        contextSource: `Ollama default (${OLLAMA_DEFAULT_CONTEXT})`,
+      },
     ]);
     expect(ollama?.note).toContain('OLLAMA_CONTEXT_LENGTH');
   });
@@ -60,7 +73,7 @@ describe('detectLocalServers', () => {
     expect(servers.map((s) => s.kind)).toEqual(['ollama', 'vllm']);
     expect(servers[0]?.models[0]?.contextWindow).toBe(16384);
     expect(servers[0]?.note).toBeUndefined();
-    expect(servers[1]?.models[0]).toEqual({ id: 'Qwen/Coder', contextWindow: 40960 });
+    expect(servers[1]?.models[0]).toMatchObject({ id: 'Qwen/Coder', contextWindow: 40960 });
   });
 
   test('returns nothing when no server is running', async () => {
@@ -158,5 +171,21 @@ describe('writeConfigLayer', () => {
     expect(() => writeConfigLayer(file, { routing: { mode: 'sideways' } })).toThrow(
       'invalid config',
     );
+  });
+});
+
+describe('probeContextWindow', () => {
+  test('identifies the server and reports where the number came from', async () => {
+    const llama = fakeFetch({
+      'http://gpu:8080/v1/models': { data: [{ id: 'default' }] },
+      'http://gpu:8080/props': { default_generation_settings: { n_ctx: 16384 } },
+    });
+    expect(await probeContextWindow('http://gpu:8080/v1', 'default', { fetch: llama })).toEqual({
+      contextWindow: 16384,
+      source: 'llama.cpp /props n_ctx',
+    });
+    expect(
+      await probeContextWindow('http://gpu:8080/v1', 'missing', { fetch: llama }),
+    ).toBeUndefined();
   });
 });

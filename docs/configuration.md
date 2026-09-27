@@ -72,7 +72,7 @@ With no local model:
 |---|---|---|
 | `provider` | required | A key of `providers` |
 | `model` | required | The provider's model ID |
-| `contextWindow` | 32768 | Used by the context-overflow rule. Set it to what the server really loads. |
+| `contextWindow` | detected | Tokens the server loads; used by the context-overflow rule. For local models it can be omitted, and the engine asks the server (Ollama, LM Studio, llama.cpp, vLLM). If the server can't say, it assumes 8,192 and `doctor` flags it. |
 | `maxOutputTokens` | 16000 | `max_tokens` per call |
 | `effort` | unset | `low`\|`medium`\|`high`\|`xhigh`\|`max`, sent as `output_config.effort` on Claude |
 | `price` | built-in table | `{ input, output, cacheRead?, cacheWrite? }` in USD per million tokens |

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HarnessClient } from '@harness/client';
 import { createTransportPair, type EngineEvent } from '@harness/protocol';
-import { ProviderError, type Script, ScriptedProvider } from '@harness/providers';
+import { type Provider, ProviderError, type Script, ScriptedProvider } from '@harness/providers';
 import { HarnessConfig } from './config.ts';
 import { Engine, type EngineOptions } from './engine.ts';
 import { serve } from './server.ts';
@@ -59,6 +59,40 @@ describe('Engine', () => {
     const usage = engine.usage();
     expect(usage.byTier.remote.costUsd).toBe(0);
     expect(usage.estimatedSavingsUsd).toBeGreaterThan(0);
+  });
+
+  test('uses the context window the server reports when config leaves it out', async () => {
+    const config = HarnessConfig.parse({
+      providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
+      models: {
+        local: { provider: 'lp', model: 'small' },
+        remote: { provider: 'rp', model: 'big' },
+      },
+    });
+    const lp = Object.assign(new ScriptedProvider('lp', 'local', [{ text: 'local' }]), {
+      contextWindow: async () => ({ contextWindow: 1_000, source: 'test' }),
+    });
+    const rp = new ScriptedProvider('rp', 'remote', [{ text: 'remote' }]);
+    const engine = new Engine({
+      workspaceRoot: root,
+      config,
+      providers: new Map<string, Provider>([
+        ['lp', lp],
+        ['rp', rp],
+      ]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    const s = engine.createSession({});
+    // ~1,500 tokens of prompt: over 85% of the detected 1,000-token window.
+    const r = await engine.runTurn(s.id, 'x'.repeat(6_000));
+    expect(r.text).toBe('remote');
+    expect(events.find((e) => e.type === 'route.decided')).toMatchObject({
+      rule: 'context-overflow',
+    });
+    expect(events.some((e) => e.type === 'log' && e.message.includes('context window 1000'))).toBe(
+      true,
+    );
   });
 
   test('runs tools and feeds results back', async () => {

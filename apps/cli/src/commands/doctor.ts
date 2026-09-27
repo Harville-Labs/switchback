@@ -34,7 +34,28 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,
   );
-  if (!config.models[r.local] && r.mode !== 'remote-only') {
+  const local = config.models[r.local];
+  const localProvider = local && config.providers[local.provider];
+  if (local && localProvider) {
+    if (local.contextWindow) {
+      out(`  local context window ${local.contextWindow.toLocaleString('en-US')} (configured)`);
+    } else {
+      const found = await createProvider(local.provider, localProvider)
+        .contextWindow?.(local.model)
+        .catch(() => undefined);
+      if (found) {
+        out(
+          `  local context window ${found.contextWindow.toLocaleString('en-US')} (detected from ${found.source})`,
+        );
+      } else {
+        problems++;
+        out(
+          `  ✗ local context window unknown; set models.${r.local}.contextWindow (assuming 8,192)`,
+        );
+      }
+    }
+  }
+  if (!local && r.mode !== 'remote-only') {
     problems++;
     out('  ✗ no local model configured; run `harness init` to pick one');
   }

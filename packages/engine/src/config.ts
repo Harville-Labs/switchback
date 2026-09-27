@@ -16,7 +16,11 @@ export type PermissionLevel = z.infer<typeof PermissionLevel>;
 export const ModelConfig = z.object({
   provider: z.string(),
   model: z.string(),
-  contextWindow: z.number().int().positive().default(32_768),
+  /**
+   * Tokens the server loads. Optional for local models: the engine asks the
+   * server (Ollama, LM Studio, llama.cpp, vLLM) when it's left out.
+   */
+  contextWindow: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().default(16_000),
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
   price: z
