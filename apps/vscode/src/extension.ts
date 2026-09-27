@@ -383,12 +383,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
     try {
       await engine.start();
       // Local models are user-configured; nudge toward setup when there isn't one.
+      // Never await a notification here: it resolves only when the user
+      // clicks, and activation would hang until then.
       if (!engine.init?.models.some((m) => m.tier === 'local')) {
-        const pick = await vscode.window.showInformationMessage(
-          'Harness has no local model configured, so every turn runs remotely.',
-          'Set Up Models',
-        );
-        if (pick) vscode.commands.executeCommand('harness.runSetup');
+        void vscode.window
+          .showInformationMessage(
+            'Harness has no local model configured, so every turn runs remotely.',
+            'Set Up Models',
+          )
+          .then((pick) => {
+            if (pick) void vscode.commands.executeCommand('harness.runSetup');
+          });
       }
     } catch (err) {
       const message = (err as Error).message;
@@ -397,14 +402,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
         type: 'disconnected',
         message: `Could not start harness: ${message}. Check the "harness.executablePath" setting.`,
       });
-      const pick = await vscode.window.showErrorMessage(
-        'Harness could not start its engine.',
-        'Open Settings',
-        'Show Logs',
-      );
-      if (pick === 'Open Settings')
-        vscode.commands.executeCommand('workbench.action.openSettings', 'harness.executablePath');
-      if (pick === 'Show Logs') log.show();
+      void vscode.window
+        .showErrorMessage('Harness could not start its engine.', 'Open Settings', 'Show Logs')
+        .then((pick) => {
+          if (pick === 'Open Settings')
+            void vscode.commands.executeCommand(
+              'workbench.action.openSettings',
+              'harness.executablePath',
+            );
+          if (pick === 'Show Logs') log.show();
+        });
     }
   };
 

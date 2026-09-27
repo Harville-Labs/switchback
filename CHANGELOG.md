@@ -14,6 +14,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Mock provider can script a tool call (`mock:tool {json}`) for demos and client development
 
 ### Fixed
+- VS Code: activation hung until the user dismissed the "no local model" or "could not start" notification
 - `shutdown` closed the connection before its reply was written
 
 ## [0.2.0] - 2026-09-27

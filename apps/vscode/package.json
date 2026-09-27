@@ -194,7 +194,8 @@
     "build": "bun build src/extension.ts --target=node --format=cjs --external vscode --outfile dist/extension.js && bun build src/webview/main.ts --target=browser --outfile dist/webview.js",
     "package": "bun run build && bunx @vscode/vsce package --no-dependencies",
     "build:test": "bun build test/suite/*.itest.ts --outdir out/test --target node --format cjs --external vscode",
-    "test": "bun run build && bun run build:test && vscode-test"
+    "test": "bun run build && bun run build:test && vscode-test --label dev",
+    "test:bundled": "bun run build && bun run build:test && bun ../cli/scripts/build.ts --outfile bin/harness && vscode-test --label bundled"
   },
   "dependencies": {
     "@harness/client": "workspace:*",

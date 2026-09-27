@@ -6,3 +6,4 @@ out/
 .vscode-test/
 test/**
 .vscode-test.mjs
+test/fixture-bundled/**
