@@ -6,6 +6,8 @@
       "name": "harness",
       "dependencies": {
         "@harness/engine": "workspace:*",
+        "@harness/protocol": "workspace:*",
+        "@harness/providers": "workspace:*",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.14",

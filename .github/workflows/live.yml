@@ -1,0 +1,48 @@
+name: Live models
+
+# Real-model tests. The local model runs in an Ollama service container.
+# Hosted providers run only when their secret is set, each on its cheapest
+# catalog model: OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY.
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Ollama model (must support tool calling)
+        default: qwen3:1.7b
+
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports: ['11434:11434']
+        env:
+          OLLAMA_CONTEXT_LENGTH: '16384'
+    env:
+      MODEL: ${{ inputs.model || 'qwen3:1.7b' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Pull local model
+        run: |
+          for i in $(seq 1 30); do curl -sf http://localhost:11434/api/version && break; sleep 2; done
+          curl -sf http://localhost:11434/api/pull -d "{\"model\":\"$MODEL\",\"stream\":false}"
+      - name: Live tests
+        env:
+          HARNESS_LIVE_LOCAL_URL: http://localhost:11434/v1
+          HARNESS_LIVE_LOCAL_MODEL: ${{ env.MODEL }}
+        run: bun run test:live

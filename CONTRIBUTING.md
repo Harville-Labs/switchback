@@ -25,6 +25,10 @@ bun run check        # must pass before you start and before you push
 - An ADR in `docs/adr/` if you change an invariant from AGENTS.md.
 - A `CHANGELOG.md` entry under *Unreleased* for anything user-visible.
 
+## Live tests
+
+Unit tests never touch real models. `bun run test:live` runs scenarios against a real local model (detected, or `HARNESS_LIVE_LOCAL_URL` + `HARNESS_LIVE_LOCAL_MODEL`) and against every hosted provider whose API key is set (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`), each on its cheapest model; the run prints what it spent. The **Live models** workflow runs nightly with an Ollama container and can be triggered manually with a different model. Run it before changing an adapter.
+
 ## Labels
 
 | Label | Meaning |
