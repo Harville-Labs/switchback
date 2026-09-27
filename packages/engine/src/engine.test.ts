@@ -491,6 +491,72 @@ describe('refusal fallback', () => {
   });
 });
 
+describe('prompt caching', () => {
+  test('consecutive requests share a byte-identical prefix', async () => {
+    const { engine, rp } = setup(
+      [],
+      [
+        { toolCalls: [{ name: 'read', input: { path: 'hello.txt' } }] },
+        { text: 'it says hello' },
+        { text: 'second answer' },
+      ],
+      { config: { routing: { mode: 'remote-only' } } },
+    );
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'read hello.txt');
+    await engine.runTurn(s.id, 'and again');
+    expect(rp.requests).toHaveLength(3);
+    const [first, ...rest] = rp.requests.map((r) => ({
+      system: r.system,
+      tools: JSON.stringify(r.tools),
+      messages: JSON.stringify(r.messages),
+      count: r.messages.length,
+      raw: r.messages,
+    }));
+    for (const next of rest) {
+      expect(next.system).toBe(first?.system ?? '');
+      expect(next.tools).toBe(first?.tools ?? '');
+    }
+    // Each request's transcript starts with the previous request's, byte for byte.
+    const all = [first, ...rest];
+    for (let i = 1; i < all.length; i++) {
+      const prev = all[i - 1];
+      const cur = all[i];
+      if (!prev || !cur) throw new Error('missing request');
+      expect(JSON.stringify(cur.raw.slice(0, prev.count))).toBe(prev.messages);
+    }
+  });
+
+  test('warns once when a follow-up call to the same remote model misses the cache', async () => {
+    const miss = { inputTokens: 20_000, outputTokens: 50, cacheReadTokens: 0 };
+    const hit = { inputTokens: 500, outputTokens: 50, cacheReadTokens: 19_500 };
+    const warnings = async (usages: (typeof miss)[]) => {
+      const { engine, events } = setup(
+        [],
+        usages.map((usage, i) =>
+          i < usages.length - 1
+            ? { toolCalls: [{ name: 'read', input: { path: 'hello.txt', n: i } }], usage }
+            : { text: 'done', usage },
+        ),
+        { config: { routing: { mode: 'remote-only' } } },
+      );
+      await engine.runTurn(engine.createSession({}).id, 'go');
+      return events.filter(
+        (e) => e.type === 'log' && e.level === 'warn' && /prompt-cache/.test(e.message),
+      );
+    };
+    expect(await warnings([miss, hit, hit])).toHaveLength(0);
+    expect(await warnings([miss, miss, miss])).toHaveLength(1);
+    // Small prompts can legitimately miss (below the provider's cacheable minimum).
+    expect(
+      await warnings([
+        { ...miss, inputTokens: 900 },
+        { ...miss, inputTokens: 900 },
+      ]),
+    ).toHaveLength(0);
+  });
+});
+
 describe('token counting', () => {
   function withCounter(contextWindow: number, exact: number) {
     const counted: string[] = [];

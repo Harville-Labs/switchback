@@ -14,6 +14,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - A declined escalation is reported as `escalation-declined` rather than a user override
 
 - Refusal handling for every provider: a remote refusal is retried on the next model in `routing.remote` (`refusal-fallback`), and the refused output is discarded. The first-party Anthropic API also gets server-side `fallbacks: "default"`, with the answering model billed and reported (#14)
+- Prompt-cache verification: a regression test guards the byte-stable request prefix, and a warning is logged once per session when a follow-up remote call to the same model misses the cache (#15)
 
 ### Changed
 - OpenAI-compatible providers (OpenAI, DeepSeek, Ollama, vLLM, llama.cpp, LM Studio, hosted gateways) now use the official `openai` SDK: typed errors, backoff on 429/5xx for hosted APIs, and fail-fast for local servers. Environment variables such as `OPENAI_API_KEY` are never picked up implicitly, so a key can't leak to another server

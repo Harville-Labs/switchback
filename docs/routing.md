@@ -131,3 +131,11 @@ Where a provider offers its own fallback, Harness uses it too. On the first-part
 
 A refusal from a local model is a quality signal instead: it counts as a failed local turn and escalates per `escalation.policy`.
 
+## Prompt caching and stickiness
+
+Remote calls are cheapest when they reuse the provider's prompt cache, which only works if each request starts with exactly the bytes of the previous one. Harness keeps that prefix stable: the system prompt is frozen when a session starts, tools are always sent in the same order, and the transcript is append-only. A test (`prompt caching` in `engine.test.ts`) checks that consecutive requests share a byte-identical prefix.
+
+The engine also checks it at runtime. When a follow-up call to the same remote model, within five minutes and with at least 4,096 input tokens, reads nothing from the cache, it logs one warning per session: either the provider doesn't cache that model or something is changing the prefix. `harness usage` reports the remote cache hit rate.
+
+Stickiness (`escalation.stickyTurns`) is a fixed number of model calls, not tied to cache state. We considered extending it while the remote cache is warm and decided against it: a warm cache makes a remote call cheaper, but a local call is still free, and stickiness exists to give a struggling task a few steps on the stronger model, not to save money. When routing returns to local and later escalates again, the first remote call may rewrite the cache; that cost is visible per rule in `harness usage --by rule`.
+
