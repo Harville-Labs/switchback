@@ -14,7 +14,8 @@ Usage
   harness run "<prompt>"          Run one prompt headlessly and print the answer
   harness config [action]         path | show | schema | edit
   harness doctor                  Check configuration, providers, and agents
-  harness usage                   Show spend, savings, and budget
+  harness usage                   Show spend, savings, cache hits, and budget
+                                  [--period today|week|month] [--by rule|agent|model]
   harness login [--server <url>]  Sign in to your organization (applies its policy)
   harness logout | whoami         Sign out / show organization and policy
   harness serve --stdio           Serve the engine protocol to one client over stdin/stdout
@@ -123,6 +124,8 @@ async function main(argv: string[]): Promise<number> {
       'monthly-budget': { type: 'string' },
       server: { type: 'string' },
       token: { type: 'string' },
+      by: { type: 'string' },
+      period: { type: 'string' },
       version: { type: 'boolean', short: 'v', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -238,7 +241,12 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'usage': {
       const { usage } = await import('./commands/usage.ts');
-      return usage({ ...common, json: values.json });
+      return usage({
+        ...common,
+        json: values.json,
+        ...(values.by ? { by: values.by } : {}),
+        ...(values.period ? { period: values.period } : {}),
+      });
     }
     default:
       process.stderr.write(`harness: unknown command "${command}"\n\n${HELP}`);

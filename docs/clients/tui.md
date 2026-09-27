@@ -38,7 +38,7 @@ Retries live in src/http/client.ts:88 ...
 | `/new` | New session with the default agent |
 | `/sessions` | Saved sessions in this workspace, newest first |
 | `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
-| `/usage` | Spend, budget, savings |
+| `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |

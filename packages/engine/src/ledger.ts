@@ -11,7 +11,9 @@ import {
   type ModelRef,
   type Tier,
   type Usage,
+  type UsagePeriod,
   type UsageReport,
+  type UsageRow,
 } from '@harness/protocol';
 import { costUsd, type Price, priceFor } from '@harness/providers';
 
@@ -23,6 +25,31 @@ export interface LedgerEntry {
   usage: Usage;
   costUsd: number;
   savingsUsd: number;
+  /** Routing rule that picked the model (absent in ledgers written before 0.4). */
+  rule?: string;
+  agent?: string;
+}
+
+/** Group entries by a key, most expensive first (ties: most calls). */
+export function groupUsage(entries: LedgerEntry[], key: (e: LedgerEntry) => string): UsageRow[] {
+  const rows = new Map<string, UsageRow>();
+  for (const e of entries) {
+    const k = key(e);
+    const row = rows.get(k) ?? { key: k, calls: 0, usage: emptyUsage(), costUsd: 0, savingsUsd: 0 };
+    row.calls++;
+    row.usage = addUsage(row.usage, e.usage);
+    row.costUsd += e.costUsd;
+    row.savingsUsd += e.savingsUsd;
+    rows.set(k, row);
+  }
+  return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd || b.calls - a.calls);
+}
+
+/** Share of input tokens read from cache. Input counts exclude cached tokens for every adapter. */
+export function cacheHitRate(usage: Usage): number | undefined {
+  const read = usage.cacheReadTokens ?? 0;
+  const total = usage.inputTokens + read + (usage.cacheWriteTokens ?? 0);
+  return total > 0 ? read / total : undefined;
 }
 
 export class UsageLedger {
@@ -47,7 +74,13 @@ export class UsageLedger {
     }
   }
 
-  record(sessionId: string, tier: Tier, model: ModelRef, usage: Usage): LedgerEntry {
+  record(
+    sessionId: string,
+    tier: Tier,
+    model: ModelRef,
+    usage: Usage,
+    meta: { rule?: string; agent?: string } = {},
+  ): LedgerEntry {
     const cost = tier === 'local' ? 0 : costUsd(usage, priceFor(model.model, this.prices));
     const reference = this.referenceModel ? priceFor(this.referenceModel, this.prices) : undefined;
     const savings = tier === 'local' ? costUsd(usage, reference) : 0;
@@ -59,6 +92,8 @@ export class UsageLedger {
       usage,
       costUsd: cost,
       savingsUsd: savings,
+      ...(meta.rule ? { rule: meta.rule } : {}),
+      ...(meta.agent ? { agent: meta.agent } : {}),
     };
     this.entries.push(entry);
     if (this.file) {
@@ -71,6 +106,10 @@ export class UsageLedger {
   setPricing(prices: Record<string, Price>, referenceModel: string | undefined): void {
     this.prices = prices;
     this.referenceModel = referenceModel;
+  }
+
+  priceOf(model: string): Price | undefined {
+    return priceFor(model, this.prices);
   }
 
   entriesSince(sinceIso: string): LedgerEntry[] {
@@ -101,23 +140,45 @@ export class UsageLedger {
     return { usage, costUsd: cost };
   }
 
-  report(budget: { dailyUsd?: number; monthlyUsd?: number }): UsageReport {
+  /** Mean output tokens per call in a session, for cost estimates. */
+  meanOutputTokens(sessionId: string): number | undefined {
+    let calls = 0;
+    let out = 0;
+    for (const e of this.entries) {
+      if (e.sessionId !== sessionId) continue;
+      calls++;
+      out += e.usage.outputTokens;
+    }
+    return calls ? out / calls : undefined;
+  }
+
+  report(
+    budget: { dailyUsd?: number; monthlyUsd?: number },
+    period: UsagePeriod = 'month',
+  ): UsageReport {
     const now = this.now();
-    const month = now.toISOString().slice(0, 7);
+    const today = now.toISOString().slice(0, 10);
+    const from =
+      period === 'today'
+        ? today
+        : period === 'week'
+          ? new Date(now.getTime() - 6 * 86_400_000).toISOString().slice(0, 10)
+          : `${today.slice(0, 7)}-01`;
+    const entries = this.entries.filter((e) => e.ts >= from);
     const byTier: UsageReport['byTier'] = {
       local: { usage: emptyUsage(), costUsd: 0 },
       remote: { usage: emptyUsage(), costUsd: 0 },
     };
     let savings = 0;
-    for (const e of this.entries) {
-      if (!e.ts.startsWith(month)) continue;
+    for (const e of entries) {
       byTier[e.tier].usage = addUsage(byTier[e.tier].usage, e.usage);
       byTier[e.tier].costUsd += e.costUsd;
       savings += e.savingsUsd;
     }
     const spend = this.spend();
+    const hitRate = cacheHitRate(byTier.remote.usage);
     return {
-      period: { from: `${month}-01`, to: now.toISOString().slice(0, 10) },
+      period: { from, to: today },
       byTier,
       estimatedSavingsUsd: savings,
       budget: {
@@ -126,6 +187,10 @@ export class UsageLedger {
         spentTodayUsd: spend.todayUsd,
         spentMonthUsd: spend.monthUsd,
       },
+      byRule: groupUsage(entries, (e) => e.rule ?? 'unrecorded'),
+      byAgent: groupUsage(entries, (e) => e.agent ?? 'unrecorded'),
+      byModel: groupUsage(entries, (e) => `${e.model.provider}/${e.model.model}`),
+      ...(hitRate !== undefined ? { remoteCacheHitRate: hitRate } : {}),
     };
   }
 }

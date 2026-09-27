@@ -21,6 +21,7 @@ import {
   SessionGetParams,
   SessionPromptParams,
   type Transport,
+  UsageGetParams,
 } from '@harness/protocol';
 import type { z } from 'zod';
 import type { Engine } from './engine.ts';
@@ -98,7 +99,7 @@ export function serve(
       case 'agents.list':
         return engine.listAgents();
       case 'usage.get':
-        return engine.usage();
+        return engine.usage(parse(UsageGetParams, req.params).period);
       case 'shutdown':
         // onShutdown runs after the reply is sent (see below).
         if (ownsEngine) await engine.shutdown();

@@ -5,6 +5,8 @@
 import {
   addInfo,
   addUserPrompt,
+  estimateLabel,
+  formatUsage,
   fromTranscript,
   initialView,
   reduce,
@@ -51,9 +53,10 @@ app.innerHTML = `
   .tool, .subagent { font-family: var(--vscode-editor-font-family); font-size: .9em; margin: 2px 0; }
   .ok { color: var(--vscode-charts-green); } .error { color: var(--vscode-errorForeground); } .running { color: var(--vscode-charts-yellow); }
   .detail { opacity: .7; margin-left: 1.4em; white-space: pre-wrap; }
-  .info { opacity: .7; white-space: pre-wrap; }
+  .info { opacity: .7; white-space: pre-wrap; font-family: var(--vscode-editor-font-family); }
   .prompt { border: 1px solid var(--vscode-focusBorder); border-radius: 4px; padding: 8px; margin: 6px 10px; }
   .prompt button { margin: 6px 6px 0 0; }
+  .prompt .estimate { color: var(--vscode-charts-yellow); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
   .chip { font-size: .8em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--vscode-panel-border); background: transparent; color: var(--vscode-foreground); opacity: .7; }
   .chip.on { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: transparent; opacity: 1; }
@@ -162,7 +165,7 @@ function render() {
   prompts.innerHTML = perm
     ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${perm.preview ? renderDiff(perm.preview) : '<br>'}<button data-perm="allow_once">Allow once</button><button data-perm="allow_always" class="secondary">Always this session</button><button data-perm="deny" class="secondary">Deny</button></div>`
     : escl
-      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>? ${esc(escl.reason)}<br><button data-esc="1">Use remote</button><button data-esc="0" class="secondary">Stay local</button></div>`
+      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<br><button data-esc="1">Use remote</button><button data-esc="0" class="secondary">Stay local</button></div>`
       : '';
   cancelBtn.hidden = !view.running;
   routeSelect.value = route;
@@ -307,10 +310,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       route = m.route;
       break;
     case 'usage':
-      view = addInfo(
-        view,
-        `saved ~$${m.usage.estimatedSavingsUsd.toFixed(2)} this month · remote $${m.usage.byTier.remote.costUsd.toFixed(2)}`,
-      );
+      view = addInfo(view, formatUsage(m.usage, 'rule'));
       break;
     case 'history':
       view = addInfo(

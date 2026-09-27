@@ -42,7 +42,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`) | `{ ok }` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
-| `usage.get` | none | Month-to-date spend, savings, and budget |
+| `usage.get` | `period?`: `today` \| `week` \| `month` (default) | Spend, savings, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
 
 ## Events
@@ -57,7 +57,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError` |
 | `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file |
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
-| `escalation.requested` | Waiting on `escalation.respond` (policy `ask`) |
+| `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session |
 | `usage.updated` | Cumulative session usage and cost |
 | `error` | Something failed; the turn may continue or end |

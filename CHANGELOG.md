@@ -4,6 +4,10 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- Escalation prompts show an estimated cost (`≈ $0.04`) in the TUI and VS Code; `escalation.requested` carries `estimatedCostUsd` (#13)
+- Routing analytics: ledger entries record the routing rule and agent; `harness usage --period today|week|month --by rule|agent|model`, `/usage` shows the week with a breakdown, and the remote cache hit rate is reported (#17, part of #15)
+
 ## [0.3.0] - 2026-09-27
 
 ### Added

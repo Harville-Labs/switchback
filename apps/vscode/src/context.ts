@@ -25,10 +25,7 @@ export class EditorContext implements vscode.Disposable {
   private readonly subs: vscode.Disposable[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(
-    private readonly root: string,
-    private readonly onChange: (state: EditorContextState) => void,
-  ) {
+  constructor(private readonly onChange: (state: EditorContextState) => void) {
     const changed = () => {
       if (this.timer) clearTimeout(this.timer);
       this.timer = setTimeout(() => this.onChange(this.state()), 150);

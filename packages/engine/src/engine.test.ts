@@ -350,6 +350,52 @@ describe('Engine', () => {
   });
 });
 
+describe('escalation cost and routing analytics', () => {
+  test('an escalation prompt carries a cost estimate and the ledger records the rule', async () => {
+    const { engine, events } = setup(
+      [{ error: new ProviderError('bad output', 'lp', false) }],
+      [{ text: 'remote answer' }],
+      { config: { routing: { escalation: { policy: 'ask' } } } },
+    );
+    engine.subscribe((e) => {
+      if (e.type === 'escalation.requested') engine.respondEscalation(e.requestId, true);
+    });
+    const s = engine.createSession({});
+    const r = await engine.runTurn(s.id, 'x'.repeat(4_000));
+    expect(r.text).toBe('remote answer');
+    const ask = events.find((e) => e.type === 'escalation.requested');
+    // claude-opus-5 is $5/M input: ~1k+ prompt tokens, so a few tenths of a cent at least.
+    expect(ask?.type === 'escalation.requested' && ask.estimatedCostUsd).toBeGreaterThan(0.005);
+    const report = engine.usage('today');
+    expect(report.byRule?.map((row) => row.key)).toEqual(['escalation']);
+    expect(report.byAgent?.[0]).toMatchObject({ key: 'build', calls: 1 });
+    expect(report.byModel?.[0]?.key).toBe('rp/claude-opus-5');
+  });
+
+  test('no estimate when the target model has no known price', async () => {
+    const { engine, events } = setup(
+      [{ error: new ProviderError('bad output', 'lp', false) }, { text: 'local' }],
+      [],
+      {
+        config: {
+          models: {
+            local: { provider: 'lp', model: 'small', contextWindow: 8_000 },
+            remote: { provider: 'rp', model: 'unpriced-model', contextWindow: 100_000 },
+          },
+          routing: { escalation: { policy: 'ask' } },
+        },
+      },
+    );
+    engine.subscribe((e) => {
+      if (e.type === 'escalation.requested') engine.respondEscalation(e.requestId, false);
+    });
+    await engine.runTurn(engine.createSession({}).id, 'hi');
+    const ask = events.find((e) => e.type === 'escalation.requested');
+    expect(ask).toBeDefined();
+    expect(ask && 'estimatedCostUsd' in ask).toBe(false);
+  });
+});
+
 describe('protocol round-trip', () => {
   test('client drives the engine over a transport', async () => {
     const { engine } = setup([{ text: 'over the wire' }], []);

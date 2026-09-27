@@ -46,12 +46,24 @@ Signals reset after an escalation and when a new user prompt starts (except stic
 `routing.escalation.policy`:
 
 - `auto` (default): escalate immediately and show the reason.
-- `ask`: emit `escalation.requested`. The TUI and VS Code show "Escalate to claude-opus-5? 3 consecutive tool errors [y/n]". Declining keeps the turn local. Headless runs always decline.
+- `ask`: emit `escalation.requested`. The TUI and VS Code show "Escalate to gpt-6-sol (≈ $0.04)? 3 consecutive tool errors [y/n]". Declining keeps the turn local. Headless runs always decline.
+
+The estimate covers the escalated call plus the `stickyTurns` calls that follow it: the prompt at the model's input price, this session's mean output per call (800 tokens until there's history), and, for the follow-ups, the prefix read from the provider's prompt cache. It aims to be within 2x of the bill, not exact. Models without a known price (see `models.<alias>.price`) get no estimate.
 - `off`: never escalate on quality signals. Context overflow and outages still route remote, because the local model can't take those calls at all.
 
 ## Budgets and savings
 
 Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`, which is what the same tokens would have cost on the configured remote model (`routing.remote`). `harness usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
+
+Each entry also records the routing `rule` and the `agent`, so you can see why money was spent:
+
+```sh
+harness usage --period week --by rule    # escalation vs. context-overflow vs. sticky ...
+harness usage --by agent                 # which agents cost the most
+harness usage --by model --json
+```
+
+The remote cache hit rate (cached input tokens over all remote input tokens) is shown alongside. A low rate on long remote runs usually means something is changing the prompt prefix.
 
 Prices come from the model catalog (`packages/providers/src/catalog.ts`: list prices for Anthropic, OpenAI, and DeepSeek models). Bedrock, Vertex, resellers, and DeepSeek off-peak pricing differ, so override per model with `models.<alias>.price` when accuracy matters.
 

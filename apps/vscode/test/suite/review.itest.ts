@@ -50,12 +50,15 @@ suite('Edit review in the diff editor', () => {
     return events;
   };
 
+  // Literal `${name}` placeholders: they must survive the edit untouched.
   test('accept applies the edit', async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: file content, not a template
     await run('hello ${name}', 'hi ${name}', 'harness.acceptEdit');
     assert.match(readFileSync(join(root(), 'hello.ts'), 'utf8'), /hi \$\{name\}/);
   });
 
   test('reject leaves the file alone and tells the model', async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: file content, not a template
     const events = await run('hello ${name}', 'bye ${name}', 'harness.rejectEdit');
     assert.strictEqual(readFileSync(join(root(), 'hello.ts'), 'utf8'), original);
     assert.ok(events.some((e) => e.type === 'tool.completed' && e.isError));

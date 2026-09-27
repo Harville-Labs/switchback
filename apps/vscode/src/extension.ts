@@ -264,7 +264,7 @@ class EngineConnection implements vscode.Disposable {
 
   async usage() {
     if (!this.client) return;
-    const u = await this.client.request('usage.get', {});
+    const u = await this.client.request('usage.get', { period: 'week' });
     this.broadcast({ type: 'usage', usage: u });
     const $ = (n: number) => `$${n.toFixed(2)}`;
     vscode.window.showInformationMessage(
@@ -348,7 +348,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const review = new EditReview();
   const editorContext = root
-    ? new EditorContext(root, (state) => engine?.post({ type: 'context', state }))
+    ? new EditorContext((state) => engine?.post({ type: 'context', state }))
     : undefined;
   if (editorContext) context.subscriptions.push(editorContext);
   context.subscriptions.push(

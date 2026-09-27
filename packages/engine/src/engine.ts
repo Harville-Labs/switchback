@@ -23,6 +23,7 @@ import {
   type ToolResultPart,
   textOf,
   type Usage,
+  type UsagePeriod,
   type UsageReport,
 } from '@harness/protocol';
 import {
@@ -36,6 +37,7 @@ import {
 import { estimateTokens, type ModelInfo, Router, SignalTracker } from '@harness/router';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import type { HarnessConfig } from './config.ts';
+import { estimateEscalationCost } from './estimate.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import type { OrgStatus } from './org/policy.ts';
@@ -399,8 +401,8 @@ export class Engine {
     return this.ledger.entriesSince(sinceIso);
   }
 
-  usage(): UsageReport {
-    return this.ledger.report(this.options.config.routing.budget);
+  usage(period?: UsagePeriod): UsageReport {
+    return this.ledger.report(this.options.config.routing.budget, period);
   }
 
   async shutdown(): Promise<void> {
@@ -434,6 +436,7 @@ export class Engine {
       if (signal.aborted) return 'cancelled';
       await this.refreshHealth(signal);
 
+      const inputTokens = estimateTokens(s.header.system, s.messages, specChars);
       const decision = this.router.decide({
         preference: forceLocal ? 'local' : preference,
         agent: {
@@ -441,7 +444,7 @@ export class Engine {
           route: agent.route,
           ...(agent.model ? { model: agent.model } : {}),
         },
-        estimatedInputTokens: estimateTokens(s.header.system, s.messages, specChars),
+        estimatedInputTokens: inputTokens,
         signals: s.signals.snapshot(),
         spend: this.ledger.spend(),
         escalationApproved,
@@ -470,7 +473,19 @@ export class Engine {
         return 'error';
       }
       if (decision.kind === 'ask') {
-        const approved = await this.askEscalation(s, decision.target.ref, decision.reason, signal);
+        const estimate = estimateEscalationCost({
+          price: this.ledger.priceOf(decision.target.ref.model),
+          inputTokens,
+          outputTokens: this.ledger.meanOutputTokens(s.header.id),
+          calls: 1 + this.options.config.routing.escalation.stickyTurns,
+        });
+        const approved = await this.askEscalation(
+          s,
+          decision.target.ref,
+          decision.reason,
+          estimate,
+          signal,
+        );
         escalationApproved = approved;
         forceLocal = !approved;
         step--;
@@ -524,7 +539,7 @@ export class Engine {
       }
       if (!done) throw new Error(`${provider.id} ended the stream without a result`);
 
-      this.recordUsage(s, model.tier, model.ref, done.usage);
+      this.recordUsage(s, model.tier, model.ref, done.usage, { rule, agent: agent.name });
       s.signals.recordTurn(model.tier, escalated);
       escalationApproved = false;
 
@@ -761,6 +776,7 @@ export class Engine {
     s: LiveSession,
     target: ModelRef,
     reason: string,
+    estimatedCostUsd: number | undefined,
     signal: AbortSignal,
   ): Promise<boolean> {
     const mode = this.options.interaction ?? 'prompt';
@@ -768,7 +784,14 @@ export class Engine {
     if (mode !== 'prompt') return false;
     const requestId = `esc_${crypto.randomUUID().slice(0, 8)}`;
     const approved = await this.waitFor(this.pendingEscalations, requestId, signal, false, () =>
-      this.emit({ type: 'escalation.requested', ...this.scope(s), requestId, reason, target }),
+      this.emit({
+        type: 'escalation.requested',
+        ...this.scope(s),
+        requestId,
+        reason,
+        target,
+        ...(estimatedCostUsd !== undefined ? { estimatedCostUsd } : {}),
+      }),
     );
     this.emit({ type: 'escalation.resolved', ...this.scope(s), requestId, approved });
     return approved;
@@ -822,8 +845,14 @@ export class Engine {
     this.store.append(s.header.id, message);
   }
 
-  private recordUsage(s: LiveSession, tier: Tier, model: ModelRef, usage: Usage): void {
-    this.ledger.record(s.header.id, tier, model, usage);
+  private recordUsage(
+    s: LiveSession,
+    tier: Tier,
+    model: ModelRef,
+    usage: Usage,
+    meta: { rule: string; agent: string },
+  ): void {
+    this.ledger.record(s.header.id, tier, model, usage, meta);
     const total = this.ledger.sessionCost(s.header.id);
     this.emit({
       type: 'usage.updated',

@@ -10,6 +10,7 @@ import type {
   PermissionDecision,
   SessionSummary,
   Tier,
+  UsageReport,
 } from '@harness/protocol';
 
 export type ViewItem =
@@ -51,6 +52,14 @@ export interface PendingEscalation {
   requestId: string;
   reason: string;
   target: ModelRef;
+  estimatedCostUsd?: number;
+}
+
+/** `≈ $0.04`, shared by both clients' escalation prompts; empty when unknown. */
+export function estimateLabel(usd: number | undefined): string {
+  if (usd === undefined) return '';
+  if (usd < 0.01) return '≈ <$0.01';
+  return `≈ $${usd.toFixed(2)}`;
 }
 
 export interface ViewState {
@@ -290,7 +299,14 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
         ...state,
         escalations: [
           ...state.escalations,
-          { requestId: event.requestId, reason: event.reason, target: event.target },
+          {
+            requestId: event.requestId,
+            reason: event.reason,
+            target: event.target,
+            ...(event.estimatedCostUsd !== undefined
+              ? { estimatedCostUsd: event.estimatedCostUsd }
+              : {}),
+          },
         ],
       };
     case 'usage.updated':
@@ -324,6 +340,9 @@ function updateSubagent(
           requestId: event.requestId,
           reason: `${row.agent}: ${event.reason}`,
           target: event.target,
+          ...(event.estimatedCostUsd !== undefined
+            ? { estimatedCostUsd: event.estimatedCostUsd }
+            : {}),
         },
       ],
     };
@@ -331,4 +350,35 @@ function updateSubagent(
   const items = [...state.items];
   items[i] = row;
   return { ...state, items };
+}
+
+export type UsageBreakdown = 'rule' | 'agent' | 'model';
+
+/**
+ * Plain-text usage summary shared by `harness usage`, the TUI's `/usage`, and
+ * VS Code. `by` adds a breakdown table.
+ */
+export function formatUsage(u: UsageReport, by?: UsageBreakdown): string {
+  const $ = (n: number) => `$${n.toFixed(2)}`;
+  const tok = (n: number) => n.toLocaleString('en-US');
+  const { local, remote } = u.byTier;
+  const lines = [
+    `Usage ${u.period.from} to ${u.period.to}`,
+    `  local   ${tok(local.usage.inputTokens)} in / ${tok(local.usage.outputTokens)} out   ${$(0)}`,
+    `  remote  ${tok(remote.usage.inputTokens)} in / ${tok(remote.usage.outputTokens)} out   ${$(remote.costUsd)}${u.remoteCacheHitRate !== undefined ? `   cache hits ${Math.round(u.remoteCacheHitRate * 100)}%` : ''}`,
+    `  saved   ~${$(u.estimatedSavingsUsd)} vs. running everything remotely`,
+    `  budget  today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}, month ${$(u.budget.spentMonthUsd)}${u.budget.monthlyUsd ? ` of ${$(u.budget.monthlyUsd)}` : ''}`,
+  ];
+  const rows = by === 'rule' ? u.byRule : by === 'agent' ? u.byAgent : by ? u.byModel : undefined;
+  if (by && rows) {
+    lines.push('', `By ${by}`);
+    const width = Math.max(by.length, ...rows.map((r) => r.key.length));
+    for (const r of rows) {
+      lines.push(
+        `  ${r.key.padEnd(width)}  ${String(r.calls).padStart(5)} calls  ${tok(r.usage.inputTokens + (r.usage.cacheReadTokens ?? 0)).padStart(12)} in  ${$(r.costUsd).padStart(9)}`,
+      );
+    }
+    if (rows.length === 0) lines.push('  no model calls in this period');
+  }
+  return lines.join('\n');
 }

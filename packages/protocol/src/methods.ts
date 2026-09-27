@@ -121,12 +121,36 @@ export interface AgentSummary {
   model?: string;
 }
 
+export const UsagePeriod = z.enum(['today', 'week', 'month']);
+export type UsagePeriod = z.infer<typeof UsagePeriod>;
+
+export const UsageGetParams = z.object({
+  /** `week` is the last 7 days including today. Defaults to the calendar month. */
+  period: UsagePeriod.optional(),
+});
+export type UsageGetParams = z.infer<typeof UsageGetParams>;
+
+/** Model calls grouped by one key (a routing rule, an agent, or `provider/model`). */
+export interface UsageRow {
+  key: string;
+  calls: number;
+  usage: Usage;
+  costUsd: number;
+  savingsUsd: number;
+}
+
 export interface UsageReport {
   period: { from: string; to: string };
   byTier: Record<Tier, { usage: Usage; costUsd: number }>;
   /** What the local tokens would have cost on the configured reference remote model. */
   estimatedSavingsUsd: number;
   budget: { dailyUsd?: number; monthlyUsd?: number; spentTodayUsd: number; spentMonthUsd: number };
+  /** Why calls were routed where they were, most expensive first. */
+  byRule?: UsageRow[];
+  byAgent?: UsageRow[];
+  byModel?: UsageRow[];
+  /** Share of remote input tokens served from the provider's prompt cache (0 to 1). */
+  remoteCacheHitRate?: number;
 }
 
 export interface Methods {
@@ -139,7 +163,7 @@ export interface Methods {
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };
   'escalation.respond': { params: EscalationRespondParams; result: { ok: true } };
   'agents.list': { params: Record<string, never>; result: AgentSummary[] };
-  'usage.get': { params: Record<string, never>; result: UsageReport };
+  'usage.get': { params: UsageGetParams; result: UsageReport };
   shutdown: { params: Record<string, never>; result: { ok: true } };
 }
 
@@ -204,6 +228,12 @@ export type EngineEvent =
       requestId: string;
       reason: string;
       target: ModelRef;
+      /**
+       * Rough cost of approving: this call plus the sticky follow-ups, from
+       * the prompt size and this session's typical output. Absent when the
+       * target model has no known price.
+       */
+      estimatedCostUsd?: number;
     } & SessionScoped)
   | ({
       type: 'subagent.started';

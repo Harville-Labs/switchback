@@ -1,6 +1,8 @@
 import {
   addInfo,
   addUserPrompt,
+  estimateLabel,
+  formatUsage,
   fromTranscript,
   type HarnessClient,
   initialView,
@@ -40,7 +42,7 @@ const HELP = `Commands
   /new                     start a new session
   /sessions                list saved sessions in this workspace
   /resume <n|id>           switch to a saved session
-  /usage                   spend, budget, and savings
+  /usage [rule|agent|model] this week's spend, savings, and why
   /exit                    quit
 Input: @ mentions a file (its contents are attached); ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
@@ -183,9 +185,11 @@ export function App({
         case 'resume':
           return resume(args[0]);
         case 'usage': {
-          const u = await client.request('usage.get', {});
-          setUsage(u);
-          setView((v) => addInfo(v, formatUsage(u)));
+          // `/usage` is the weekly picture: where the money went and why.
+          const u = await client.request('usage.get', { period: 'week' });
+          const by = (['rule', 'agent', 'model'] as const).find((b) => b === args[0]) ?? 'rule';
+          setView((v) => addInfo(v, formatUsage(u, by)));
+          client.request('usage.get', {}).then(setUsage, () => {});
           return;
         }
         case 'help':
@@ -279,7 +283,11 @@ export function App({
       {escalation && !permission && (
         <Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
           <Text>
-            Escalate to <Text bold>{escalation.target.model}</Text>? {escalation.reason}
+            Escalate to <Text bold>{escalation.target.model}</Text>
+            {escalation.estimatedCostUsd !== undefined ? (
+              <Text color="yellow"> ({estimateLabel(escalation.estimatedCostUsd)})</Text>
+            ) : null}
+            ? {escalation.reason}
           </Text>
           <Text dimColor>[y] use remote for this turn [n] stay local</Text>
         </Box>
@@ -462,13 +470,4 @@ function ago(iso: string): string {
   if (s < 5400) return `${Math.round(s / 60)}m ago`;
   if (s < 129600) return `${Math.round(s / 3600)}h ago`;
   return `${Math.round(s / 86400)}d ago`;
-}
-
-function formatUsage(u: UsageReport): string {
-  const $ = (n: number) => `$${n.toFixed(2)}`;
-  return [
-    `This month: remote ${$(u.byTier.remote.costUsd)} · local ${u.byTier.local.usage.outputTokens.toLocaleString()} output tokens (free)`,
-    `Saved ~${$(u.estimatedSavingsUsd)} vs. all-remote`,
-    `Budget: today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''} · month ${$(u.budget.spentMonthUsd)}${u.budget.monthlyUsd ? ` of ${$(u.budget.monthlyUsd)}` : ''}`,
-  ].join('\n');
 }
