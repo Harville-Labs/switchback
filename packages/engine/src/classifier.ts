@@ -63,6 +63,8 @@ export async function classifyPrompt(
       ],
       tools: [],
       maxTokens: 256,
+      // A rating needs no chain of thought, and thinking models would blow the timeout.
+      effort: 'none',
       signal,
     })) {
       if (ev.type === 'done') {

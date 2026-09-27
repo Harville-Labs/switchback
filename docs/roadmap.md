@@ -28,17 +28,18 @@ Make the local path excellent, since it's where users spend most of their time.
 - Shared engine daemon: the TUI and VS Code attach to the same live sessions
 - Integration tests inside real VS Code, including the bundled engine
 
-## v0.4 Routing intelligence
+## v0.4 Routing intelligence (released)
 
 Escalate less often and more precisely.
 
-- Real token counting (provider token-count endpoints and local tokenizers) instead of the 4-chars heuristic
-- Pre-routing difficulty classifier (a small local model scores the prompt before the first call)
+- Several providers at once: ordered model chains per tier, with `context-fit` and in-tier `fallback`
+- Real token counting (a BPE tokenizer, plus the local server's `/tokenize` near the threshold)
+- Optional pre-routing difficulty classifier on a small local model
 - Cost preview on escalation prompts ("≈ $0.04")
-- Refusal handling: a router-level fallback chain for every provider, plus provider-native fallbacks where offered
-- Prompt cache verification and cache-aware stickiness
+- Refusal handling: a fallback chain for every provider, plus Anthropic's server-side fallbacks
+- Prompt cache verification and a documented stickiness decision
 - Append-only context compaction for long sessions
-- Routing analytics: escalation reasons over time, savings by agent
+- Routing analytics: `harness usage --by rule|agent|model`, cache hit rate
 
 ## v0.5 Subagents and integrations
 

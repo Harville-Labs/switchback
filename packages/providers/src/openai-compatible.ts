@@ -15,6 +15,7 @@ import { probeContextWindow } from './local-detect.ts';
 import {
   type ChatEvent,
   type ChatRequest,
+  type Effort,
   type HealthStatus,
   type Provider,
   ProviderError,
@@ -117,6 +118,30 @@ const DEEPSEEK_EFFORT = {
   xhigh: 'max',
   max: 'max',
 } as const;
+
+/**
+ * Reasoning controls per flavor. `none` turns thinking off: DeepSeek by not
+ * enabling it, OpenAI with `reasoning_effort: "none"`, and local servers with
+ * both `reasoning_effort: "none"` (Ollama) and the chat-template switch that
+ * vLLM, llama.cpp, and SGLang pass to thinking models such as Qwen3.
+ */
+export function effortParams(
+  flavor: ChatFlavor,
+  effort: Effort | undefined,
+): Record<string, unknown> {
+  if (!effort) return {};
+  if (flavor === 'deepseek')
+    return effort === 'none'
+      ? {}
+      : { reasoning_effort: DEEPSEEK_EFFORT[effort], thinking: { type: 'enabled' } };
+  if (flavor === 'generic') {
+    if (effort === 'none')
+      return { reasoning_effort: 'none', chat_template_kwargs: { enable_thinking: false } };
+    // Local servers (Ollama in particular) accept only low/medium/high.
+    return { reasoning_effort: effort === 'xhigh' || effort === 'max' ? 'high' : effort };
+  }
+  return { reasoning_effort: effort };
+}
 
 /**
  * Normalize usage so `inputTokens` excludes cache hits, matching how cost is
@@ -294,11 +319,7 @@ export class OpenAICompatibleProvider implements Provider {
       ...(flavor === 'openai'
         ? { max_completion_tokens: request.maxTokens }
         : { max_tokens: request.maxTokens }),
-      ...(effort && flavor === 'deepseek'
-        ? { reasoning_effort: DEEPSEEK_EFFORT[effort], thinking: { type: 'enabled' } }
-        : effort
-          ? { reasoning_effort: effort }
-          : {}),
+      ...effortParams(flavor, effort),
       messages: toWireMessages(
         request.system,
         request.messages,

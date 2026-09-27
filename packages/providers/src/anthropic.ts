@@ -177,7 +177,8 @@ export class AnthropicProvider implements Provider {
 
   async *stream(request: ChatRequest): AsyncIterable<ChatEvent> {
     const eager = this.options.eagerToolInputStreaming ?? this.options.platform.kind !== 'bedrock';
-    const thinking = !(this.options.noThinkingModels ?? []).includes(request.model);
+    const thinking =
+      request.effort !== 'none' && !(this.options.noThinkingModels ?? []).includes(request.model);
 
     const params: Anthropic.MessageStreamParams = {
       model: request.model,
@@ -199,7 +200,9 @@ export class AnthropicProvider implements Provider {
           }
         : {}),
       ...(thinking ? { thinking: { type: 'adaptive', display: 'summarized' } } : {}),
-      ...(request.effort ? { output_config: { effort: request.effort } } : {}),
+      ...(request.effort && request.effort !== 'none'
+        ? { output_config: { effort: request.effort } }
+        : {}),
     };
 
     const useFallback =

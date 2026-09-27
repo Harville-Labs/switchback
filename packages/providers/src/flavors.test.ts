@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message } from '@harness/protocol';
 import { aliasModels, CATALOG } from './catalog.ts';
-import { normalizeUsage, OpenAICompatibleProvider } from './openai-compatible.ts';
+import { effortParams, normalizeUsage, OpenAICompatibleProvider } from './openai-compatible.ts';
 import { createProvider } from './registry.ts';
 import type { ChatEvent, ChatRequest } from './types.ts';
 
@@ -306,5 +306,23 @@ describe('local /tokenize', () => {
       fetch: fetchStub,
     });
     expect(await p.countTokens('m', 'x')).toBeUndefined();
+  });
+});
+
+describe('effort none (no thinking)', () => {
+  test('each flavor turns thinking off its own way', () => {
+    expect(effortParams('generic', 'none')).toEqual({
+      reasoning_effort: 'none',
+      chat_template_kwargs: { enable_thinking: false },
+    });
+    expect(effortParams('openai', 'none')).toEqual({ reasoning_effort: 'none' });
+    expect(effortParams('deepseek', 'none')).toEqual({});
+    expect(effortParams('deepseek', 'high')).toMatchObject({ thinking: { type: 'enabled' } });
+  });
+
+  test('local servers get only the levels they accept', () => {
+    expect(effortParams('generic', 'max')).toEqual({ reasoning_effort: 'high' });
+    expect(effortParams('generic', 'low')).toEqual({ reasoning_effort: 'low' });
+    expect(effortParams('openai', 'xhigh')).toEqual({ reasoning_effort: 'xhigh' });
   });
 });

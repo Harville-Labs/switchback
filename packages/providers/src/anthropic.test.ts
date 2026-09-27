@@ -156,3 +156,30 @@ describe('server-side refusal fallback (first-party API)', () => {
     expect(calls[0]?.params).not.toHaveProperty('fallbacks');
   });
 });
+
+test('effort none sends no thinking and no effort', async () => {
+  const { client, calls } = fakeClient(() => ({
+    model: 'claude-opus-5',
+    content: [{ type: 'text', text: 'ok' }],
+    stop_reason: 'end_turn',
+    usage,
+  }));
+  const p = new AnthropicProvider({
+    id: 'a',
+    tier: 'remote',
+    platform: { kind: 'anthropic' },
+    client,
+  });
+  for await (const _ of p.stream({
+    model: 'claude-opus-5',
+    system: 's',
+    messages: [],
+    tools: [],
+    maxTokens: 64,
+    effort: 'none',
+  })) {
+    // drain
+  }
+  expect(calls[0]?.params).not.toHaveProperty('thinking');
+  expect(calls[0]?.params).not.toHaveProperty('output_config');
+});

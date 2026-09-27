@@ -26,7 +26,7 @@ export const ModelConfig = z.object({
    */
   contextWindow: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().default(16_000),
-  effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  effort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   price: z
     .object({
       input: z.number(),

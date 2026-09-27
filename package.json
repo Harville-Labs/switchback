@@ -18,7 +18,7 @@
     "format": "biome check --write .",
     "check": "bun run lint && bun run typecheck && bun run test",
     "build": "bun run --cwd apps/cli build && bun run --cwd apps/vscode build",
-    "schema": "bun scripts/gen-schema.ts",
+    "schema": "bun scripts/gen-schema.ts && biome format --write apps/vscode/schemas/config.schema.json",
     "test:live": "HARNESS_LIVE=1 bun test tests/live --timeout 600000"
   },
   "devDependencies": {

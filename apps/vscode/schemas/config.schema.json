@@ -188,7 +188,7 @@
           },
           "effort": {
             "type": "string",
-            "enum": ["low", "medium", "high", "xhigh", "max"]
+            "enum": ["none", "low", "medium", "high", "xhigh", "max"]
           },
           "price": {
             "type": "object",

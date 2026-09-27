@@ -9,7 +9,8 @@ export interface ToolSpec {
   inputSchema: JsonSchema;
 }
 
-export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+/** `none` asks the model not to think at all (quick classification, simple edits). */
+export type Effort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface ChatRequest {
   model: string;
