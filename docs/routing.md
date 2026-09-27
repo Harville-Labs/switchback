@@ -117,6 +117,10 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
 }
 ```
 
+## Long sessions
+
+Before routing each step, the engine checks the prompt against `compaction.threshold` (0.7) of the largest local window. Past it, older messages are summarized into an appended marker and requests carry the summary plus the recent part of the conversation verbatim, so a long session keeps fitting the local model instead of drifting into `context-overflow` and staying remote. Summaries are written by a local model; a remote one is used only when no local model is reachable, routing allows remote, and the budget isn't spent, and then it shows as `rule: compaction`. The full transcript is never changed. Design: [ADR 0008](adr/0008-append-only-compaction.md).
+
 ## Counting tokens
 
 The prompt size behind `context-overflow` and cost estimates comes from a BPE tokenizer (o200k) run over the system prompt, tool schemas, and transcript. Counts are cached per message, which is safe because transcripts are append-only, so each step only tokenizes what's new.

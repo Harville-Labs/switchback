@@ -59,6 +59,17 @@ export const HarnessConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
+  /** Append-only context compaction (docs/adr/0008-append-only-compaction.md). */
+  compaction: z
+    .object({
+      /** Compact automatically when the prompt passes `threshold`. `session.compact` works either way. */
+      enabled: z.boolean().default(true),
+      /** Fraction of the largest local window (or the remote window without one) that triggers compaction. */
+      threshold: z.number().min(0.2).max(0.95).default(0.7),
+      /** Fraction of that window kept verbatim at the end of the conversation. */
+      keepRecent: z.number().min(0.05).max(0.6).default(0.25),
+    })
+    .prefault({}),
 });
 export type HarnessConfig = z.infer<typeof HarnessConfig>;
 

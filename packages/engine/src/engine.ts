@@ -36,6 +36,14 @@ import {
 } from '@harness/providers';
 import { type ModelInfo, Router, SignalTracker } from '@harness/router';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
+import {
+  chooseBoundary,
+  contextOf,
+  latestMarker,
+  renderForSummary,
+  SUMMARIZER_PROMPT,
+  summaryRequest,
+} from './compaction.ts';
 import type { HarnessConfig } from './config.ts';
 import { estimateEscalationCost } from './estimate.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
@@ -49,7 +57,13 @@ import {
   type SessionHeader,
   type SessionStore,
 } from './store.ts';
-import { nearThreshold, PER_MESSAGE_OVERHEAD, promptText, promptTokens } from './tokens.ts';
+import {
+  countTokens,
+  nearThreshold,
+  PER_MESSAGE_OVERHEAD,
+  promptText,
+  promptTokens,
+} from './tokens.ts';
 import {
   type Tool,
   type ToolContext,
@@ -434,15 +448,7 @@ export class Engine {
     turnId: string,
     signal: AbortSignal,
   ): Promise<StopReason> {
-    const agent = this.agents.get(s.header.agent);
-    if (!agent) throw new Error(`agent "${s.header.agent}" no longer exists`);
-    const canDelegate = s.depth < this.options.config.subagents.maxDepth;
-    const tools = toolsFor(agent.tools).filter((t) => t.name !== 'task' || canDelegate);
-    const catalog = [...this.agents.values()]
-      .filter((a) => a.name !== s.header.agent || s.depth === 0)
-      .map((a) => ({ name: a.name, description: a.description }));
-    const specs = tools.map((t) => toolSpec(t, { agentCatalog: catalog }));
-    const specsJson = JSON.stringify(specs);
+    const { agent, tools, catalog, specs, specsJson } = this.toolSetup(s);
     let escalationApproved = false;
     let forceLocal = false;
     /** Remote aliases that refused this turn, and whether the next call retries one. */
@@ -453,6 +459,13 @@ export class Engine {
     for (let step = 0; step < this.options.config.maxStepsPerTurn; step++) {
       if (signal.aborted) return 'cancelled';
       await this.refreshHealth(signal);
+      if (this.options.config.compaction.enabled) {
+        // A failed summary costs context, not the turn: routing still has
+        // overflow escalation to fall back on.
+        await this.compact(s, specsJson, signal, false, turnId).catch((err) => {
+          if (!signal.aborted) this.notify('warn', `compaction failed: ${(err as Error).message}`);
+        });
+      }
 
       const inputTokens = await this.countPrompt(s, specsJson, signal);
       const decision = this.router.decide({
@@ -534,8 +547,9 @@ export class Engine {
         for await (const ev of provider.stream({
           model: model.ref.model,
           system: s.header.system,
-          // Snapshot: providers must never observe later appends.
-          messages: [...s.messages],
+          // A fresh array (so providers never observe later appends), built
+          // from the latest compaction marker.
+          messages: contextOf(s.messages),
           tools: specs,
           maxTokens: modelConfig?.maxOutputTokens ?? 16_000,
           ...(modelConfig?.effort ? { effort: modelConfig.effort } : {}),
@@ -550,7 +564,7 @@ export class Engine {
       } catch (err) {
         if (signal.aborted) return 'cancelled';
         const retryable = err instanceof ProviderError && err.retryable;
-        if (retryable) this.health.set(provider.id, { ok: false, at: Date.now() });
+        if (retryable) this.health.set(provider.id, { ok: false, at: this.now().getTime() });
         if (model.tier === 'local') s.signals.recordLocalFailure();
         this.emit({
           type: 'log',
@@ -629,6 +643,187 @@ export class Engine {
       message: `stopped after ${this.options.config.maxStepsPerTurn} steps`,
     });
     return 'max_tokens';
+  }
+
+  /** The agent's tools and their specs for a session; fixed order keeps the cache prefix stable. */
+  private toolSetup(s: LiveSession) {
+    const agent = this.agents.get(s.header.agent);
+    if (!agent) throw new Error(`agent "${s.header.agent}" no longer exists`);
+    const canDelegate = s.depth < this.options.config.subagents.maxDepth;
+    const tools = toolsFor(agent.tools).filter((t) => t.name !== 'task' || canDelegate);
+    const catalog = [...this.agents.values()]
+      .filter((a) => a.name !== s.header.agent || s.depth === 0)
+      .map((a) => ({ name: a.name, description: a.description }));
+    const specs = tools.map((t) => toolSpec(t, { agentCatalog: catalog }));
+    return { agent, tools, catalog, specs, specsJson: JSON.stringify(specs) };
+  }
+
+  // -------------------------------------------------------------------------
+  // Compaction (ADR 0008)
+  // -------------------------------------------------------------------------
+
+  /** `session.compact`: compact now, whatever the prompt size. */
+  async compactSession(sessionId: string): Promise<{ compacted: boolean }> {
+    const s = this.live(sessionId);
+    if (s.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is running a turn');
+    const controller = new AbortController();
+    s.controller = controller;
+    try {
+      await this.refreshHealth(controller.signal);
+      return {
+        compacted: await this.compact(s, this.toolSetup(s).specsJson, controller.signal, true),
+      };
+    } finally {
+      s.controller = undefined;
+    }
+  }
+
+  /** The window compaction keeps a session inside: the largest local one, else the remote one. */
+  private compactionWindow(): number | undefined {
+    const routing = this.options.config.routing;
+    const locals = routing.local.flatMap((a) => this.modelInfo(a) ?? []);
+    if (locals.length) return Math.max(...locals.map((m) => m.contextWindow));
+    const remote = routing.remote.flatMap((a) => this.modelInfo(a) ?? [])[0];
+    return remote?.contextWindow;
+  }
+
+  /**
+   * Summarize older history into an appended marker when the prompt passes the
+   * threshold (or always, when forced). Returns whether a marker was written.
+   */
+  private async compact(
+    s: LiveSession,
+    specsJson: string,
+    signal: AbortSignal,
+    force: boolean,
+    turnId?: string,
+  ): Promise<boolean> {
+    const cfg = this.options.config.compaction;
+    const window = this.compactionWindow();
+    if (!window) return false;
+    const before = promptTokens(s.header.system, contextOf(s.messages), specsJson);
+    if (!force && before < window * cfg.threshold) return false;
+
+    const latest = latestMarker(s.messages);
+    const start = latest ? latest.part.keepFrom : 0;
+    // On request, compact meaningfully even far below the threshold.
+    const keep = force ? Math.min(window * cfg.keepRecent, before * 0.25) : window * cfg.keepRecent;
+    const keepFrom = chooseBoundary(s.messages, start, keep);
+    if (keepFrom === undefined) return false;
+
+    const summarizer = this.summarizerModel(before);
+    if (!summarizer) {
+      this.notify('warn', 'context is large but no model is available to summarize it');
+      return false;
+    }
+    const provider = this.providers.get(summarizer.ref.provider);
+    if (!provider) return false;
+    if (summarizer.tier === 'remote' && turnId)
+      this.emit({
+        type: 'route.decided',
+        ...this.scope(s),
+        turnId,
+        tier: 'remote',
+        model: summarizer.ref,
+        rule: 'compaction',
+        reason: 'no local model is reachable to summarize earlier context',
+      });
+
+    // Fold chunks that fit the summarizer's window into a running summary.
+    const budget = Math.floor(summarizer.contextWindow * 0.5);
+    const blocks = renderForSummary(s.messages.slice(start, keepFrom));
+    let summary = latest?.part.summary;
+    let chunk: string[] = [];
+    let chunkTokens = 0;
+    const flush = async () => {
+      if (!chunk.length) return;
+      summary = await this.summarize(s, provider, summarizer, summary, chunk.join('\n\n'), signal);
+      chunk = [];
+      chunkTokens = 0;
+    };
+    for (const block of blocks) {
+      const n = countTokens(block);
+      const text = n > budget ? `${block.slice(0, budget * 3)}\n... (truncated)` : block;
+      if (chunkTokens + Math.min(n, budget) > budget) await flush();
+      chunk.push(text);
+      chunkTokens += Math.min(n, budget);
+    }
+    await flush();
+    if (!summary || signal.aborted) return false;
+
+    const marker: Message = {
+      role: 'user',
+      parts: [{ type: 'compaction', summary, keepFrom, tokensBefore: before, tokensAfter: 0 }],
+    };
+    const part = marker.parts[0] as Extract<Message['parts'][number], { type: 'compaction' }>;
+    part.tokensAfter = promptTokens(s.header.system, contextOf([...s.messages, marker]), specsJson);
+    this.append(s, marker);
+    this.emit({
+      type: 'context.compacted',
+      ...this.scope(s),
+      messages: keepFrom - start,
+      tokensBefore: before,
+      tokensAfter: part.tokensAfter,
+    });
+    return true;
+  }
+
+  /**
+   * Local first: the first reachable local model. A remote model only when
+   * routing allows remote and the budget isn't spent (local never silently
+   * costs money).
+   */
+  private summarizerModel(tokens: number): ModelInfo | undefined {
+    const routing = this.options.config.routing;
+    const local = routing.local
+      .flatMap((a) => this.modelInfo(a) ?? [])
+      .find((m) => m.tier === 'local' && m.available);
+    if (local) return local;
+    if (routing.mode === 'local-only') return undefined;
+    const spend = this.ledger.spend();
+    const b = routing.budget;
+    if (
+      (b.dailyUsd && spend.todayUsd >= b.dailyUsd) ||
+      (b.monthlyUsd && spend.monthUsd >= b.monthlyUsd)
+    )
+      return undefined;
+    return routing.remote
+      .flatMap((a) => this.modelInfo(a) ?? [])
+      .find((m) => m.available && m.contextWindow > Math.min(tokens, 16_000));
+  }
+
+  private async summarize(
+    s: LiveSession,
+    provider: Provider,
+    model: ModelInfo,
+    previous: string | undefined,
+    chunk: string,
+    signal: AbortSignal,
+  ): Promise<string> {
+    let done: Extract<ChatEvent, { type: 'done' }> | undefined;
+    for await (const ev of provider.stream({
+      model: model.ref.model,
+      system: SUMMARIZER_PROMPT,
+      messages: [
+        { role: 'user', parts: [{ type: 'text', text: summaryRequest(previous, chunk) }] },
+      ],
+      tools: [],
+      maxTokens: 4_000,
+      signal,
+    })) {
+      if (ev.type === 'done') done = ev;
+    }
+    if (!done) throw new Error(`${provider.id} ended the summary without a result`);
+    this.recordUsage(s, model.tier, model.ref, done.usage, {
+      rule: 'compaction',
+      agent: s.header.agent,
+    });
+    const text = done.parts
+      .flatMap((p) => (p.type === 'text' ? [p.text] : []))
+      .join('')
+      .trim();
+    if (!text) throw new Error(`${model.alias} returned an empty summary`);
+    return text;
   }
 
   private async runTools(
@@ -996,7 +1191,8 @@ export class Engine {
    * threshold that the difference could change the decision.
    */
   private async countPrompt(s: LiveSession, specsJson: string, signal: AbortSignal) {
-    const estimate = promptTokens(s.header.system, s.messages, specsJson);
+    const messages = contextOf(s.messages);
+    const estimate = promptTokens(s.header.system, messages, specsJson);
     const routing = this.options.config.routing;
     // With several local models, ask the first reachable one whose threshold
     // is close; the others either clearly fit or clearly don't.
@@ -1007,10 +1203,10 @@ export class Engine {
         continue;
       const provider = this.providers.get(local.ref.provider);
       const exact = await provider
-        ?.countTokens?.(local.ref.model, promptText(s.header.system, s.messages, specsJson), signal)
+        ?.countTokens?.(local.ref.model, promptText(s.header.system, messages, specsJson), signal)
         .catch(() => undefined);
       // The server counts raw text; add the same per-message template allowance.
-      if (exact !== undefined) return exact + PER_MESSAGE_OVERHEAD * s.messages.length;
+      if (exact !== undefined) return exact + PER_MESSAGE_OVERHEAD * messages.length;
     }
     return estimate;
   }
@@ -1047,7 +1243,7 @@ export class Engine {
   }
 
   private async refreshHealth(signal: AbortSignal): Promise<void> {
-    const now = Date.now();
+    const now = this.now().getTime();
     const used = new Set(Object.values(this.options.config.models).map((m) => m.provider));
     await Promise.all(
       [...used].map(async (id) => {
@@ -1056,7 +1252,7 @@ export class Engine {
         const provider = this.providers.get(id);
         if (!provider) return;
         const status = await provider.health(signal).catch(() => ({ ok: false }));
-        this.health.set(id, { ok: status.ok, at: Date.now() });
+        this.health.set(id, { ok: status.ok, at: this.now().getTime() });
       }),
     );
     await this.detectContextWindows();

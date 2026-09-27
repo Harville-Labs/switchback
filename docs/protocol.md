@@ -39,6 +39,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.get` | `sessionId` | Summary and full transcript |
 | `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`) | `{ turnId }`, returned immediately; progress arrives as events. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
+| `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`) | `{ ok }` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
@@ -60,6 +61,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session |
 | `usage.updated` | Cumulative session usage and cost |
+| `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (e.g. an organization policy update); carries `org` and human-readable `notes` |
 | `log` | Engine diagnostics |

@@ -11,3 +11,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0005](0005-claude-code-agent-compat.md) | Agent definitions are compatible with Claude Code | Accepted |
 | [0006](0006-provider-neutrality.md) | No default vendor; every provider gets equal treatment | Accepted |
 | [0007](0007-organization-policy.md) | Organization policy from a config server | Accepted |
+| [0008](0008-append-only-compaction.md) | Append-only context compaction | Accepted |

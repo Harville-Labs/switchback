@@ -248,7 +248,8 @@ export class Router {
       const fb = this.config.fallback;
       const other =
         d.model.tier === 'local'
-          ? fb.onLocalUnavailable === 'remote'
+          ? // local-only means no remote spend, even when the local server is down.
+            fb.onLocalUnavailable === 'remote' && this.config.mode !== 'local-only'
             ? this.choose(remoteChain, input.estimatedInputTokens).model
             : undefined
           : fb.onRemoteUnavailable === 'local'

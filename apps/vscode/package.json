@@ -65,6 +65,11 @@
         "category": "Harness"
       },
       {
+        "command": "harness.compact",
+        "title": "Compact Conversation",
+        "category": "Harness"
+      },
+      {
         "command": "harness.askAboutSelection",
         "title": "Ask About Selection",
         "category": "Harness"

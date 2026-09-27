@@ -48,7 +48,22 @@ export interface ToolResultPart {
   isError?: boolean;
 }
 
-export type Part = TextPart | ReasoningPart | ToolCallPart | ToolResultPart;
+/**
+ * A compaction marker (ADR 0008). Appended as the only part of a user message;
+ * never sent to a model. Requests are built from the latest marker: its
+ * summary, then the messages from `keepFrom` onward.
+ */
+export interface CompactionPart {
+  type: 'compaction';
+  summary: string;
+  /** Index of the first message kept verbatim (always an assistant message). */
+  keepFrom: number;
+  /** Prompt size before and after, for display. */
+  tokensBefore: number;
+  tokensAfter: number;
+}
+
+export type Part = TextPart | ReasoningPart | ToolCallPart | ToolResultPart | CompactionPart;
 
 export interface Message {
   role: 'user' | 'assistant';

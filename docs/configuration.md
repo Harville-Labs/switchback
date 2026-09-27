@@ -112,6 +112,9 @@ Values are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md).
 | `subagents.maxConcurrent` | 4 | Concurrent subagents per depth |
 | `subagents.maxDepth` | 2 | Maximum nesting |
 | `maxStepsPerTurn` | 50 | Model calls per user prompt before stopping |
+| `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |
+| `compaction.threshold` | 0.7 | Fraction of the largest local context window (the remote window when there's no local model) that triggers it |
+| `compaction.keepRecent` | 0.25 | Fraction of that window kept verbatim at the end of the conversation |
 
 ## Environment variables
 

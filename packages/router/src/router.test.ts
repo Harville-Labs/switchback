@@ -322,3 +322,10 @@ describe('refusal fallback', () => {
     expect(d).toMatchObject({ kind: 'block', rule: 'refusal-fallback' });
   });
 });
+
+test('local-only never falls back to remote, even when the local server is down', () => {
+  const d = router({ mode: 'local-only' }, { local: { ...LOCAL, available: false } }).decide(
+    input(),
+  );
+  expect(d).toMatchObject({ kind: 'block', rule: 'fallback' });
+});

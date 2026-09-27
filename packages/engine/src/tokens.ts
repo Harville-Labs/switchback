@@ -37,6 +37,7 @@ export function messageText(m: Message): string {
     .map((p) => {
       if (p.type === 'text' || p.type === 'reasoning') return p.text;
       if (p.type === 'tool_result') return p.content;
+      if (p.type === 'compaction') return ''; // never sent; `contextOf` substitutes the summary
       return `${p.name} ${JSON.stringify(p.input ?? {})}`;
     })
     .join('\n');

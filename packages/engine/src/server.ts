@@ -17,6 +17,7 @@ import {
   PROTOCOL_VERSION,
   RpcError,
   SessionCancelParams,
+  SessionCompactParams,
   SessionCreateParams,
   SessionGetParams,
   SessionPromptParams,
@@ -84,6 +85,8 @@ export function serve(
         return engine.getSession(parse(SessionGetParams, req.params).sessionId);
       case 'session.prompt':
         return engine.prompt(parse(SessionPromptParams, req.params));
+      case 'session.compact':
+        return engine.compactSession(parse(SessionCompactParams, req.params).sessionId);
       case 'session.cancel':
         return { cancelled: engine.cancel(parse(SessionCancelParams, req.params).sessionId) };
       case 'permission.respond': {

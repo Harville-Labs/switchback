@@ -43,6 +43,7 @@ const HELP = `Commands
   /sessions                list saved sessions in this workspace
   /resume <n|id>           switch to a saved session
   /usage [rule|agent|model] this week's spend, savings, and why
+  /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
 Input: @ mentions a file (its contents are attached); ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
@@ -190,6 +191,16 @@ export function App({
           const by = (['rule', 'agent', 'model'] as const).find((b) => b === args[0]) ?? 'rule';
           setView((v) => addInfo(v, formatUsage(u, by)));
           client.request('usage.get', {}).then(setUsage, () => {});
+          return;
+        }
+        case 'compact': {
+          const { compacted } = await client
+            .request('session.compact', { sessionId: session.id })
+            .catch((err: Error) => {
+              setView((v) => addInfo(v, `compact: ${err.message}`));
+              return { compacted: true };
+            });
+          if (!compacted) setView((v) => addInfo(v, 'Nothing to compact yet.'));
           return;
         }
         case 'help':

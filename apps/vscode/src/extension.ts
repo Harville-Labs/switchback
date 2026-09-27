@@ -268,8 +268,16 @@ class EngineConnection implements vscode.Disposable {
     this.broadcast({ type: 'usage', usage: u });
     const $ = (n: number) => `$${n.toFixed(2)}`;
     vscode.window.showInformationMessage(
-      `Harness this month: remote ${$(u.byTier.remote.costUsd)}, saved ~${$(u.estimatedSavingsUsd)} vs. all-remote. Today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}.`,
+      `Harness, last 7 days: remote ${$(u.byTier.remote.costUsd)}, saved ~${$(u.estimatedSavingsUsd)} vs. all-remote. Today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}.`,
     );
+  }
+
+  async compact() {
+    if (!this.client || !this.session) return;
+    const { compacted } = await this.client.request('session.compact', {
+      sessionId: this.session.id,
+    });
+    if (!compacted) vscode.window.showInformationMessage('Harness: nothing to compact yet.');
   }
 
   dispose() {
@@ -422,6 +430,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
     vscode.commands.registerCommand('harness.rejectEdit', answerEdit('deny')),
     vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
+    vscode.commands.registerCommand('harness.compact', () =>
+      engine?.compact().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
+    ),
     vscode.commands.registerCommand('harness.restartEngine', start),
     vscode.commands.registerCommand('harness.runSetup', () => {
       if (!root) return;

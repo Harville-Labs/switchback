@@ -107,6 +107,9 @@ export const PermissionRespondParams = z.object({
 });
 export type PermissionRespondParams = z.infer<typeof PermissionRespondParams>;
 
+export const SessionCompactParams = z.object({ sessionId: z.string() });
+export type SessionCompactParams = z.infer<typeof SessionCompactParams>;
+
 export const EscalationRespondParams = z.object({
   requestId: z.string(),
   approve: z.boolean(),
@@ -160,6 +163,8 @@ export interface Methods {
   'session.get': { params: SessionGetParams; result: SessionGetResult };
   'session.prompt': { params: SessionPromptParams; result: SessionPromptResult };
   'session.cancel': { params: SessionCancelParams; result: { cancelled: boolean } };
+  /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
+  'session.compact': { params: SessionCompactParams; result: { compacted: boolean } };
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };
   'escalation.respond': { params: EscalationRespondParams; result: { ok: true } };
   'agents.list': { params: Record<string, never>; result: AgentSummary[] };
@@ -225,6 +230,13 @@ export type EngineEvent =
       decision: PermissionDecision;
     } & SessionScoped)
   | ({ type: 'escalation.resolved'; requestId: string; approved: boolean } & SessionScoped)
+  | ({
+      type: 'context.compacted';
+      /** Messages now represented by the summary. */
+      messages: number;
+      tokensBefore: number;
+      tokensAfter: number;
+    } & SessionScoped)
   | ({
       type: 'escalation.requested';
       requestId: string;

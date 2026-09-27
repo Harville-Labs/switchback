@@ -55,6 +55,11 @@ export interface PendingEscalation {
   estimatedCostUsd?: number;
 }
 
+function compactedLabel(messages: number, before: number, after: number): string {
+  const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
+  return `Compacted ${messages} earlier messages into a summary (~${k(before)} → ~${k(after)} tokens). The full history is kept.`;
+}
+
 /** `≈ $0.04`, shared by both clients' escalation prompts; empty when unknown. */
 export function estimateLabel(usd: number | undefined): string {
   if (usd === undefined) return '';
@@ -93,6 +98,12 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
             text: `📎 ${p.attachment.path}`,
           });
         else if (p.type === 'text') items.push({ kind: 'user', id: `h${mi}u`, text: p.text });
+        else if (p.type === 'compaction')
+          items.push({
+            kind: 'info',
+            id: `h${mi}c`,
+            text: compactedLabel(p.keepFrom, p.tokensBefore, p.tokensAfter),
+          });
         else if (p.type === 'tool_result') {
           const t = tools.get(p.callId);
           if (t) {
@@ -309,6 +320,13 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
           },
         ],
       };
+    case 'context.compacted':
+      items.push({
+        kind: 'info',
+        id: `c${items.length}`,
+        text: compactedLabel(event.messages, event.tokensBefore, event.tokensAfter),
+      });
+      return { ...state, items };
     case 'usage.updated':
       return { ...state, costUsd: event.costUsd };
     case 'error':

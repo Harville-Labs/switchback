@@ -14,7 +14,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 - **Permission and escalation prompts** appear inline in the chat.
 - **Setup**: if no local model is configured, the extension offers **Set Up Models**, which runs `harness init` in a terminal and restarts the engine when it closes.
 - **Config validation**: `.harness/config.json` and `~/.config/harness/config.json` are validated and autocompleted against the bundled schema.
-- Commands: Set Up Models, New Session, Cancel, Show Usage and Savings, Restart Engine, Show Engine Logs.
+- Commands: Set Up Models, New Session, Cancel, Show Usage and Savings, Compact Conversation, Restart Engine, Show Engine Logs.
 
 ## Settings
 
