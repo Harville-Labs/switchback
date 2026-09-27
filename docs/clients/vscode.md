@@ -10,6 +10,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 - **Routing control**: a dropdown in the chat, the status bar item (click to change), and the **Harness: Set Routing** command.
 - **Status bar**: current route preference, last tier used (`$(home)` local, `$(cloud)` remote), and session cost.
 - **Ask About Selection** (editor context menu) pre-fills the chat with the selected code and its location.
+- **Edit review in the diff editor.** Proposed edits open side by side with the file on disk, with **Accept** / **Reject** buttons in the editor title (also in the chat and the command palette). The tab closes when the request is answered anywhere. Turn off with `harness.reviewEditsInDiffEditor`.
 - **Permission and escalation prompts** appear inline in the chat.
 - **Setup**: if no local model is configured, the extension offers **Set Up Models**, which runs `harness init` in a terminal and restarts the engine when it closes.
 - **Config validation**: `.harness/config.json` and `~/.config/harness/config.json` are validated and autocompleted against the bundled schema.
@@ -41,4 +42,4 @@ Each release publishes one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `
 
 ## Planned
 
-Inline diff review for edits, editor context (open files, diagnostics, selection) as prompt attachments, Markdown rendering, a session history view, attaching to a shared engine daemon so the TUI and VS Code can share a live session, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).
+Editor context (open files, diagnostics, selection) as prompt attachments, Markdown rendering, a session history view, attaching to a shared engine daemon so the TUI and VS Code can share a live session, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).

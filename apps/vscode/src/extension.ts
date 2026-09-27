@@ -14,6 +14,7 @@ import type {
 } from '@harness/protocol';
 import * as vscode from 'vscode';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
+import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
 const VERSION = '0.2.0';
 // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code variable syntax, not a JS template.
@@ -48,6 +49,7 @@ class EngineConnection implements vscode.Disposable {
     private readonly root: string,
     private readonly log: vscode.OutputChannel,
     private readonly status: vscode.StatusBarItem,
+    private readonly review: EditReview,
   ) {
     this.route = vscode.workspace
       .getConfiguration('harness')
@@ -88,6 +90,14 @@ class EngineConnection implements vscode.Disposable {
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
       if (event.type === 'log') this.log.appendLine(`[${event.level}] ${event.message}`);
+      if (
+        event.type === 'permission.requested' &&
+        event.proposed &&
+        vscode.workspace.getConfiguration('harness').get<boolean>('reviewEditsInDiffEditor', true)
+      ) {
+        void this.review.show(this.root, event.requestId, event.proposed);
+      }
+      if (event.type === 'permission.resolved') void this.review.close(event.requestId);
       if (event.type === 'config.updated' && event.org) {
         void vscode.window.showInformationMessage(
           `${event.org.name} updated its Harness policy${event.notes.length ? `: ${event.notes.join('; ')}` : '.'}`,
@@ -279,6 +289,7 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 /** Returned from activate() for the integration tests; not a public API. */
 export interface HarnessTestApi {
   connected(): boolean;
+  pendingReviews(): string[];
   init(): InitializeResult | undefined;
   onEvent(listener: (event: EngineEvent) => void): vscode.Disposable;
   prompt(text: string): Promise<void>;
@@ -307,6 +318,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
   context.subscriptions.push(log, status);
 
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const review = new EditReview();
+  context.subscriptions.push(
+    review,
+    vscode.workspace.registerTextDocumentContentProvider(PROPOSED_SCHEME, review),
+  );
+  const answerEdit = (decision: 'allow_once' | 'deny') => async (uri?: vscode.Uri) => {
+    const requestId =
+      review.requestIdOf(uri) ?? review.requestIdOf(vscode.window.activeTextEditor?.document.uri);
+    if (!requestId) return;
+    await engine?.handle({ type: 'permission', requestId, decision });
+  };
   let engine: EngineConnection | undefined;
   const chat = new ChatViewProvider(context.extensionUri, () => engine);
   context.subscriptions.push(
@@ -323,7 +345,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       status.show();
       return;
     }
-    engine = new EngineConnection(root, log, status);
+    engine = new EngineConnection(root, log, status, review);
     engine.onMessage((m) => chat.post(m));
     try {
       await engine.start();
@@ -356,6 +378,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
   context.subscriptions.push(
     vscode.commands.registerCommand('harness.newSession', () => engine?.newSession()),
     vscode.commands.registerCommand('harness.openSession', () => engine?.openSession()),
+    vscode.commands.registerCommand('harness.acceptEdit', answerEdit('allow_once')),
+    vscode.commands.registerCommand('harness.rejectEdit', answerEdit('deny')),
     vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
     vscode.commands.registerCommand('harness.restartEngine', start),
@@ -406,6 +430,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
 
   return {
     connected: () => !!engine?.client,
+    pendingReviews: () => review.pending(),
     init: () => engine?.init,
     onEvent: (listener) =>
       engine?.onMessage((m) => {

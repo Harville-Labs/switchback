@@ -23,6 +23,14 @@ export interface ToolContext {
   agentCatalog: { name: string; description: string }[];
 }
 
+/** What a mutating call would change, for review before approval. */
+export interface ToolPreview {
+  /** Unified diff, possibly truncated for display. */
+  diff: string;
+  /** The complete proposed file, for editors that show a real diff. */
+  proposed?: { path: string; content: string };
+}
+
 export interface Tool<I = unknown> {
   name: string;
   description: string;
@@ -37,7 +45,7 @@ export interface Tool<I = unknown> {
    * prompts. Must not have side effects. Return undefined when there's
    * nothing useful to show; throw ToolError when the call would fail anyway.
    */
-  preview?(input: I, ctx: ToolContext): Promise<string | undefined>;
+  preview?(input: I, ctx: ToolContext): Promise<ToolPreview | undefined>;
   run(input: I, ctx: ToolContext): Promise<string>;
 }
 

@@ -52,7 +52,8 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError` |
-| `permission.requested` | Waiting on `permission.respond`; `preview` holds a unified diff for edits |
+| `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file |
+| `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`) |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session |
 | `usage.updated` | Cumulative session usage and cost |

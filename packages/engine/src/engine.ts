@@ -46,7 +46,13 @@ import {
   type SessionHeader,
   type SessionStore,
 } from './store.ts';
-import { type Tool, type ToolContext, toolSpec, toolsFor } from './tools/index.ts';
+import {
+  type Tool,
+  type ToolContext,
+  type ToolPreview,
+  toolSpec,
+  toolsFor,
+} from './tools/index.ts';
 import { currentShell } from './tools/shell.ts';
 
 export const ENGINE_VERSION = '0.2.0';
@@ -703,7 +709,7 @@ export class Engine {
     const mode = this.options.interaction ?? 'prompt';
     if (mode !== 'prompt') return { allowed: mode === 'approve' };
 
-    let preview: string | undefined;
+    let preview: ToolPreview | undefined;
     try {
       preview = await tool.preview?.(input, ctx);
     } catch (err) {
@@ -724,9 +730,12 @@ export class Engine {
           tool: tool.name,
           summary: tool.summarize(input),
           input,
-          ...(preview ? { preview } : {}),
+          ...(preview ? { preview: preview.diff } : {}),
+          ...(preview?.proposed ? { proposed: preview.proposed } : {}),
         }),
     );
+    // Every client clears the prompt, whichever one answered (or none, on cancel).
+    this.emit({ type: 'permission.resolved', ...this.scope(s), requestId, decision });
     if (decision === 'allow_always') this.alwaysAllowed.add(tool.permission);
     return { allowed: decision !== 'deny' };
   }
@@ -741,9 +750,11 @@ export class Engine {
     // Headless runs never spend money they were not told they could spend.
     if (mode !== 'prompt') return false;
     const requestId = `esc_${crypto.randomUUID().slice(0, 8)}`;
-    return this.waitFor(this.pendingEscalations, requestId, signal, false, () =>
+    const approved = await this.waitFor(this.pendingEscalations, requestId, signal, false, () =>
       this.emit({ type: 'escalation.requested', ...this.scope(s), requestId, reason, target }),
     );
+    this.emit({ type: 'escalation.resolved', ...this.scope(s), requestId, approved });
+    return approved;
   }
 
   private waitFor<T>(

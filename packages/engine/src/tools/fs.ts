@@ -58,7 +58,10 @@ export const writeTool = defineTool({
   async preview(input, ctx) {
     const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
     const before = await readFile(file, 'utf8').catch(() => '');
-    return diffPreview(input.path, before, input.content);
+    return {
+      diff: diffPreview(input.path, before, input.content),
+      proposed: { path: input.path, content: input.content },
+    };
   },
   async run(input, ctx) {
     const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
@@ -106,7 +109,10 @@ export const editTool = defineTool({
   summarize: (i) => `edit ${i.path}`,
   async preview(input, ctx) {
     const { before, after } = await applyEdit(input, ctx.workspaceRoot);
-    return diffPreview(input.path, before, after);
+    return {
+      diff: diffPreview(input.path, before, after),
+      proposed: { path: input.path, content: after },
+    };
   },
   async run(input, ctx) {
     const { file, after, replacements } = await applyEdit(input, ctx.workspaceRoot);

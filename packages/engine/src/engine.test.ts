@@ -233,6 +233,13 @@ describe('Engine', () => {
     await engine.runTurn(s.id, 'edit it');
     const req = events.find((e) => e.type === 'permission.requested');
     expect(req && 'preview' in req && req.preview).toContain('-hello world\n+hello there');
+    expect(req && 'proposed' in req && req.proposed).toEqual({
+      path: 'hello.txt',
+      content: 'hello there\n',
+    });
+    expect(events.find((e) => e.type === 'permission.resolved')).toMatchObject({
+      decision: 'allow_once',
+    });
     expect(readFileSync(join(root, 'hello.txt'), 'utf8')).toBe('hello there\n');
   });
 

@@ -2,8 +2,8 @@ import type { Tier } from '@harness/protocol';
 import { z } from 'zod';
 import { AnthropicProvider } from './anthropic.ts';
 import { OpenAICompatibleProvider } from './openai-compatible.ts';
-import { ScriptedProvider } from './scripted.ts';
-import type { Provider } from './types.ts';
+import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
+import type { ChatRequest, Provider } from './types.ts';
 
 /** `{env:NAME}` references are resolved at load time so secrets stay out of config files. */
 const Secret = z.string();
@@ -130,10 +130,34 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         noThinkingModels: NO_THINKING,
       });
     case 'mock':
-      return new ScriptedProvider(id, config.tier, (req) => ({
-        text: `[mock ${id}] You said: ${lastUserText(req.messages)}`,
-      }));
+      return new ScriptedProvider(id, config.tier, (req) => mockTurn(id, req.messages));
   }
+}
+
+/**
+ * The mock provider echoes prompts. For demos and client development it can
+ * also call a tool: a prompt of `mock:tool {"name": "...", "input": {...}}`
+ * makes one tool call, then reports the result.
+ */
+function mockTurn(id: string, messages: ChatRequest['messages']): ScriptedTurn {
+  const last = messages.at(-1);
+  const result = last?.parts.find((p) => p.type === 'tool_result');
+  if (result?.type === 'tool_result') {
+    return {
+      text: `[mock ${id}] tool ${result.isError ? 'failed' : 'finished'}: ${result.content.split('\n')[0]}`,
+    };
+  }
+  const text = lastUserText(messages);
+  const call = /^mock:tool\s+(\{[\s\S]*\})\s*$/.exec(text);
+  if (call?.[1]) {
+    try {
+      const { name, input } = JSON.parse(call[1]) as { name: string; input: unknown };
+      return { toolCalls: [{ name, input }] };
+    } catch {
+      return { text: `[mock ${id}] could not parse mock:tool JSON` };
+    }
+  }
+  return { text: `[mock ${id}] You said: ${text}` };
 }
 
 function lastUserText(messages: { role: string; parts: { type: string; text?: string }[] }[]) {

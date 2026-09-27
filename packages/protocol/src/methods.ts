@@ -169,9 +169,17 @@ export type EngineEvent =
       tool: string;
       summary: string;
       input: unknown;
-      /** Unified diff of what the call would change, for edits. */
+      /** Unified diff of what the call would change, for edits (may be truncated). */
       preview?: string;
+      /** The complete proposed file, so editors can show a real diff. */
+      proposed?: { path: string; content: string };
     } & SessionScoped)
+  | ({
+      type: 'permission.resolved';
+      requestId: string;
+      decision: PermissionDecision;
+    } & SessionScoped)
+  | ({ type: 'escalation.resolved'; requestId: string; approved: boolean } & SessionScoped)
   | ({
       type: 'escalation.requested';
       requestId: string;

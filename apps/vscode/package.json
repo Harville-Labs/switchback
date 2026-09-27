@@ -81,9 +81,21 @@
       },
       {
         "command": "harness.openSession",
-        "title": "Open Session…",
+        "title": "Open Session\u2026",
         "category": "Harness",
         "icon": "$(history)"
+      },
+      {
+        "command": "harness.acceptEdit",
+        "title": "Accept Proposed Edit",
+        "category": "Harness",
+        "icon": "$(check)"
+      },
+      {
+        "command": "harness.rejectEdit",
+        "title": "Reject Proposed Edit",
+        "category": "Harness",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -104,6 +116,28 @@
           "command": "harness.askAboutSelection",
           "when": "editorHasSelection",
           "group": "harness"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "harness.acceptEdit",
+          "when": "resourceScheme == harness-proposed",
+          "group": "navigation@1"
+        },
+        {
+          "command": "harness.rejectEdit",
+          "when": "resourceScheme == harness-proposed",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "harness.acceptEdit",
+          "when": "resourceScheme == harness-proposed"
+        },
+        {
+          "command": "harness.rejectEdit",
+          "when": "resourceScheme == harness-proposed"
         }
       ]
     },
@@ -133,6 +167,11 @@
           ],
           "default": "auto",
           "description": "Routing for new prompts. `auto` follows your harness config."
+        },
+        "harness.reviewEditsInDiffEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open proposed edits in the diff editor with Accept / Reject buttons, in addition to the prompt in the chat."
         }
       }
     },

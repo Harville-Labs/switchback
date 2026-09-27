@@ -183,6 +183,10 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
     return addInfo(state, [head, ...event.notes.map((n) => `  ${n}`)].join('\n'));
   }
 
+  if (event.type === 'permission.resolved')
+    return resolvePermission(state, event.requestId, event.decision);
+  if (event.type === 'escalation.resolved') return resolveEscalation(state, event.requestId);
+
   // Permission prompts can come from any descendant session.
   if (event.type === 'permission.requested') {
     return {
