@@ -47,5 +47,5 @@ Retries live in src/http/client.ts:88 ...
 
 ## Implementation notes
 
-- Finished items render through Ink's `<Static>`, so long sessions don't re-render history.
+- Finished items render through Ink's `<Static>`, so long sessions don't re-render history. Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
 - All display state comes from `reduce()` in `@harness/client/view`. If something looks wrong in both clients, fix it there.

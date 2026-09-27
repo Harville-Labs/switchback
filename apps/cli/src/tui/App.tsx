@@ -20,6 +20,7 @@ import type {
 import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { useCallback, useEffect, useState } from 'react';
+import { renderMarkdown } from './markdown.ts';
 
 interface Props {
   client: HarnessClient;
@@ -138,7 +139,8 @@ export function App({
             (x, i) =>
               `${String(i + 1).padStart(2)}. ${x.id === session.id ? '* ' : ''}${x.title || '(untitled)'}  ${x.agent} · ${ago(x.updatedAt)} · $${x.costUsd.toFixed(3)}`,
           )
-          .join('\n') + '\n/resume <number> to switch'
+          .join('\n')
+          .concat('\n/resume <number> to switch')
       : 'no saved sessions in this workspace yet';
     setView((v) => addInfo(v, text));
   };
@@ -236,6 +238,7 @@ export function App({
   });
 
   const hidden = quietRoutes(view.items);
+  const width = Math.max(40, Math.min(120, (stdout.columns ?? 80) - 2));
   const done = view.items.slice(0, committed);
   const live = view.items.slice(committed);
 
@@ -251,12 +254,12 @@ export function App({
               <Text dimColor>{init.workspaceRoot} · /help for commands</Text>
             </Box>
           ) : (
-            <Item key={item.id} item={item} hidden={hidden.has(item.id)} />
+            <Item key={item.id} item={item} hidden={hidden.has(item.id)} width={width} final />
           )
         }
       </Static>
       {live.map((item) => (
-        <Item key={item.id} item={item} hidden={hidden.has(item.id)} />
+        <Item key={item.id} item={item} hidden={hidden.has(item.id)} width={width} />
       ))}
 
       {permission && (
@@ -367,7 +370,18 @@ function quietRoutes(items: ViewItem[]): Set<string> {
   return quiet;
 }
 
-function Item({ item, hidden }: { item: ViewItem; hidden: boolean }) {
+function Item({
+  item,
+  hidden,
+  width,
+  final = false,
+}: {
+  item: ViewItem;
+  hidden: boolean;
+  width: number;
+  /** Committed items render Markdown; live ones stay plain while streaming. */
+  final?: boolean;
+}) {
   if (hidden) return null;
   switch (item.kind) {
     case 'user':
@@ -397,7 +411,7 @@ function Item({ item, hidden }: { item: ViewItem; hidden: boolean }) {
               ✻ {item.reasoning.slice(-200).replace(/\s+/g, ' ')}
             </Text>
           ) : null}
-          {item.text ? <Text>{item.text}</Text> : null}
+          {item.text ? <Text>{final ? renderMarkdown(item.text, width) : item.text}</Text> : null}
         </Box>
       );
     case 'tool': {

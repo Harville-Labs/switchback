@@ -16,9 +16,12 @@
     "@harness/providers": "workspace:*",
     "ink": "^7.1.1",
     "ink-text-input": "^6.0.0",
+    "marked": "15",
+    "marked-terminal": "^7.3.0",
     "react": "^19.3.0"
   },
   "devDependencies": {
+    "@types/marked-terminal": "^6.1.1",
     "@types/react": "^19.3.0"
   }
 }
