@@ -1,6 +1,6 @@
 # Terminal UI
 
-`harness` with no arguments opens the TUI in the current directory. It's built with [Ink](https://github.com/vadimdemedes/ink) and runs the engine in-process over a transport pair, which is the same protocol VS Code uses.
+`harness` with no arguments opens the TUI in the current directory. It's built with [Ink](https://github.com/vadimdemedes/ink) and attaches to the workspace's shared engine daemon (starting it if needed), the same one VS Code uses, so sessions are shared live between them. `--no-daemon` runs a private in-process engine instead; `--mock` always does.
 
 ## First run
 

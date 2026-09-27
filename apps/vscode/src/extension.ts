@@ -5,7 +5,7 @@
  */
 
 import { chmodSync, existsSync } from 'node:fs';
-import { HarnessClient, spawnEngine } from '@harness/client';
+import { connectDaemon, HarnessClient, spawnEngine } from '@harness/client';
 import type {
   EngineEvent,
   InitializeResult,
@@ -68,19 +68,40 @@ class EngineConnection implements vscode.Disposable {
     for (const l of this.listeners) l(m);
   }
 
+  /** True when attached to the workspace's shared daemon (see harness.sharedEngine). */
+  shared = false;
+
   async start(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration('harness');
     const { command, args: baseArgs } = harnessCommand(this.root);
-    const args = [...baseArgs, 'serve', '--stdio'];
-    this.log.appendLine(`starting: ${command} ${args.join(' ')} (cwd ${this.root})`);
-    const transport = spawnEngine({
-      command,
-      args,
-      cwd: this.root,
-      onStderr: (t) => this.log.append(t),
-    });
-    const client = new HarnessClient(transport);
-    transport.onClose(() => {
-      if (this.client !== client) return;
+    let client: HarnessClient | undefined;
+    let init: InitializeResult | undefined;
+    // Share the engine with the TUI (and other windows) unless disabled; mock
+    // engines are never shared.
+    if (cfg.get<boolean>('sharedEngine', true) && !baseArgs.includes('--mock')) {
+      const shared = await connectDaemon({
+        workspaceRoot: this.root,
+        version: VERSION,
+        client: { name: 'vscode', version: VERSION },
+        spawn: { command, args: baseArgs },
+        log: (m) => this.log.appendLine(m),
+      });
+      if (shared) {
+        ({ client, init } = shared);
+        this.shared = true;
+        this.log.appendLine('attached to the shared workspace engine');
+      }
+    }
+    if (!client) {
+      const args = [...baseArgs, 'serve', '--stdio'];
+      this.log.appendLine(`starting: ${command} ${args.join(' ')} (cwd ${this.root})`);
+      client = new HarnessClient(
+        spawnEngine({ command, args, cwd: this.root, onStderr: (t) => this.log.append(t) }),
+      );
+    }
+    const connected = client;
+    connected.onClose(() => {
+      if (this.client !== connected) return;
       this.client = undefined;
       this.setStatus('$(error) Harness', 'Engine stopped. Run "Harness: Restart Engine".');
       this.broadcast({
@@ -107,7 +128,7 @@ class EngineConnection implements vscode.Disposable {
         );
       }
     });
-    this.init = await client.initialize({ name: 'vscode', version: VERSION }, this.root);
+    this.init = init ?? (await client.initialize({ name: 'vscode', version: VERSION }, this.root));
     this.client = client;
     this.session = await client.request('session.create', {});
     this.updateStatus(0);

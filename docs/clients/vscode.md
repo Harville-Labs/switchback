@@ -23,6 +23,8 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 | `harness.executablePath` | empty | The binary to run (`<path> [args] serve --stdio`). Empty uses the engine bundled in the platform-specific `.vsix`, falling back to `harness` on PATH. |
 | `harness.executableArgs` | `[]` | Extra leading args (e.g. a script path when the path is `bun`) |
 | `harness.defaultRoute` | `auto` | Initial routing preference |
+| `harness.sharedEngine` | `true` | Attach to the workspace's shared engine so the terminal UI and VS Code see the same live sessions |
+| `harness.reviewEditsInDiffEditor` | `true` | Open proposed edits in the diff editor with Accept / Reject |
 
 Project behavior (models, routing, permissions, agents) comes from the same `.harness/config.json` the CLI uses. There are deliberately no VS Code settings for it, so the two clients can't be configured differently.
 
@@ -42,4 +44,4 @@ Each release publishes one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `
 
 ## Planned
 
-Terminal output as an attachment, attaching to a shared engine daemon so the TUI and VS Code can share a live session, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).
+Terminal output as an attachment, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).

@@ -172,6 +172,11 @@
           "type": "boolean",
           "default": true,
           "description": "Open proposed edits in the diff editor with Accept / Reject buttons, in addition to the prompt in the chat."
+        },
+        "harness.sharedEngine": {
+          "type": "boolean",
+          "default": true,
+          "description": "Attach to the workspace's shared Harness engine, so the terminal UI and VS Code see the same live sessions. Off: this window runs its own engine."
         }
       }
     },

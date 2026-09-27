@@ -10,7 +10,11 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - VS Code integration tests running inside a real VS Code instance in CI
 - VS Code: review proposed edits in the diff editor with Accept / Reject in the editor title; protocol adds `proposed` (full new file) to `permission.requested` and `permission.resolved` / `escalation.resolved` events so every client clears answered prompts
 - Prompt attachments in the protocol (`file` ranges read by the engine, labeled `text`); VS Code chips attach the selection, active file, or its problems
+- Shared engine daemon (`harness serve --socket`): the TUI and VS Code attach to one engine per workspace by default and share live sessions; token-authenticated socket, version-checked, idle exit, automatic fallback to a private engine
 - Mock provider can script a tool call (`mock:tool {json}`) for demos and client development
+
+### Fixed
+- `shutdown` closed the connection before its reply was written
 
 ## [0.2.0] - 2026-09-27
 

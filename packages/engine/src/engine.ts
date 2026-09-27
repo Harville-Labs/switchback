@@ -849,7 +849,14 @@ export class Engine {
       updatedAt,
       usage: cost.usage,
       costUsd: cost.costUsd,
+      ...(this.sessions.get(header.id)?.controller ? { running: true } : {}),
     };
+  }
+
+  /** Whether any session has a turn in progress (daemons stay up while busy). */
+  busy(): boolean {
+    for (const s of this.sessions.values()) if (s.controller) return true;
+    return false;
   }
 
   private systemPrompt(agent: AgentDefinition): string {

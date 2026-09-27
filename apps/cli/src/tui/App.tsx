@@ -59,7 +59,7 @@ export function App({
   const [session, setSession] = useState(initialSession);
   const [view, setView] = useState<ViewState>(() =>
     warnings.reduce(
-      (v, w) => addInfo(v, `agent skipped: ${w}`),
+      (v, w) => addInfo(v, w),
       resumed
         ? addInfo(resumed, `resumed "${initialSession.title || initialSession.id}"`)
         : initialView(initialSession.id),

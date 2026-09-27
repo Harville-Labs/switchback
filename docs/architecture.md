@@ -79,7 +79,17 @@ Append-only files make crash recovery trivial: a torn final line is ignored and 
 |---|---|---|
 | In-process pair (`createTransportPair`) | TUI, `harness run`, tests | Messages are JSON round-tripped, so it behaves exactly like a wire. |
 | stdio (`harness serve --stdio`) | VS Code, any external client | NDJSON on stdin/stdout; logs on stderr. |
-| Socket / WebSocket (planned) | Shared daemon: attach TUI and VS Code to the same live session | Same framing. Tracked in the roadmap. |
+| Unix socket / named pipe (`harness serve --socket`) | The shared workspace daemon: TUI and VS Code attach to it by default | Same framing; token-authenticated; see below. |
+
+## The shared daemon
+
+By default the TUI and VS Code don't each run an engine. They attach to one daemon per workspace, so a session started in the terminal can be watched, joined, or approved from VS Code and vice versa.
+
+- The first client runs `harness serve --socket` in the background. It records the socket path, a random token, its version, and its pid in `<data>/daemons/<workspace-hash>.json` (mode 0600, directory 0700).
+- Clients connect and present the token in `initialize`. A daemon of another version is never used; that client runs a private engine instead.
+- Clients leaving, including calling `shutdown`, don't affect others. The daemon exits after `HARNESS_DAEMON_IDLE_MS` (default 10 minutes) with no clients and no running turns.
+- If anything fails, the client falls back to a private engine (in-process for the TUI, `serve --stdio` for VS Code). Opt out with `harness --no-daemon` / `HARNESS_NO_DAEMON=1` or the `harness.sharedEngine` setting. Mock engines are never shared.
+- `session.list` marks running sessions, and opening one mid-turn continues with its live events.
 
 ## Security boundaries
 

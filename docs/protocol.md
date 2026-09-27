@@ -5,8 +5,11 @@ Every client, including our own, talks to the engine over this protocol. It's JS
 ## Connecting
 
 ```sh
-harness serve --stdio
+harness serve --stdio     # one client over stdin/stdout
+harness serve --socket    # the shared workspace daemon; many clients (see architecture.md)
 ```
+
+Daemon clients read the socket and token from the daemon info file (`connectDaemon` in `@harness/client` does all of this) and pass `token` in `initialize`.
 
 Write requests to stdin and read responses and notifications from stdout. stderr carries human-readable logs. The first request must be `initialize`:
 

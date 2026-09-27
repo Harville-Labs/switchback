@@ -2,6 +2,8 @@
  * Exposes an Engine over any Transport as a JSON-RPC 2.0 server. Engine events
  * are sent as `event` notifications.
  */
+
+import { createServer } from 'node:net';
 import {
   ErrorCode,
   EscalationRespondParams,
@@ -34,7 +36,24 @@ function parse<T extends z.ZodType>(schema: T, params: unknown): z.infer<T> {
   return r.data;
 }
 
-export function serve(engine: Engine, transport: Transport, onShutdown?: () => void): () => void {
+export interface ServeOptions {
+  /** Require this token in `initialize` (shared daemons). */
+  token?: string;
+  /**
+   * Stop the engine's turns when this connection closes or calls `shutdown`.
+   * True for a client's private engine; false for a shared daemon, where one
+   * client leaving must not affect the others.
+   */
+  ownsEngine?: boolean;
+}
+
+export function serve(
+  engine: Engine,
+  transport: Transport,
+  onShutdown?: () => void,
+  options: ServeOptions = {},
+): () => void {
+  const ownsEngine = options.ownsEngine ?? true;
   let initialized = false;
   const unsubscribe = engine.subscribe((event) => {
     if (initialized) transport.send({ jsonrpc: '2.0', method: 'event', params: event });
@@ -46,6 +65,8 @@ export function serve(engine: Engine, transport: Transport, onShutdown?: () => v
     switch (req.method) {
       case 'initialize': {
         const p = parse(InitializeParams, req.params);
+        if (options.token && p.token !== options.token)
+          throw new RpcError(ErrorCode.Unauthorized, 'invalid daemon token');
         if (p.protocolVersion !== PROTOCOL_VERSION)
           throw new RpcError(
             ErrorCode.InvalidRequest,
@@ -79,8 +100,8 @@ export function serve(engine: Engine, transport: Transport, onShutdown?: () => v
       case 'usage.get':
         return engine.usage();
       case 'shutdown':
-        await engine.shutdown();
-        queueMicrotask(() => onShutdown?.());
+        // onShutdown runs after the reply is sent (see below).
+        if (ownsEngine) await engine.shutdown();
         return { ok: true };
       default:
         throw new RpcError(ErrorCode.MethodNotFound, `unknown method ${req.method}`);
@@ -90,7 +111,11 @@ export function serve(engine: Engine, transport: Transport, onShutdown?: () => v
   transport.onMessage((message: JsonRpcMessage) => {
     if (!isRequest(message)) return;
     dispatch(message).then(
-      (result) => transport.send({ jsonrpc: '2.0', id: message.id, result: result ?? null }),
+      (result) => {
+        transport.send({ jsonrpc: '2.0', id: message.id, result: result ?? null });
+        // Close only after the reply is written, or the client never sees it.
+        if (message.method === 'shutdown') onShutdown?.();
+      },
       (err: unknown) => {
         const rpc = err instanceof RpcError ? err : undefined;
         transport.send({
@@ -107,7 +132,7 @@ export function serve(engine: Engine, transport: Transport, onShutdown?: () => v
   });
   transport.onClose(() => {
     unsubscribe();
-    void engine.shutdown();
+    if (ownsEngine) void engine.shutdown();
   });
   return unsubscribe;
 }
@@ -134,4 +159,45 @@ export function stdioTransport(): Transport {
     onClose: (h) => closers.push(h),
     close: () => process.stdin.destroy(),
   };
+}
+
+/**
+ * Accept many clients on a Unix socket / named pipe (a shared daemon).
+ * Returns a close function; `onConnections` reports the live connection count.
+ */
+export function listenSocket(
+  engine: Engine,
+  path: string,
+  options: { token: string; onConnections?: (count: number) => void },
+): Promise<{ close: () => void }> {
+  let count = 0;
+  const server = createServer((socket) => {
+    count++;
+    options.onConnections?.(count);
+    const handlers: ((m: JsonRpcMessage) => void)[] = [];
+    const closers: (() => void)[] = [];
+    const decoder = new NdjsonDecoder((m) => {
+      for (const h of handlers) h(m);
+    });
+    socket.on('data', (chunk: Buffer) => decoder.push(new Uint8Array(chunk)));
+    socket.on('error', () => socket.destroy());
+    socket.on('close', () => {
+      count--;
+      options.onConnections?.(count);
+      for (const c of closers) c();
+    });
+    const transport: Transport = {
+      send: (m) => {
+        if (!socket.destroyed) socket.write(encodeNdjson(m));
+      },
+      onMessage: (h) => handlers.push(h),
+      onClose: (h) => closers.push(h),
+      close: () => socket.end(),
+    };
+    serve(engine, transport, () => socket.end(), { token: options.token, ownsEngine: false });
+  });
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(path, () => resolve({ close: () => server.close() }));
+  });
 }

@@ -19,6 +19,8 @@ export const InitializeParams = z.object({
   protocolVersion: z.number().int(),
   client: z.object({ name: z.string(), version: z.string() }),
   workspaceRoot: z.string(),
+  /** Shared daemons require the token from their info file. */
+  token: z.string().optional(),
 });
 export type InitializeParams = z.infer<typeof InitializeParams>;
 
@@ -54,6 +56,8 @@ export interface SessionSummary {
   updatedAt: string;
   usage: Usage;
   costUsd: number;
+  /** A turn is in progress (possibly driven by another client). */
+  running?: boolean;
 }
 
 export const SessionGetParams = z.object({ sessionId: z.string() });

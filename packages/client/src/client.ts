@@ -24,10 +24,13 @@ export class HarnessClient {
   private listeners = new Set<(event: EngineEvent) => void>();
   private closed = false;
 
+  private closeListeners: (() => void)[] = [];
+
   constructor(private readonly transport: Transport) {
     transport.onMessage((m) => this.handle(m));
     transport.onClose(() => {
       this.closed = true;
+      for (const l of this.closeListeners) l();
       for (const p of this.pending.values()) p.reject(new Error('engine connection closed'));
       this.pending.clear();
     });
@@ -36,8 +39,15 @@ export class HarnessClient {
   async initialize(
     client: { name: string; version: string },
     workspaceRoot: string,
+    /** Required by shared daemons (see daemon.ts). */
+    token?: string,
   ): Promise<InitializeResult> {
-    return this.request('initialize', { protocolVersion: PROTOCOL_VERSION, client, workspaceRoot });
+    return this.request('initialize', {
+      protocolVersion: PROTOCOL_VERSION,
+      client,
+      workspaceRoot,
+      ...(token ? { token } : {}),
+    });
   }
 
   request<M extends MethodName>(
@@ -56,6 +66,11 @@ export class HarnessClient {
   on(listener: (event: EngineEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Called once when the connection to the engine ends. */
+  onClose(listener: () => void): void {
+    this.closeListeners.push(listener);
   }
 
   close(): void {

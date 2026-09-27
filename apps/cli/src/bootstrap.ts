@@ -1,4 +1,4 @@
-import { HarnessClient } from '@harness/client';
+import { connectDaemon, HarnessClient } from '@harness/client';
 import {
   ConfigError,
   Engine,
@@ -10,7 +10,7 @@ import {
   refreshPolicy,
   serve,
 } from '@harness/engine';
-import { createTransportPair } from '@harness/protocol';
+import { createTransportPair, type InitializeResult } from '@harness/protocol';
 import { tierOf } from '@harness/providers';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -105,6 +105,43 @@ export async function connectInProcess(
   const client = new HarnessClient(clientSide);
   const init = await client.initialize({ name: clientName, version: CLI_VERSION }, flags.cwd);
   return { client, init, agentErrors };
+}
+
+/** How to start this same harness as a daemon: the binary, or bun + this script in dev. */
+export function selfCommand(): { command: string; args: string[] } {
+  const compiled = !Bun.main.endsWith('.ts') && !Bun.main.endsWith('.tsx');
+  return compiled
+    ? { command: process.execPath, args: [] }
+    : { command: process.execPath, args: [Bun.main] };
+}
+
+/**
+ * Attach to the workspace's shared daemon (starting it if needed) so the TUI
+ * and VS Code share live sessions. Falls back to a private in-process engine.
+ */
+export async function connectShared(
+  flags: CommonFlags & { daemon: boolean },
+  clientName: string,
+): Promise<{ client: HarnessClient; init: InitializeResult; warnings: string[]; shared: boolean }> {
+  const warnings: string[] = [];
+  // Mock engines are never shared: a daemon must serve real sessions only.
+  if (flags.daemon && !flags.mock) {
+    const shared = await connectDaemon({
+      workspaceRoot: flags.cwd,
+      version: CLI_VERSION,
+      client: { name: clientName, version: CLI_VERSION },
+      spawn: selfCommand(),
+      log: (m) => warnings.push(m),
+    });
+    if (shared) return { ...shared, warnings, shared: true };
+  }
+  const local = await connectInProcess(flags, 'prompt', clientName, { syncOrg: true });
+  return {
+    client: local.client,
+    init: local.init,
+    warnings: [...warnings, ...local.agentErrors.map((e) => `agent skipped: ${e}`)],
+    shared: false,
+  };
 }
 
 /**

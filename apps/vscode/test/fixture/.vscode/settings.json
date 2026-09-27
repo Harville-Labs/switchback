@@ -1,4 +1,5 @@
 {
   "harness.executablePath": "bun",
+  "harness.sharedEngine": false,
   "harness.executableArgs": ["${workspaceFolder}/../../../cli/src/main.ts", "--mock"]
 }

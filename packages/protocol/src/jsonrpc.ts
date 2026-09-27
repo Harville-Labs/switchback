@@ -43,6 +43,7 @@ export const ErrorCode = {
   SessionBusy: -32002,
   ProviderUnavailable: -32003,
   BudgetExceeded: -32004,
+  Unauthorized: -32005,
 } as const;
 
 export class RpcError extends Error {

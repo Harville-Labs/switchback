@@ -124,6 +124,8 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
   return {
     ...initialView(session.id),
     items,
+    // Joining a session mid-turn: the live events that follow will finish it.
+    running: !!session.running,
     costUsd: session.costUsd,
     ...(lastRoute?.kind === 'route' ? { lastTier: lastRoute.tier } : {}),
   };

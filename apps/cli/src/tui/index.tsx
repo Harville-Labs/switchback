@@ -1,7 +1,7 @@
 import { fromTranscript, type ViewState } from '@harness/client';
 import type { RoutePreference, SessionSummary } from '@harness/protocol';
 import { render } from 'ink';
-import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
+import { type CommonFlags, connectShared } from '../bootstrap.ts';
 import { App } from './App.tsx';
 
 export async function tui(
@@ -10,15 +10,15 @@ export async function tui(
     agent?: string;
     /** `latest` for --continue, or a session id. */
     resume?: string;
+    /** Attach to (or start) the workspace's shared daemon. */
+    daemon: boolean;
   },
 ): Promise<number> {
   if (!process.stdin.isTTY) {
     process.stderr.write('harness: the terminal UI needs a TTY; use `harness run` for scripts\n');
     return 2;
   }
-  const { client, init, agentErrors } = await connectInProcess(opts, 'prompt', 'harness-tui', {
-    syncOrg: true,
-  });
+  const { client, init, warnings } = await connectShared(opts, 'harness-tui');
   let session: SessionSummary | undefined;
   let history: ViewState | undefined;
   if (opts.resume) {
@@ -40,7 +40,7 @@ export async function tui(
       initialSession={session}
       {...(history ? { initialView: history } : {})}
       initialRoute={opts.route}
-      warnings={agentErrors}
+      warnings={warnings}
     />,
     { exitOnCtrlC: true },
   );

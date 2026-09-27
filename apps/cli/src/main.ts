@@ -17,7 +17,8 @@ Usage
   harness usage                   Show spend, savings, and budget
   harness login [--server <url>]  Sign in to your organization (applies its policy)
   harness logout | whoami         Sign out / show organization and policy
-  harness serve --stdio           Serve the engine protocol (used by the VS Code extension)
+  harness serve --stdio           Serve the engine protocol to one client over stdin/stdout
+  harness serve --socket          Run this workspace's shared engine (TUI and VS Code attach to it)
 
 Options
   --cwd <dir>        Workspace root (default: current directory)
@@ -25,6 +26,7 @@ Options
   --agent <name>     Agent to start with (default: config defaultAgent)
   -c, --continue     Resume the most recent session in this workspace
   --session <id>     Resume a specific session
+  --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
   --json             run/usage: machine-readable output
   --mock             Use scripted mock providers (no models needed)
@@ -100,6 +102,8 @@ async function main(argv: string[]): Promise<number> {
       json: { type: 'boolean', default: false },
       mock: { type: 'boolean', default: false },
       stdio: { type: 'boolean', default: false },
+      socket: { type: 'boolean', default: false },
+      'no-daemon': { type: 'boolean', default: false },
       continue: { type: 'boolean', short: 'c', default: false },
       session: { type: 'string' },
       scope: { type: 'string' },
@@ -147,6 +151,7 @@ async function main(argv: string[]): Promise<number> {
       const { tui } = await import('./tui/index.tsx');
       return tui({
         ...common,
+        daemon: !values['no-daemon'] && !process.env.HARNESS_NO_DAEMON,
         route: route.data,
         ...(values.agent ? { agent: values.agent } : {}),
         ...(values.session
@@ -202,10 +207,14 @@ async function main(argv: string[]): Promise<number> {
       });
     }
     case 'serve': {
-      if (!values.stdio)
-        throw new UsageError('only --stdio is supported today (see docs/protocol.md)');
+      if (values.stdio === values.socket)
+        throw new UsageError(
+          'serve needs exactly one of --stdio or --socket (see docs/protocol.md)',
+        );
+      if (values.socket && values.mock)
+        throw new UsageError('a shared daemon never runs mock providers; use --stdio with --mock');
       const { serve } = await import('./commands/serve.ts');
-      return serve(common);
+      return serve({ ...common, socket: values.socket });
     }
     case 'doctor': {
       const { doctor } = await import('./commands/doctor.ts');
