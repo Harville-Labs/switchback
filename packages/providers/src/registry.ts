@@ -53,6 +53,21 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     region: z.string().default('global'),
   }),
   z.object({
+    /** Claude Platform on AWS: Anthropic-operated, SigV4 auth, AWS billing. Bare model IDs. */
+    type: z.literal('anthropic-aws'),
+    region: z.string().optional(),
+    workspaceId: z.string().optional(),
+    profile: z.string().optional(),
+    refusalFallback: z.enum(['server', 'off']).default('server'),
+  }),
+  z.object({
+    type: z.literal('foundry'),
+    /** Foundry resource name (`https://<resource>.services.ai.azure.com`). */
+    resource: z.string().optional(),
+    apiKey: Secret.optional(),
+    baseUrl: z.url().optional(),
+  }),
+  z.object({
     type: z.literal('mock'),
     tier: z.enum(['local', 'remote']).default('local'),
   }),
@@ -128,6 +143,31 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
           ...(config.profile ? { profile: config.profile } : {}),
         },
         eagerToolInputStreaming: config.eagerToolInputStreaming,
+        noThinkingModels: NO_THINKING,
+      });
+    case 'anthropic-aws':
+      return new AnthropicProvider({
+        id,
+        tier: 'remote',
+        platform: {
+          kind: 'aws',
+          ...(config.region ? { region: config.region } : {}),
+          ...(config.workspaceId ? { workspaceId: config.workspaceId } : {}),
+          ...(config.profile ? { profile: config.profile } : {}),
+        },
+        noThinkingModels: NO_THINKING,
+        serverFallback: config.refusalFallback === 'server',
+      });
+    case 'foundry':
+      return new AnthropicProvider({
+        id,
+        tier: 'remote',
+        platform: {
+          kind: 'foundry',
+          ...(config.resource ? { resource: config.resource } : {}),
+          ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+          ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+        },
         noThinkingModels: NO_THINKING,
       });
     case 'vertex':

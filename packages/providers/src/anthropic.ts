@@ -5,11 +5,15 @@
  * - `anthropic`: first-party Claude API (`@anthropic-ai/sdk`)
  * - `bedrock`:   Amazon Bedrock via the Mantle client (`@anthropic-ai/bedrock-sdk`)
  * - `vertex`:    Google Cloud Vertex AI (`@anthropic-ai/vertex-sdk`)
+ * - `aws`:       Claude Platform on AWS, Anthropic-operated with SigV4 auth (`@anthropic-ai/aws-sdk`)
+ * - `foundry`:   Microsoft Foundry (`@anthropic-ai/foundry-sdk`)
  */
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import AnthropicAws from '@anthropic-ai/aws-sdk';
 import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
+import AnthropicFoundry from '@anthropic-ai/foundry-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk';
 import type { Message, Part, StopReason, Tier } from '@harness/protocol';
@@ -24,7 +28,9 @@ import {
 export type AnthropicPlatform =
   | { kind: 'anthropic'; apiKey?: string; baseUrl?: string }
   | { kind: 'bedrock'; region?: string; profile?: string }
-  | { kind: 'vertex'; projectId: string; region: string };
+  | { kind: 'vertex'; projectId: string; region: string }
+  | { kind: 'aws'; region?: string; workspaceId?: string; profile?: string }
+  | { kind: 'foundry'; resource?: string; apiKey?: string; baseUrl?: string };
 
 export interface AnthropicProviderOptions {
   id: string;
@@ -71,6 +77,18 @@ function createClient(platform: AnthropicPlatform): MessagesClient {
       return new AnthropicVertex({
         projectId: platform.projectId,
         region: platform.region,
+      }) as unknown as MessagesClient;
+    case 'aws':
+      return new AnthropicAws({
+        ...(platform.region ? { awsRegion: platform.region } : {}),
+        ...(platform.workspaceId ? { workspaceId: platform.workspaceId } : {}),
+        ...(platform.profile ? { awsProfile: platform.profile } : {}),
+      }) as unknown as MessagesClient;
+    case 'foundry':
+      return new AnthropicFoundry({
+        ...(platform.resource ? { resource: platform.resource } : {}),
+        ...(platform.apiKey ? { apiKey: platform.apiKey } : {}),
+        ...(platform.baseUrl ? { baseURL: platform.baseUrl } : {}),
       }) as unknown as MessagesClient;
   }
 }
@@ -167,6 +185,26 @@ export class AnthropicProvider implements Provider {
         detail: 'no credentials found (set ANTHROPIC_API_KEY or run `ant auth login`)',
       };
     }
+    const env = process.env;
+    if (platform.kind === 'aws' && !platform.workspaceId && !env.ANTHROPIC_AWS_WORKSPACE_ID)
+      return {
+        ok: false,
+        detail: 'no workspace ID (set workspaceId or ANTHROPIC_AWS_WORKSPACE_ID)',
+      };
+    if (platform.kind === 'foundry') {
+      if (
+        !platform.resource &&
+        !platform.baseUrl &&
+        !env.ANTHROPIC_FOUNDRY_RESOURCE &&
+        !env.ANTHROPIC_FOUNDRY_BASE_URL
+      )
+        return {
+          ok: false,
+          detail: 'no Foundry resource (set resource or ANTHROPIC_FOUNDRY_RESOURCE)',
+        };
+      if (!platform.apiKey && !env.ANTHROPIC_FOUNDRY_API_KEY)
+        return { ok: false, detail: 'no API key (set apiKey or ANTHROPIC_FOUNDRY_API_KEY)' };
+    }
     try {
       this.getClient();
       return { ok: true, detail: `${platform.kind} client configured` };
@@ -205,9 +243,10 @@ export class AnthropicProvider implements Provider {
         : {}),
     };
 
+    // Server-side fallbacks exist on the Claude API and Claude Platform on AWS only.
     const useFallback =
       this.options.serverFallback === true &&
-      this.options.platform.kind === 'anthropic' &&
+      (this.options.platform.kind === 'anthropic' || this.options.platform.kind === 'aws') &&
       !this.noServerFallback.has(request.model);
 
     let final: Anthropic.Message | Anthropic.Beta.BetaMessage;

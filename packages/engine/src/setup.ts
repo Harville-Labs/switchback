@@ -34,13 +34,16 @@ export const REMOTE_KINDS = [
   'deepseek',
   'bedrock',
   'vertex',
+  'anthropic-aws',
+  'foundry',
   'openai-compatible',
 ] as const;
 export type RemoteKind = (typeof REMOTE_KINDS)[number];
 
 /** Which catalog a remote kind draws its models from. */
 export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
-  if (kind === 'bedrock' || kind === 'vertex') return 'anthropic';
+  if (kind === 'bedrock' || kind === 'vertex' || kind === 'anthropic-aws' || kind === 'foundry')
+    return 'anthropic';
   if (kind === 'openai-compatible') return undefined;
   return kind;
 }
@@ -57,6 +60,8 @@ export type RemoteAnswer =
   | { kind: 'anthropic' | 'openai' | 'deepseek'; model: string }
   | { kind: 'bedrock'; model: string; region: string; profile?: string }
   | { kind: 'vertex'; model: string; projectId: string; region: string }
+  | { kind: 'anthropic-aws'; model: string; region: string; workspaceId: string; profile?: string }
+  | { kind: 'foundry'; model: string; resource: string }
   | {
       kind: 'openai-compatible';
       model: string;
@@ -132,7 +137,16 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
         ? { type: 'bedrock', region: r.region, ...(r.profile ? { profile: r.profile } : {}) }
         : r.kind === 'vertex'
           ? { type: 'vertex', projectId: r.projectId, region: r.region }
-          : { type: r.kind };
+          : r.kind === 'anthropic-aws'
+            ? {
+                type: 'anthropic-aws',
+                region: r.region,
+                workspaceId: r.workspaceId,
+                ...(r.profile ? { profile: r.profile } : {}),
+              }
+            : r.kind === 'foundry'
+              ? { type: 'foundry', resource: r.resource }
+              : { type: r.kind };
     const catalog = catalogFor(r.kind) as HostedProviderKind;
     // Bedrock model IDs carry the `anthropic.` prefix; everywhere else uses bare IDs.
     const wire = (m: string) => (r.kind === 'bedrock' ? `anthropic.${m}` : m);

@@ -95,6 +95,24 @@ Uses the official Anthropic SDK. Credentials resolve through its chain: `ANTHROP
 
 Bedrock uses the Mantle client from `@anthropic-ai/bedrock-sdk` with standard AWS credentials; model IDs take the `anthropic.` prefix, and `eagerToolInputStreaming` is off by default because older deployments reject it. Vertex uses Application Default Credentials. Both bill differently from the first-party API, so set `price` for accurate savings.
 
+### Claude Platform on AWS and Microsoft Foundry
+
+```jsonc
+"providers": {
+  "claude-aws": { "type": "anthropic-aws", "region": "us-west-2", "workspaceId": "wrkspc_..." },
+  "foundry": { "type": "foundry", "resource": "acme-ai", "apiKey": "{env:ANTHROPIC_FOUNDRY_API_KEY}" }
+},
+"models": {
+  "remote": { "provider": "claude-aws", "model": "claude-opus-5" }
+}
+```
+
+Claude Platform on AWS (`@anthropic-ai/aws-sdk`) is operated by Anthropic with AWS IAM (SigV4) authentication and AWS billing, and has the same API as the first-party Claude API, including server-side refusal fallbacks. It isn't Bedrock: model IDs are bare (`claude-opus-5`, no `anthropic.` prefix). It needs a region and a Claude workspace ID (`region`/`workspaceId`, or `AWS_REGION`/`ANTHROPIC_AWS_WORKSPACE_ID`); credentials come from the standard AWS chain or `profile`.
+
+Microsoft Foundry (`@anthropic-ai/foundry-sdk`) needs the Foundry resource name (or `baseUrl`) and an API key (`apiKey` or `ANTHROPIC_FOUNDRY_API_KEY`). It has no server-side refusal fallback, so refusals go to the next model in `routing.remote`. Foundry billing can differ from list prices; set `price` for accurate savings.
+
+Both use the same Claude adapter as the first-party API, so thinking replay, caching, and tool translation behave identically. `harness init` offers both.
+
 ### Any other OpenAI-compatible API
 
 ```jsonc

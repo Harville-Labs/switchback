@@ -20,6 +20,8 @@ const PROVIDER_TYPES = [
   'anthropic',
   'bedrock',
   'vertex',
+  'anthropic-aws',
+  'foundry',
   'mock',
 ] as const satisfies readonly ProviderConfig['type'][];
 

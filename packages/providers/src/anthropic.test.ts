@@ -42,11 +42,22 @@ async function run(p: AnthropicProvider, model = 'claude-opus-5') {
   return events.at(-1) as Extract<ChatEvent, { type: 'done' }>;
 }
 
-function provider(client: MessagesClient, kind: 'anthropic' | 'bedrock' = 'anthropic') {
+function provider(
+  client: MessagesClient,
+  kind: 'anthropic' | 'bedrock' | 'aws' | 'foundry' = 'anthropic',
+) {
+  const platform =
+    kind === 'anthropic'
+      ? ({ kind } as const)
+      : kind === 'bedrock'
+        ? ({ kind, region: 'us-east-1' } as const)
+        : kind === 'aws'
+          ? ({ kind, region: 'us-east-1', workspaceId: 'wrkspc_1' } as const)
+          : ({ kind, resource: 'acme', apiKey: 'k' } as const);
   return new AnthropicProvider({
     id: kind,
     tier: 'remote',
-    platform: kind === 'anthropic' ? { kind } : { kind, region: 'us-east-1' },
+    platform,
     serverFallback: true,
     client,
   });
@@ -182,4 +193,52 @@ test('effort none sends no thinking and no effort', async () => {
   }
   expect(calls[0]?.params).not.toHaveProperty('thinking');
   expect(calls[0]?.params).not.toHaveProperty('output_config');
+});
+
+describe('Claude platforms', () => {
+  const ok = () => ({
+    model: 'claude-opus-5',
+    content: [{ type: 'text', text: 'ok' }],
+    stop_reason: 'end_turn',
+    usage,
+  });
+
+  test('Claude Platform on AWS gets server-side fallbacks; Foundry does not', async () => {
+    const aws = fakeClient(ok);
+    await run(provider(aws.client, 'aws'));
+    expect(aws.calls[0]).toMatchObject({ beta: true, params: { fallbacks: 'default' } });
+    const foundry = fakeClient(ok);
+    await run(provider(foundry.client, 'foundry'));
+    expect(foundry.calls[0]?.beta).toBe(false);
+  });
+
+  test('health names the missing setting', async () => {
+    const saved = { ...process.env };
+    delete process.env.ANTHROPIC_AWS_WORKSPACE_ID;
+    delete process.env.ANTHROPIC_FOUNDRY_API_KEY;
+    delete process.env.ANTHROPIC_FOUNDRY_RESOURCE;
+    delete process.env.ANTHROPIC_FOUNDRY_BASE_URL;
+    try {
+      const aws = new AnthropicProvider({
+        id: 'a',
+        tier: 'remote',
+        platform: { kind: 'aws', region: 'us-east-1' },
+      });
+      expect((await aws.health()).detail).toContain('ANTHROPIC_AWS_WORKSPACE_ID');
+      const foundry = new AnthropicProvider({
+        id: 'f',
+        tier: 'remote',
+        platform: { kind: 'foundry', resource: 'acme' },
+      });
+      expect((await foundry.health()).detail).toContain('ANTHROPIC_FOUNDRY_API_KEY');
+      const ready = new AnthropicProvider({
+        id: 'f',
+        tier: 'remote',
+        platform: { kind: 'foundry', resource: 'acme', apiKey: 'k' },
+      });
+      expect((await ready.health()).ok).toBe(true);
+    } finally {
+      process.env = saved;
+    }
+  });
 });

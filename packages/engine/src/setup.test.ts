@@ -126,6 +126,38 @@ describe('buildSetupConfig', () => {
     }
   });
 
+  test('Claude Platform on AWS and Foundry use bare Claude IDs and the Claude catalog', () => {
+    const parsed = HarnessConfig.parse(
+      buildSetupConfig({
+        locals: [],
+        remotes: [
+          {
+            kind: 'anthropic-aws',
+            model: 'claude-opus-5',
+            region: 'us-west-2',
+            workspaceId: 'wrkspc_1',
+          },
+          { kind: 'foundry', model: 'claude-sonnet-5', resource: 'acme' },
+        ],
+        escalationPolicy: 'auto',
+      }),
+    );
+    expect(parsed.providers['anthropic-aws']).toMatchObject({
+      type: 'anthropic-aws',
+      workspaceId: 'wrkspc_1',
+    });
+    expect(parsed.providers.foundry).toMatchObject({ type: 'foundry', resource: 'acme' });
+    expect(parsed.models.remote).toMatchObject({
+      provider: 'anthropic-aws',
+      model: 'claude-opus-5',
+    });
+    expect(parsed.models['remote-2']).toMatchObject({
+      provider: 'foundry',
+      model: 'claude-sonnet-5',
+    });
+    expect(parsed.models.haiku?.model).toBe('claude-haiku-4-5');
+  });
+
   test('DeepSeek models get an effort so thinking mode is on', () => {
     const layer = buildSetupConfig({
       locals: [],

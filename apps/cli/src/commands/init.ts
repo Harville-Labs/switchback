@@ -47,6 +47,10 @@ export interface InitFlags {
   region?: string;
   profile?: string;
   projectId?: string;
+  /** Claude Platform on AWS. */
+  workspaceId?: string;
+  /** Microsoft Foundry resource name. */
+  resource?: string;
   policy?: 'auto' | 'ask' | 'off';
   dailyBudget?: number;
   monthlyBudget?: number;
@@ -346,6 +350,8 @@ const REMOTE_LABELS: Record<RemoteKind, string> = {
   deepseek: 'DeepSeek API',
   bedrock: 'Amazon Bedrock (Claude)',
   vertex: 'Google Vertex AI (Claude)',
+  'anthropic-aws': 'Claude Platform on AWS (Anthropic-operated, AWS billing)',
+  foundry: 'Microsoft Foundry (Claude)',
   'openai-compatible': 'Other OpenAI-compatible API (OpenRouter, Together, Groq, ...)',
 };
 
@@ -362,6 +368,12 @@ function credentialHint(kind: RemoteKind): string {
     }
     case 'bedrock':
       return 'AWS credentials';
+    case 'anthropic-aws':
+      return 'AWS credentials and a Claude workspace ID';
+    case 'foundry':
+      return process.env.ANTHROPIC_FOUNDRY_API_KEY
+        ? 'credentials found'
+        : 'needs ANTHROPIC_FOUNDRY_API_KEY';
     case 'vertex':
       return 'gcloud application-default credentials';
     case 'openai-compatible':
@@ -487,6 +499,32 @@ async function chooseRemote(
       if (!projectId) throw new SetupError('Vertex AI needs a project ID (--project-id)');
       const region = flags.region ?? (p ? await p.text('Region', 'global') : 'global');
       return { kind, model, projectId, region };
+    }
+    case 'anthropic-aws': {
+      const region =
+        flags.region ?? (p ? await p.text('AWS region', env.AWS_REGION) : env.AWS_REGION);
+      const workspaceId =
+        flags.workspaceId ??
+        (p
+          ? await p.text('Claude workspace ID', env.ANTHROPIC_AWS_WORKSPACE_ID)
+          : env.ANTHROPIC_AWS_WORKSPACE_ID);
+      if (!region || !workspaceId)
+        throw new SetupError('Claude Platform on AWS needs --region and --workspace-id');
+      const profile =
+        flags.profile ??
+        (p
+          ? await p.text('AWS profile (leave empty for the default chain)', env.AWS_PROFILE)
+          : env.AWS_PROFILE);
+      return { kind, model, region, workspaceId, ...(profile ? { profile } : {}) };
+    }
+    case 'foundry': {
+      const resource =
+        flags.resource ??
+        (p
+          ? await p.text('Foundry resource name', env.ANTHROPIC_FOUNDRY_RESOURCE)
+          : env.ANTHROPIC_FOUNDRY_RESOURCE);
+      if (!resource) throw new SetupError('Microsoft Foundry needs --resource');
+      return { kind, model, resource };
     }
   }
 }

@@ -7,9 +7,12 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/aws-sdk": "^0.7.4",
     "@anthropic-ai/bedrock-sdk": "^0.33.8",
+    "@anthropic-ai/foundry-sdk": "^0.4.9",
     "@anthropic-ai/sdk": "^0.128.0",
     "@anthropic-ai/vertex-sdk": "^0.19.11",
+    "@google/genai": "^2.24.0",
     "@harness/protocol": "workspace:*",
     "openai": "^7.23.0",
     "zod": "^4.6.5"

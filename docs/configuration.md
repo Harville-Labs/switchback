@@ -77,6 +77,8 @@ Any number of providers can be configured together, including several local serv
 | `anthropic` | `apiKey`, `baseUrl`, `refusalFallback` (`server` \| `off`, default `server`; see [routing.md](routing.md#refusals)) |
 | `bedrock` | `region`, `profile`, `eagerToolInputStreaming` (default `false`) |
 | `vertex` | `projectId` (required), `region` (default `global`) |
+| `anthropic-aws` | `region`, `workspaceId`, `profile`, `refusalFallback` (Claude Platform on AWS) |
+| `foundry` | `resource` or `baseUrl`, `apiKey` (default `$ANTHROPIC_FOUNDRY_API_KEY`) (Microsoft Foundry) |
 | `mock` | `tier` |
 
 ### `models.<alias>`
