@@ -5,6 +5,11 @@
   "version": "0.3.0",
   "private": true,
   "publisher": "harville-labs",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#000000",
+    "theme": "dark"
+  },
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "vscode": "^1.95.0"

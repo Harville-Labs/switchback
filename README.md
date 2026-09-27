@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/harville-labs.png" alt="Harville Labs" width="480"></p>
+
 # Harness
 
 A local-first coding agent from Harville Labs. Most of the work runs on a model on your own machine; Harness escalates the hard parts to the hosted model of your choice (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) and shows you exactly when and why it did.
