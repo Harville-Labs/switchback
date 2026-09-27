@@ -47,6 +47,8 @@ export interface RouteInput {
   refusalRetry?: boolean;
   /** The classifier's rating of this turn's prompt (first call of a turn only). */
   difficulty?: Difficulty;
+  /** A subagent invocation's own budget and what it (and its subagents) spent so far. */
+  invocationBudget?: { agent: string; limitUsd: number; spentUsd: number };
 }
 
 export type RouteDecision =
@@ -247,6 +249,20 @@ export class Router {
     remoteChain: string[],
   ): RouteDecision {
     let d = decision;
+
+    // A subagent's own budget: once spent, it continues locally or stops.
+    const ib = input.invocationBudget;
+    if (d.model.tier === 'remote' && ib && ib.spentUsd >= ib.limitUsd) {
+      const over = `subagent "${ib.agent}" spent $${ib.spentUsd.toFixed(2)} of its $${ib.limitUsd.toFixed(2)} budget`;
+      if (!local.model?.available) return { kind: 'block', rule: 'agent-budget', reason: over };
+      d = {
+        ...d,
+        model: local.model,
+        rule: 'agent-budget',
+        reason: `${over}; continuing locally`,
+        escalated: false,
+      };
+    }
 
     // Budget: never overspend unless the user explicitly asked for remote.
     if (d.model.tier === 'remote' && input.preference !== 'remote') {

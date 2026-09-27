@@ -369,3 +369,32 @@ describe('classifier rule', () => {
     ).toBe('user-override');
   });
 });
+
+describe('agent budgets', () => {
+  const budget = (spentUsd: number) => ({ agent: 'reviewer', limitUsd: 0.5, spentUsd });
+  const remoteTurn = { signals: { ...input().signals, stickyRemoteTurns: 1 } };
+
+  test('under budget: no effect', () => {
+    const d = routed(router().decide(input({ ...remoteTurn, invocationBudget: budget(0.2) })));
+    expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'remote' } });
+  });
+
+  test('spent: remote calls continue locally', () => {
+    const d = routed(router().decide(input({ ...remoteTurn, invocationBudget: budget(0.5) })));
+    expect(d).toMatchObject({ rule: 'agent-budget', model: { alias: 'local' } });
+    expect(d.reason).toBe(
+      'subagent "reviewer" spent $0.50 of its $0.50 budget; continuing locally',
+    );
+  });
+
+  test('spent with no local model: the subagent is stopped', () => {
+    const d = router({}, { local: { ...LOCAL, available: false } }).decide(
+      input({ ...remoteTurn, invocationBudget: budget(0.9) }),
+    );
+    expect(d).toMatchObject({ kind: 'block', rule: 'agent-budget' });
+  });
+
+  test('local calls are never limited by a budget', () => {
+    expect(routed(router().decide(input({ invocationBudget: budget(9) }))).rule).toBe('default');
+  });
+});

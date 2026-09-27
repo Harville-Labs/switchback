@@ -122,6 +122,8 @@ export interface AgentSummary {
   source: 'builtin' | 'user' | 'project' | 'claude-compat';
   route: RoutePreference;
   model?: string;
+  /** Remote spend allowed per invocation as a subagent. */
+  budgetUsd?: number;
 }
 
 export const UsagePeriod = z.enum(['today', 'week', 'month']);

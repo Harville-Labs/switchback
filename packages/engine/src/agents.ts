@@ -22,6 +22,8 @@ export interface AgentDefinition {
   route: RoutePreference;
   /** Model alias pin, e.g. `haiku` or `local`. */
   model?: string;
+  /** Remote spend allowed per subagent invocation (including its own subagents). */
+  budgetUsd?: number;
   source: AgentSummary['source'];
   file?: string;
 }
@@ -114,6 +116,12 @@ export function parseAgentFile(
   else if (rawModel && rawModel !== 'inherit') model = rawModel;
   if (meta.route === 'local' || meta.route === 'remote' || meta.route === 'auto')
     route = meta.route;
+  let budgetUsd: number | undefined;
+  if (meta.budgetUsd !== undefined) {
+    budgetUsd = Number(meta.budgetUsd);
+    if (!Number.isFinite(budgetUsd) || budgetUsd < 0)
+      throw new Error(`${file}: budgetUsd must be a non-negative number of dollars`);
+  }
 
   return {
     name,
@@ -122,6 +130,7 @@ export function parseAgentFile(
     ...(tools ? { tools } : {}),
     route,
     ...(model ? { model } : {}),
+    ...(budgetUsd !== undefined ? { budgetUsd } : {}),
     source,
     file,
   };
@@ -160,5 +169,6 @@ export function summarize(agent: AgentDefinition): AgentSummary {
     source: agent.source,
     route: agent.route,
     ...(agent.model ? { model: agent.model } : {}),
+    ...(agent.budgetUsd !== undefined ? { budgetUsd: agent.budgetUsd } : {}),
   };
 }

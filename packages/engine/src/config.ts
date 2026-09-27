@@ -61,6 +61,8 @@ export const HarnessConfig = z.object({
     .object({
       maxConcurrent: z.number().int().positive().default(4),
       maxDepth: z.number().int().positive().default(2),
+      /** Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it. */
+      budgetUsd: z.number().nonnegative().optional(),
     })
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */

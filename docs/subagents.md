@@ -40,6 +40,7 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and harness names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`haiku`, `sonnet`, `opus`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Harness extension; same effect as `model: local`/`remote` |
+| `budgetUsd` | dollars | Harness extension. Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
 
 The body is the system prompt. Harness appends an environment section and the project's `AGENTS.md` (or `CLAUDE.md`) to it.
 
@@ -76,6 +77,7 @@ Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the lar
 | `subagents.maxConcurrent` | 4 | Concurrent subagents per depth level. Extra calls queue. |
 | `subagents.maxDepth` | 2 | Agents at this depth don't get the `task` tool. |
 | `maxStepsPerTurn` | 50 | Applies to each subagent turn too. |
+| `subagents.budgetUsd` | none | Remote spend per invocation for agents without their own `budgetUsd`. |
 
 ## Patterns
 

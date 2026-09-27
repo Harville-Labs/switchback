@@ -109,6 +109,10 @@ interface LiveSession {
   signals: SignalTracker;
   depth: number;
   controller?: AbortController;
+  /** Subagent invocations: remote spend allowed for this session and its descendants. */
+  budget?: { agent: string; limitUsd: number };
+  /** Why the last turn stopped with an error, reported to a parent agent. */
+  lastError?: string;
   /** The previous remote call, to check that the next one hits the prompt cache. */
   lastRemote?: { key: string; at: number };
   cacheWarned?: boolean;
@@ -515,6 +519,7 @@ export class Engine {
         refused,
         refusalRetry,
         ...(difficulty ? { difficulty } : {}),
+        ...this.invocationBudget(s),
         agent: {
           name: agent.name,
           route: agent.route,
@@ -540,12 +545,8 @@ export class Engine {
         return 'error';
       }
       if (decision.kind === 'block') {
-        this.emit({
-          type: 'error',
-          ...this.scope(s),
-          turnId,
-          message: `cannot route turn: ${decision.reason}`,
-        });
+        s.lastError = `cannot route turn: ${decision.reason}`;
+        this.emit({ type: 'error', ...this.scope(s), turnId, message: s.lastError });
         return 'error';
       }
       if (decision.kind === 'ask') {
@@ -757,6 +758,33 @@ export class Engine {
   // -------------------------------------------------------------------------
   // Compaction (ADR 0008)
   // -------------------------------------------------------------------------
+
+  /** Remote spend of a session and all its descendant sessions. */
+  private treeCost(sessionId: string): number {
+    let total = this.ledger.sessionCost(sessionId).costUsd;
+    for (const live of this.sessions.values())
+      if (live.header.parentId === sessionId) total += this.treeCost(live.header.id);
+    return total;
+  }
+
+  /**
+   * The tightest budget among this session and its ancestors: a nested
+   * subagent also counts against every budgeted invocation above it.
+   */
+  private invocationBudget(s: LiveSession): {
+    invocationBudget?: { agent: string; limitUsd: number; spentUsd: number };
+  } {
+    let tightest: { agent: string; limitUsd: number; spentUsd: number } | undefined;
+    for (let cur: LiveSession | undefined = s; cur; ) {
+      if (cur.budget) {
+        const spentUsd = this.treeCost(cur.header.id);
+        if (!tightest || cur.budget.limitUsd - spentUsd < tightest.limitUsd - tightest.spentUsd)
+          tightest = { ...cur.budget, spentUsd };
+      }
+      cur = cur.header.parentId ? this.sessions.get(cur.header.parentId) : undefined;
+    }
+    return tightest ? { invocationBudget: tightest } : {};
+  }
 
   /** `session.compact`: compact now, whatever the prompt size. */
   async compactSession(sessionId: string): Promise<{ compacted: boolean }> {
@@ -1033,6 +1061,9 @@ export class Engine {
     await slots.acquire(signal);
     try {
       const child = this.createSession({ agent, title: description, parentId: parent.header.id });
+      const limitUsd = this.agents.get(agent)?.budgetUsd ?? this.options.config.subagents.budgetUsd;
+      const childSession = this.sessions.get(child.id);
+      if (childSession && limitUsd !== undefined) childSession.budget = { agent, limitUsd };
       this.emit({
         type: 'subagent.started',
         ...this.scope(parent),
@@ -1051,7 +1082,9 @@ export class Engine {
       });
       return {
         ok,
-        text: ok ? result.text : `${result.stopReason}: ${result.text}`,
+        text: ok
+          ? result.text
+          : `${result.stopReason}: ${this.sessions.get(child.id)?.lastError ?? result.text}`,
         sessionId: child.id,
       };
     } finally {

@@ -39,7 +39,9 @@ A tier pin in an agent definition (`route: local`) is a preference: if that tier
 
 Whichever rule picks a tier, the model within it comes from that tier's list: the first that's reachable and fits. When that isn't the first model listed, the decision says so with `rule: context-fit` (an earlier model's window is too small) or `rule: fallback` (an earlier model's server is down), and the reason names both models.
 
-Two guards then run on the chosen target:
+Three guards then run on the chosen target:
+
+- **Agent budget** (`rule: agent-budget`). A subagent invocation with `budgetUsd` (its own or `subagents.budgetUsd`) that has spent it, counting its own subagents, continues locally; with no local model it's stopped and its parent is told why. Nested subagents count against every budgeted invocation above them.
 
 - **Budget** (`rule: budget`). If the target is remote, the user didn't explicitly ask for remote, and daily or monthly spend has reached `routing.budget`, the call stays local (`onExceeded: local`) or is refused (`onExceeded: block`).
 - **Availability** (`rule: fallback`). If every model in the chosen tier failed its health check, the call moves to the other tier per `routing.fallback`. If that's also unavailable or over budget, the call is blocked with an explanation.

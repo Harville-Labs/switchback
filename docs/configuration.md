@@ -141,6 +141,7 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 | `defaultAgent` | `build` | Agent for new sessions |
 | `subagents.maxConcurrent` | 4 | Concurrent subagents per depth |
 | `subagents.maxDepth` | 2 | Maximum nesting |
+| `subagents.budgetUsd` | none | Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it |
 | `maxStepsPerTurn` | 50 | Model calls per user prompt before stopping |
 | `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |
 | `compaction.threshold` | 0.7 | Fraction of the largest local context window (the remote window when there's no local model) that triggers it |

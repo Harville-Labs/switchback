@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { HarnessClient } from '@harness/client';
 import { createTransportPair, type EngineEvent } from '@harness/protocol';
 import { type Provider, ProviderError, type Script, ScriptedProvider } from '@harness/providers';
+import { loadAgents, parseAgentFile } from './agents.ts';
 import { HarnessConfig } from './config.ts';
 import { Engine, type EngineOptions } from './engine.ts';
 import { serve } from './server.ts';
@@ -554,6 +555,83 @@ describe('prompt caching', () => {
         { ...miss, inputTokens: 900 },
       ]),
     ).toHaveLength(0);
+  });
+});
+
+describe('per-agent budgets', () => {
+  function withBudget(localUp: boolean) {
+    const reviewer = parseAgentFile(
+      '---\nname: reviewer\ndescription: reviews\nmodel: remote\nbudgetUsd: 0.0001\n---\nReview.',
+      'reviewer.md',
+      'project',
+    );
+    const task = {
+      name: 'task',
+      input: { agent: 'reviewer', description: 'review', prompt: 'look' },
+    };
+    const script =
+      (tier: 'local' | 'remote'): Script =>
+      (req) => {
+        const afterTool = req.messages.at(-1)?.parts.some((p) => p.type === 'tool_result');
+        if (!req.system.startsWith('Review.'))
+          return afterTool ? { text: 'parent done' } : { toolCalls: [task] };
+        // The reviewer keeps working remotely (about a cent per call) and wraps up locally.
+        return tier === 'remote'
+          ? {
+              toolCalls: [{ name: 'read', input: { path: 'hello.txt' } }],
+              usage: { inputTokens: 2_000, outputTokens: 100 },
+            }
+          : { text: 'reviewed locally' };
+      };
+    const lp = new ScriptedProvider('lp', 'local', script('local'), localUp);
+    const rp = new ScriptedProvider('rp', 'remote', script('remote'));
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: HarnessConfig.parse({
+        providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
+        models: {
+          local: { provider: 'lp', model: 'small', contextWindow: 100_000 },
+          remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
+        },
+        routing: { fallback: { onLocalUnavailable: 'fail' } },
+      }),
+      providers: new Map<string, Provider>([
+        ['lp', lp],
+        ['rp', rp],
+      ]),
+      agents: new Map([...loadAgents([]).agents, ['reviewer', reviewer]]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    return { engine, rp, events };
+  }
+  const childRemoteCalls = (rp: ScriptedProvider) =>
+    rp.requests.filter((r) => r.system.startsWith('Review.')).length;
+
+  test('an over-budget subagent continues on the local model', async () => {
+    const { engine, rp, events } = withBudget(true);
+    await engine.runTurn(engine.createSession({}).id, 'review it');
+    expect(childRemoteCalls(rp)).toBe(1);
+    expect(
+      events.find((e) => e.type === 'route.decided' && e.rule === 'agent-budget'),
+    ).toMatchObject({ tier: 'local' });
+    expect(events.find((e) => e.type === 'subagent.completed')).toMatchObject({ ok: true });
+  });
+
+  test('with no local model it is stopped, and the parent is told why', async () => {
+    const { engine, rp } = withBudget(false);
+    const s = engine.createSession({});
+    const r = await engine.runTurn(s.id, 'review it', 'remote');
+    expect(childRemoteCalls(rp)).toBe(1);
+    const result = engine
+      .getSession(s.id)
+      .messages.flatMap((m) => m.parts)
+      .find((p) => p.type === 'tool_result');
+    expect(result).toMatchObject({ isError: true });
+    expect(result?.type === 'tool_result' && result.content).toContain(
+      'subagent "reviewer" spent $',
+    );
+    expect(r.text).toBe('parent done');
   });
 });
 
