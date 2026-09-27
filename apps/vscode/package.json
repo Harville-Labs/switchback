@@ -101,8 +101,8 @@
       "properties": {
         "harness.executablePath": {
           "type": "string",
-          "default": "harness",
-          "description": "Path to the harness executable. The extension runs `<path> serve --stdio`.",
+          "default": "",
+          "description": "Path to the harness executable. Empty: use the binary bundled with the extension, or `harness` on PATH. The extension runs `<path> serve --stdio`.",
           "scope": "machine-overridable"
         },
         "harness.executableArgs": {

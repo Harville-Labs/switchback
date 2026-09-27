@@ -17,7 +17,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 
 | Setting | Default | |
 |---|---|---|
-| `harness.executablePath` | `harness` | The binary to run. The extension runs `<path> [args] serve --stdio`. |
+| `harness.executablePath` | empty | The binary to run (`<path> [args] serve --stdio`). Empty uses the engine bundled in the platform-specific `.vsix`, falling back to `harness` on PATH. |
 | `harness.executableArgs` | `[]` | Extra leading args (e.g. a script path when the path is `bun`) |
 | `harness.defaultRoute` | `auto` | Initial routing preference |
 
@@ -30,6 +30,10 @@ Project behavior (models, routing, permissions, agents) comes from the same `.ha
 3. To work without models, add `"--mock"` to `harness.executableArgs`. `${workspaceFolder}` is expanded in both settings.
 
 Build a `.vsix` with `bun run --cwd apps/vscode package`.
+
+## Distribution
+
+Each release publishes one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`) with the engine binary inside, so installing the extension is all a user needs. A universal `.vsix` without a binary uses `harness` from PATH. When `VSCE_PAT` / `OVSX_PAT` repository secrets are set, releases also publish to the VS Code Marketplace and Open VSX; otherwise that step is skipped.
 
 ## Planned
 

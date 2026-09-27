@@ -3,6 +3,8 @@
  * relays engine events to the chat webview, and forwards user actions back.
  * All behavior (routing, tools, permissions, agents) lives in the engine.
  */
+
+import { chmodSync, existsSync } from 'node:fs';
 import { HarnessClient, spawnEngine } from '@harness/client';
 import type { InitializeResult, RoutePreference, SessionSummary } from '@harness/protocol';
 import * as vscode from 'vscode';
@@ -12,13 +14,20 @@ const VERSION = '0.2.0';
 // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code variable syntax, not a JS template.
 const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
 
-/** The configured harness executable and leading args, with `${workspaceFolder}` expanded. */
+/** Set on activation when this .vsix ships a platform binary in `bin/`. */
+let bundledBinary: string | undefined;
+
+/**
+ * The harness executable and leading args: the user's setting if set, else
+ * the bundled binary, else `harness` on PATH. `${workspaceFolder}` is expanded.
+ */
 function harnessCommand(root: string): { command: string; args: string[] } {
   const cfg = vscode.workspace.getConfiguration('harness');
   // VS Code does not expand variables in extension settings; support the common one.
   const expand = (v: string) => v.replaceAll(WORKSPACE_FOLDER_VAR, root);
+  const configured = cfg.get<string>('executablePath', '').trim();
   return {
-    command: expand(cfg.get<string>('executablePath', 'harness')),
+    command: configured ? expand(configured) : (bundledBinary ?? 'harness'),
     args: cfg.get<string[]>('executableArgs', []).map(expand),
   };
 }
@@ -213,6 +222,22 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+  const bin = vscode.Uri.joinPath(
+    context.extensionUri,
+    'bin',
+    process.platform === 'win32' ? 'harness.exe' : 'harness',
+  ).fsPath;
+  if (existsSync(bin)) {
+    bundledBinary = bin;
+    // .vsix is a zip; installs don't always preserve the executable bit.
+    if (process.platform !== 'win32') {
+      try {
+        chmodSync(bin, 0o755);
+      } catch {
+        // Read-only install location; it was installed executable or spawn will say so.
+      }
+    }
+  }
   const log = vscode.window.createOutputChannel('Harness');
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   status.command = 'harness.setRoute';

@@ -68,8 +68,21 @@ jobs:
           if-no-files-found: error
 
   vsix:
-    needs: verify
+    needs: [verify, binaries]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # One .vsix per platform with the engine binary inside, plus a universal
+          # one that uses `harness` from PATH.
+          - { target: darwin-arm64, platform: darwin-arm64 }
+          - { target: darwin-x64, platform: darwin-x64 }
+          - { target: linux-x64, platform: linux-x64 }
+          - { target: linux-arm64, platform: linux-arm64 }
+          - { target: win32-x64, platform: windows-x64, ext: .exe }
+          - { target: universal, platform: '' }
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -77,17 +90,39 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run --cwd apps/vscode build
-      - run: mkdir -p ../../dist && bunx @vscode/vsce package --no-dependencies --allow-missing-repository -o "../../dist/harness-vscode-${{ needs.verify.outputs.version }}.vsix"
+      - uses: actions/download-artifact@v4
+        if: matrix.platform != ''
+        with:
+          name: bin-${{ matrix.platform }}
+          path: bin-download
+      - name: Bundle engine binary
+        if: matrix.platform != ''
+        run: |
+          mkdir -p apps/vscode/bin
+          cp "bin-download/harness-$VERSION-${{ matrix.platform }}${{ matrix.ext }}" "apps/vscode/bin/harness${{ matrix.ext }}"
+          chmod +x "apps/vscode/bin/harness${{ matrix.ext }}"
+      - name: Package
         working-directory: apps/vscode
+        run: |
+          mkdir -p ../../dist
+          if [ "${{ matrix.target }}" = universal ]; then
+            bunx @vscode/vsce package --no-dependencies --allow-missing-repository -o "../../dist/harness-vscode-$VERSION.vsix"
+          else
+            bunx @vscode/vsce package --no-dependencies --allow-missing-repository --target ${{ matrix.target }} -o "../../dist/harness-vscode-$VERSION-${{ matrix.target }}.vsix"
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: vsix
+          name: vsix-${{ matrix.target }}
           path: dist/*.vsix
           if-no-files-found: error
 
   publish:
     needs: [verify, binaries, vsix]
     runs-on: ubuntu-latest
+    env:
+      # Marketplace publishing runs only when these secrets are configured.
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -107,7 +142,7 @@ jobs:
             echo
             echo "### Install"
             echo "Download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`harness\`. Then run \`harness init\`."
-            echo "Install the VS Code extension with \`code --install-extension harness-vscode-${{ needs.verify.outputs.version }}.vsix\`."
+            echo "Install the VS Code extension for your platform with \`code --install-extension harness-vscode-${{ needs.verify.outputs.version }}-<platform>.vsix\`; it includes the engine, so no separate install is needed. The universal .vsix uses \`harness\` from your PATH."
             echo
             echo "Binaries are not yet signed or notarized (tracked for 1.0). On macOS, clear the quarantine flag with \`xattr -d com.apple.quarantine harness\`."
           } > notes.md
@@ -119,3 +154,9 @@ jobs:
           prerelease=""
           case "$version" in 0.*|*-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --title "Harness $version" --notes-file notes.md $prerelease
+      - name: Publish to the VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: for f in dist/harness-vscode-*-*.vsix; do bunx @vscode/vsce publish --packagePath "$f" --pre-release; done
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        run: for f in dist/harness-vscode-*-*.vsix; do bunx ovsx publish "$f" --pre-release; done
