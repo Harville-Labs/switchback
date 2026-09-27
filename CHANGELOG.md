@@ -13,6 +13,8 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Several providers at once: `routing.local` and `routing.remote` take ordered lists of model aliases from any mix of providers. The router uses the first reachable model whose window fits, so a big prompt moves to a bigger local model (`context-fit`) and a down server hands over to the next (`fallback`) before anything goes remote. `harness init` adds extra local models and fallback remote providers, and `--local-model` / `--remote` repeat
 - A declined escalation is reported as `escalation-declined` rather than a user override
 
+- Refusal handling for every provider: a remote refusal is retried on the next model in `routing.remote` (`refusal-fallback`), and the refused output is discarded. The first-party Anthropic API also gets server-side `fallbacks: "default"`, with the answering model billed and reported (#14)
+
 ### Changed
 - OpenAI-compatible providers (OpenAI, DeepSeek, Ollama, vLLM, llama.cpp, LM Studio, hosted gateways) now use the official `openai` SDK: typed errors, backoff on 429/5xx for hosted APIs, and fail-fast for local servers. Environment variables such as `OPENAI_API_KEY` are never picked up implicitly, so a key can't leak to another server
 - Config files are parsed with `jsonc-parser` (trailing commas allowed, errors give line and column), and `harness init` edits existing files in place, keeping comments and formatting

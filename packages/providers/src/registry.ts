@@ -33,6 +33,13 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     type: z.literal('anthropic'),
     apiKey: Secret.optional(),
     baseUrl: z.url().optional(),
+    /**
+     * `server`: when a safety classifier declines, the API retries on the model
+     * Anthropic recommends for that category (`fallbacks: "default"`), in the
+     * same request. `off`: refusals come back to Harness, which tries the next
+     * remote model in `routing.remote` like it does for every provider.
+     */
+    refusalFallback: z.enum(['server', 'off']).default('server'),
   }),
   z.object({
     type: z.literal('bedrock'),
@@ -109,6 +116,7 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
           ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
         },
         noThinkingModels: NO_THINKING,
+        serverFallback: config.refusalFallback === 'server',
       });
     case 'bedrock':
       return new AnthropicProvider({

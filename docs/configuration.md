@@ -74,7 +74,7 @@ Any number of providers can be configured together, including several local serv
 | `openai-compatible` | `baseUrl` (required), `apiKey`, `tier` (`local`\|`remote`, default `local`), `headers` |
 | `openai` | `apiKey` (default `$OPENAI_API_KEY`), `baseUrl` (default `https://api.openai.com/v1`), `organization` |
 | `deepseek` | `apiKey` (default `$DEEPSEEK_API_KEY`), `baseUrl` (default `https://api.deepseek.com`) |
-| `anthropic` | `apiKey`, `baseUrl` |
+| `anthropic` | `apiKey`, `baseUrl`, `refusalFallback` (`server` \| `off`, default `server`; see [routing.md](routing.md#refusals)) |
 | `bedrock` | `region`, `profile`, `eagerToolInputStreaming` (default `false`) |
 | `vertex` | `projectId` (required), `region` (default `global`) |
 | `mock` | `tier` |

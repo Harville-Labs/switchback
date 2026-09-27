@@ -434,6 +434,9 @@ export class Engine {
     const specsJson = JSON.stringify(specs);
     let escalationApproved = false;
     let forceLocal = false;
+    /** Remote aliases that refused this turn, and whether the next call retries one. */
+    const refused: string[] = [];
+    let refusalRetry = false;
     let failures = 0;
 
     for (let step = 0; step < this.options.config.maxStepsPerTurn; step++) {
@@ -444,6 +447,8 @@ export class Engine {
       const decision = this.router.decide({
         preference,
         escalationDeclined: forceLocal,
+        refused,
+        refusalRetry,
         agent: {
           name: agent.name,
           route: agent.route,
@@ -497,6 +502,7 @@ export class Engine {
         continue;
       }
 
+      refusalRetry = false;
       const { model, rule, reason, escalated } = decision;
       this.emit({
         type: 'route.decided',
@@ -545,12 +551,40 @@ export class Engine {
       }
       if (!done) throw new Error(`${provider.id} ended the stream without a result`);
 
-      this.recordUsage(s, model.tier, model.ref, done.usage, { rule, agent: agent.name });
+      // A provider-side fallback may have answered with a different model; bill that one.
+      const servedBy = done.model && done.model !== model.ref.model ? done.model : undefined;
+      if (servedBy)
+        this.emit({
+          type: 'log',
+          level: 'info',
+          message: `${model.ref.model} declined; ${model.ref.provider} answered with ${servedBy}`,
+        });
+      this.recordUsage(
+        s,
+        model.tier,
+        servedBy ? { ...model.ref, model: servedBy } : model.ref,
+        done.usage,
+        { rule, agent: agent.name },
+      );
       s.signals.recordTurn(model.tier, escalated);
       escalationApproved = false;
 
       const toolCalls = done.parts.filter((p) => p.type === 'tool_call');
       const truncatedTools = done.stopReason === 'max_tokens' && toolCalls.length > 0;
+
+      // A remote refusal is retried on the next remote model, if there is one.
+      // The refused output is discarded, not added to the transcript.
+      if (model.tier === 'remote' && done.stopReason === 'refusal') {
+        const routing = this.options.config.routing;
+        const others = routing.remote.filter(
+          (a) => a !== model.alias && !refused.includes(a) && this.options.config.models[a],
+        );
+        if (others.length) {
+          refused.push(model.alias);
+          refusalRetry = true;
+          continue;
+        }
+      }
 
       // A local model that refuses or runs out of room gets one more chance on
       // the remote tier instead of ending the user's turn.

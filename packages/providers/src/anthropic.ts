@@ -37,6 +37,12 @@ export interface AnthropicProviderOptions {
   eagerToolInputStreaming?: boolean;
   /** Models that do not accept adaptive thinking (e.g. Haiku 4.5). */
   noThinkingModels?: string[];
+  /**
+   * First-party API only: ask the API to retry classifier refusals on its
+   * recommended fallback model (`fallbacks: "default"`, beta
+   * `server-side-fallback-2026-07-01`). Bedrock and Vertex don't offer it.
+   */
+  serverFallback?: boolean;
   /** Injected for tests. */
   client?: MessagesClient;
 }
@@ -44,7 +50,10 @@ export interface AnthropicProviderOptions {
 /** The slice of the SDK client this adapter uses; every platform client satisfies it. */
 export interface MessagesClient {
   messages: Pick<Anthropic['messages'], 'stream'>;
+  beta?: { messages: Pick<Anthropic['beta']['messages'], 'stream'> };
 }
+
+const SERVER_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
 function createClient(platform: AnthropicPlatform): MessagesClient {
   switch (platform.kind) {
@@ -135,6 +144,8 @@ export class AnthropicProvider implements Provider {
   readonly id: string;
   readonly tier: Tier;
   private client: MessagesClient | undefined;
+  /** Models whose requests rejected the `fallbacks` parameter; never sent again. */
+  private noServerFallback = new Set<string>();
 
   constructor(private readonly options: AnthropicProviderOptions) {
     this.id = options.id;
@@ -191,25 +202,71 @@ export class AnthropicProvider implements Provider {
       ...(request.effort ? { output_config: { effort: request.effort } } : {}),
     };
 
-    let final: Anthropic.Message;
+    const useFallback =
+      this.options.serverFallback === true &&
+      this.options.platform.kind === 'anthropic' &&
+      !this.noServerFallback.has(request.model);
+
+    let final: Anthropic.Message | Anthropic.Beta.BetaMessage;
+    let streamed = false;
     try {
-      const stream = this.getClient().messages.stream(params, { signal: request.signal });
+      const client = this.getClient();
+      const stream =
+        useFallback && client.beta
+          ? client.beta.messages.stream(
+              {
+                ...(params as unknown as Anthropic.Beta.Messages.MessageCreateParamsStreaming),
+                betas: [SERVER_FALLBACK_BETA],
+                fallbacks: 'default',
+              },
+              { signal: request.signal },
+            )
+          : client.messages.stream(params, { signal: request.signal });
       for await (const event of stream) {
         if (event.type !== 'content_block_delta') continue;
-        if (event.delta.type === 'text_delta') yield { type: 'text.delta', text: event.delta.text };
-        else if (event.delta.type === 'thinking_delta')
+        if (event.delta.type === 'text_delta') {
+          streamed = true;
+          yield { type: 'text.delta', text: event.delta.text };
+        } else if (event.delta.type === 'thinking_delta') {
+          streamed = true;
           yield { type: 'reasoning.delta', text: event.delta.thinking };
+        }
       }
       final = await stream.finalMessage();
     } catch (err) {
       if (request.signal?.aborted) throw err;
+      // A model that doesn't take the parameter answers 400 before any output:
+      // remember that and send the request again without it.
+      if (
+        useFallback &&
+        !streamed &&
+        err instanceof Anthropic.BadRequestError &&
+        /fallback/i.test(err.message)
+      ) {
+        this.noServerFallback.add(request.model);
+        yield* this.stream(request);
+        return;
+      }
       throw toProviderError(this.id, err);
     }
 
-    const origin = { provider: this.id, model: request.model };
+    // After a server-side fallback, only blocks after the last `fallback`
+    // marker came from the model that finished; text before it is kept, but
+    // the declining model's thinking and tool calls must not be echoed back.
+    const content = final.content as { type: string }[];
+    const boundary = content.map((b) => b.type).lastIndexOf('fallback');
+    // The served-by signal is a `fallback_message` iteration; sticky-served turns
+    // (the fallback keeps answering for a while) have no marker block.
+    const iterations = (final.usage as { iterations?: { type: string }[] | null }).iterations;
+    const fellBack = boundary >= 0 || !!iterations?.some((it) => it.type === 'fallback_message');
+    const servedBy = fellBack && final.stop_reason !== 'refusal' ? final.model : undefined;
+    const origin = { provider: this.id, model: servedBy ?? request.model };
     const parts: Part[] = [];
-    for (const block of final.content) {
+    content.forEach((raw, i) => {
+      const beforeSwitch = i < boundary;
+      const block = raw as Anthropic.ContentBlock;
       if (block.type === 'text') parts.push({ type: 'text', text: block.text });
+      else if (beforeSwitch) return;
       else if (block.type === 'thinking')
         parts.push({
           type: 'reasoning',
@@ -219,7 +276,7 @@ export class AnthropicProvider implements Provider {
         });
       else if (block.type === 'tool_use')
         parts.push({ type: 'tool_call', id: block.id, name: block.name, input: block.input });
-    }
+    });
 
     yield {
       type: 'done',
@@ -231,6 +288,7 @@ export class AnthropicProvider implements Provider {
         cacheReadTokens: final.usage.cache_read_input_tokens ?? 0,
         cacheWriteTokens: final.usage.cache_creation_input_tokens ?? 0,
       },
+      ...(servedBy ? { model: servedBy } : {}),
     };
   }
 }

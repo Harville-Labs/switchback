@@ -28,7 +28,14 @@ export interface ChatRequest {
 export type ChatEvent =
   | { type: 'text.delta'; text: string }
   | { type: 'reasoning.delta'; text: string }
-  | { type: 'done'; parts: Part[]; usage: Usage; stopReason: StopReason };
+  | {
+      type: 'done';
+      parts: Part[];
+      usage: Usage;
+      stopReason: StopReason;
+      /** The model that produced the result, when a provider-side fallback swapped it. */
+      model?: string;
+    };
 
 export interface HealthStatus {
   ok: boolean;

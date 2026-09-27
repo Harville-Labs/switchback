@@ -33,6 +33,10 @@ export interface RouteInput {
   escalationApproved?: boolean;
   /** Set when an escalation was just declined (by the user, or because the run is headless). */
   escalationDeclined?: boolean;
+  /** Remote aliases that refused a request this turn; they're skipped until the next prompt. */
+  refused?: string[];
+  /** The last call was refused: retry on the next remote model now. */
+  refusalRetry?: boolean;
 }
 
 export type RouteDecision =
@@ -62,11 +66,30 @@ export class Router {
 
   decide(input: RouteInput): RouteDecision {
     const tokens = input.estimatedInputTokens;
+    const refused = new Set(input.refused ?? []);
+    const remoteChain = this.config.remote.filter((a) => !refused.has(a));
     const local = this.choose(this.config.local, tokens);
-    const remote = this.choose(this.config.remote, tokens);
+    const remote = this.choose(remoteChain, tokens);
+    if (input.refusalRetry) {
+      const declined = input.refused?.at(-1) ?? 'the remote model';
+      if (!remote.model)
+        return {
+          kind: 'block',
+          rule: 'refusal-fallback',
+          reason: `${declined} declined the request and no other remote model is configured`,
+        };
+      const picked = {
+        kind: 'route',
+        model: remote.model,
+        rule: 'refusal-fallback',
+        reason: `${declined} declined the request; retrying on ${remote.model.alias}`,
+        escalated: false,
+      } as const;
+      return this.guard(input, picked, local, remoteChain);
+    }
     const picked = this.pick(input, local, remote);
     if (picked.kind !== 'route') return picked;
-    return this.guard(input, picked, local);
+    return this.guard(input, picked, local, remoteChain);
   }
 
   /**
@@ -199,6 +222,7 @@ export class Router {
     input: RouteInput,
     decision: Extract<RouteDecision, { kind: 'route' }>,
     local: Choice,
+    remoteChain: string[],
   ): RouteDecision {
     let d = decision;
 
@@ -225,7 +249,7 @@ export class Router {
       const other =
         d.model.tier === 'local'
           ? fb.onLocalUnavailable === 'remote'
-            ? this.choose(this.config.remote, input.estimatedInputTokens).model
+            ? this.choose(remoteChain, input.estimatedInputTokens).model
             : undefined
           : fb.onRemoteUnavailable === 'local'
             ? local.model

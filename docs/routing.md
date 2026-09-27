@@ -25,6 +25,7 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | # | Rule (`rule` in events) | Fires when | Target |
 |---|---|---|---|
 | 1 | `user-override` | The prompt was sent with `route: local` or `route: remote` | That tier |
+| 0 | `refusal-fallback` | The last remote call ended in `refusal`; retry on the next remote model not yet refused this turn | remote |
 | 1 | `escalation-declined` | An `ask` escalation was just declined (or the run is headless) | local |
 | 2 | `mode` | `routing.mode` is `local-only` or `remote-only` | That tier |
 | 3 | `agent-pin` | The agent's definition names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model or tier |
@@ -121,4 +122,12 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
 The prompt size behind `context-overflow` and cost estimates comes from a BPE tokenizer (o200k) run over the system prompt, tool schemas, and transcript. Counts are cached per message, which is safe because transcripts are append-only, so each step only tokenizes what's new.
 
 No single tokenizer matches every model, so when the estimate is within 20% of the local threshold, where the difference could flip the decision, the engine asks the local server for an exact count with the model's own tokenizer: llama.cpp and vLLM expose `/tokenize`. Servers without it (Ollama, LM Studio) keep the estimate. Hosted APIs are never asked; their windows are large enough that the estimate decides nothing close. `route.decided` reports the count it used as `inputTokens`.
+
+## Refusals
+
+A hosted model can decline a request (`stop_reason: refusal`, often from a safety classifier on benign security or biology work). Harness handles that the same way for every provider: the refused output is discarded, not added to the transcript, and the call is retried on the next model in `routing.remote` (`rule: refusal-fallback`). A model that refused is skipped for the rest of that user turn. Both calls are billed and appear in the usage ledger. With no other remote model configured, the turn ends as a refusal.
+
+Where a provider offers its own fallback, Harness uses it too. On the first-party Anthropic API, requests carry `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), so a classifier decline is retried server-side on the model Anthropic recommends for that category, in the same request. The adapter keeps the text streamed before the switch, drops the declining model's thinking and tool calls, records the model that actually answered for billing, and logs the switch. A model that rejects the parameter is sent it once and never again. Set `providers.<id>.refusalFallback: "off"` to rely on the router alone. Bedrock and Vertex don't offer server-side fallback, so they use the router's chain.
+
+A refusal from a local model is a quality signal instead: it counts as a failed local turn and escalates per `escalation.policy`.
 

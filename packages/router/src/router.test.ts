@@ -294,3 +294,31 @@ test('a declined escalation stays local and says why', () => {
   );
   expect(d).toMatchObject({ rule: 'escalation-declined', model: { alias: 'local' } });
 });
+
+describe('refusal fallback', () => {
+  const SOL: ModelInfo = {
+    alias: 'sol',
+    ref: { provider: 'openai', model: 'gpt-6-sol' },
+    tier: 'remote',
+    contextWindow: 400_000,
+    available: true,
+  };
+  const r = () => router({ remote: ['remote', 'sol'] }, { sol: SOL });
+
+  test('retries on the next remote model and says who declined', () => {
+    const d = routed(r().decide(input({ refused: ['remote'], refusalRetry: true })));
+    expect(d).toMatchObject({ rule: 'refusal-fallback', model: { alias: 'sol' } });
+    expect(d.reason).toBe('remote declined the request; retrying on sol');
+  });
+
+  test('a model that refused is skipped for the rest of the turn', () => {
+    const signals = { ...input().signals, stickyRemoteTurns: 2 };
+    const d = routed(r().decide(input({ refused: ['remote'], signals })));
+    expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'sol' } });
+  });
+
+  test('no other remote model: blocked with the reason', () => {
+    const d = r().decide(input({ refused: ['remote', 'sol'], refusalRetry: true }));
+    expect(d).toMatchObject({ kind: 'block', rule: 'refusal-fallback' });
+  });
+});

@@ -441,6 +441,56 @@ describe('several providers at once', () => {
   });
 });
 
+describe('refusal fallback', () => {
+  test('a remote refusal retries on the next remote provider; the refusal is not kept', async () => {
+    const anthropic = new ScriptedProvider('anthropic', 'remote', [
+      { text: 'I can’t help with that', stopReason: 'refusal' },
+    ]);
+    const openai = new ScriptedProvider('openai', 'remote', [{ text: 'here you go' }]);
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: HarnessConfig.parse({
+        providers: {
+          anthropic: { type: 'mock', tier: 'remote' },
+          openai: { type: 'mock', tier: 'remote' },
+        },
+        models: {
+          opus: { provider: 'anthropic', model: 'claude-opus-5' },
+          sol: { provider: 'openai', model: 'gpt-6-sol' },
+        },
+        routing: { mode: 'remote-only', remote: ['opus', 'sol'] },
+      }),
+      providers: new Map<string, Provider>([
+        ['anthropic', anthropic],
+        ['openai', openai],
+      ]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    const s = engine.createSession({});
+    const r = await engine.runTurn(s.id, 'hi');
+    expect(r).toEqual({ stopReason: 'end_turn', text: 'here you go' });
+    const routes = events.filter((e) => e.type === 'route.decided');
+    expect(routes.map((e) => (e as { rule: string }).rule)).toEqual(['mode', 'refusal-fallback']);
+    expect(engine.getSession(s.id).messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+    // Both calls are billed.
+    expect(
+      engine
+        .usage('today')
+        .byRule?.map((row) => row.key)
+        .sort(),
+    ).toEqual(['mode', 'refusal-fallback']);
+  });
+
+  test('with no other remote model the refusal ends the turn as a refusal', async () => {
+    const { engine } = setup([], [{ text: 'no', stopReason: 'refusal' }], {
+      config: { routing: { mode: 'remote-only' } },
+    });
+    const r = await engine.runTurn(engine.createSession({}).id, 'hi');
+    expect(r.stopReason).toBe('refusal');
+  });
+});
+
 describe('token counting', () => {
   function withCounter(contextWindow: number, exact: number) {
     const counted: string[] = [];

@@ -96,6 +96,11 @@
               "baseUrl": {
                 "type": "string",
                 "format": "uri"
+              },
+              "refusalFallback": {
+                "default": "server",
+                "type": "string",
+                "enum": ["server", "off"]
               }
             },
             "required": ["type"]
