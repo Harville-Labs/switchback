@@ -21,6 +21,14 @@ export interface ModelInfo {
   available: boolean;
 }
 
+/** A classifier's rating of the user's prompt. */
+export interface Difficulty {
+  level: 'easy' | 'medium' | 'hard';
+  reason: string;
+}
+
+const LEVEL = { easy: 0, medium: 1, hard: 2 } as const;
+
 export interface RouteInput {
   /** Per-turn override from the user (`/remote`, `--route local`, VS Code toggle). */
   preference: RoutePreference;
@@ -37,6 +45,8 @@ export interface RouteInput {
   refused?: string[];
   /** The last call was refused: retry on the next remote model now. */
   refusalRetry?: boolean;
+  /** The classifier's rating of this turn's prompt (first call of a turn only). */
+  difficulty?: Difficulty;
 }
 
 export type RouteDecision =
@@ -191,7 +201,19 @@ export class Router {
         `recently escalated (${input.signals.stickyRemoteTurns} turns left)`,
       );
 
-    // 6. Quality signals from the local model.
+    // 6. The classifier rated the prompt too hard for the local model.
+    const d = input.difficulty;
+    const c = this.config.classifier;
+    if (d && c && remote.model && LEVEL[d.level] >= LEVEL[c.escalateOn]) {
+      const reason = `classifier rated the prompt ${d.level}${d.reason ? `: ${d.reason}` : ''}`;
+      const policy = this.config.escalation.policy;
+      if (policy === 'auto' || input.escalationApproved)
+        return route(remote, 'classifier', reason, true);
+      if (policy === 'ask')
+        return { kind: 'ask', target: remote.model, rule: 'classifier', reason };
+    }
+
+    // 7. Quality signals from the local model.
     const why = this.qualityProblem(input.signals);
     if (why && remote.model) {
       const policy = this.config.escalation.policy;
@@ -201,7 +223,7 @@ export class Router {
         return { kind: 'ask', target: remote.model, rule: 'escalation', reason: why };
     }
 
-    // 7. Default: local first.
+    // 8. Default: local first.
     return local.model
       ? route(local, 'default', 'local by default')
       : route(remote, 'default', 'no local model configured (run `harness init`)');

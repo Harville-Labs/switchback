@@ -1,0 +1,40 @@
+{"prompt": "Where is the config file loaded?", "label": "easy"}
+{"prompt": "What does the Router class do?", "label": "easy"}
+{"prompt": "Rename the variable `tmp` to `buffer` in src/io.ts", "label": "easy"}
+{"prompt": "Run the tests and tell me which ones fail", "label": "easy"}
+{"prompt": "Add a docstring to the parseArgs function", "label": "easy"}
+{"prompt": "Fix the typo in README.md: 'recieve' should be 'receive'", "label": "easy"}
+{"prompt": "List all files that import lodash", "label": "easy"}
+{"prompt": "What port does the dev server use?", "label": "easy"}
+{"prompt": "Change the default timeout from 30 to 60 seconds in config.ts", "label": "easy"}
+{"prompt": "Explain what this regex does: ^\\d{3}-\\d{4}$", "label": "easy"}
+{"prompt": "Add `.env` to .gitignore", "label": "easy"}
+{"prompt": "Bump the version in package.json to 1.2.3", "label": "easy"}
+{"prompt": "Find where we log the user's email and remove that log line", "label": "easy"}
+{"prompt": "Write a shell one-liner that counts lines of TypeScript in src", "label": "easy"}
+{"prompt": "Convert this for loop to use Array.map", "label": "easy"}
+{"prompt": "Show me the git diff for the last commit", "label": "easy"}
+{"prompt": "Add a unit test that checks add(2, 3) returns 5", "label": "easy"}
+{"prompt": "Sort the imports in src/index.ts alphabetically", "label": "easy"}
+{"prompt": "What's the difference between let and const?", "label": "easy"}
+{"prompt": "Delete the unused function formatDate in utils.ts", "label": "easy"}
+{"prompt": "There's an intermittent deadlock between the job scheduler and the connection pool under load; find the root cause and fix it", "label": "hard"}
+{"prompt": "Migrate the entire data layer from the callback-based driver to async/await across all 40 modules without changing behavior", "label": "hard"}
+{"prompt": "Our p99 latency doubled after last week's release; profile the request path and find what regressed", "label": "hard"}
+{"prompt": "Design a plugin architecture so third parties can add storage backends, and refactor the existing S3 and GCS backends onto it", "label": "hard"}
+{"prompt": "Find and fix the memory leak that makes the worker process grow to 8 GB after a day", "label": "hard"}
+{"prompt": "Audit the authentication flow for security vulnerabilities, including session fixation and token replay, and fix what you find", "label": "hard"}
+{"prompt": "Implement a lock-free concurrent hash map in Rust with correct memory ordering", "label": "hard"}
+{"prompt": "The CRDT merge produces divergent documents when two users edit the same paragraph offline; make the merge convergent", "label": "hard"}
+{"prompt": "Refactor the monolithic 5,000-line OrderService into separate bounded contexts with clear interfaces, keeping all tests passing", "label": "hard"}
+{"prompt": "Floating-point results differ between our GPU and CPU paths by more than 1e-3; track down the numerical instability", "label": "hard"}
+{"prompt": "Replace our hand-written SQL query builder with a type-safe one and migrate every query in the codebase", "label": "hard"}
+{"prompt": "Implement incremental compilation for our DSL compiler so only changed modules and their dependents are rebuilt", "label": "hard"}
+{"prompt": "Make the event-sourced order aggregate idempotent under at-least-once delivery, including replays after partial failures", "label": "hard"}
+{"prompt": "Port the Python simulation engine to TypeScript, preserving exact numerical behavior, and set up cross-language golden tests", "label": "hard"}
+{"prompt": "Figure out why the distributed cache returns stale data after a network partition heals and fix the invalidation protocol", "label": "hard"}
+{"prompt": "Design and implement a zero-downtime schema migration strategy for splitting the users table into accounts and profiles", "label": "hard"}
+{"prompt": "Our React app re-renders the whole tree on every keystroke; restructure state management across the app to fix it", "label": "hard"}
+{"prompt": "Implement a correct B-tree with deletion and rebalancing, plus property-based tests", "label": "hard"}
+{"prompt": "The TLS handshake intermittently fails only on ARM builds; diagnose it across our C bindings and the Go wrapper", "label": "hard"}
+{"prompt": "Rewrite the rate limiter to be globally consistent across 12 regions with bounded error, and prove the bound", "label": "hard"}

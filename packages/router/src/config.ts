@@ -42,6 +42,20 @@ export const RoutingConfig = z.object({
   /** Model aliases for escalated and remote turns, in order of preference. */
   remote: ModelChain.default(['remote']),
   escalation: EscalationConfig.prefault({}),
+  /**
+   * Optional pre-routing classifier: a small local model rates each new
+   * prompt, and prompts rated `escalateOn` or harder start on the remote tier
+   * (subject to `escalation.policy`). Off unless configured.
+   */
+  classifier: z
+    .object({
+      /** Model alias; must be a local model. */
+      model: z.string(),
+      escalateOn: z.enum(['medium', 'hard']).default('hard'),
+      /** Skip the rating if the model hasn't answered by then. */
+      timeoutMs: z.number().int().positive().default(1_500),
+    })
+    .optional(),
   budget: BudgetConfig.prefault({}),
   fallback: z
     .object({

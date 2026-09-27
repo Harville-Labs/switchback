@@ -329,3 +329,43 @@ test('local-only never falls back to remote, even when the local server is down'
   );
   expect(d).toMatchObject({ kind: 'block', rule: 'fallback' });
 });
+
+describe('classifier rule', () => {
+  const hard = { level: 'hard', reason: 'subtle race in the scheduler' } as const;
+  const cfg = (extra: object = {}) => ({ classifier: { model: 'local' }, ...extra });
+
+  test('a hard rating starts the turn remote, with the reason', () => {
+    const d = routed(router(cfg()).decide(input({ difficulty: hard })));
+    expect(d).toMatchObject({ rule: 'classifier', escalated: true, model: { alias: 'remote' } });
+    expect(d.reason).toBe('classifier rated the prompt hard: subtle race in the scheduler');
+  });
+
+  test('below escalateOn stays local; medium can be the bar', () => {
+    const medium = { level: 'medium', reason: '' } as const;
+    expect(routed(router(cfg()).decide(input({ difficulty: medium }))).rule).toBe('default');
+    expect(
+      routed(
+        router(cfg({ classifier: { model: 'local', escalateOn: 'medium' } })).decide(
+          input({ difficulty: medium }),
+        ),
+      ).rule,
+    ).toBe('classifier');
+  });
+
+  test('follows escalation.policy', () => {
+    expect(
+      router(cfg({ escalation: { policy: 'ask' } })).decide(input({ difficulty: hard })),
+    ).toMatchObject({ kind: 'ask', rule: 'classifier' });
+    expect(
+      routed(router(cfg({ escalation: { policy: 'off' } })).decide(input({ difficulty: hard })))
+        .rule,
+    ).toBe('default');
+  });
+
+  test('ignored without a classifier configured, and never beats a user override', () => {
+    expect(routed(router().decide(input({ difficulty: hard }))).rule).toBe('default');
+    expect(
+      routed(router(cfg()).decide(input({ difficulty: hard, preference: 'local' }))).rule,
+    ).toBe('user-override');
+  });
+});

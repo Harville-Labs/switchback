@@ -16,6 +16,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Refusal handling for every provider: a remote refusal is retried on the next model in `routing.remote` (`refusal-fallback`), and the refused output is discarded. The first-party Anthropic API also gets server-side `fallbacks: "default"`, with the answering model billed and reported (#14)
 - Prompt-cache verification: a regression test guards the byte-stable request prefix, and a warning is logged once per session when a follow-up remote call to the same model misses the cache (#15)
 - Append-only context compaction (ADR 0008): long sessions are summarized into a marker, locally when possible, so they keep fitting the local window; the full transcript is kept. `session.compact`, `/compact`, and the VS Code "Compact Conversation" command compact on request; `context.compacted` reports it (#16)
+- Optional pre-routing classifier (`routing.classifier`): a small local model rates each new prompt, and hard ones start on the remote tier under the `classifier` rule, following `escalation.policy`. It's off by default, local-only, and skipped on timeout. `scripts/eval-classifier.ts` and the nightly live workflow measure its precision and recall (#12)
 
 ### Fixed
 - `mode: local-only` no longer falls back to a remote model when the local server is down

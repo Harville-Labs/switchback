@@ -31,8 +31,9 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | 3 | `agent-pin` | The agent's definition names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model or tier |
 | 4 | `context-overflow` | Input tokens exceed `escalation.contextHeadroom` × the `contextWindow` of every local model (see [Counting tokens](#counting-tokens)) | remote (counts as an escalation) |
 | 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` model calls | remote |
-| 6 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
-| 7 | `default` | Nothing else matched | local (remote if no local model is configured) |
+| 6 | `classifier` | `routing.classifier` is set and rated the turn's prompt `escalateOn` or harder, and `escalation.policy` is `auto` (or the user approved an `ask`) | remote (counts as an escalation) |
+| 7 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
+| 8 | `default` | Nothing else matched | local (remote if no local model is configured) |
 
 A tier pin in an agent definition (`route: local`) is a preference: if that tier has no model configured, the router skips the pin. A user override (`--route local`) or `mode: local-only` with no local model is blocked with a pointer to `harness init`.
 
@@ -42,6 +43,24 @@ Two guards then run on the chosen target:
 
 - **Budget** (`rule: budget`). If the target is remote, the user didn't explicitly ask for remote, and daily or monthly spend has reached `routing.budget`, the call stays local (`onExceeded: local`) or is refused (`onExceeded: block`).
 - **Availability** (`rule: fallback`). If every model in the chosen tier failed its health check, the call moves to the other tier per `routing.fallback`. If that's also unavailable or over budget, the call is blocked with an explanation.
+
+## Pre-routing classifier
+
+Escalation is normally reactive: the local model has to struggle first. The optional classifier lets obviously hard prompts start remote. Before the first call of a turn, a small local model rates the prompt `easy`, `medium`, or `hard` with a short reason, and the router's `classifier` rule escalates ratings at or above `escalateOn`.
+
+```jsonc
+"routing": {
+  "classifier": { "model": "tiny", "escalateOn": "hard", "timeoutMs": 1500 }
+}
+```
+
+- Off unless configured. `model` must be a local model alias, so rating every prompt never costs money. A small, fast, non-thinking model works best.
+- It runs only when its answer could change anything: automatic routing, no agent pin, not already sticky, and a remote model to escalate to.
+- A classifier that doesn't answer within `timeoutMs`, errors, or gives an unreadable answer is ignored for that turn.
+- It follows `escalation.policy`: `ask` prompts first, and `off` ignores the rating.
+- The rating call is recorded in the usage ledger as `classify` (local, free), and the escalated call as `classifier`, so `harness usage --by rule` shows what it costs.
+
+`bun scripts/eval-classifier.ts --model <name>` measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The nightly live workflow runs it and posts the numbers in the job summary.
 
 ## Quality signals
 

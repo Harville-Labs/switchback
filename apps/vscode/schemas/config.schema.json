@@ -294,6 +294,26 @@
             }
           }
         },
+        "classifier": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "escalateOn": {
+              "default": "hard",
+              "type": "string",
+              "enum": ["medium", "hard"]
+            },
+            "timeoutMs": {
+              "default": 1500,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["model"]
+        },
         "budget": {
           "default": {},
           "type": "object",

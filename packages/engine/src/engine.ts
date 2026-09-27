@@ -34,8 +34,9 @@ import {
   ProviderError,
   tierOf,
 } from '@harness/providers';
-import { type ModelInfo, Router, SignalTracker } from '@harness/router';
+import { type Difficulty, type ModelInfo, Router, SignalTracker } from '@harness/router';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
+import { classifyPrompt } from './classifier.ts';
 import {
   chooseBoundary,
   contextOf,
@@ -454,6 +455,8 @@ export class Engine {
     /** Remote aliases that refused this turn, and whether the next call retries one. */
     const refused: string[] = [];
     let refusalRetry = false;
+    /** Used by the first routing decision of the turn only. */
+    let difficulty = await this.classifyTurn(s, preference, agent, signal);
     let failures = 0;
 
     for (let step = 0; step < this.options.config.maxStepsPerTurn; step++) {
@@ -473,6 +476,7 @@ export class Engine {
         escalationDeclined: forceLocal,
         refused,
         refusalRetry,
+        ...(difficulty ? { difficulty } : {}),
         agent: {
           name: agent.name,
           route: agent.route,
@@ -527,6 +531,7 @@ export class Engine {
       }
 
       refusalRetry = false;
+      difficulty = undefined;
       const { model, rule, reason, escalated } = decision;
       this.emit({
         type: 'route.decided',
@@ -643,6 +648,53 @@ export class Engine {
       message: `stopped after ${this.options.config.maxStepsPerTurn} steps`,
     });
     return 'max_tokens';
+  }
+
+  /**
+   * Rate the new prompt with the configured local classifier, when its answer
+   * could change anything: automatic routing, no pins, not already sticky, and
+   * a remote model to escalate to. Never runs on a remote model (that would
+   * spend money on every prompt).
+   */
+  private async classifyTurn(
+    s: LiveSession,
+    preference: RoutePreference,
+    agent: AgentDefinition,
+    signal: AbortSignal,
+  ): Promise<Difficulty | undefined> {
+    const routing = this.options.config.routing;
+    const c = routing.classifier;
+    if (!c || preference !== 'auto' || routing.mode !== 'auto') return undefined;
+    if (agent.model || agent.route !== 'auto' || s.signals.snapshot().stickyRemoteTurns > 0)
+      return undefined;
+    if (!routing.remote.some((a) => this.options.config.models[a])) return undefined;
+    const model = this.modelInfo(c.model);
+    if (!model || model.tier !== 'local') {
+      this.notify('warn', `routing.classifier.model "${c.model}" must be a configured local model`);
+      return undefined;
+    }
+    if (!model.available) return undefined;
+    const provider = this.providers.get(model.ref.provider);
+    const prompt = s.messages.findLast(
+      (m) => m.role === 'user' && m.parts.some((p) => p.type === 'text' && !p.attachment),
+    );
+    if (!provider || !prompt) return undefined;
+    const text = prompt.parts
+      .flatMap((p) => (p.type === 'text' && !p.attachment ? [p.text] : []))
+      .join('\n');
+    const r = await classifyPrompt(provider, model.ref.model, text, {
+      signal,
+      timeoutMs: c.timeoutMs,
+    });
+    if (r.usage)
+      this.recordUsage(s, 'local', model.ref, r.usage, { rule: 'classify', agent: agent.name });
+    this.notify(
+      'debug',
+      r.difficulty
+        ? `classifier: ${r.difficulty.level} in ${Math.round(r.ms)}ms (${r.difficulty.reason})`
+        : `classifier: no rating in ${Math.round(r.ms)}ms`,
+    );
+    return r.difficulty;
   }
 
   /** The agent's tools and their specs for a session; fixed order keeps the cache prefix stable. */

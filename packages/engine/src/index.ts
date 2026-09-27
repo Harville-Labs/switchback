@@ -1,4 +1,5 @@
 export * from './agents.ts';
+export * from './classifier.ts';
 export * from './compaction.ts';
 export * from './config.ts';
 export * from './engine.ts';
