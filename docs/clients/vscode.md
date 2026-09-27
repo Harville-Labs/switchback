@@ -29,6 +29,8 @@ Project behavior (models, routing, permissions, agents) comes from the same `.ha
 2. Open the repo in VS Code and run **Run Extension** (F5). It builds `apps/vscode/dist` and opens this repo in an Extension Development Host. The repo's `.vscode/settings.json` points `harness.executablePath` at `bun` and `harness.executableArgs` at `apps/cli/src/main.ts`, so the extension runs the dev CLI from source.
 3. To work without models, add `"--mock"` to `harness.executableArgs`. `${workspaceFolder}` is expanded in both settings.
 
+Run the integration tests (a real VS Code instance with the extension, talking to the engine in `--mock` mode) with `bun run --cwd apps/vscode test`. CI runs them on every push.
+
 Build a `.vsix` with `bun run --cwd apps/vscode package`.
 
 ## Distribution

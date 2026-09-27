@@ -9,3 +9,5 @@ coverage/
 .env.*
 !.env.example
 apps/vscode/bin/
+.vscode-test/
+apps/vscode/out/

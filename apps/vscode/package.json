@@ -137,10 +137,18 @@
   },
   "scripts": {
     "build": "bun build src/extension.ts --target=node --format=cjs --external vscode --outfile dist/extension.js && bun build src/webview/main.ts --target=browser --outfile dist/webview.js",
-    "package": "bun run build && bunx @vscode/vsce package --no-dependencies"
+    "package": "bun run build && bunx @vscode/vsce package --no-dependencies",
+    "build:test": "bun build test/suite/*.test.ts --outdir out/test --target node --format cjs --external vscode",
+    "test": "bun run build && bun run build:test && vscode-test"
   },
   "dependencies": {
     "@harness/client": "workspace:*",
     "@harness/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "mocha": "^12.0.2"
   }
 }

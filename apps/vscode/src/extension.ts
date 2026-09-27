@@ -6,7 +6,12 @@
 
 import { chmodSync, existsSync } from 'node:fs';
 import { HarnessClient, spawnEngine } from '@harness/client';
-import type { InitializeResult, RoutePreference, SessionSummary } from '@harness/protocol';
+import type {
+  EngineEvent,
+  InitializeResult,
+  RoutePreference,
+  SessionSummary,
+} from '@harness/protocol';
 import * as vscode from 'vscode';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
 
@@ -221,7 +226,15 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 }
 
-export async function activate(context: vscode.ExtensionContext) {
+/** Returned from activate() for the integration tests; not a public API. */
+export interface HarnessTestApi {
+  connected(): boolean;
+  init(): InitializeResult | undefined;
+  onEvent(listener: (event: EngineEvent) => void): vscode.Disposable;
+  prompt(text: string): Promise<void>;
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<HarnessTestApi> {
   const bin = vscode.Uri.joinPath(
     context.extensionUri,
     'bin',
@@ -339,6 +352,18 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   await start();
+
+  return {
+    connected: () => !!engine?.client,
+    init: () => engine?.init,
+    onEvent: (listener) =>
+      engine?.onMessage((m) => {
+        if (m.type === 'event') listener(m.event);
+      }) ?? new vscode.Disposable(() => {}),
+    prompt: async (text) => {
+      await engine?.handle({ type: 'prompt', text });
+    },
+  };
 }
 
 export function deactivate() {}

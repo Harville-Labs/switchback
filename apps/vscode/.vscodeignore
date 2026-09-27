@@ -2,3 +2,7 @@ src/**
 node_modules/**
 tsconfig.json
 **/*.test.ts
+out/
+.vscode-test/
+test/**
+.vscode-test.mjs
