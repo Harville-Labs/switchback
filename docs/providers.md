@@ -62,6 +62,8 @@ Point any alias at any provider in config. If an agent names an alias that isn't
 
 Uses Chat Completions with streaming and function calling. Sends `max_completion_tokens` (OpenAI's reasoning models reject `max_tokens`) and passes `effort` through as `reasoning_effort`. Cached prompt tokens (`prompt_tokens_details.cached_tokens`) are priced at the cached rate. Optional: `baseUrl` (Azure OpenAI or a proxy) and `organization`.
 
+Set `"api": "responses"` to use the Responses API instead. It keeps the model's reasoning between tool calls, which helps reasoning models on multi-step agent work. Requests use `store: false` (nothing is kept on OpenAI's side) and ask for encrypted reasoning, which Harness keeps in the transcript and sends back only to the model that produced it, the same rule as Claude thinking and DeepSeek reasoning. `effort` becomes `reasoning.effort`, with reasoning summaries shown in the clients. Chat Completions remains the default until the Responses path has been verified against the live API.
+
 ### DeepSeek
 
 ```jsonc

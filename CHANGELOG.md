@@ -11,6 +11,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Background subagents: `task` with `background: true` returns at once; the report is appended to the parent later (next step if it's busy, a follow-up turn if an interactive session is idle). Headless runs and subagents wait for their background work; cancelling a session cancels it (#20)
 - Worktree isolation: `isolation: worktree` (task call or agent file) runs a subagent in its own git worktree and branch. On success its changes are committed to `harness/<id>` and the parent gets the branch and diff; on failure the worktree is kept (#19)
 - Providers: Claude Platform on AWS (`anthropic-aws`, with server-side refusal fallbacks) and Microsoft Foundry (`foundry`), on the shared Claude adapter; both in `harness init` and `doctor` (part of #24)
+- OpenAI Responses API (`api: "responses"` on an `openai` provider): reasoning is kept between tool calls as encrypted items (`store: false`) and replayed only to the model that produced it (part of #24)
 
 ## [0.4.0] - 2026-09-27
 
