@@ -16,7 +16,7 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | 1 | `user-override` | The prompt was sent with `route: local` or `route: remote` | That tier |
 | 2 | `mode` | `routing.mode` is `local-only` or `remote-only` | That tier |
 | 3 | `agent-pin` | The agent's definition names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model or tier |
-| 4 | `context-overflow` | Estimated input tokens exceed `escalation.contextHeadroom` × the local model's `contextWindow` | remote (counts as an escalation) |
+| 4 | `context-overflow` | Input tokens exceed `escalation.contextHeadroom` × the local model's `contextWindow` (see [Counting tokens](#counting-tokens)) | remote (counts as an escalation) |
 | 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` model calls | remote |
 | 6 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
 | 7 | `default` | Nothing else matched | local (remote if no local model is configured) |
@@ -101,3 +101,10 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
   "fallback": { "onLocalUnavailable": "remote", "onRemoteUnavailable": "local" }
 }
 ```
+
+## Counting tokens
+
+The prompt size behind `context-overflow` and cost estimates comes from a BPE tokenizer (o200k) run over the system prompt, tool schemas, and transcript. Counts are cached per message, which is safe because transcripts are append-only, so each step only tokenizes what's new.
+
+No single tokenizer matches every model, so when the estimate is within 20% of the local threshold, where the difference could flip the decision, the engine asks the local server for an exact count with the model's own tokenizer: llama.cpp and vLLM expose `/tokenize`. Servers without it (Ollama, LM Studio) keep the estimate. Hosted APIs are never asked; their windows are large enough that the estimate decides nothing close. `route.decided` reports the count it used as `inputTokens`.
+

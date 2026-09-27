@@ -34,7 +34,7 @@ import {
   ProviderError,
   tierOf,
 } from '@harness/providers';
-import { estimateTokens, type ModelInfo, Router, SignalTracker } from '@harness/router';
+import { type ModelInfo, Router, SignalTracker } from '@harness/router';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import type { HarnessConfig } from './config.ts';
 import { estimateEscalationCost } from './estimate.ts';
@@ -49,6 +49,7 @@ import {
   type SessionHeader,
   type SessionStore,
 } from './store.ts';
+import { nearThreshold, PER_MESSAGE_OVERHEAD, promptText, promptTokens } from './tokens.ts';
 import {
   type Tool,
   type ToolContext,
@@ -427,7 +428,7 @@ export class Engine {
       .filter((a) => a.name !== s.header.agent || s.depth === 0)
       .map((a) => ({ name: a.name, description: a.description }));
     const specs = tools.map((t) => toolSpec(t, { agentCatalog: catalog }));
-    const specChars = JSON.stringify(specs).length;
+    const specsJson = JSON.stringify(specs);
     let escalationApproved = false;
     let forceLocal = false;
     let failures = 0;
@@ -436,7 +437,7 @@ export class Engine {
       if (signal.aborted) return 'cancelled';
       await this.refreshHealth(signal);
 
-      const inputTokens = estimateTokens(s.header.system, s.messages, specChars);
+      const inputTokens = await this.countPrompt(s, specsJson, signal);
       const decision = this.router.decide({
         preference: forceLocal ? 'local' : preference,
         agent: {
@@ -501,6 +502,7 @@ export class Engine {
         model: model.ref,
         rule,
         reason,
+        inputTokens,
       });
       const provider = this.providers.get(model.ref.provider);
       if (!provider) throw new Error(`provider "${model.ref.provider}" is not configured`);
@@ -913,6 +915,26 @@ export class Engine {
       contextWindow: this.contextWindowOf(alias),
       available: this.health.get(m.provider)?.ok ?? true,
     };
+  }
+
+  /**
+   * Prompt size for routing. A tokenizer estimate, replaced by the local
+   * server's exact count when the estimate is close enough to the local
+   * threshold that the difference could change the decision.
+   */
+  private async countPrompt(s: LiveSession, specsJson: string, signal: AbortSignal) {
+    const estimate = promptTokens(s.header.system, s.messages, specsJson);
+    const routing = this.options.config.routing;
+    const local = this.modelInfo(routing.local);
+    if (!local || local.tier !== 'local' || !local.available) return estimate;
+    if (!nearThreshold(estimate, local.contextWindow * routing.escalation.contextHeadroom))
+      return estimate;
+    const provider = this.providers.get(local.ref.provider);
+    const exact = await provider
+      ?.countTokens?.(local.ref.model, promptText(s.header.system, s.messages, specsJson), signal)
+      .catch(() => undefined);
+    // The server counts raw text; add the same per-message template allowance.
+    return exact === undefined ? estimate : exact + PER_MESSAGE_OVERHEAD * s.messages.length;
   }
 
   /** Configured window, else what the server reported, else a conservative guess. */

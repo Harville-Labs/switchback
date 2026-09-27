@@ -44,6 +44,12 @@ export interface Provider {
   stream(request: ChatRequest): AsyncIterable<ChatEvent>;
   /** The context window the server loads for `model`, when it can tell. */
   contextWindow?(model: string): Promise<{ contextWindow: number; source: string } | undefined>;
+  /**
+   * Exact token count of `text` with the model's own tokenizer, when the
+   * server offers one. Undefined means "can't say"; callers fall back to an
+   * estimate.
+   */
+  countTokens?(model: string, text: string, signal?: AbortSignal): Promise<number | undefined>;
 }
 
 /** Thrown for failures the router may recover from by falling back to another model. */

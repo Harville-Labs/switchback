@@ -188,6 +188,8 @@ export type EngineEvent =
       model: ModelRef;
       rule: string;
       reason: string;
+      /** Prompt size the decision was based on (exact when the local server counted it). */
+      inputTokens?: number;
     } & SessionScoped)
   | ({ type: 'text.delta'; turnId: string; text: string } & SessionScoped)
   | ({ type: 'reasoning.delta'; turnId: string; text: string } & SessionScoped)

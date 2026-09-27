@@ -396,6 +396,62 @@ describe('escalation cost and routing analytics', () => {
   });
 });
 
+describe('token counting', () => {
+  function withCounter(contextWindow: number, exact: number) {
+    const counted: string[] = [];
+    const lp = Object.assign(new ScriptedProvider('lp', 'local', [{ text: 'local' }]), {
+      countTokens: async (_model: string, text: string) => {
+        counted.push(text);
+        return exact;
+      },
+    });
+    const rp = new ScriptedProvider('rp', 'remote', [{ text: 'remote' }]);
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: HarnessConfig.parse({
+        providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
+        models: {
+          local: { provider: 'lp', model: 'small', contextWindow },
+          remote: { provider: 'rp', model: 'big', contextWindow: 1_000_000 },
+        },
+      }),
+      providers: new Map<string, Provider>([
+        ['lp', lp],
+        ['rp', rp],
+      ]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    return { engine, counted, events };
+  }
+  const routeOf = (events: EngineEvent[]) =>
+    events.find((e) => e.type === 'route.decided') as Extract<
+      EngineEvent,
+      { type: 'route.decided' }
+    >;
+
+  test('far from the threshold: tokenizer estimate only, no server call', async () => {
+    const { engine, counted, events } = withCounter(1_000_000, 1);
+    await engine.runTurn(engine.createSession({}).id, 'hi');
+    expect(counted).toHaveLength(0);
+    expect(routeOf(events)).toMatchObject({ tier: 'local' });
+    expect(routeOf(events).inputTokens).toBeGreaterThan(100);
+  });
+
+  test('near the threshold: the local server’s exact count decides', async () => {
+    const probe = withCounter(1_000_000, 1);
+    await probe.engine.runTurn(probe.engine.createSession({}).id, 'hi');
+    const estimate = routeOf(probe.events).inputTokens ?? 0;
+
+    // Window whose threshold sits right at the estimate; the server says it's far bigger.
+    const { engine, counted, events } = withCounter(Math.ceil(estimate / 0.85) + 50, 1_000_000);
+    await engine.runTurn(engine.createSession({}).id, 'hi');
+    expect(counted).toHaveLength(1);
+    expect(counted[0]).toContain('hi');
+    expect(routeOf(events)).toMatchObject({ tier: 'remote', rule: 'context-overflow' });
+  });
+});
+
 describe('protocol round-trip', () => {
   test('client drives the engine over a transport', async () => {
     const { engine } = setup([{ text: 'over the wire' }], []);

@@ -174,6 +174,8 @@ export class OpenAICompatibleProvider implements Provider {
   readonly tier: Tier;
   private readonly baseUrl: string;
   private readonly client: OpenAI;
+  /** Which `/tokenize` request shape this server accepts, once known. */
+  private tokenizer: 'llama.cpp' | 'vllm' | 'none' | undefined;
 
   constructor(private readonly options: OpenAICompatibleOptions) {
     this.id = options.id;
@@ -231,6 +233,51 @@ export class OpenAICompatibleProvider implements Provider {
     return probeContextWindow(this.baseUrl, model, {
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
     });
+  }
+
+  /**
+   * llama.cpp and vLLM expose `/tokenize` at the server root (not under /v1),
+   * with different request shapes. Try each once and remember which works;
+   * only a definite 404/405 marks the server as having none (Ollama, LM Studio).
+   */
+  async countTokens(model: string, text: string, signal?: AbortSignal) {
+    if (this.tier === 'remote' || this.tokenizer === 'none') return undefined;
+    const root = this.baseUrl.replace(/\/v1$/, '');
+    const shapes = {
+      'llama.cpp': { content: text, add_special: false },
+      vllm: { model, prompt: text, add_special_tokens: false },
+    } as const;
+    const order = this.tokenizer ? [this.tokenizer] : (['llama.cpp', 'vllm'] as const);
+    let definite = true;
+    for (const dialect of order) {
+      try {
+        const res = await (this.options.fetch ?? fetch)(`${root}/tokenize`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
+          },
+          body: JSON.stringify(shapes[dialect]),
+          signal: signal ?? AbortSignal.timeout(3000),
+        });
+        if (!res.ok) {
+          if (res.status !== 404 && res.status !== 405 && res.status !== 400 && res.status !== 422)
+            definite = false;
+          continue;
+        }
+        const body = (await res.json()) as { count?: number; tokens?: unknown[] };
+        const n = typeof body.count === 'number' ? body.count : body.tokens?.length;
+        if (typeof n === 'number' && (n > 0 || !text)) {
+          this.tokenizer = dialect;
+          return n;
+        }
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        definite = false;
+      }
+    }
+    if (definite && !this.tokenizer) this.tokenizer = 'none';
+    return undefined;
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatEvent> {

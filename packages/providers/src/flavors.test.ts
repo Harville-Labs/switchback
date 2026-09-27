@@ -252,3 +252,59 @@ describe('openai SDK transport', () => {
     expect((await denied.health()).detail).toContain('HTTP 401');
   });
 });
+
+describe('local /tokenize', () => {
+  function server(kind: 'llama.cpp' | 'vllm' | 'ollama') {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    const fetchStub = (async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      calls.push({ url: String(url), body });
+      if (kind === 'ollama') return new Response('404 page not found', { status: 404 });
+      if (kind === 'llama.cpp') {
+        if (!('content' in body)) return Response.json({ tokens: [] });
+        return Response.json({ tokens: [1, 2, 3, 4, 5] });
+      }
+      if (!('prompt' in body)) return new Response('{"detail":"prompt required"}', { status: 422 });
+      return Response.json({ count: 7, max_model_len: 32768, tokens: [] });
+    }) as unknown as typeof fetch;
+    const p = new OpenAICompatibleProvider({
+      id: kind,
+      baseUrl: 'http://gpu:8000/v1',
+      tier: 'local',
+      fetch: fetchStub,
+    });
+    return { p, calls };
+  }
+
+  test('llama.cpp: content shape, at the server root', async () => {
+    const { p, calls } = server('llama.cpp');
+    expect(await p.countTokens('m', 'hello world')).toBe(5);
+    expect(calls[0]?.url).toBe('http://gpu:8000/tokenize');
+  });
+
+  test('vLLM: falls through to the prompt shape and remembers it', async () => {
+    const { p, calls } = server('vllm');
+    expect(await p.countTokens('m', 'hello')).toBe(7);
+    expect(await p.countTokens('m', 'again')).toBe(7);
+    expect(calls.map((c) => Object.keys(c.body)[0])).toEqual(['content', 'model', 'model']);
+  });
+
+  test('servers without /tokenize are asked once', async () => {
+    const { p, calls } = server('ollama');
+    expect(await p.countTokens('m', 'hello')).toBeUndefined();
+    expect(await p.countTokens('m', 'hello')).toBeUndefined();
+    expect(calls).toHaveLength(2); // both shapes, then never again
+  });
+
+  test('hosted APIs never get a tokenize call', async () => {
+    const { fetchStub } = capture([]);
+    const p = new OpenAICompatibleProvider({
+      id: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      tier: 'remote',
+      apiKey: 'k',
+      fetch: fetchStub,
+    });
+    expect(await p.countTokens('m', 'x')).toBeUndefined();
+  });
+});
