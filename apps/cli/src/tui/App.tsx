@@ -538,6 +538,7 @@ function Item({
           </Text>{' '}
           {item.task}
           <Text dimColor>
+            {item.background ? ' · background' : ''}
             {item.tier ? ` · ${item.tier}` : ''} · {item.toolCalls} tool calls
             {item.status === 'running' && item.activity ? ` · ${item.activity}` : ''}
           </Text>

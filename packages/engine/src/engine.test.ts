@@ -635,6 +635,101 @@ describe('per-agent budgets', () => {
   });
 });
 
+describe('background subagents', () => {
+  function setupBg(childDelayMs: number) {
+    const isChild = (system: string) => system.startsWith('You are a read-only search agent');
+    const lp = new ScriptedProvider('lp', 'local', (req) => {
+      if (isChild(req.system)) return { text: 'found it in src/parse.ts' };
+      const last = req.messages.at(-1);
+      if (last?.parts.some((p) => p.type === 'text' && p.backgroundTask))
+        return { text: 'got the report' };
+      if (last?.parts.some((p) => p.type === 'tool_result')) return { text: 'working meanwhile' };
+      return {
+        toolCalls: [
+          {
+            name: 'task',
+            input: {
+              agent: 'explore',
+              description: 'find parser',
+              prompt: 'find it',
+              background: true,
+            },
+          },
+        ],
+      };
+    });
+    const stream = lp.stream.bind(lp);
+    lp.stream = async function* (req) {
+      if (isChild(req.system)) await Bun.sleep(childDelayMs);
+      yield* stream(req);
+    };
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: HarnessConfig.parse({
+        providers: { lp: { type: 'mock', tier: 'local' } },
+        models: { local: { provider: 'lp', model: 'small', contextWindow: 100_000 } },
+        routing: { mode: 'local-only' },
+      }),
+      providers: new Map<string, Provider>([['lp', lp]]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    return { engine, events };
+  }
+  const shape = (engine: Engine, id: string) =>
+    engine
+      .getSession(id)
+      .messages.map((m) =>
+        m.role === 'assistant'
+          ? `a:${m.parts.map((p) => (p.type === 'text' ? p.text : p.type)).join('+')}`
+          : `u:${m.parts.map((p) => (p.type === 'text' && p.backgroundTask ? 'report' : p.type)).join('+')}`,
+      );
+
+  test('headless: the parent keeps working, then gets the report append-only', async () => {
+    const { engine, events } = setupBg(100);
+    const s = engine.createSession({});
+    const r = await engine.runTurn(s.id, 'go');
+    expect(r.text).toBe('got the report');
+    expect(shape(engine, s.id)).toEqual([
+      'u:text',
+      'a:tool_call',
+      'u:tool_result',
+      'a:working meanwhile',
+      'u:report',
+      'a:got the report',
+    ]);
+    const report = engine.getSession(s.id).messages[4]?.parts[0];
+    expect(report?.type === 'text' && report.text).toContain('found it in src/parse.ts');
+    expect(events.find((e) => e.type === 'subagent.started')).toMatchObject({ background: true });
+  });
+
+  test('interactive: the turn ends first; the report starts a follow-up turn', async () => {
+    const { engine, events } = setupBg(150);
+    const s = engine.createSession({});
+    engine.prompt({ sessionId: s.id, text: 'go' });
+    const turns = () => events.filter((e) => e.type === 'turn.completed' && e.sessionId === s.id);
+    for (let i = 0; i < 100 && turns().length < 1; i++) await Bun.sleep(10);
+    expect(shape(engine, s.id).at(-1)).toBe('a:working meanwhile');
+    expect(engine.busy()).toBe(true); // background work keeps a daemon alive
+    for (let i = 0; i < 100 && turns().length < 2; i++) await Bun.sleep(10);
+    expect(shape(engine, s.id).slice(-2)).toEqual(['u:report', 'a:got the report']);
+    expect(engine.busy()).toBe(false);
+  });
+
+  test('cancelling the session cancels background tasks and drops their reports', async () => {
+    const { engine, events } = setupBg(200);
+    const s = engine.createSession({});
+    engine.prompt({ sessionId: s.id, text: 'go' });
+    for (let i = 0; i < 100 && !events.some((e) => e.type === 'turn.completed'); i++)
+      await Bun.sleep(10);
+    expect(engine.cancel(s.id)).toBe(true);
+    await Bun.sleep(300);
+    expect(shape(engine, s.id).includes('u:report')).toBe(false);
+    expect(events.filter((e) => e.type === 'turn.started' && e.sessionId === s.id)).toHaveLength(1);
+    expect(engine.busy()).toBe(false);
+  });
+});
+
 describe('token counting', () => {
   function withCounter(contextWindow: number, exact: number) {
     const counted: string[] = [];

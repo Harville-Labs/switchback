@@ -18,7 +18,12 @@ export interface ToolContext {
   sessionId: string;
   signal: AbortSignal;
   /** Available only to the task tool; undefined when max subagent depth is reached. */
-  runSubagent?: (agent: string, prompt: string, description: string) => Promise<SubagentResult>;
+  runSubagent?: (
+    agent: string,
+    prompt: string,
+    description: string,
+    options?: { background?: boolean },
+  ) => Promise<SubagentResult>;
   /** Names and descriptions of agents available as subagents. */
   agentCatalog: { name: string; description: string }[];
 }

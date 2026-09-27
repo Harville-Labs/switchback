@@ -19,6 +19,8 @@ export interface TextPart {
   text: string;
   /** Set when the engine attached a file the user @-mentioned; clients show a chip, not the text. */
   attachment?: { path: string };
+  /** Set on the message that delivers a background subagent's report to its parent. */
+  backgroundTask?: { sessionId: string; agent: string; ok: boolean };
 }
 
 /**

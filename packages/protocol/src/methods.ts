@@ -269,12 +269,15 @@ export type EngineEvent =
       childSessionId: string;
       agent: string;
       task: string;
+      /** Started with `background: true`: the parent didn't wait for it. */
+      background?: boolean;
     } & SessionScoped)
   | ({
       type: 'subagent.completed';
       childSessionId: string;
       agent: string;
       ok: boolean;
+      background?: boolean;
     } & SessionScoped)
   | ({ type: 'usage.updated'; usage: Usage; costUsd: number; tier: Tier } & SessionScoped)
   | ({ type: 'turn.completed'; turnId: string; stopReason: StopReason } & SessionScoped)

@@ -42,6 +42,7 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
       const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
       const meta = [
         item.tier,
+        item.background ? 'background' : undefined,
         `${item.toolCalls} tool calls`,
         item.status === 'running' ? item.activity : undefined,
       ]

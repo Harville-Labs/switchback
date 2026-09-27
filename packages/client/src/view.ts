@@ -35,6 +35,8 @@ export type ViewItem =
       tier?: Tier;
       activity?: string;
       toolCalls: number;
+      /** The parent didn't wait; the report arrives later as a message. */
+      background?: boolean;
     }
   | { kind: 'error'; id: string; message: string }
   /** Client-local notices (slash command output); never produced by the engine. */
@@ -128,7 +130,13 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
   messages.forEach((m, mi) => {
     if (m.role === 'user') {
       for (const p of m.parts) {
-        if (p.type === 'text' && p.attachment)
+        if (p.type === 'text' && p.backgroundTask)
+          items.push({
+            kind: 'info',
+            id: `h${mi}b${p.backgroundTask.sessionId}`,
+            text: `↳ background ${p.backgroundTask.agent} ${p.backgroundTask.ok ? 'finished' : 'failed'}; its report went to the agent`,
+          });
+        else if (p.type === 'text' && p.attachment)
           items.push({
             kind: 'info',
             id: `h${mi}f${p.attachment.path}`,
@@ -358,6 +366,7 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         task: event.task,
         status: 'running',
         toolCalls: 0,
+        ...(event.background ? { background: true } : {}),
       });
       return {
         ...state,
@@ -378,6 +387,12 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
           ...(items[i] as Extract<ViewItem, { kind: 'subagent' }>),
           status: event.ok ? 'ok' : 'error',
         };
+      if (event.background)
+        items.push({
+          kind: 'info',
+          id: `b${event.childSessionId}`,
+          text: `↳ background ${event.agent} ${event.ok ? 'finished' : 'failed'}; its report went to the agent`,
+        });
       return { ...state, items };
     }
     case 'escalation.requested':

@@ -20,6 +20,7 @@ import {
   type SessionGetResult,
   type SessionSummary,
   type StopReason,
+  type TextPart,
   type Tier,
   type ToolResultPart,
   textOf,
@@ -68,6 +69,7 @@ import {
   promptTokens,
 } from './tokens.ts';
 import {
+  type SubagentResult,
   type Tool,
   type ToolContext,
   type ToolPreview,
@@ -113,6 +115,12 @@ interface LiveSession {
   budget?: { agent: string; limitUsd: number };
   /** Why the last turn stopped with an error, reported to a parent agent. */
   lastError?: string;
+  /** Background subagents still running, by child session ID. */
+  background: Map<string, Promise<void>>;
+  /** Their reports, waiting to be appended at the next safe point. */
+  inbox: TextPart[];
+  /** Cancels background subagents (they outlive the turn that started them). */
+  bgController?: AbortController;
   /** The previous remote call, to check that the next one hits the prompt cache. */
   lastRemote?: { key: string; at: number };
   cacheWarned?: boolean;
@@ -307,6 +315,8 @@ export class Engine {
       updatedAt: now,
       signals: new SignalTracker(this.options.config.routing.escalation),
       depth: parent ? parent.depth + 1 : 0,
+      background: new Map(),
+      inbox: [],
     };
     this.sessions.set(header.id, live);
     return this.summary(live);
@@ -346,6 +356,9 @@ export class Engine {
       turnId,
       undefined,
       params.attachments ?? [],
+      // Interactive sessions stay usable while background tasks run; their
+      // reports start a follow-up turn when they arrive.
+      { waitForBackground: false },
     ).catch((err) => {
       this.emit({ type: 'error', ...this.scope(s), turnId, message: (err as Error).message });
     });
@@ -360,6 +373,7 @@ export class Engine {
     turnId = `turn_${crypto.randomUUID().slice(0, 8)}`,
     parentSignal?: AbortSignal,
     extra: Attachment[] = [],
+    options: { waitForBackground?: boolean } = {},
   ): Promise<TurnResult> {
     const session = typeof s === 'string' ? this.live(s) : s;
     if (session.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is busy');
@@ -367,19 +381,34 @@ export class Engine {
     const onParentAbort = () => controller.abort();
     parentSignal?.addEventListener('abort', onParentAbort, { once: true });
     session.controller = controller;
-    if (!session.header.title) session.header.title = text.slice(0, 60);
+    if (!session.header.title && text) session.header.title = text.slice(0, 60);
 
     this.emit({ type: 'turn.started', ...this.scope(session), turnId });
-    const attachments = [
-      ...(await expandAttachments(extra, this.options.workspaceRoot).catch(() => [])),
-      ...(await expandMentions(text, this.options.workspaceRoot).catch(() => [])),
-    ];
-    this.append(session, { role: 'user', parts: [{ type: 'text', text }, ...attachments] });
+    // An empty prompt continues the session with whatever reports are waiting.
+    if (text) {
+      const attachments = [
+        ...(await expandAttachments(extra, this.options.workspaceRoot).catch(() => [])),
+        ...(await expandMentions(text, this.options.workspaceRoot).catch(() => [])),
+      ];
+      this.append(session, { role: 'user', parts: [{ type: 'text', text }, ...attachments] });
+    }
     session.signals.startUserTurn();
 
     let stopReason: StopReason = 'end_turn';
     try {
       stopReason = await this.loop(session, route, turnId, controller.signal);
+      // Headless runs and subagents finish their background work before they
+      // report, so nothing is left running unattended.
+      while (
+        options.waitForBackground !== false &&
+        stopReason === 'end_turn' &&
+        (session.background.size || session.inbox.length) &&
+        !controller.signal.aborted
+      ) {
+        if (!session.inbox.length) await Promise.race(session.background.values());
+        if (session.inbox.length)
+          stopReason = await this.loop(session, route, turnId, controller.signal);
+      }
     } catch (err) {
       stopReason = controller.signal.aborted ? 'cancelled' : 'error';
       if (stopReason === 'error')
@@ -398,11 +427,16 @@ export class Engine {
     return { stopReason, text: last ? textOf(last) : '' };
   }
 
+  /** Cancel the running turn and every background subagent the session started. */
   cancel(sessionId: string): boolean {
     const s = this.sessions.get(sessionId);
-    if (!s?.controller) return false;
-    s.controller.abort();
-    return true;
+    if (!s) return false;
+    const hadWork = !!s.controller || s.background.size > 0;
+    s.controller?.abort();
+    s.bgController?.abort();
+    s.bgController = undefined;
+    s.inbox.length = 0;
+    return hadWork;
   }
 
   respondPermission(requestId: string, decision: PermissionDecision): void {
@@ -475,7 +509,10 @@ export class Engine {
   }
 
   async shutdown(): Promise<void> {
-    for (const s of this.sessions.values()) s.controller?.abort();
+    for (const s of this.sessions.values()) {
+      s.controller?.abort();
+      s.bgController?.abort();
+    }
     await this.mcp?.close();
   }
 
@@ -504,6 +541,7 @@ export class Engine {
     for (let step = 0; step < this.options.config.maxStepsPerTurn; step++) {
       if (signal.aborted) return 'cancelled';
       await this.refreshHealth(signal);
+      this.drainInbox(s);
       if (this.options.config.compaction.enabled) {
         // A failed summary costs context, not the turn: routing still has
         // overflow escalation to fall back on.
@@ -963,8 +1001,8 @@ export class Engine {
       sessionId: s.header.id,
       signal,
       agentCatalog: catalog,
-      runSubagent: (agent, prompt, description) =>
-        this.runSubagent(s, agent, prompt, description, signal),
+      runSubagent: (agent, prompt, description, options) =>
+        this.runSubagent(s, agent, prompt, description, signal, options),
     };
     const runOne = async (call: (typeof calls)[number]): Promise<ToolResultPart> => {
       const tool = tools.find((t) => t.name === call.name);
@@ -1050,7 +1088,8 @@ export class Engine {
     prompt: string,
     description: string,
     signal: AbortSignal,
-  ) {
+    options: { background?: boolean } = {},
+  ): Promise<SubagentResult> {
     const depth = parent.depth + 1;
     let slots = this.subagentSlots.get(depth);
     if (!slots) {
@@ -1058,38 +1097,90 @@ export class Engine {
       slots = new Semaphore(this.options.config.subagents.maxConcurrent);
       this.subagentSlots.set(depth, slots);
     }
-    await slots.acquire(signal);
-    try {
-      const child = this.createSession({ agent, title: description, parentId: parent.header.id });
-      const limitUsd = this.agents.get(agent)?.budgetUsd ?? this.options.config.subagents.budgetUsd;
-      const childSession = this.sessions.get(child.id);
-      if (childSession && limitUsd !== undefined) childSession.budget = { agent, limitUsd };
-      this.emit({
-        type: 'subagent.started',
-        ...this.scope(parent),
-        childSessionId: child.id,
-        agent,
-        task: description,
-      });
-      const result = await this.runTurn(child.id, prompt, 'auto', undefined, signal);
-      const ok = result.stopReason === 'end_turn';
-      this.emit({
-        type: 'subagent.completed',
-        ...this.scope(parent),
-        childSessionId: child.id,
-        agent,
-        ok,
-      });
-      return {
-        ok,
-        text: ok
-          ? result.text
-          : `${result.stopReason}: ${this.sessions.get(child.id)?.lastError ?? result.text}`,
-        sessionId: child.id,
-      };
-    } finally {
-      slots.release();
+    const child = this.createSession({ agent, title: description, parentId: parent.header.id });
+    const limitUsd = this.agents.get(agent)?.budgetUsd ?? this.options.config.subagents.budgetUsd;
+    const childSession = this.sessions.get(child.id);
+    if (childSession && limitUsd !== undefined) childSession.budget = { agent, limitUsd };
+    const background = options.background === true;
+    // Background work outlives the turn that started it; the session cancels it.
+    parent.bgController ??= new AbortController();
+    const runSignal = background ? parent.bgController.signal : signal;
+
+    const run = async (): Promise<SubagentResult> => {
+      await slots.acquire(runSignal);
+      try {
+        this.emit({
+          type: 'subagent.started',
+          ...this.scope(parent),
+          childSessionId: child.id,
+          agent,
+          task: description,
+          ...(background ? { background } : {}),
+        });
+        const result = await this.runTurn(child.id, prompt, 'auto', undefined, runSignal);
+        const ok = result.stopReason === 'end_turn';
+        this.emit({
+          type: 'subagent.completed',
+          ...this.scope(parent),
+          childSessionId: child.id,
+          agent,
+          ok,
+          ...(background ? { background } : {}),
+        });
+        return {
+          ok,
+          text: ok
+            ? result.text
+            : `${result.stopReason}: ${this.sessions.get(child.id)?.lastError ?? result.text}`,
+          sessionId: child.id,
+        };
+      } finally {
+        slots.release();
+      }
+    };
+
+    if (!background) return run();
+    const done = run()
+      .then((r) => {
+        // Cancelled with the session: the report is dropped, not delivered.
+        if (!runSignal.aborted) this.deliver(parent, child.id, agent, description, r);
+      })
+      .catch(() => {
+        // Cancelled with the session: nothing to deliver.
+      })
+      .finally(() => parent.background.delete(child.id));
+    parent.background.set(child.id, done);
+    return { ok: true, text: '', sessionId: child.id };
+  }
+
+  /**
+   * A background subagent finished: queue its report for the parent. A busy
+   * parent picks it up at its next step; an idle top-level session starts a
+   * follow-up turn so the agent can act on it.
+   */
+  private deliver(
+    parent: LiveSession,
+    childId: string,
+    agent: string,
+    description: string,
+    result: SubagentResult,
+  ): void {
+    parent.inbox.push({
+      type: 'text',
+      text: `Background task "${description}" (${agent}) ${result.ok ? 'finished' : 'failed'}:\n\n${result.text || '(no report)'}`,
+      backgroundTask: { sessionId: childId, agent, ok: result.ok },
+    });
+    if (!parent.controller && !parent.header.parentId) {
+      void this.runTurn(parent, '', 'auto', undefined, undefined, [], {
+        waitForBackground: false,
+      }).catch((err) => this.notify('error', (err as Error).message));
     }
+  }
+
+  /** Append waiting background reports as one user message, at a step boundary. */
+  private drainInbox(s: LiveSession): void {
+    if (!s.inbox.length) return;
+    this.append(s, { role: 'user', parts: s.inbox.splice(0) });
   }
 
   // -------------------------------------------------------------------------
@@ -1213,6 +1304,8 @@ export class Engine {
       updatedAt: this.now().toISOString(),
       signals: new SignalTracker(this.options.config.routing.escalation),
       depth: parent ? parent.depth + 1 : stored.header.parentId ? 1 : 0,
+      background: new Map(),
+      inbox: [],
     };
     this.sessions.set(sessionId, live);
     return live;
@@ -1287,7 +1380,7 @@ export class Engine {
 
   /** Whether any session has a turn in progress (daemons stay up while busy). */
   busy(): boolean {
-    for (const s of this.sessions.values()) if (s.controller) return true;
+    for (const s of this.sessions.values()) if (s.controller || s.background.size) return true;
     return false;
   }
 

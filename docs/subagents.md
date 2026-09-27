@@ -70,6 +70,15 @@ Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the lar
 - A subagent that fails or is cancelled returns an error result, which the parent can handle.
 - Cancelling the parent turn cancels its subagents.
 
+### Background tasks
+
+With `"background": true` the call returns at once with the task's ID and the parent keeps working. When the subagent finishes, its report is appended to the parent's transcript as a new user message (marked `backgroundTask`, shown as a note in both clients), so history stays append-only:
+
+- If the parent is in the middle of a turn, the report is picked up at its next step.
+- If an interactive session is idle, the report starts a follow-up turn so the agent can act on it. You can keep chatting while background tasks run.
+- Headless `harness run` and subagents wait for their own background tasks before they finish, so nothing is left running unattended.
+- Cancelling the session (esc in the TUI, Cancel in VS Code) cancels its background tasks and drops their reports.
+
 ## Limits
 
 | Config | Default | Effect |
