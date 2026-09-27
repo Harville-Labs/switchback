@@ -27,8 +27,13 @@ suite('Edit review in the diff editor', () => {
     const sub = a.onEvent((e) => events.push(e));
     await a.prompt(editPrompt(from, to));
     await waitFor(() => a.pendingReviews().length === 1, 20_000, 'diff editor');
-    const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
-    assert.ok(tab?.input instanceof vscode.TabInputTextDiff, 'a diff tab is active');
+    const activeDiff = () => {
+      const t = vscode.window.tabGroups.activeTabGroup.activeTab;
+      return t?.input instanceof vscode.TabInputTextDiff ? t : undefined;
+    };
+    await waitFor(() => !!activeDiff(), 10_000, 'active diff tab');
+    const tab = activeDiff();
+    assert.ok(tab, 'a diff tab is active');
     assert.match(tab.label, /hello\.ts \(proposed by Harness\)/);
     await vscode.commands.executeCommand(answer);
     await waitFor(() => events.some((e) => e.type === 'turn.completed'), 20_000, 'turn');

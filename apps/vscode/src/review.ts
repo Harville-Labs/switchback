@@ -39,7 +39,6 @@ export class EditReview implements vscode.TextDocumentContentProvider, vscode.Di
       left = right.with({ query: `request=${requestId}&side=empty` });
       this.contents.set(left.toString(), '');
     }
-    this.open.set(requestId, right);
     await vscode.commands.executeCommand(
       'vscode.diff',
       left,
@@ -47,6 +46,8 @@ export class EditReview implements vscode.TextDocumentContentProvider, vscode.Di
       `${proposed.path} (proposed by Harness)`,
       { preview: false },
     );
+    // Recorded once the tab exists, so `pending()` means "visible to the user".
+    this.open.set(requestId, right);
   }
 
   async close(requestId: string) {
