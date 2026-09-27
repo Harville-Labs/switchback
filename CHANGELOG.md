@@ -4,6 +4,8 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-27
+
 ### Added
 - VS Code: platform-specific `.vsix` packages bundle the engine; Marketplace/Open VSX publishing when tokens are configured
 - VS Code: Markdown rendering in chat (raw HTML escaped, http(s)/mailto links only, DOMPurify as a second layer) with Copy / Insert-at-cursor on code blocks; session history picker

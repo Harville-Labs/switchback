@@ -19,7 +19,16 @@ Make the local path excellent, since it's where users spend most of their time.
 - Accurate local context window detection from the server
 - Single-binary releases for macOS, Linux, and Windows
 
-## v0.3 Routing intelligence
+## v0.3 VS Code (released)
+
+- Platform-specific `.vsix` with the engine bundled; Marketplace/Open VSX publishing when tokens are configured
+- Markdown chat with Copy / Insert on code blocks; session history
+- Review proposed edits in the diff editor with Accept / Reject
+- Editor context attachments (selection, active file, problems)
+- Shared engine daemon: the TUI and VS Code attach to the same live sessions
+- Integration tests inside real VS Code, including the bundled engine
+
+## v0.4 Routing intelligence
 
 Escalate less often and more precisely.
 
@@ -31,7 +40,7 @@ Escalate less often and more precisely.
 - Append-only context compaction for long sessions
 - Routing analytics: escalation reasons over time, savings by agent
 
-## v0.4 Subagents and integrations
+## v0.5 Subagents and integrations
 
 - Subagent tree view with drill-down in both clients
 - Background subagents that report later
@@ -40,13 +49,6 @@ Escalate less often and more precisely.
 - External agent runtimes as subagents: Claude Agent SDK, Claude Managed Agents, OpenAI Agents SDK, Amazon Bedrock AgentCore
 - Per-agent budgets
 - More providers: Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry
-
-## v0.5 VS Code
-
-- Inline diff review with accept and reject
-- Editor context attachments (open files, diagnostics, selection, terminal output)
-- Shared engine daemon: attach the TUI and VS Code to the same live session
-- Bundle a platform-specific engine binary in the `.vsix`; publish to the Marketplace and Open VSX
 
 ## v1.0 Product readiness
 
