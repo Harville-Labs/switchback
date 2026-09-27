@@ -115,6 +115,18 @@ async function scenarioEdit(engine: Engine, route: 'local' | 'remote') {
   expect(text).not.toContain('addNumbers');
 }
 
+async function scenarioDelegate(engine: Engine, events: EngineEvent[], route: 'local' | 'remote') {
+  const s = engine.createSession({});
+  const r = await engine.runTurn(
+    s.id,
+    'Use the task tool with the explore agent to find which file defines addNumbers, then tell me the file name.',
+    route,
+  );
+  expect(r.stopReason).toBe('end_turn');
+  expect(events.some((e) => e.type === 'subagent.started' && e.agent === 'explore')).toBe(true);
+  expect(r.text).toContain('math.ts');
+}
+
 describe.skipIf(!LIVE || !local)('local model', () => {
   const setup = () =>
     engineFor(
@@ -147,19 +159,12 @@ describe.skipIf(!LIVE || !local)('local model', () => {
     TIMEOUT,
   );
 
-  test(
+  // Small models (like the 1.7B one in nightly CI) rarely delegate; opt in with a stronger model.
+  test.skipIf(!process.env.HARNESS_LIVE_LOCAL_DELEGATION)(
     'delegates to the explore subagent',
     async () => {
       const { engine, events } = setup();
-      const s = engine.createSession({});
-      const r = await engine.runTurn(
-        s.id,
-        'Use the task tool with the explore agent to find which file defines addNumbers, then tell me the file name.',
-        'local',
-      );
-      expect(r.stopReason).toBe('end_turn');
-      expect(events.some((e) => e.type === 'subagent.started' && e.agent === 'explore')).toBe(true);
-      expect(r.text).toContain('math.ts');
+      await scenarioDelegate(engine, events, 'local');
     },
     TIMEOUT,
   );
@@ -201,6 +206,19 @@ for (const kind of hosted) {
           { mode: 'remote-only' },
         );
         await scenarioEdit(engine, 'remote');
+      },
+      TIMEOUT,
+    );
+
+    test(
+      'delegates to the explore subagent',
+      async () => {
+        const { engine, events } = engineFor(
+          { remote: remoteModel },
+          { [kind]: { type: kind } },
+          { mode: 'remote-only' },
+        );
+        await scenarioDelegate(engine, events, 'remote');
       },
       TIMEOUT,
     );

@@ -11,6 +11,10 @@ on:
       model:
         description: Ollama model (must support tool calling)
         default: qwen3:1.7b
+      delegation:
+        description: Also test subagent delegation locally (needs a stronger model)
+        type: boolean
+        default: false
 
 concurrency:
   group: live
@@ -45,4 +49,5 @@ jobs:
         env:
           HARNESS_LIVE_LOCAL_URL: http://localhost:11434/v1
           HARNESS_LIVE_LOCAL_MODEL: ${{ env.MODEL }}
+          HARNESS_LIVE_LOCAL_DELEGATION: ${{ inputs.delegation && '1' || '' }}
         run: bun run test:live
