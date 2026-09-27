@@ -18,7 +18,7 @@ import { type AttachChoice, EditorContext } from './context.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code variable syntax, not a JS template.
 const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
 
