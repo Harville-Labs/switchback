@@ -8,7 +8,7 @@ import type { InitializeResult, RoutePreference, SessionSummary } from '@harness
 import * as vscode from 'vscode';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code variable syntax, not a JS template.
 const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
 

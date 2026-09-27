@@ -6,7 +6,7 @@ Each milestone below is a GitHub milestone. Individual work items are [issues](h
 
 Engine/client split, protocol, router with escalation signals and budgets, OpenAI-compatible and Claude (Anthropic/Bedrock/Vertex) providers, tools with permissions, subagents with per-agent routing, Claude Code agent compatibility, usage ledger with savings, Ink TUI, VS Code extension, docs.
 
-## v0.2 Local experience
+## v0.2 Local experience (released)
 
 Make the local path excellent, since it's where users spend most of their time.
 
