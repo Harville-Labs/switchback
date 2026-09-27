@@ -3,7 +3,7 @@
 ## Using Harness
 
 - [Configuration](configuration.md): every config key, file locations, environment variables
-- [Providers](providers.md): local servers, Anthropic, Bedrock, Vertex
+- [Providers](providers.md): local servers, OpenAI, Anthropic, DeepSeek, Bedrock, Vertex, any OpenAI-compatible API
 - [Routing and escalation](routing.md): how local vs. remote is decided, budgets, tuning
 - [Agents and subagents](subagents.md): built-in agents, writing your own, Claude Code compatibility
 - [Permissions and safety](permissions.md)
