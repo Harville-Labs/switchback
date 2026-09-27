@@ -30,7 +30,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 
 | Method | Params | Result |
 |---|---|---|
-| `initialize` | `protocolVersion`, `client`, `workspaceRoot` | Engine version, models, agents |
+| `initialize` | `protocolVersion`, `client`, `workspaceRoot` | Engine version, models, agents, and `org` when an organization policy applies |
 | `session.create` | `agent?`, `title?` | `SessionSummary` |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
@@ -57,6 +57,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session |
 | `usage.updated` | Cumulative session usage and cost |
 | `error` | Something failed; the turn may continue or end |
+| `config.updated` | Configuration changed while running (e.g. an organization policy update); carries `org` and human-readable `notes` |
 | `log` | Engine diagnostics |
 
 Clients should fold events with `reduce()` from `@harness/client/view` rather than writing their own interpretation.

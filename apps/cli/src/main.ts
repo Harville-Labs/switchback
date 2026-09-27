@@ -15,6 +15,8 @@ Usage
   harness config [action]         path | show | schema | edit
   harness doctor                  Check configuration, providers, and agents
   harness usage                   Show spend, savings, and budget
+  harness login [--server <url>]  Sign in to your organization (applies its policy)
+  harness logout | whoami         Sign out / show organization and policy
   harness serve --stdio           Serve the engine protocol (used by the VS Code extension)
 
 Options
@@ -45,6 +47,10 @@ init options (all optional; prompts cover anything not given)
   --project-id <id>        GCP project (Vertex)
   --policy <p>             Escalation: auto | ask | off
   --daily-budget <usd>     --monthly-budget <usd>
+
+login options
+  --server <url>           Organization server (default: previous or $HARNESS_ORG_SERVER)
+  --token <token>          Sign in with an access token instead of the browser (CI)
 `;
 
 function bunTooOld(): boolean {
@@ -111,6 +117,8 @@ async function main(argv: string[]): Promise<number> {
       policy: { type: 'string' },
       'daily-budget': { type: 'string' },
       'monthly-budget': { type: 'string' },
+      server: { type: 'string' },
+      token: { type: 'string' },
       version: { type: 'boolean', short: 'v', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -202,6 +210,22 @@ async function main(argv: string[]): Promise<number> {
     case 'doctor': {
       const { doctor } = await import('./commands/doctor.ts');
       return doctor(common);
+    }
+    case 'login': {
+      const { login } = await import('./commands/org.ts');
+      return login({
+        cwd: common.cwd,
+        ...(values.server ? { server: values.server } : {}),
+        ...(values.token ? { token: values.token } : {}),
+      });
+    }
+    case 'logout': {
+      const { logout } = await import('./commands/org.ts');
+      return logout();
+    }
+    case 'whoami': {
+      const { whoami } = await import('./commands/org.ts');
+      return whoami(common.cwd);
     }
     case 'usage': {
       const { usage } = await import('./commands/usage.ts');

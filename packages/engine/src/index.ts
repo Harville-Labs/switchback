@@ -2,6 +2,7 @@ export * from './agents.ts';
 export * from './config.ts';
 export * from './engine.ts';
 export * from './ledger.ts';
+export * from './org/index.ts';
 export * from './paths.ts';
 export * from './server.ts';
 export * from './setup.ts';

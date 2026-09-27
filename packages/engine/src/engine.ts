@@ -35,8 +35,9 @@ import {
 import { estimateTokens, type ModelInfo, Router, SignalTracker } from '@harness/router';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import type { HarnessConfig } from './config.ts';
-import { UsageLedger } from './ledger.ts';
+import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { expandMentions } from './mentions.ts';
+import type { OrgStatus } from './org/policy.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
 import { Semaphore } from './semaphore.ts';
 import {
@@ -67,6 +68,8 @@ export interface EngineOptions {
    * decide immediately (headless runs).
    */
   interaction?: 'prompt' | 'approve' | 'deny';
+  /** Organization policy in effect, reported to clients. */
+  org?: OrgStatus;
   now?: () => Date;
 }
 
@@ -101,8 +104,10 @@ export class Engine {
   private pendingEscalations = new Map<string, (approve: boolean) => void>();
   private alwaysAllowed = new Set<string>();
   private subagentSlots = new Map<number, Semaphore>();
-  private readonly router: Router;
+  private router: Router;
   private readonly ledger: UsageLedger;
+  /** Provider config each live provider was built from, to rebuild only what changed. */
+  private providerConfigs = new Map<string, string>();
   private readonly store: SessionStore;
   private readonly agents: Map<string, AgentDefinition>;
   private readonly now: () => Date;
@@ -111,6 +116,7 @@ export class Engine {
     const { config } = options;
     for (const [id, pc] of Object.entries(config.providers)) {
       this.providers.set(id, options.providers?.get(id) ?? createProvider(id, pc));
+      this.providerConfigs.set(id, JSON.stringify(pc));
     }
     for (const [id, p] of options.providers ?? []) this.providers.set(id, p);
     this.router = new Router(config.routing, (alias) => this.modelInfo(alias));
@@ -157,6 +163,11 @@ export class Engine {
     return () => this.listeners.delete(listener);
   }
 
+  /** Surface a diagnostic to clients (as a `log` event). */
+  notify(level: 'debug' | 'info' | 'warn' | 'error', message: string): void {
+    this.emit({ type: 'log', level, message });
+  }
+
   private emit(event: EngineEvent): void {
     for (const l of this.listeners) l(event);
   }
@@ -183,6 +194,15 @@ export class Engine {
         tier: this.tierOfProvider(m.provider),
       })),
       agents: this.listAgents(),
+      ...(this.options.org
+        ? {
+            org: {
+              id: this.options.org.id,
+              name: this.options.org.name,
+              version: this.options.org.version,
+            },
+          }
+        : {}),
     };
   }
 
@@ -308,6 +328,54 @@ export class Engine {
     resolve(approve);
   }
 
+  /**
+   * Swap in a new configuration without restarting (organization policy
+   * updates, config file edits). Running turns pick it up at their next model
+   * call; providers whose settings didn't change keep their state.
+   */
+  applyConfig(next: {
+    config: HarnessConfig;
+    prices?: Record<string, Price>;
+    org?: OrgStatus;
+  }): void {
+    const injected = this.options.providers;
+    for (const id of [...this.providers.keys()]) {
+      if (!next.config.providers[id] && !injected?.has(id)) {
+        this.providers.delete(id);
+        this.providerConfigs.delete(id);
+        this.health.delete(id);
+      }
+    }
+    for (const [id, pc] of Object.entries(next.config.providers)) {
+      const json = JSON.stringify(pc);
+      if (injected?.has(id) || this.providerConfigs.get(id) === json) continue;
+      this.providers.set(id, createProvider(id, pc));
+      this.providerConfigs.set(id, json);
+      this.health.delete(id);
+    }
+    this.detectedContext.clear();
+    this.alwaysAllowed.clear(); // grants were made under the old policy
+    this.options.config = next.config;
+    if (next.org) this.options.org = next.org;
+    this.router = new Router(next.config.routing, (alias) => this.modelInfo(alias));
+    this.ledger.setPricing(
+      next.prices ?? {},
+      next.config.models[next.config.routing.remote]?.model,
+    );
+    this.emit({
+      type: 'config.updated',
+      ...(next.org
+        ? { org: { id: next.org.id, name: next.org.name, version: next.org.version } }
+        : {}),
+      notes: next.org?.notes ?? [],
+    });
+  }
+
+  /** Ledger entries recorded after `sinceIso`, for usage reporting. */
+  usageEntriesSince(sinceIso: string): LedgerEntry[] {
+    return this.ledger.entriesSince(sinceIso);
+  }
+
   usage(): UsageReport {
     return this.ledger.report(this.options.config.routing.budget);
   }
@@ -356,6 +424,19 @@ export class Engine {
         escalationApproved,
       });
 
+      if (
+        decision.kind === 'block' &&
+        this.options.org?.remoteDisabled &&
+        preference === 'remote'
+      ) {
+        this.emit({
+          type: 'error',
+          ...this.scope(s),
+          turnId,
+          message: `remote models are disabled by ${this.options.org.name} policy`,
+        });
+        return 'error';
+      }
       if (decision.kind === 'block') {
         this.emit({
           type: 'error',
@@ -616,8 +697,9 @@ export class Engine {
   ): Promise<{ allowed: boolean; error?: string }> {
     if (tool.permission === 'none') return { allowed: true };
     const level = this.options.config.permissions[tool.permission];
-    if (level === 'allow' || this.alwaysAllowed.has(tool.permission)) return { allowed: true };
+    // deny first: an org can enforce it, and no session grant may override that.
     if (level === 'deny') return { allowed: false };
+    if (level === 'allow' || this.alwaysAllowed.has(tool.permission)) return { allowed: true };
     const mode = this.options.interaction ?? 'prompt';
     if (mode !== 'prompt') return { allowed: mode === 'approve' };
 

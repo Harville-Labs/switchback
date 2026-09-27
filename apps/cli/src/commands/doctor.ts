@@ -12,6 +12,13 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   if (loaded.sources.length === 0) out('  (none; using built-in defaults)');
   for (const s of loaded.sources) out(`  ${s}`);
 
+  if (loaded.org) {
+    const o = loaded.org;
+    out(`\nOrganization\n  ${o.name} (${o.id}), policy revision ${o.version}`);
+    for (const n of o.notes) out(`  ${n}`);
+    if (o.enforcedKeys.length) out(`  enforced: ${o.enforcedKeys.join(', ')}`);
+  }
+
   out('\nProviders');
   const used = new Set(Object.values(config.models).map((m) => m.provider));
   for (const [id, pc] of Object.entries(config.providers)) {

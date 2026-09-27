@@ -5,9 +5,11 @@
 Layers deep-merge in this order, with later layers winning:
 
 1. Built-in defaults (below)
-2. `~/.config/harness/config.json` (user; respects `XDG_CONFIG_HOME`)
-3. `.harness/config.json` in the workspace (project)
-4. `--mock` (any command) then swaps every provider for a scripted mock
+2. Organization policy `defaults`, when signed in ([organizations.md](organizations.md))
+3. `~/.config/harness/config.json` (user; respects `XDG_CONFIG_HOME`)
+4. `.harness/config.json` in the workspace (project)
+5. Organization policy `enforced`, then its `restrictions`
+6. `--mock` (any command) then swaps every provider for a scripted mock
 
 Files are JSON with `//` and `/* */` comments allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `harness doctor` shows which files were loaded.
 
@@ -92,6 +94,7 @@ Values are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md).
 | Variable | Effect |
 |---|---|
 | `HARNESS_HOME` | Relocate all config and data |
+| `HARNESS_ORG_SERVER`, `HARNESS_ORG_TOKEN` | Organization sign-in without `harness login` (CI, managed installs) |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME` | Standard base directories |
 | `OPENAI_API_KEY` | OpenAI credentials |
 | `DEEPSEEK_API_KEY` | DeepSeek credentials |

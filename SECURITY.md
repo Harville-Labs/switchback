@@ -14,11 +14,14 @@ Harness executes model-generated tool calls on the user's machine. We treat thes
 - Credentials written to logs, session files, the usage ledger, or protocol events
 - Remote spend beyond configured budgets without an explicit user request
 - The VS Code webview executing content from model output (script injection)
+- Organization policy not applied, or bypassed without signing out or modifying the program
+- Organization credentials or the cached policy readable by other local users
 
 Known and documented limitations, which are not vulnerabilities but are tracked for hardening:
 
 - Once allowed, `bash` can do anything the user can. OS-level sandboxing is on the roadmap.
 - Session files and the usage ledger are stored unencrypted under the user's data directory.
+- Organization policy is enforced on the client; a user who controls their machine can sign out. See [docs/organizations.md](docs/organizations.md#security-and-enforcement) for gateway-based hard enforcement.
 
 ## Design notes
 

@@ -66,6 +66,8 @@ The `task` tool creates a child session (`parentId` set) running a named agent w
 | Agent definitions | `~/.config/harness/agents/`, `.claude/agents/`, `.harness/agents/` | Markdown + YAML frontmatter |
 | Sessions | `~/.local/share/harness/sessions/<id>.jsonl` | Header line, then one message per line, append-only. Written on the first message, so the header has the title and unused sessions leave no file. |
 | Usage ledger | `~/.local/share/harness/usage.jsonl` | One entry per model call |
+| Organization sign-in | `~/.config/harness/auth.json` | Credentials, mode 0600 |
+| Organization policy cache | `~/.local/share/harness/org-policy.json` | Last policy received, mode 0600 ([organizations.md](organizations.md)) |
 
 `HARNESS_HOME` relocates everything (tests and development). `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are respected.
 

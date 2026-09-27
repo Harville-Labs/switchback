@@ -28,6 +28,15 @@ export interface InitializeResult {
   workspaceRoot: string;
   models: { alias: string; ref: ModelRef; tier: Tier }[];
   agents: AgentSummary[];
+  /** Set when the user is signed in to an organization whose policy applies. */
+  org?: OrgInfo;
+}
+
+export interface OrgInfo {
+  id: string;
+  name: string;
+  /** Policy revision. */
+  version: string;
 }
 
 export const SessionCreateParams = z.object({
@@ -184,6 +193,8 @@ export type EngineEvent =
   | ({ type: 'usage.updated'; usage: Usage; costUsd: number; tier: Tier } & SessionScoped)
   | ({ type: 'turn.completed'; turnId: string; stopReason: StopReason } & SessionScoped)
   | ({ type: 'error'; turnId?: string; message: string } & SessionScoped)
-  | { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string };
+  | { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string }
+  /** Configuration changed while running (e.g. an organization policy update). */
+  | { type: 'config.updated'; org?: OrgInfo; notes: string[] };
 
 export type EngineEventType = EngineEvent['type'];

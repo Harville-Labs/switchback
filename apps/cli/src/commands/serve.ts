@@ -4,10 +4,11 @@
  * stdout carries protocol messages only; everything else goes to stderr.
  */
 import { serve as serveEngine, stdioTransport } from '@harness/engine';
-import { type CommonFlags, createEngine } from '../bootstrap.ts';
+import { type CommonFlags, createEngine, refreshOrgPolicyQuickly } from '../bootstrap.ts';
 
 export async function serve(flags: CommonFlags): Promise<number> {
-  const { engine, agentErrors } = createEngine(flags, 'prompt');
+  await refreshOrgPolicyQuickly();
+  const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true });
   for (const e of agentErrors) process.stderr.write(`harness: agent definition skipped: ${e}\n`);
   const transport = stdioTransport();
   return new Promise((resolve) => {

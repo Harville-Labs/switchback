@@ -20,6 +20,10 @@ export async function run(flags: RunFlags): Promise<number> {
     client.on((e) => {
       if (flags.json) {
         process.stdout.write(`${JSON.stringify(e)}\n`);
+      } else if (e.type === 'config.updated') {
+        process.stderr.write(
+          dim(`[${e.org ? `${e.org.name} policy updated` : 'config updated'}]\n`),
+        );
       } else if (e.type !== 'log' && e.sessionId === session.id) {
         if (e.type === 'text.delta') process.stdout.write(e.text);
         else if (e.type === 'route.decided')

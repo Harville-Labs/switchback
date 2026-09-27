@@ -30,9 +30,9 @@ export class UsageLedger {
 
   constructor(
     private readonly file: string | undefined,
-    private readonly prices: Record<string, Price>,
+    private prices: Record<string, Price>,
     /** Model whose prices define "what this would have cost remotely". */
-    private readonly referenceModel: string | undefined,
+    private referenceModel: string | undefined,
     private readonly now: () => Date = () => new Date(),
   ) {
     if (file && existsSync(file)) {
@@ -66,6 +66,15 @@ export class UsageLedger {
       appendFileSync(this.file, `${JSON.stringify(entry)}\n`);
     }
     return entry;
+  }
+
+  setPricing(prices: Record<string, Price>, referenceModel: string | undefined): void {
+    this.prices = prices;
+    this.referenceModel = referenceModel;
+  }
+
+  entriesSince(sinceIso: string): LedgerEntry[] {
+    return this.entries.filter((e) => e.ts > sinceIso);
   }
 
   spend(): { todayUsd: number; monthUsd: number } {

@@ -16,7 +16,9 @@ export async function tui(
     process.stderr.write('harness: the terminal UI needs a TTY; use `harness run` for scripts\n');
     return 2;
   }
-  const { client, init, agentErrors } = await connectInProcess(opts, 'prompt', 'harness-tui');
+  const { client, init, agentErrors } = await connectInProcess(opts, 'prompt', 'harness-tui', {
+    syncOrg: true,
+  });
   let session: SessionSummary | undefined;
   let history: ViewState | undefined;
   if (opts.resume) {

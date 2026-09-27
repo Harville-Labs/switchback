@@ -30,7 +30,7 @@ Set `HARNESS_HOME=$(mktemp -d)` when running the CLI during development so you n
 | `packages/protocol` | Wire types, JSON-RPC framing, transports, the transcript model | Import any other workspace package |
 | `packages/providers` | Provider interface and adapters (OpenAI-compatible, Anthropic/Bedrock/Vertex, mock), pricing | Know about routing, tools, or sessions |
 | `packages/router` | Pure routing decisions and escalation signals | Do I/O. It takes snapshots and returns decisions. |
-| `packages/engine` | Sessions, the agent loop, tools, permissions, subagents, config, ledger, JSON-RPC server | Render anything |
+| `packages/engine` | Sessions, the agent loop, tools, permissions, subagents, config, ledger, organization policy (`src/org`), JSON-RPC server | Render anything |
 | `packages/client` | Typed protocol client, child-process transport, shared view-model reducer | Import engine code |
 | `apps/cli` | `harness` binary: TUI (Ink), `run`, `serve --stdio`, `doctor`, `usage` | Contain agent behavior |
 | `apps/vscode` | VS Code extension (host + webview) | Contain agent behavior |
@@ -63,6 +63,8 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 **Change agent definitions.** Built-ins live in `packages/engine/src/agents.ts`. The file format must stay compatible with Claude Code's `.claude/agents/*.md`. See [docs/subagents.md](docs/subagents.md).
 
 **Add a config key.** Add it to the Zod schema in `packages/engine/src/config.ts` with a default, run `bun run schema` (a test fails if the shipped schema is stale), document it in [docs/configuration.md](docs/configuration.md), and, if users choose it during setup, add a prompt and flag to `harness init`. Never add a default local provider or model: local setup is the user's choice.
+
+**Change what an organization can control.** Extend `OrgPolicy` in `packages/engine/src/org/policy.ts`, apply it in `applyRestrictions` (restrictions remove things; they never add), test it in `org.test.ts` against the dev server, and document it in [docs/organizations.md](docs/organizations.md). Org-enforced settings must win over every user and project setting, including in-session grants.
 
 ## Conventions
 

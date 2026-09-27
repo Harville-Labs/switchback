@@ -74,6 +74,11 @@ class EngineConnection implements vscode.Disposable {
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
       if (event.type === 'log') this.log.appendLine(`[${event.level}] ${event.message}`);
+      if (event.type === 'config.updated' && event.org) {
+        void vscode.window.showInformationMessage(
+          `${event.org.name} updated its Harness policy${event.notes.length ? `: ${event.notes.join('; ')}` : '.'}`,
+        );
+      }
     });
     this.init = await client.initialize({ name: 'vscode', version: VERSION }, this.root);
     this.client = client;

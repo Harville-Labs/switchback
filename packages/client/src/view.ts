@@ -176,6 +176,12 @@ export function resolveEscalation(state: ViewState, requestId: string): ViewStat
 
 export function reduce(state: ViewState, event: EngineEvent): ViewState {
   if (event.type === 'log') return state;
+  if (event.type === 'config.updated') {
+    const head = event.org
+      ? `${event.org.name} policy updated (revision ${event.org.version})`
+      : 'configuration updated';
+    return addInfo(state, [head, ...event.notes.map((n) => `  ${n}`)].join('\n'));
+  }
 
   // Permission prompts can come from any descendant session.
   if (event.type === 'permission.requested') {
@@ -292,7 +298,10 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
   return state;
 }
 
-function updateSubagent(state: ViewState, event: Exclude<EngineEvent, { type: 'log' }>): ViewState {
+function updateSubagent(
+  state: ViewState,
+  event: Exclude<EngineEvent, { type: 'log' } | { type: 'config.updated' }>,
+): ViewState {
   const i = state.items.findIndex((it) => it.kind === 'subagent' && it.id === event.sessionId);
   if (i < 0) return state;
   const row = { ...(state.items[i] as Extract<ViewItem, { kind: 'subagent' }>) };

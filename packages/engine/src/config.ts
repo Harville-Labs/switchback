@@ -8,6 +8,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { type Price, ProviderConfig } from '@harness/providers';
 import { RoutingConfig } from '@harness/router';
 import { z } from 'zod';
+import { applyRestrictions, leafPaths, type OrgPolicy, type OrgStatus } from './org/policy.ts';
+import { readCachedPolicy } from './org/store.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
 
 export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
@@ -63,6 +65,8 @@ export interface LoadedConfig {
   /** Files that contributed, lowest precedence first. */
   sources: string[];
   prices: Record<string, Price>;
+  /** Present when an organization policy applied. */
+  org?: OrgStatus;
 }
 
 export class ConfigError extends Error {
@@ -84,13 +88,21 @@ export function defaultConfig(): Record<string, unknown> {
   return { providers: {}, models: {} };
 }
 
+/**
+ * Merge order, lowest first: built-in defaults, org `defaults`, user file,
+ * project file, command-line layers, org `enforced`. Org `restrictions` are
+ * applied last. By default the org policy is the cached one for the signed-in
+ * user; pass `null` to ignore it or a policy to use that one.
+ */
 export function loadConfig(
   workspaceRoot: string,
   env: Record<string, string | undefined> = process.env,
   extra: Record<string, unknown>[] = [],
+  org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
   const files = [harnessPaths(env).configFile, projectPaths(workspaceRoot).configFile];
   let merged: Record<string, unknown> = defaultConfig();
+  if (org) merged = deepMerge(merged, org.defaults);
   const sources: string[] = [];
   for (const file of files) {
     if (!existsSync(file)) continue;
@@ -104,6 +116,7 @@ export function loadConfig(
     sources.push(file);
   }
   for (const layer of extra) merged = deepMerge(merged, layer);
+  if (org) merged = deepMerge(merged, org.enforced);
 
   const result = HarnessConfig.safeParse(resolveEnv(merged, env));
   if (!result.success) {
@@ -112,12 +125,25 @@ export function loadConfig(
       .join('\n');
     throw new ConfigError(`invalid configuration:\n${issues}`, sources.at(-1));
   }
-  const config = result.data;
+  let config = result.data;
   const problem = referenceProblem(config);
   if (problem) throw new ConfigError(problem, sources.at(-1));
+  let orgStatus: OrgStatus | undefined;
+  if (org) {
+    const restricted = applyRestrictions(config, org);
+    config = restricted.config;
+    orgStatus = {
+      id: org.org.id,
+      name: org.org.name,
+      version: org.version,
+      notes: restricted.notes,
+      enforcedKeys: leafPaths(org.enforced),
+      remoteDisabled: !org.restrictions.allowRemote,
+    };
+  }
   const prices: Record<string, Price> = {};
   for (const m of Object.values(config.models)) if (m.price) prices[m.model] = m.price;
-  return { config, sources, prices };
+  return { config, sources, prices, ...(orgStatus ? { org: orgStatus } : {}) };
 }
 
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */

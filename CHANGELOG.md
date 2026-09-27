@@ -5,6 +5,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 ## [Unreleased]
 
 ### Added
+- Organization policy: `harness login` (device flow or token), `logout`, `whoami`. An org server pushes default models (e.g. company GPU servers), enforced settings, and restrictions (remote off, provider allowlists, org-only providers, spend caps), applied live with a `config.updated` event; daily usage aggregates are reported. Reference server included; see docs/organizations.md
 - First-class OpenAI and DeepSeek providers alongside Anthropic: OpenAI uses `max_completion_tokens` and `reasoning_effort`; DeepSeek gets thinking mode and same-model `reasoning_content` replay; cached tokens are priced correctly for both
 - Model catalog (IDs, tiers, context windows, list prices) shared by setup and pricing; ADR 0006 on provider neutrality
 - `harness init` setup wizard: detects Ollama, LM Studio, llama.cpp, and vLLM, reads tool support and effective context size, configures Anthropic, Bedrock, or Vertex, escalation policy, and budgets; fully scriptable with flags
@@ -28,6 +29,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Requires Bun 1.4+
 
 ### Fixed
+- An "allow always" permission grant could override a `deny` setting; `deny` now always wins
 - **Security:** on Windows, file tools accepted paths outside the workspace (the escape check assumed `/` separators)
 - The `bash` tool now works on Windows: Git Bash when installed (never the WSL launcher), otherwise PowerShell, otherwise cmd; the system prompt names the shell
 - Sessions were kept in memory only in the CLI; they now persist to the data directory
