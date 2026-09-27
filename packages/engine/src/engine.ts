@@ -3,7 +3,9 @@
  * subagents. Clients (TUI, VS Code, headless) drive it only through the
  * protocol methods mirrored here and observe it only through `EngineEvent`s.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   type AgentSummary,
   type Attachment,
@@ -72,11 +74,14 @@ import {
   type SubagentResult,
   type Tool,
   type ToolContext,
+  ToolError,
   type ToolPreview,
   toolSpec,
   toolsFor,
+  truncate,
 } from './tools/index.ts';
 import { currentShell } from './tools/shell.ts';
+import { createWorktree, finishWorktree, type Worktree } from './worktree.ts';
 
 export const ENGINE_VERSION = '0.4.0';
 
@@ -99,6 +104,8 @@ export interface EngineOptions {
   interaction?: 'prompt' | 'approve' | 'deny';
   /** Organization policy in effect, reported to clients. */
   org?: OrgStatus;
+  /** Where engine-owned files live (worktrees). Defaults to the harness data directory. */
+  dataDir?: string;
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];
   now?: () => Date;
@@ -293,7 +300,12 @@ export class Engine {
     return [...this.agents.values()].map(summarize);
   }
 
-  createSession(params: { agent?: string; title?: string; parentId?: string }): SessionSummary {
+  createSession(params: {
+    agent?: string;
+    title?: string;
+    parentId?: string;
+    worktree?: Worktree;
+  }): SessionSummary {
     const agentName = params.agent ?? this.options.config.defaultAgent;
     const agent = this.agents.get(agentName);
     if (!agent) throw new RpcError(ErrorCode.InvalidParams, `unknown agent "${agentName}"`);
@@ -305,8 +317,17 @@ export class Engine {
       agent: agent.name,
       ...(params.parentId ? { parentId: params.parentId } : {}),
       workspaceRoot: this.options.workspaceRoot,
+      ...(params.worktree
+        ? {
+            worktree: {
+              path: params.worktree.path,
+              root: params.worktree.root,
+              branch: params.worktree.branch,
+            },
+          }
+        : {}),
       createdAt: now,
-      system: this.systemPrompt(agent),
+      system: this.systemPrompt(agent, params.worktree?.root),
     };
     this.store.create(header);
     const live: LiveSession = {
@@ -387,8 +408,8 @@ export class Engine {
     // An empty prompt continues the session with whatever reports are waiting.
     if (text) {
       const attachments = [
-        ...(await expandAttachments(extra, this.options.workspaceRoot).catch(() => [])),
-        ...(await expandMentions(text, this.options.workspaceRoot).catch(() => [])),
+        ...(await expandAttachments(extra, this.rootOf(session)).catch(() => [])),
+        ...(await expandMentions(text, this.rootOf(session)).catch(() => [])),
       ];
       this.append(session, { role: 'user', parts: [{ type: 'text', text }, ...attachments] });
     }
@@ -997,7 +1018,7 @@ export class Engine {
     signal: AbortSignal,
   ): Promise<ToolResultPart[]> {
     const ctx: ToolContext = {
-      workspaceRoot: this.options.workspaceRoot,
+      workspaceRoot: this.rootOf(s),
       sessionId: s.header.id,
       signal,
       agentCatalog: catalog,
@@ -1088,7 +1109,7 @@ export class Engine {
     prompt: string,
     description: string,
     signal: AbortSignal,
-    options: { background?: boolean } = {},
+    options: { background?: boolean; isolation?: 'worktree' } = {},
   ): Promise<SubagentResult> {
     const depth = parent.depth + 1;
     let slots = this.subagentSlots.get(depth);
@@ -1097,7 +1118,23 @@ export class Engine {
       slots = new Semaphore(this.options.config.subagents.maxConcurrent);
       this.subagentSlots.set(depth, slots);
     }
-    const child = this.createSession({ agent, title: description, parentId: parent.header.id });
+    const isolate =
+      options.isolation === 'worktree' || this.agents.get(agent)?.isolation === 'worktree';
+    let worktree: Worktree | undefined;
+    if (isolate) {
+      const id = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
+      worktree = await createWorktree(this.rootOf(parent), this.worktreeDir(), id).catch(
+        (err: Error) => {
+          throw new ToolError(err.message);
+        },
+      );
+    }
+    const child = this.createSession({
+      agent,
+      title: description,
+      parentId: parent.header.id,
+      ...(worktree ? { worktree } : {}),
+    });
     const limitUsd = this.agents.get(agent)?.budgetUsd ?? this.options.config.subagents.budgetUsd;
     const childSession = this.sessions.get(child.id);
     if (childSession && limitUsd !== undefined) childSession.budget = { agent, limitUsd };
@@ -1127,11 +1164,12 @@ export class Engine {
           ok,
           ...(background ? { background } : {}),
         });
+        const text = ok
+          ? result.text
+          : `${result.stopReason}: ${this.sessions.get(child.id)?.lastError ?? result.text}`;
         return {
           ok,
-          text: ok
-            ? result.text
-            : `${result.stopReason}: ${this.sessions.get(child.id)?.lastError ?? result.text}`,
+          text: worktree ? await this.finishIsolated(worktree, ok, description, text) : text,
           sessionId: child.id,
         };
       } finally {
@@ -1151,6 +1189,34 @@ export class Engine {
       .finally(() => parent.background.delete(child.id));
     parent.background.set(child.id, done);
     return { ok: true, text: '', sessionId: child.id };
+  }
+
+  /** Worktrees live in the data directory, one folder per repository. */
+  private worktreeDir(): string {
+    const id = createHash('sha256').update(this.options.workspaceRoot).digest('hex').slice(0, 12);
+    return join(this.options.dataDir ?? harnessPaths().dataDir, 'worktrees', id);
+  }
+
+  /**
+   * Turn an isolated subagent's outcome into its report: on success, commit to
+   * its branch, remove the worktree, and include the diff; on failure, keep
+   * the worktree for inspection.
+   */
+  private async finishIsolated(
+    wt: Worktree,
+    ok: boolean,
+    description: string,
+    text: string,
+  ): Promise<string> {
+    if (!ok)
+      return `${text}\n\nThe worktree is kept for inspection at ${wt.path} (branch ${wt.branch}).`;
+    try {
+      const r = await finishWorktree(wt, `harness: ${description}`);
+      if (!r.changed) return `${text}\n\n(Isolated in a worktree; it made no file changes.)`;
+      return `${text}\n\nChanges are committed on branch \`${wt.branch}\` (from ${wt.base.slice(0, 8)}); your working tree is unchanged. Review and merge them if you want them, e.g. \`git merge ${wt.branch}\`.\n\n${r.stat}\n\n${truncate(r.diff, 20_000)}`;
+    } catch (err) {
+      return `${text}\n\nCould not finish the worktree (${(err as Error).message}); it is kept at ${wt.path} (branch ${wt.branch}).`;
+    }
   }
 
   /**
@@ -1384,10 +1450,19 @@ export class Engine {
     return false;
   }
 
-  private systemPrompt(agent: AgentDefinition): string {
+  /** Where a session's tools operate: its worktree, or the workspace. */
+  private rootOf(s: LiveSession): string {
+    return s.header.worktree?.root ?? this.options.workspaceRoot;
+  }
+
+  private systemPrompt(agent: AgentDefinition, root = this.options.workspaceRoot): string {
+    const isolated =
+      root !== this.options.workspaceRoot
+        ? '\nYou are working in an isolated git worktree on your own branch. Edit freely; the parent agent decides whether to merge your changes. Do not commit, push, or switch branches.'
+        : '';
     const sections = [
       agent.prompt,
-      `# Environment\nWorkspace root: ${this.options.workspaceRoot}\nPlatform: ${process.platform}\nShell for the bash tool: ${currentShell().name}\nFile paths in tool calls are relative to the workspace root.`,
+      `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${currentShell().name}\nFile paths in tool calls are relative to the workspace root.`,
     ];
     if (this.options.instructions)
       sections.push(`# Project instructions\n${this.options.instructions.trim()}`);

@@ -23,6 +23,8 @@ export interface SessionHeader {
   agent: string;
   parentId?: string;
   workspaceRoot: string;
+  /** Set for subagents isolated in a git worktree: where their tools operate. */
+  worktree?: { path: string; root: string; branch: string };
   createdAt: string;
   /** Frozen at creation so the cached prompt prefix never changes mid-session. */
   system: string;

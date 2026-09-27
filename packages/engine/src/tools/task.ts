@@ -13,6 +13,12 @@ export const taskTool = defineTool({
       .boolean()
       .optional()
       .describe('Run without waiting; the report arrives later as a message'),
+    isolation: z
+      .enum(['worktree'])
+      .optional()
+      .describe(
+        'Work in a separate git worktree and branch, so parallel editors never conflict; the report includes the branch and diff to merge',
+      ),
   }),
   permission: 'none',
   mutating: false,
@@ -26,10 +32,16 @@ export const taskTool = defineTool({
     if (input.background) {
       const started = await ctx.runSubagent(input.agent, input.prompt, input.description, {
         background: true,
+        ...(input.isolation ? { isolation: input.isolation } : {}),
       });
       return `Started background task ${started.sessionId} (${input.agent}: ${input.description}). Its report will arrive as a message when it finishes; continue with other work and don't wait for it.`;
     }
-    const result = await ctx.runSubagent(input.agent, input.prompt, input.description);
+    const result = await ctx.runSubagent(
+      input.agent,
+      input.prompt,
+      input.description,
+      input.isolation ? { isolation: input.isolation } : {},
+    );
     if (!result.ok) throw new ToolError(`subagent failed: ${result.text}`);
     return result.text || '(subagent returned no text)';
   },

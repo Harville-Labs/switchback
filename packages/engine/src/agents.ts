@@ -24,6 +24,8 @@ export interface AgentDefinition {
   model?: string;
   /** Remote spend allowed per subagent invocation (including its own subagents). */
   budgetUsd?: number;
+  /** Run as a subagent in its own git worktree. */
+  isolation?: 'worktree';
   source: AgentSummary['source'];
   file?: string;
 }
@@ -131,6 +133,7 @@ export function parseAgentFile(
     route,
     ...(model ? { model } : {}),
     ...(budgetUsd !== undefined ? { budgetUsd } : {}),
+    ...(meta.isolation === 'worktree' ? { isolation: 'worktree' as const } : {}),
     source,
     file,
   };

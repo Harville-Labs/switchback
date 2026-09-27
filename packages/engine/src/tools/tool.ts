@@ -22,7 +22,7 @@ export interface ToolContext {
     agent: string,
     prompt: string,
     description: string,
-    options?: { background?: boolean },
+    options?: { background?: boolean; isolation?: 'worktree' },
   ) => Promise<SubagentResult>;
   /** Names and descriptions of agents available as subagents. */
   agentCatalog: { name: string; description: string }[];

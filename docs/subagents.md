@@ -40,6 +40,7 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and harness names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`haiku`, `sonnet`, `opus`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Harness extension; same effect as `model: local`/`remote` |
+| `isolation` | `worktree` | Harness extension. Always run this agent in its own git worktree (see below) |
 | `budgetUsd` | dollars | Harness extension. Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
 
 The body is the system prompt. Harness appends an environment section and the project's `AGENTS.md` (or `CLAUDE.md`) to it.
@@ -69,6 +70,15 @@ Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the lar
 - Only the subagent's final text returns to the parent. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model.
 - A subagent that fails or is cancelled returns an error result, which the parent can handle.
 - Cancelling the parent turn cancels its subagents.
+
+### Worktree isolation
+
+With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the agent file), the subagent works in its own git worktree on a new branch, `harness/<id>`, created from `HEAD`. Its file tools, shell, and `@` mentions operate there, so parallel editing subagents never touch each other or your working tree.
+
+- **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. The parent (or you) decides whether to merge, e.g. `git merge harness/<id>`. A subagent that changed nothing leaves no branch behind.
+- **On failure**, the worktree is kept for inspection and its path is in the report.
+- It needs a git repository with at least one commit. Uncommitted changes in your working tree aren't in the worktree, since it starts from `HEAD`.
+- Worktrees live in the Harness data directory (`~/.local/share/harness/worktrees/`), outside your repository. Commits use your git identity, or `Harness <harness@localhost>` when none is set.
 
 ### Background tasks
 
