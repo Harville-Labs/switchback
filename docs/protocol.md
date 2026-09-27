@@ -34,7 +34,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.create` | `agent?`, `title?` | `SessionSummary` |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
-| `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`) | `{ turnId }`, returned immediately; progress arrives as events |
+| `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`) | `{ turnId }`, returned immediately; progress arrives as events. `@path` mentions of workspace files are attached to the user message as text parts marked `attachment`. |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`) | `{ ok }` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |

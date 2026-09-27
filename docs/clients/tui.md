@@ -40,7 +40,11 @@ Retries live in src/http/client.ts:88 ...
 | `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
 | `/usage` | Spend, budget, savings |
 | `/help`, `/exit` | |
-| `esc` | Cancel the running turn |
+| `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
+| `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
+| Option/Alt+Enter, Ctrl+J, or `\` then Enter | Newline |
+| Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word |
+| `esc` | Cancel the running turn (or close the mention menu) |
 | `y` / `a` / `n` | Answer a permission prompt: once, always, deny |
 | `y` / `n` | Answer an escalation prompt |
 | `ctrl+c` | Quit |

@@ -18,9 +18,10 @@ import type {
   UsageReport,
 } from '@harness/protocol';
 import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
-import TextInput from 'ink-text-input';
 import { useCallback, useEffect, useState } from 'react';
+import { PromptHistory } from './history.ts';
 import { renderMarkdown } from './markdown.ts';
+import { PromptInput } from './PromptInput.tsx';
 
 interface Props {
   client: HarnessClient;
@@ -41,6 +42,8 @@ const HELP = `Commands
   /resume <n|id>           switch to a saved session
   /usage                   spend, budget, and savings
   /exit                    quit
+Input: @ mentions a file (its contents are attached); ↑/↓ browse history;
+       option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
 Keys: esc cancels the running turn; y/a/n answer permission prompts.`;
 
 export function App({
@@ -66,7 +69,7 @@ export function App({
   // Items before this index are final and rendered once via <Static>.
   const [committed, setCommitted] = useState(0);
   const [route, setRoute] = useState<RoutePreference>(initialRoute);
-  const [input, setInput] = useState('');
+  const [history] = useState(() => new PromptHistory(init.workspaceRoot));
   const [usage, setUsage] = useState<UsageReport | undefined>();
 
   const refreshUsage = useCallback(() => {
@@ -147,8 +150,8 @@ export function App({
 
   const submit = async (raw: string) => {
     const text = raw.trim();
-    setInput('');
     if (!text) return;
+    history.add(raw);
     if (text.startsWith('/')) {
       const [cmd, ...args] = text.slice(1).split(/\s+/);
       switch (cmd) {
@@ -283,13 +286,15 @@ export function App({
       )}
 
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
-        <Text color="cyan">{view.running ? '… ' : '❯ '}</Text>
-        <TextInput
-          value={input}
-          onChange={setInput}
-          onSubmit={submit}
+        <PromptInput
           focus={!permission && !escalation}
-          placeholder={view.running ? 'working (esc to cancel)' : 'Ask anything, or /help'}
+          busy={view.running}
+          history={history.list()}
+          root={init.workspaceRoot}
+          onSubmit={submit}
+          placeholder={
+            view.running ? 'working (esc to cancel)' : 'Ask anything, @ to mention a file, /help'
+          }
         />
       </Box>
       <StatusBar session={session} route={route} view={view} usage={usage} />

@@ -95,6 +95,19 @@ describe('Engine', () => {
     );
   });
 
+  test('@mentions attach workspace files, and only those', async () => {
+    const { engine, lp } = setup([{ text: 'seen' }], []);
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'explain @hello.txt, @missing.ts and @../../etc/passwd');
+    const parts = lp.requests[0]?.messages[0]?.parts ?? [];
+    expect(parts).toHaveLength(2);
+    expect(parts[1]).toEqual({
+      type: 'text',
+      text: '<file path="hello.txt">\nhello world\n\n</file>',
+      attachment: { path: 'hello.txt' },
+    });
+  });
+
   test('runs tools and feeds results back', async () => {
     const { engine, lp } = setup(
       [

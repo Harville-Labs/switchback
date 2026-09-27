@@ -17,6 +17,8 @@ export interface ModelRef {
 export interface TextPart {
   type: 'text';
   text: string;
+  /** Set when the engine attached a file the user @-mentioned; clients show a chip, not the text. */
+  attachment?: { path: string };
 }
 
 /**

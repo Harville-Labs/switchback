@@ -77,7 +77,13 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
   messages.forEach((m, mi) => {
     if (m.role === 'user') {
       for (const p of m.parts) {
-        if (p.type === 'text') items.push({ kind: 'user', id: `h${mi}u`, text: p.text });
+        if (p.type === 'text' && p.attachment)
+          items.push({
+            kind: 'info',
+            id: `h${mi}f${p.attachment.path}`,
+            text: `📎 ${p.attachment.path}`,
+          });
+        else if (p.type === 'text') items.push({ kind: 'user', id: `h${mi}u`, text: p.text });
         else if (p.type === 'tool_result') {
           const t = tools.get(p.callId);
           if (t) {

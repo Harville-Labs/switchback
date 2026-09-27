@@ -36,6 +36,7 @@ import { estimateTokens, type ModelInfo, Router, SignalTracker } from '@harness/
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import type { HarnessConfig } from './config.ts';
 import { UsageLedger } from './ledger.ts';
+import { expandMentions } from './mentions.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
 import { Semaphore } from './semaphore.ts';
 import {
@@ -261,7 +262,8 @@ export class Engine {
     if (!session.header.title) session.header.title = text.slice(0, 60);
 
     this.emit({ type: 'turn.started', ...this.scope(session), turnId });
-    this.append(session, { role: 'user', parts: [{ type: 'text', text }] });
+    const attachments = await expandMentions(text, this.options.workspaceRoot).catch(() => []);
+    this.append(session, { role: 'user', parts: [{ type: 'text', text }, ...attachments] });
     session.signals.startUserTurn();
 
     let stopReason: StopReason = 'end_turn';
