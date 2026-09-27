@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, SessionSummary, UsageReport } from '@harness/protocol';
-import { estimateLabel, formatUsage, fromTranscript, initialView, reduce } from './view.ts';
+import type { EngineEvent, Message, SessionSummary, UsageReport } from '@harness/protocol';
+import {
+  childView,
+  estimateLabel,
+  formatUsage,
+  fromTranscript,
+  initialView,
+  reduce,
+} from './view.ts';
 
 const session: SessionSummary = {
   id: 'ses_1',
@@ -111,5 +118,157 @@ describe('usage and estimate formatting', () => {
       estimatedCostUsd: 0.03,
     });
     expect(v.escalations[0]?.estimatedCostUsd).toBe(0.03);
+  });
+});
+
+describe('subagent tree', () => {
+  const ref = { provider: 'p', model: 'm' };
+  const events: EngineEvent[] = [
+    { type: 'turn.started', sessionId: 'root', turnId: 't' },
+    {
+      type: 'subagent.started',
+      sessionId: 'root',
+      childSessionId: 'c1',
+      agent: 'explore',
+      task: 'find the parser',
+    },
+    {
+      type: 'route.decided',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      turnId: 'c',
+      tier: 'local',
+      model: ref,
+      rule: 'agent-pin',
+      reason: 'explore runs local',
+    },
+    {
+      type: 'tool.started',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      turnId: 'c',
+      callId: 'k1',
+      name: 'grep',
+      input: { pattern: 'parse' },
+    },
+    {
+      type: 'tool.completed',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      turnId: 'c',
+      callId: 'k1',
+      name: 'grep',
+      output: 'src/parse.ts',
+      isError: false,
+    },
+    // Depth 2: the explore agent delegates again.
+    {
+      type: 'subagent.started',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      childSessionId: 'g1',
+      agent: 'general',
+      task: 'read it',
+    },
+    {
+      type: 'tool.started',
+      sessionId: 'g1',
+      parentSessionId: 'c1',
+      turnId: 'g',
+      callId: 'k2',
+      name: 'read',
+      input: { path: 'src/parse.ts' },
+    },
+    {
+      type: 'text.delta',
+      sessionId: 'g1',
+      parentSessionId: 'c1',
+      turnId: 'g',
+      text: 'it tokenizes',
+    },
+    {
+      type: 'escalation.requested',
+      sessionId: 'g1',
+      parentSessionId: 'c1',
+      requestId: 'e1',
+      reason: 'stuck',
+      target: ref,
+    },
+    {
+      type: 'turn.completed',
+      sessionId: 'g1',
+      parentSessionId: 'c1',
+      turnId: 'g',
+      stopReason: 'end_turn',
+    },
+    {
+      type: 'subagent.completed',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      childSessionId: 'g1',
+      agent: 'general',
+      ok: true,
+    },
+    {
+      type: 'text.delta',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      turnId: 'c',
+      text: 'The parser is in src/parse.ts.',
+    },
+    {
+      type: 'turn.completed',
+      sessionId: 'c1',
+      parentSessionId: 'root',
+      turnId: 'c',
+      stopReason: 'end_turn',
+    },
+    {
+      type: 'subagent.completed',
+      sessionId: 'root',
+      childSessionId: 'c1',
+      agent: 'explore',
+      ok: true,
+    },
+  ];
+  const view = events.reduce(reduce, initialView('root'));
+
+  test('the parent keeps a summary row', () => {
+    expect(view.items.find((i) => i.kind === 'subagent')).toMatchObject({
+      id: 'c1',
+      status: 'ok',
+      tier: 'local',
+      toolCalls: 1,
+      activity: 'grep',
+    });
+  });
+
+  test('drilling down shows the child’s routes, tools, and final report', () => {
+    const child = childView(view, 'c1');
+    expect(child?.items.map((i) => i.kind)).toEqual([
+      'user',
+      'route',
+      'tool',
+      'subagent',
+      'assistant',
+    ]);
+    expect(child?.items.at(-1)).toMatchObject({ text: 'The parser is in src/parse.ts.' });
+    expect(child?.running).toBe(false);
+  });
+
+  test('depth 2 nests under its own parent', () => {
+    expect(Object.keys(view.children)).toEqual(['c1']);
+    const grandchild = childView(view, 'g1');
+    expect(grandchild?.items.map((i) => i.kind)).toEqual(['user', 'tool', 'assistant']);
+    expect(childView(view, 'c1')?.items.find((i) => i.kind === 'subagent')).toMatchObject({
+      id: 'g1',
+      status: 'ok',
+      toolCalls: 1,
+    });
+  });
+
+  test('prompts from any depth surface at the top, labeled by agent', () => {
+    expect(view.escalations).toEqual([{ requestId: 'e1', reason: 'general: stuck', target: ref }]);
+    expect(childView(view, 'g1')?.escalations).toEqual([]);
   });
 });

@@ -1,0 +1,79 @@
+import { beforeAll, expect, test } from 'bun:test';
+import { initialView, reduce, type ViewState } from '@harness/client/view';
+import type { EngineEvent } from '@harness/protocol';
+import { Window } from 'happy-dom';
+
+let renderItem: typeof import('./render.ts').renderItem;
+let document: Window['document'];
+beforeAll(async () => {
+  const window = new Window();
+  Object.assign(globalThis, { window, document: window.document });
+  document = window.document;
+  ({ renderItem } = await import('./render.ts'));
+});
+
+const ref = { provider: 'p', model: 'm' };
+const events: EngineEvent[] = [
+  {
+    type: 'subagent.started',
+    sessionId: 'root',
+    childSessionId: 'c1',
+    agent: 'general',
+    task: 'survey <code>',
+  },
+  {
+    type: 'tool.started',
+    sessionId: 'c1',
+    parentSessionId: 'root',
+    turnId: 't',
+    callId: 'k',
+    name: 'grep',
+    input: { pattern: 'x' },
+  },
+  {
+    type: 'subagent.started',
+    sessionId: 'c1',
+    parentSessionId: 'root',
+    childSessionId: 'g1',
+    agent: 'explore',
+    task: 'dig',
+  },
+  {
+    type: 'route.decided',
+    sessionId: 'g1',
+    parentSessionId: 'c1',
+    turnId: 'g',
+    tier: 'local',
+    model: ref,
+    rule: 'agent-pin',
+    reason: 'explore runs local',
+  },
+  {
+    type: 'text.delta',
+    sessionId: 'c1',
+    parentSessionId: 'root',
+    turnId: 't',
+    text: 'found <b>it</b>',
+  },
+];
+
+function html(view: ViewState, expanded: string[]) {
+  const el = document.createElement('div');
+  el.innerHTML = view.items.map((i) => renderItem(i, view, new Set(expanded))).join('');
+  return el;
+}
+
+test('subagents render as nested collapsible sections, depth 2 included', () => {
+  const view = events.reduce(reduce, initialView('root'));
+  const el = html(view, ['c1']);
+  const outer = el.querySelector('details[data-sub="c1"]');
+  expect(outer?.hasAttribute('open')).toBe(true);
+  expect(outer?.querySelector('.children .tool')?.textContent).toContain('grep');
+  const inner = outer?.querySelector('details[data-sub="g1"]');
+  expect(inner).toBeTruthy();
+  expect(inner?.hasAttribute('open')).toBe(false);
+  expect(inner?.querySelector('.route')?.textContent).toContain('explore runs local');
+  // Model and task text are escaped, never markup.
+  expect(outer?.querySelector('summary')?.innerHTML).toContain('&lt;code&gt;');
+  expect(el.querySelector('b')).toBeNull();
+});

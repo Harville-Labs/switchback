@@ -12,14 +12,13 @@ import {
   reduce,
   resolveEscalation,
   resolvePermission,
-  toolLabel,
   type ViewItem,
   type ViewState,
 } from '@harness/client/view';
 import type { RoutePreference } from '@harness/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, WebviewToHost } from '../messages.ts';
-import { renderMarkdown } from './markdown.ts';
+import { esc, renderDiff, renderItem as renderViewItem } from './render.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
 const vscode = acquireVsCodeApi();
@@ -51,6 +50,9 @@ app.innerHTML = `
   .route.local::before { content: "⌂ "; } .route.remote::before { content: "☁ "; }
   .route.remote { color: var(--vscode-charts-yellow); } .route.local { color: var(--vscode-charts-green); }
   .tool, .subagent { font-family: var(--vscode-editor-font-family); font-size: .9em; margin: 2px 0; }
+  details.subagent > summary { cursor: pointer; list-style: none; }
+  details.subagent > summary::-webkit-details-marker { display: none; }
+  details.subagent > .children { margin: 2px 0 6px 14px; padding-left: 8px; border-left: 1px solid var(--vscode-panel-border); }
   .ok { color: var(--vscode-charts-green); } .error { color: var(--vscode-errorForeground); } .running { color: var(--vscode-charts-yellow); }
   .detail { opacity: .7; margin-left: 1.4em; white-space: pre-wrap; }
   .info { opacity: .7; white-space: pre-wrap; font-family: var(--vscode-editor-font-family); }
@@ -90,74 +92,13 @@ const routeSelect = $<HTMLSelectElement>('route');
 const statusEl = $<HTMLSpanElement>('status');
 const cancelBtn = $<HTMLButtonElement>('cancel');
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-function renderItem(item: ViewItem): string {
-  switch (item.kind) {
-    case 'user':
-      return `<div class="user">❯ ${esc(item.text)}</div>`;
-    case 'info':
-      return `<div class="info">${esc(item.text)}</div>`;
-    case 'route':
-      return `<div class="route ${item.tier}">${esc(item.model.model)} · ${esc(item.reason)}</div>`;
-    case 'assistant': {
-      // Streaming text stays plain; finished messages render as Markdown.
-      const streaming = view.running && item.id === lastAssistantId();
-      const body = item.text
-        ? streaming
-          ? `<div class="assistant">${esc(item.text)}</div>`
-          : `<div class="assistant md">${renderMarkdown(item.text)}</div>`
-        : '';
-      return `${item.reasoning && !item.text ? `<div class="reasoning">✻ ${esc(item.reasoning.slice(-300))}</div>` : ''}${body}`;
-    }
-    case 'tool': {
-      const icon = item.status === 'running' ? '●' : item.status === 'ok' ? '✓' : '✗';
-      const detail =
-        item.status === 'error' && item.output
-          ? `<div class="detail error">${esc(item.output.split('\n')[0] ?? '')}</div>`
-          : '';
-      return `<div class="tool"><span class="${item.status}">${icon}</span> ${esc(toolLabel(item.name, item.input))}</div>${detail}`;
-    }
-    case 'subagent': {
-      const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
-      const meta = [
-        item.tier,
-        `${item.toolCalls} tool calls`,
-        item.status === 'running' ? item.activity : undefined,
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      return `<div class="subagent"><span class="${item.status}">↳ ${icon} ${esc(item.agent)}</span> ${esc(item.task)} <span class="detail">${esc(meta)}</span></div>`;
-    }
-    case 'error':
-      return `<div class="error">error: ${esc(item.message)}</div>`;
-  }
-}
-
-function renderDiff(diff: string): string {
-  const rows = diff
-    .split('\n')
-    .filter((l) => !l.startsWith('---') && !l.startsWith('+++'))
-    .map((l) => {
-      const cls = l.startsWith('+')
-        ? 'add'
-        : l.startsWith('-')
-          ? 'del'
-          : l.startsWith('@@')
-            ? 'hunk'
-            : '';
-      return `<div class="${cls}">${esc(l) || '&nbsp;'}</div>`;
-    });
-  return `<div class="diff">${rows.join('')}</div>`;
-}
-
-function lastAssistantId(): string | undefined {
-  return view.items.findLast((i) => i.kind === 'assistant')?.id;
-}
+/** Subagent sections the user opened; kept across re-renders. */
+const expanded = new Set<string>();
+const renderItem = (item: ViewItem, ctx: ViewState = view) => renderViewItem(item, ctx, expanded);
 
 function render() {
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  log.innerHTML = view.items.map(renderItem).join('');
+  log.innerHTML = view.items.map((i) => renderItem(i)).join('');
   if (nearBottom) log.scrollTop = log.scrollHeight;
 
   const perm = view.permissions[0];
@@ -173,6 +114,19 @@ function render() {
     ? `${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}`
     : 'disconnected';
 }
+
+// `toggle` doesn't bubble, so listen in the capture phase.
+log.addEventListener(
+  'toggle',
+  (e) => {
+    const d = e.target as HTMLDetailsElement;
+    const id = d.dataset?.sub;
+    if (!id) return;
+    if (d.open) expanded.add(id);
+    else expanded.delete(id);
+  },
+  true,
+);
 
 log.addEventListener('click', (e) => {
   const target = e.target as HTMLElement;

@@ -1,6 +1,8 @@
 import {
   addInfo,
   addUserPrompt,
+  childView,
+  describeSession,
   estimateLabel,
   formatUsage,
   fromTranscript,
@@ -9,6 +11,7 @@ import {
   reduce,
   resolveEscalation,
   resolvePermission,
+  subagentList,
   toolLabel,
   type ViewItem,
   type ViewState,
@@ -42,6 +45,8 @@ const HELP = `Commands
   /new                     start a new session
   /sessions                list saved sessions in this workspace
   /resume <n|id>           switch to a saved session
+  /subagents               list this session's subagents as a tree
+  /subagent <n>            show what a subagent did: routes, tools, report
   /usage [rule|agent|model] this week's spend, savings, and why
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
@@ -193,6 +198,40 @@ export function App({
           client.request('usage.get', {}).then(setUsage, () => {});
           return;
         }
+        case 'subagents': {
+          const all = subagentList(view);
+          setView((v) =>
+            addInfo(
+              v,
+              all.length
+                ? `${all
+                    .map(
+                      (x, i) =>
+                        `${String(i + 1).padStart(2)}. ${'  '.repeat(x.depth)}${x.row.status === 'running' ? '◌' : x.row.status === 'ok' ? '✓' : '✗'} ${x.row.agent}: ${x.row.task} · ${x.row.toolCalls} tool calls`,
+                    )
+                    .join('\n')}\n/subagent <number> for details`
+                : 'no subagents in this session yet',
+            ),
+          );
+          return;
+        }
+        case 'subagent': {
+          const all = subagentList(view);
+          const pick =
+            args[0] && /^\d+$/.test(args[0])
+              ? all[Number(args[0]) - 1]
+              : all.find((x) => x.id === args[0]);
+          const child = pick && childView(view, pick.id);
+          setView((v) =>
+            addInfo(
+              v,
+              child && pick
+                ? `── ${pick.row.agent}: ${pick.row.task} ──\n${describeSession(child)}`
+                : 'usage: /subagent <number from /subagents>',
+            ),
+          );
+          return;
+        }
         case 'compact': {
           const { compacted } = await client
             .request('session.compact', { sessionId: session.id })
@@ -277,7 +316,12 @@ export function App({
         }
       </Static>
       {live.map((item) => (
-        <Item key={item.id} item={item} hidden={hidden.has(item.id)} width={width} />
+        <Box key={item.id} flexDirection="column">
+          <Item item={item} hidden={hidden.has(item.id)} width={width} />
+          {item.kind === 'subagent' && item.status === 'running' && view.children[item.id] ? (
+            <LiveChild view={view.children[item.id] as ViewState} depth={1} />
+          ) : null}
+        </Box>
       ))}
 
       {permission && (
@@ -382,6 +426,29 @@ function DiffView({ diff, maxLines }: { diff: string; maxLines: number }) {
 }
 
 /** Route rows that add nothing: a default/sticky decision for the model already in use. */
+/** A running subagent's latest activity, indented under its row (nested for depth 2). */
+function LiveChild({ view, depth }: { view: ViewState; depth: number }) {
+  const recent = view.items.filter((i) => i.kind !== 'user' && i.kind !== 'info').slice(-3);
+  return (
+    <Box flexDirection="column" marginLeft={2 * depth}>
+      {recent.map((it) => (
+        <Box key={it.id} flexDirection="column">
+          {it.kind === 'assistant' ? (
+            <Text dimColor wrap="truncate-end">
+              {(it.text || it.reasoning).replace(/\s+/g, ' ').slice(-160)}
+            </Text>
+          ) : (
+            <Item item={it} hidden={false} width={80} />
+          )}
+          {it.kind === 'subagent' && it.status === 'running' && view.children[it.id] ? (
+            <LiveChild view={view.children[it.id] as ViewState} depth={depth + 1} />
+          ) : null}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 function quietRoutes(items: ViewItem[]): Set<string> {
   const quiet = new Set<string>();
   let current: string | undefined;

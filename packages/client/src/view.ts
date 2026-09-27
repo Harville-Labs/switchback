@@ -75,10 +75,46 @@ export interface ViewState {
   escalations: PendingEscalation[];
   costUsd: number;
   lastTier?: Tier;
+  /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
+  children: Record<string, ViewState>;
 }
 
 export function initialView(sessionId: string): ViewState {
-  return { sessionId, items: [], running: false, permissions: [], escalations: [], costUsd: 0 };
+  return {
+    sessionId,
+    items: [],
+    running: false,
+    permissions: [],
+    escalations: [],
+    costUsd: 0,
+    children: {},
+  };
+}
+
+/** Whether `sessionId` is this session or any of its descendants. */
+function owns(state: ViewState, sessionId: string): boolean {
+  if (state.sessionId === sessionId) return true;
+  return Object.values(state.children).some((c) => owns(c, sessionId));
+}
+
+/** The agent name of a descendant session, from its parent's subagent row. */
+export function agentOf(state: ViewState, sessionId: string): string | undefined {
+  for (const it of state.items) if (it.kind === 'subagent' && it.id === sessionId) return it.agent;
+  for (const c of Object.values(state.children)) {
+    const found = agentOf(c, sessionId);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** A descendant's view (drill-down), or undefined if it isn't part of this tree. */
+export function childView(state: ViewState, sessionId: string): ViewState | undefined {
+  if (state.sessionId === sessionId) return state;
+  for (const c of Object.values(state.children)) {
+    const found = childView(c, sessionId);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 /**
@@ -226,9 +262,36 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
     };
   }
 
-  // Events from subagents update their summary row in the parent's view.
+  // Escalation prompts can come from any descendant; they're answered at the top.
+  if (event.type === 'escalation.requested' && event.sessionId !== state.sessionId) {
+    const agent = agentOf(state, event.sessionId);
+    return {
+      ...state,
+      escalations: [
+        ...state.escalations,
+        {
+          requestId: event.requestId,
+          reason: agent ? `${agent}: ${event.reason}` : event.reason,
+          target: event.target,
+          ...(event.estimatedCostUsd !== undefined
+            ? { estimatedCostUsd: event.estimatedCostUsd }
+            : {}),
+        },
+      ],
+    };
+  }
+  return reduceSession(state, event);
+}
+
+/** Fold an event into the session it belongs to: this one or a descendant. */
+function reduceSession(state: ViewState, event: SessionEvent): ViewState {
   if (event.sessionId !== state.sessionId) {
-    return updateSubagent(state, event);
+    const entry = Object.entries(state.children).find(([, c]) => owns(c, event.sessionId));
+    if (!entry) return state;
+    const [id, child] = entry;
+    const next = { ...state, children: { ...state.children, [id]: reduceSession(child, event) } };
+    // Direct children also update their summary row here.
+    return event.sessionId === id ? updateSubagentRow(next, event) : next;
   }
 
   const items = [...state.items];
@@ -295,7 +358,18 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
         status: 'running',
         toolCalls: 0,
       });
-      return { ...state, items };
+      return {
+        ...state,
+        items,
+        children: {
+          ...state.children,
+          [event.childSessionId]: {
+            ...initialView(event.childSessionId),
+            items: [{ kind: 'user', id: 'task', text: event.task }],
+            running: true,
+          },
+        },
+      };
     case 'subagent.completed': {
       const i = items.findIndex((it) => it.kind === 'subagent' && it.id === event.childSessionId);
       if (i >= 0)
@@ -338,10 +412,9 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
   return state;
 }
 
-function updateSubagent(
-  state: ViewState,
-  event: Exclude<EngineEvent, { type: 'log' } | { type: 'config.updated' }>,
-): ViewState {
+type SessionEvent = Exclude<EngineEvent, { type: 'log' } | { type: 'config.updated' }>;
+
+function updateSubagentRow(state: ViewState, event: SessionEvent): ViewState {
   const i = state.items.findIndex((it) => it.kind === 'subagent' && it.id === event.sessionId);
   if (i < 0) return state;
   const row = { ...(state.items[i] as Extract<ViewItem, { kind: 'subagent' }>) };
@@ -349,21 +422,6 @@ function updateSubagent(
   else if (event.type === 'tool.started') {
     row.toolCalls++;
     row.activity = event.name;
-  } else if (event.type === 'escalation.requested') {
-    return {
-      ...state,
-      escalations: [
-        ...state.escalations,
-        {
-          requestId: event.requestId,
-          reason: `${row.agent}: ${event.reason}`,
-          target: event.target,
-          ...(event.estimatedCostUsd !== undefined
-            ? { estimatedCostUsd: event.estimatedCostUsd }
-            : {}),
-        },
-      ],
-    };
   } else return state;
   const items = [...state.items];
   items[i] = row;
@@ -397,6 +455,66 @@ export function formatUsage(u: UsageReport, by?: UsageBreakdown): string {
       );
     }
     if (rows.length === 0) lines.push('  no model calls in this period');
+  }
+  return lines.join('\n');
+}
+
+/** Every subagent in the tree, depth-first, for numbered listings. */
+export function subagentList(
+  state: ViewState,
+  depth = 0,
+): { id: string; depth: number; row: Extract<ViewItem, { kind: 'subagent' }> }[] {
+  return state.items.flatMap((it) =>
+    it.kind === 'subagent'
+      ? [
+          { id: it.id, depth, row: it },
+          ...(state.children[it.id]
+            ? subagentList(state.children[it.id] as ViewState, depth + 1)
+            : []),
+        ]
+      : [],
+  );
+}
+
+/**
+ * Plain-text drill-down of one session: its routes, tool calls, and report,
+ * with nested subagents indented. Used by the TUI's `/subagent`.
+ */
+export function describeSession(state: ViewState, indent = ''): string {
+  const lines: string[] = [];
+  for (const it of state.items) {
+    switch (it.kind) {
+      case 'user':
+        lines.push(`${indent}task: ${it.text}`);
+        break;
+      case 'route':
+        lines.push(`${indent}${it.tier === 'local' ? '⌂' : '☁'} ${it.model.model} · ${it.reason}`);
+        break;
+      case 'tool': {
+        // A delegation is shown by its subagent row below.
+        if (it.name === 'task' && it.status !== 'error') break;
+        const icon = it.status === 'running' ? '●' : it.status === 'ok' ? '✓' : '✗';
+        lines.push(`${indent}${icon} ${toolLabel(it.name, it.input)}`);
+        const first = it.output?.split('\n').find((l) => l.trim());
+        if (first) lines.push(`${indent}    ${first.slice(0, 160)}`);
+        break;
+      }
+      case 'assistant':
+        if (it.text) lines.push(...it.text.split('\n').map((l) => `${indent}${l}`));
+        break;
+      case 'subagent': {
+        const icon = it.status === 'running' ? '◌' : it.status === 'ok' ? '✓' : '✗';
+        lines.push(`${indent}↳ ${icon} ${it.agent}: ${it.task}`);
+        const child = state.children[it.id];
+        if (child) lines.push(describeSession(child, `${indent}    `));
+        break;
+      }
+      case 'error':
+        lines.push(`${indent}error: ${it.message}`);
+        break;
+      case 'info':
+        break;
+    }
   }
   return lines.join('\n');
 }

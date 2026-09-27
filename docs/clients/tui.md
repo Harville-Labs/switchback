@@ -25,7 +25,7 @@ Retries live in src/http/client.ts:88 ...
 
 - `⌂` lines are local routing decisions and `☁` lines are remote. Plain default decisions for the model already in use are hidden to reduce noise.
 - `●`/`✓`/`✗` mark tool calls: running, succeeded, failed.
-- `↳` rows are subagents, showing their tier, tool-call count, and current activity.
+- `↳` rows are subagents, showing their tier, tool-call count, and current activity. While one runs, its latest steps appear indented under the row (nested subagents too). Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did: its routes, every tool call with the first line of output, nested subagents, and its final report.
 - The status bar shows the agent, route preference, last tier used, session cost, today's spend against budget, and month-to-date savings.
 
 ## Commands and keys
@@ -38,6 +38,8 @@ Retries live in src/http/client.ts:88 ...
 | `/new` | New session with the default agent |
 | `/sessions` | Saved sessions in this workspace, newest first |
 | `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
+| `/subagents` | This session's subagents as a numbered tree |
+| `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/help`, `/exit` | |

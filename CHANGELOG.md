@@ -4,6 +4,9 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- Subagent drill-down: the shared view keeps a nested view per subagent. VS Code rows expand to show a subagent's routes, tool calls, nested subagents, and report; the TUI shows running subagents' activity inline and adds `/subagents` and `/subagent <n>` (#18)
+
 ## [0.4.0] - 2026-09-27
 
 ### Added
