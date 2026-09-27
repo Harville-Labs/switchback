@@ -2,6 +2,7 @@ import type { Tier } from '@harness/protocol';
 import { z } from 'zod';
 import { AnthropicProvider } from './anthropic.ts';
 import { OpenAICompatibleProvider } from './openai-compatible.ts';
+import { OpenAIResponsesProvider } from './openai-responses.ts';
 import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
 import type { ChatRequest, Provider } from './types.ts';
 
@@ -22,6 +23,11 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     apiKey: Secret.optional(),
     baseUrl: z.url().default('https://api.openai.com/v1'),
     organization: z.string().optional(),
+    /**
+     * `responses` uses the Responses API, which keeps reasoning between tool
+     * calls (recommended for reasoning models); `chat` uses Chat Completions.
+     */
+    api: z.enum(['chat', 'responses']).default('chat'),
   }),
   z.object({
     type: z.literal('deepseek'),
@@ -100,6 +106,16 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
       });
     case 'openai': {
       const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+      if (config.api === 'responses')
+        return new OpenAIResponsesProvider({
+          id,
+          baseUrl: config.baseUrl,
+          missingKeyHint: 'set OPENAI_API_KEY or providers.<id>.apiKey',
+          ...(apiKey ? { apiKey } : {}),
+          ...(config.organization
+            ? { headers: { 'OpenAI-Organization': config.organization } }
+            : {}),
+        });
       return new OpenAICompatibleProvider({
         id,
         baseUrl: config.baseUrl,

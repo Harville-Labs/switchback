@@ -141,6 +141,7 @@ describe('hosted providers', () => {
       const health = await createProvider('openai', {
         type: 'openai',
         baseUrl: 'https://api.openai.com/v1',
+        api: 'chat',
       }).health();
       expect(health).toEqual({
         ok: false,

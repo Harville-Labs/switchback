@@ -61,6 +61,11 @@
               },
               "organization": {
                 "type": "string"
+              },
+              "api": {
+                "default": "chat",
+                "type": "string",
+                "enum": ["chat", "responses"]
               }
             },
             "required": ["type"]
