@@ -5,6 +5,7 @@
 import {
   addInfo,
   addUserPrompt,
+  fromTranscript,
   initialView,
   reduce,
   resolveEscalation,
@@ -15,6 +16,7 @@ import {
 } from '@harness/client/view';
 import type { RoutePreference } from '@harness/protocol';
 import type { HostToWebview, WebviewToHost } from '../messages.ts';
+import { renderMarkdown } from './markdown.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
 const vscode = acquireVsCodeApi();
@@ -32,6 +34,15 @@ app.innerHTML = `
   #log { flex: 1; overflow-y: auto; padding: 8px 10px; }
   .user { margin-top: 12px; font-weight: 600; color: var(--vscode-textLink-foreground); white-space: pre-wrap; }
   .assistant { white-space: pre-wrap; margin: 4px 0; line-height: 1.45; }
+  .assistant.md { white-space: normal; }
+  .md p { margin: 4px 0; } .md ul, .md ol { margin: 4px 0; padding-left: 20px; }
+  .md code { font-family: var(--vscode-editor-font-family); background: var(--vscode-textCodeBlock-background); padding: 0 3px; border-radius: 3px; }
+  .md table { border-collapse: collapse; } .md td, .md th { border: 1px solid var(--vscode-panel-border); padding: 2px 6px; }
+  .md a { color: var(--vscode-textLink-foreground); }
+  .code { border: 1px solid var(--vscode-panel-border); border-radius: 4px; margin: 6px 0; }
+  .code-bar { display: flex; justify-content: space-between; padding: 2px 6px; font-size: .8em; opacity: .8; border-bottom: 1px solid var(--vscode-panel-border); }
+  .code pre { margin: 0; padding: 6px; overflow-x: auto; } .code pre code { background: none; padding: 0; }
+  button.link { background: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
   .reasoning { opacity: .6; font-style: italic; white-space: pre-wrap; }
   .route { font-size: .85em; opacity: .75; margin: 2px 0; }
   .route.local::before { content: "⌂ "; } .route.remote::before { content: "☁ "; }
@@ -81,8 +92,16 @@ function renderItem(item: ViewItem): string {
       return `<div class="info">${esc(item.text)}</div>`;
     case 'route':
       return `<div class="route ${item.tier}">${esc(item.model.model)} · ${esc(item.reason)}</div>`;
-    case 'assistant':
-      return `${item.reasoning && !item.text ? `<div class="reasoning">✻ ${esc(item.reasoning.slice(-300))}</div>` : ''}${item.text ? `<div class="assistant">${esc(item.text)}</div>` : ''}`;
+    case 'assistant': {
+      // Streaming text stays plain; finished messages render as Markdown.
+      const streaming = view.running && item.id === lastAssistantId();
+      const body = item.text
+        ? streaming
+          ? `<div class="assistant">${esc(item.text)}</div>`
+          : `<div class="assistant md">${renderMarkdown(item.text)}</div>`
+        : '';
+      return `${item.reasoning && !item.text ? `<div class="reasoning">✻ ${esc(item.reasoning.slice(-300))}</div>` : ''}${body}`;
+    }
     case 'tool': {
       const icon = item.status === 'running' ? '●' : item.status === 'ok' ? '✓' : '✗';
       const detail =
@@ -124,6 +143,10 @@ function renderDiff(diff: string): string {
   return `<div class="diff">${rows.join('')}</div>`;
 }
 
+function lastAssistantId(): string | undefined {
+  return view.items.findLast((i) => i.kind === 'assistant')?.id;
+}
+
 function render() {
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.innerHTML = view.items.map(renderItem).join('');
@@ -142,6 +165,22 @@ function render() {
     ? `${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}`
     : 'disconnected';
 }
+
+log.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  const anchor = target.closest('a');
+  if (anchor) {
+    e.preventDefault();
+    const href = anchor.getAttribute('href');
+    if (href) vscode.postMessage({ type: 'openLink', href });
+    return;
+  }
+  const button = target.closest('button');
+  const code = button?.closest('.code')?.querySelector('code')?.textContent;
+  if (!button || code == null) return;
+  if (button.hasAttribute('data-copy')) vscode.postMessage({ type: 'copy', text: code });
+  if (button.hasAttribute('data-insert')) vscode.postMessage({ type: 'insert', text: code });
+});
 
 prompts.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest('button');
@@ -217,6 +256,12 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       view = addInfo(
         view,
         `saved ~$${m.usage.estimatedSavingsUsd.toFixed(2)} this month · remote $${m.usage.byTier.remote.costUsd.toFixed(2)}`,
+      );
+      break;
+    case 'history':
+      view = addInfo(
+        fromTranscript(m.session, m.messages),
+        `resumed "${m.session.title || m.session.id}"`,
       );
       break;
     case 'prefill':

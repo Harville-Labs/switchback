@@ -5,6 +5,8 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 ## Features
 
 - **Chat view** in the activity bar. It renders from the same view-model reducer as the TUI, so both show the same routing lines, tool rows, subagent rows, and prompts.
+- **Markdown answers** with syntax-aware code blocks and **Copy** / **Insert** (at the cursor in the active editor). Model output can't run script: raw HTML is shown as text, links are limited to http(s) and mailto and open in your browser.
+- **Session history**: the history button (or **Harness: Open Session…**) lists saved sessions for the workspace and reopens one.
 - **Routing control**: a dropdown in the chat, the status bar item (click to change), and the **Harness: Set Routing** command.
 - **Status bar**: current route preference, last tier used (`$(home)` local, `$(cloud)` remote), and session cost.
 - **Ask About Selection** (editor context menu) pre-fills the chat with the selected code and its location.

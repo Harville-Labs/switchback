@@ -101,6 +101,31 @@ class EngineConnection implements vscode.Disposable {
     this.broadcast({ type: 'ready', init: this.init, session: this.session, route: this.route });
   }
 
+  /** Pick a saved session and show it in the chat. */
+  async openSession(): Promise<void> {
+    const c = this.client;
+    if (!c) return;
+    const sessions = await c.request('session.list', {});
+    if (!sessions.length) {
+      void vscode.window.showInformationMessage('No saved Harness sessions in this workspace yet.');
+      return;
+    }
+    const pick = await vscode.window.showQuickPick(
+      sessions.map((x) => ({
+        label: x.title || '(untitled)',
+        description: `${x.agent} · $${x.costUsd.toFixed(3)}`,
+        detail: new Date(x.updatedAt).toLocaleString(),
+        id: x.id,
+      })),
+      { title: 'Harness sessions', matchOnDescription: true },
+    );
+    if (!pick) return;
+    const { session, messages } = await c.request('session.get', { sessionId: pick.id });
+    this.session = session;
+    this.updateStatus(session.costUsd);
+    this.broadcast({ type: 'history', session, messages });
+  }
+
   async newSession(agent?: string) {
     if (!this.client) return;
     this.session = await this.client.request('session.create', agent ? { agent } : {});
@@ -120,6 +145,31 @@ class EngineConnection implements vscode.Disposable {
 
   async handle(m: WebviewToHost): Promise<void> {
     const c = this.client;
+    // Editor-side actions that don't need the engine.
+    switch (m.type) {
+      case 'copy':
+        await vscode.env.clipboard.writeText(m.text);
+        void vscode.window.setStatusBarMessage('Copied', 1500);
+        return;
+      case 'insert': {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+          void vscode.window.showWarningMessage('Open a file to insert the code into.');
+          return;
+        }
+        await editor.edit((b) => {
+          for (const sel of editor.selections) b.replace(sel, m.text);
+        });
+        return;
+      }
+      case 'openLink':
+        // Only web links leave the editor; anything else in model output is ignored.
+        if (/^https?:\/\//i.test(m.href)) await vscode.env.openExternal(vscode.Uri.parse(m.href));
+        return;
+      case 'openHistory':
+        await vscode.commands.executeCommand('harness.openSession');
+        return;
+    }
     if (m.type === 'loaded') {
       if (this.init && this.session)
         this.broadcast({
@@ -305,6 +355,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
 
   context.subscriptions.push(
     vscode.commands.registerCommand('harness.newSession', () => engine?.newSession()),
+    vscode.commands.registerCommand('harness.openSession', () => engine?.openSession()),
     vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
     vscode.commands.registerCommand('harness.restartEngine', start),

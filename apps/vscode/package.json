@@ -78,10 +78,21 @@
         "command": "harness.runSetup",
         "title": "Set Up Models",
         "category": "Harness"
+      },
+      {
+        "command": "harness.openSession",
+        "title": "Open Session…",
+        "category": "Harness",
+        "icon": "$(history)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "harness.openSession",
+          "when": "view == harness.chat",
+          "group": "navigation"
+        },
         {
           "command": "harness.newSession",
           "when": "view == harness.chat",
@@ -143,12 +154,15 @@
   },
   "dependencies": {
     "@harness/client": "workspace:*",
-    "@harness/protocol": "workspace:*"
+    "@harness/protocol": "workspace:*",
+    "dompurify": "^3.4.16",
+    "marked": "15"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
+    "happy-dom": "^20.14.5",
     "mocha": "^12.0.2"
   }
 }

@@ -2,6 +2,7 @@
 import type {
   EngineEvent,
   InitializeResult,
+  Message,
   PermissionDecision,
   RoutePreference,
   SessionSummary,
@@ -15,6 +16,7 @@ export type HostToWebview =
   | { type: 'route'; route: RoutePreference }
   | { type: 'usage'; usage: UsageReport }
   | { type: 'prefill'; text: string }
+  | { type: 'history'; session: SessionSummary; messages: Message[] }
   | { type: 'disconnected'; message: string };
 
 export type WebviewToHost =
@@ -24,4 +26,8 @@ export type WebviewToHost =
   | { type: 'permission'; requestId: string; decision: PermissionDecision }
   | { type: 'escalation'; requestId: string; approve: boolean }
   | { type: 'setRoute'; route: RoutePreference }
-  | { type: 'newSession'; agent?: string };
+  | { type: 'newSession'; agent?: string }
+  | { type: 'copy'; text: string }
+  | { type: 'insert'; text: string }
+  | { type: 'openLink'; href: string }
+  | { type: 'openHistory' };
