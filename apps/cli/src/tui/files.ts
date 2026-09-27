@@ -1,7 +1,7 @@
 /** Workspace file list for @-mention completion. git-aware, cached briefly. */
 import { Glob } from 'bun';
 
-const IGNORED = /(^|\/)(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)(\/|$)/;
+const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)([\\/]|$)/;
 const LIMIT = 20_000;
 const TTL_MS = 30_000;
 
@@ -14,7 +14,7 @@ export async function workspaceFiles(root: string): Promise<string[]> {
     files = [];
     for await (const f of new Glob('**/*').scan({ cwd: root, onlyFiles: true })) {
       if (IGNORED.test(f)) continue;
-      files.push(f);
+      files.push(f.replaceAll('\\', '/'));
       if (files.length >= LIMIT) break;
     }
   }

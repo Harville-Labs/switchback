@@ -1,10 +1,15 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
 import { defineTool, diffPreview, resolveInWorkspace, ToolError, truncate } from './tool.ts';
 
-const IGNORED = /(^|\/)(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)(\/|$)/;
+const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)([\\/]|$)/;
+
+/** Workspace-relative path with forward slashes, so tool output is the same on every OS. */
+function workspacePath(root: string, file: string): string {
+  return relative(root, file).split(sep).join('/');
+}
 
 export const readTool = defineTool({
   name: 'read',
@@ -126,7 +131,7 @@ export const globTool = defineTool({
     const matches: string[] = [];
     for await (const f of new Glob(input.pattern).scan({ cwd, onlyFiles: true, dot: false })) {
       if (IGNORED.test(f)) continue;
-      matches.push(relative(ctx.workspaceRoot, `${cwd}/${f}`));
+      matches.push(workspacePath(ctx.workspaceRoot, join(cwd, f)));
       if (matches.length >= 500) break;
     }
     matches.sort();
@@ -154,13 +159,13 @@ export async function grepJs(input: GrepInput, cwd: string, root: string): Promi
   const out: string[] = [];
   for await (const f of new Glob(input.glob ?? '**/*').scan({ cwd, onlyFiles: true })) {
     if (IGNORED.test(f)) continue;
-    const full = `${cwd}/${f}`;
+    const full = join(cwd, f);
     const text = await readFile(full, 'utf8').catch(() => '');
     if (text.includes('\u0000')) continue; // binary
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (re.test(lines[i] ?? '')) {
-        out.push(`${relative(root, full)}:${i + 1}: ${(lines[i] ?? '').slice(0, 300)}`);
+        out.push(`${workspacePath(root, full)}:${i + 1}: ${(lines[i] ?? '').slice(0, 300)}`);
         if (out.length >= GREP_LIMIT) return out;
       }
     }
@@ -202,7 +207,9 @@ export async function grepRipgrep(
       };
       if (ev.type !== 'match' || !ev.data.path?.text) continue;
       const text = (ev.data.lines?.text ?? '').replace(/\r?\n$/, '');
-      out.push(`${relative(root, join(cwd, ev.data.path.text))}:${ev.data.line_number}: ${text}`);
+      out.push(
+        `${workspacePath(root, join(cwd, ev.data.path.text))}:${ev.data.line_number}: ${text}`,
+      );
       if (out.length >= GREP_LIMIT) {
         proc.kill();
         return out;
