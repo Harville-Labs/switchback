@@ -10,8 +10,10 @@ import {
   type DetectedServer,
   detectLocalServers,
   harnessPaths,
+  type LocalAnswer,
   projectPaths,
   REMOTE_KINDS,
+  type RemoteAnswer,
   type RemoteKind,
   type SetupAnswers,
   writeConfigLayer,
@@ -29,15 +31,19 @@ export interface InitFlags {
   cwd: string;
   yes: boolean;
   scope?: 'user' | 'project';
-  localUrl?: string;
-  localModel?: string;
-  contextWindow?: number;
+  /** Extra server URLs to probe. */
+  localUrls: string[];
+  /** Local models in order of preference; `contextWindows` pairs with them by position. */
+  localModels: string[];
+  contextWindows: number[];
   noLocal: boolean;
-  remote?: RemoteKind | 'none';
-  remoteModel?: string;
+  /** Remote providers in order of preference; `remoteModels` pairs with them by position. */
+  remotes: (RemoteKind | 'none')[];
+  remoteModels: string[];
   /** openai-compatible remote only. */
   remoteUrl?: string;
   remoteKeyEnv?: string;
+  remoteContextWindow?: number;
   region?: string;
   profile?: string;
   projectId?: string;
@@ -102,14 +108,14 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
     return 0;
   }
 
-  const local = await chooseLocal(flags, p);
-  const remote = await chooseRemote(flags, p);
-  if (!local && remote.kind === 'none')
+  const locals = await chooseLocals(flags, p);
+  const remotes = await chooseRemotes(flags, p);
+  if (!locals.length && !remotes.length)
     throw new SetupError('configure a local model, a remote provider, or both');
 
   const escalationPolicy =
     flags.policy ??
-    (p && local && remote.kind !== 'none'
+    (p && locals.length && remotes.length
       ? await p.select('\nWhen the local model struggles, escalate to remote:', [
           { label: 'Automatically', value: 'auto' as const, hint: 'shows the reason each time' },
           { label: 'Ask me first', value: 'ask' as const },
@@ -127,7 +133,7 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
       ...(flags.dailyBudget ? { dailyUsd: flags.dailyBudget } : {}),
       ...(flags.monthlyBudget ? { monthlyUsd: flags.monthlyBudget } : {}),
     };
-  } else if (p && remote.kind !== 'none') {
+  } else if (p && remotes.length) {
     console.log(
       dim('\nBudgets keep automatic escalations local once reached. Leave empty for no limit.'),
     );
@@ -138,8 +144,8 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   }
 
   const answers: SetupAnswers = {
-    ...(local ? { local } : {}),
-    remote,
+    locals,
+    remotes,
     escalationPolicy,
     ...(budget ? { budget } : {}),
   };
@@ -166,41 +172,47 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
 // Local
 // ---------------------------------------------------------------------------
 
-type Pick = { server: DetectedServer; model: DetectedServer['models'][number] } | 'manual' | 'skip';
+type Pick = { server: DetectedServer; model: DetectedServer['models'][number] } | 'manual' | 'done';
 
-async function chooseLocal(
-  flags: InitFlags,
-  p: Prompter | undefined,
-): Promise<SetupAnswers['local']> {
-  if (flags.noLocal) return undefined;
+const ADD_LOCAL =
+  'Add another local model? It takes over when earlier ones are down or a prompt is too big for them.';
+
+async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<LocalAnswer[]> {
+  if (flags.noLocal) return [];
   if (p)
-    console.log(`\n${bold('Local model')}\n${dim('Looking for model servers on this machine...')}`);
-  const servers = await detectLocalServers(flags.localUrl ? { extra: [flags.localUrl] } : {});
+    console.log(
+      `\n${bold('Local models')}\n${dim('Looking for model servers on this machine...')}`,
+    );
+  const servers = await detectLocalServers({ extra: flags.localUrls });
 
-  // Unattended: the model must be named; the server is found or given.
+  // Unattended: models must be named; each server is found or given.
   if (!p) {
-    if (!flags.localModel) {
-      if (flags.remote && flags.remote !== 'none') return undefined;
+    if (!flags.localModels.length) {
+      if (flags.remotes.some((r) => r !== 'none')) return [];
       throw new SetupError(
         'pass --local-model (and --local-url if not auto-detected), or --no-local',
       );
     }
-    const server =
-      servers.find((s) => flags.localUrl && s.baseUrl === normalizeUrl(flags.localUrl)) ??
-      servers.find((s) => s.models.some((m) => m.id === flags.localModel));
-    const baseUrl = server?.baseUrl ?? (flags.localUrl ? normalizeUrl(flags.localUrl) : undefined);
-    if (!baseUrl)
-      throw new SetupError(`no running server has "${flags.localModel}"; pass --local-url`);
-    const detected = server?.models.find((m) => m.id === flags.localModel);
-    const contextWindow = flags.contextWindow ?? detected?.contextWindow;
-    if (!contextWindow)
-      throw new SetupError('could not detect the context window; pass --context-window');
-    return {
-      providerId: server?.kind === 'openai-compatible' || !server ? 'local-server' : server.kind,
-      baseUrl,
-      model: flags.localModel,
-      contextWindow,
-    };
+    const urls = flags.localUrls.map(normalizeUrl);
+    return flags.localModels.map((name, i) => {
+      const server =
+        servers.find((s) => urls[i] === s.baseUrl && s.models.some((m) => m.id === name)) ??
+        servers.find((s) => s.models.some((m) => m.id === name));
+      const baseUrl = server?.baseUrl ?? urls[i] ?? urls[0];
+      if (!baseUrl) throw new SetupError(`no running server has "${name}"; pass --local-url`);
+      const detected = server?.models.find((m) => m.id === name);
+      const contextWindow = flags.contextWindows[i] ?? detected?.contextWindow;
+      if (!contextWindow)
+        throw new SetupError(
+          `could not detect the context window of ${name}; pass --context-window`,
+        );
+      return {
+        providerId: server?.kind === 'openai-compatible' || !server ? 'local-server' : server.kind,
+        baseUrl,
+        model: name,
+        contextWindow,
+      };
+    });
   }
 
   const options: { label: string; value: Pick; hint?: string }[] = [];
@@ -231,47 +243,72 @@ async function chooseLocal(
       ),
     );
   }
-  // Prefer a model that reports tool support.
-  const preferred = Math.max(
-    0,
-    options.findIndex((o) => typeof o.value === 'object' && o.value.model.tools === true),
-  );
-  options.push({ label: 'Enter a server URL and model manually', value: 'manual' });
-  options.push({ label: 'Skip: no local model (remote only)', value: 'skip' });
-  const pick = await p.select(
-    '\nWhich local model should Harness use?',
-    options,
-    options.length > 2 ? preferred : options.length - 2,
-  );
-  if (pick === 'skip') return undefined;
 
-  if (pick === 'manual') {
-    const baseUrl = normalizeUrl(
-      await p.text('Server base URL', flags.localUrl ?? 'http://localhost:11434/v1'),
+  const chosen: LocalAnswer[] = [];
+  for (;;) {
+    const remaining = options.filter(
+      (o) =>
+        typeof o.value !== 'object' ||
+        !chosen.some((c) => {
+          const v = o.value as Exclude<Pick, string>;
+          return c.baseUrl === v.server.baseUrl && c.model === v.model.id;
+        }),
     );
-    const [probe] = await detectLocalServers({ extra: [baseUrl] }).then((s) =>
-      s.filter((x) => x.baseUrl === baseUrl),
+    // Prefer a model that reports tool support.
+    const preferred = Math.max(
+      0,
+      remaining.findIndex((o) => typeof o.value === 'object' && o.value.model.tools === true),
     );
-    if (probe?.models.length)
-      console.log(dim(`  Models on this server: ${probe.models.map((m) => m.id).join(', ')}`));
-    else console.log(yellow('  Could not list models at that URL; continuing anyway.'));
-    const model = await p.text('Model name', probe?.models[0]?.id);
-    if (!model) throw new SetupError('a model name is required');
-    const contextWindow =
-      (await p.number('Context window (tokens) the server loads', 32_768)) ?? 32_768;
-    const apiKeyEnv = await p.text(
-      'Environment variable holding an API key (leave empty for none)',
+    const choices = [
+      ...remaining,
+      { label: 'Enter a server URL and model manually', value: 'manual' as const },
+      {
+        label: chosen.length ? 'Done' : 'Skip: no local model (remote only)',
+        value: 'done' as const,
+      },
+    ];
+    const pick = await p.select(
+      chosen.length
+        ? '\nWhich model should back it up?'
+        : '\nWhich local model should Harness use first?',
+      choices,
+      remaining.length ? preferred : choices.length - 2,
     );
-    return {
-      providerId: 'local-server',
-      baseUrl,
-      model,
-      contextWindow,
-      ...(apiKeyEnv ? { apiKeyEnv } : {}),
-    };
+    if (pick === 'done') break;
+    chosen.push(pick === 'manual' ? await manualLocal(flags, p) : await detectedLocal(pick, p));
+    if (!(await p.confirm(`\n${ADD_LOCAL}`, false))) break;
   }
+  return chosen;
+}
 
-  const { server, model } = pick;
+async function manualLocal(flags: InitFlags, p: Prompter): Promise<LocalAnswer> {
+  const baseUrl = normalizeUrl(
+    await p.text('Server base URL', flags.localUrls[0] ?? 'http://localhost:11434/v1'),
+  );
+  const [probe] = await detectLocalServers({ extra: [baseUrl] }).then((s) =>
+    s.filter((x) => x.baseUrl === baseUrl),
+  );
+  if (probe?.models.length)
+    console.log(dim(`  Models on this server: ${probe.models.map((m) => m.id).join(', ')}`));
+  else console.log(yellow('  Could not list models at that URL; continuing anyway.'));
+  const model = await p.text('Model name', probe?.models[0]?.id);
+  if (!model) throw new SetupError('a model name is required');
+  const contextWindow =
+    (await p.number('Context window (tokens) the server loads', 32_768)) ?? 32_768;
+  const apiKeyEnv = await p.text('Environment variable holding an API key (leave empty for none)');
+  return {
+    providerId: 'local-server',
+    baseUrl,
+    model,
+    contextWindow,
+    ...(apiKeyEnv ? { apiKeyEnv } : {}),
+  };
+}
+
+async function detectedLocal(
+  { server, model }: Exclude<Pick, string>,
+  p: Prompter,
+): Promise<LocalAnswer> {
   if (model.tools === false) {
     console.log(
       yellow(
@@ -332,41 +369,60 @@ function credentialHint(kind: RemoteKind): string {
   }
 }
 
+async function chooseRemotes(flags: InitFlags, p: Prompter | undefined): Promise<RemoteAnswer[]> {
+  if (!p) {
+    if (!flags.remotes.length)
+      throw new SetupError(
+        'pass --remote (anthropic, openai, deepseek, bedrock, vertex, openai-compatible, none)',
+      );
+    const kinds = flags.remotes.filter((k): k is RemoteKind => k !== 'none');
+    const out: RemoteAnswer[] = [];
+    for (const [i, kind] of kinds.entries())
+      out.push(await chooseRemote(kind, flags.remoteModels[i], flags, undefined));
+    return out;
+  }
+  const chosen: RemoteAnswer[] = [];
+  for (;;) {
+    const kind: RemoteKind | 'none' = await p.select(
+      chosen.length
+        ? '\nFallback provider (used when the ones above are down):'
+        : `\n${bold('Remote model')}\nWhere should escalated turns run?`,
+      [
+        ...REMOTE_KINDS.map((k) => ({
+          label: REMOTE_LABELS[k],
+          value: k,
+          hint: credentialHint(k),
+        })),
+        { label: chosen.length ? 'Done' : 'None: local only', value: 'none' as const },
+      ],
+    );
+    if (kind === 'none') break;
+    chosen.push(await chooseRemote(kind, undefined, flags, p));
+    if (!(await p.confirm('\nAdd a fallback remote provider?', false))) break;
+  }
+  return chosen;
+}
+
 async function chooseRemote(
+  kind: RemoteKind,
+  modelFlag: string | undefined,
   flags: InitFlags,
   p: Prompter | undefined,
-): Promise<SetupAnswers['remote']> {
+): Promise<RemoteAnswer> {
   const env = process.env;
-  const kind: RemoteKind | 'none' | undefined =
-    flags.remote ??
-    (p
-      ? await p.select(`\n${bold('Remote model')}\nWhere should escalated turns run?`, [
-          ...REMOTE_KINDS.map((k) => ({
-            label: REMOTE_LABELS[k],
-            value: k,
-            hint: credentialHint(k),
-          })),
-          { label: 'None: local only', value: 'none' as const },
-        ])
-      : undefined);
-  if (!kind)
-    throw new SetupError(
-      'pass --remote (anthropic, openai, deepseek, bedrock, vertex, openai-compatible, none)',
-    );
-  if (kind === 'none') return { kind };
 
   if (kind === 'openai-compatible') {
     const baseUrl =
       flags.remoteUrl ??
       (p ? await p.text('API base URL (e.g. https://openrouter.ai/api/v1)') : undefined);
-    const model = flags.remoteModel ?? (p ? await p.text('Model ID') : undefined);
+    const model = modelFlag ?? (p ? await p.text('Model ID') : undefined);
     if (!baseUrl || !model)
       throw new SetupError('--remote-url and --remote-model are required for openai-compatible');
     const apiKeyEnv =
       flags.remoteKeyEnv ??
       (p ? await p.text('Environment variable holding the API key') : undefined);
     const contextWindow =
-      flags.contextWindow ??
+      flags.remoteContextWindow ??
       (p ? await p.number('Context window (tokens)', 128_000) : undefined) ??
       128_000;
     return {
@@ -380,7 +436,7 @@ async function chooseRemote(
 
   const catalog = CATALOG[catalogFor(kind) as HostedProviderKind];
   const model =
-    flags.remoteModel ??
+    modelFlag ??
     (p
       ? await p.select(
           'Model for escalated turns:',
@@ -446,5 +502,14 @@ export async function offerSetup(cwd: string): Promise<number> {
     );
     return 0;
   }
-  return init({ cwd, yes: false, noLocal: false });
+  return init({
+    cwd,
+    yes: false,
+    noLocal: false,
+    localUrls: [],
+    localModels: [],
+    contextWindows: [],
+    remotes: [],
+    remoteModels: [],
+  });
 }

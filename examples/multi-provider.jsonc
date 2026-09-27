@@ -1,0 +1,31 @@
+// Several local servers and several hosted providers at once. Each tier is an
+// ordered list: the router uses the first model that is up and whose context
+// window fits the prompt, and only escalates when no local model can take it.
+{
+  "providers": {
+    "ollama": { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" },
+    "gpu": { "type": "openai-compatible", "baseUrl": "http://gpu-box:8000/v1" },
+    "openai": { "type": "openai" },
+    "deepseek": { "type": "deepseek" },
+    "anthropic": { "type": "anthropic" }
+  },
+  "models": {
+    // Small and fast on this machine.
+    "laptop": { "provider": "ollama", "model": "<small model>", "contextWindow": 32768 },
+    // Bigger model and window on a shared vLLM server.
+    "gpu-coder": { "provider": "gpu", "model": "<large model>", "contextWindow": 131072 },
+    "sol": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000 },
+    "ds-pro": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "contextWindow": 1000000,
+      "effort": "high"
+    },
+    "sonnet": { "provider": "anthropic", "model": "claude-sonnet-5", "contextWindow": 1000000 }
+  },
+  "routing": {
+    "local": ["laptop", "gpu-coder"],
+    "remote": ["sol", "ds-pro", "sonnet"],
+    "budget": { "dailyUsd": 5 }
+  }
+}

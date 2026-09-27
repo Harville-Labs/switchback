@@ -10,4 +10,5 @@
 | [llamacpp-bedrock.jsonc](llamacpp-bedrock.jsonc) | llama.cpp locally, Claude on Amazon Bedrock |
 | [lmstudio-vertex.jsonc](lmstudio-vertex.jsonc) | LM Studio locally, Claude on Vertex AI |
 | [vllm-openrouter.jsonc](vllm-openrouter.jsonc) | A vLLM box locally, any OpenRouter model remotely |
+| [multi-provider.jsonc](multi-provider.jsonc) | Two local servers (laptop and GPU box) and three hosted providers as ordered fallbacks |
 | [agents/](agents/) | Agent definitions (Claude Code compatible) |

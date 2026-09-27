@@ -91,8 +91,8 @@ describe('buildSetupConfig', () => {
 
   test('local + Bedrock points every Claude alias at Bedrock with prefixed IDs', () => {
     const layer = buildSetupConfig({
-      local,
-      remote: { kind: 'bedrock', model: 'claude-sonnet-5', region: 'us-west-2' },
+      locals: [local],
+      remotes: [{ kind: 'bedrock', model: 'claude-sonnet-5', region: 'us-west-2' }],
       escalationPolicy: 'ask',
       budget: { dailyUsd: 3 },
     });
@@ -117,7 +117,7 @@ describe('buildSetupConfig', () => {
       ['deepseek', 'deepseek-flash'],
     ] as const) {
       const parsed = HarnessConfig.parse(
-        buildSetupConfig({ local, remote: { kind, model }, escalationPolicy: 'auto' }),
+        buildSetupConfig({ locals: [local], remotes: [{ kind, model }], escalationPolicy: 'auto' }),
       );
       expect(parsed.providers[kind]?.type).toBe(kind);
       expect(parsed.models.remote).toMatchObject({ provider: kind, model });
@@ -128,7 +128,8 @@ describe('buildSetupConfig', () => {
 
   test('DeepSeek models get an effort so thinking mode is on', () => {
     const layer = buildSetupConfig({
-      remote: { kind: 'deepseek', model: 'deepseek-v4-pro' },
+      locals: [],
+      remotes: [{ kind: 'deepseek', model: 'deepseek-v4-pro' }],
       escalationPolicy: 'auto',
     });
     expect((layer.models as Record<string, { effort?: string }>).remote?.effort).toBe('high');
@@ -137,14 +138,16 @@ describe('buildSetupConfig', () => {
   test('any OpenAI-compatible API can be the remote', () => {
     const parsed = HarnessConfig.parse(
       buildSetupConfig({
-        local,
-        remote: {
-          kind: 'openai-compatible',
-          baseUrl: 'https://openrouter.ai/api/v1',
-          model: 'qwen/qwen3-coder',
-          apiKeyEnv: 'OPENROUTER_API_KEY',
-          contextWindow: 262144,
-        },
+        locals: [local],
+        remotes: [
+          {
+            kind: 'openai-compatible',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            model: 'qwen/qwen3-coder',
+            apiKeyEnv: 'OPENROUTER_API_KEY',
+            contextWindow: 262144,
+          },
+        ],
         escalationPolicy: 'auto',
       }),
     );
@@ -161,22 +164,54 @@ describe('buildSetupConfig', () => {
 
   test('remote-only and local-only set the routing mode', () => {
     const remoteOnly = buildSetupConfig({
-      remote: { kind: 'anthropic', model: 'claude-opus-5' },
+      locals: [],
+      remotes: [{ kind: 'anthropic', model: 'claude-opus-5' }],
       escalationPolicy: 'auto',
     });
     const localOnly = buildSetupConfig({
-      local,
-      remote: { kind: 'none' },
+      locals: [local],
+      remotes: [],
       escalationPolicy: 'auto',
     });
     expect((remoteOnly.routing as { mode: string }).mode).toBe('remote-only');
     expect((localOnly.routing as { mode: string }).mode).toBe('local-only');
   });
 
+  test('several local servers and remote providers become ordered chains', () => {
+    const parsed = HarnessConfig.parse(
+      buildSetupConfig({
+        locals: [
+          local,
+          { ...local, model: 'coder:32b', contextWindow: 65536 }, // same server, bigger model
+          {
+            providerId: 'ollama',
+            baseUrl: 'http://gpu:11434/v1',
+            model: 'big',
+            contextWindow: 131072,
+          },
+        ],
+        remotes: [
+          { kind: 'openai', model: 'gpt-6-sol' },
+          { kind: 'deepseek', model: 'deepseek-v4-pro' },
+          { kind: 'anthropic', model: 'claude-sonnet-5' },
+        ],
+        escalationPolicy: 'auto',
+      }),
+    );
+    expect(parsed.routing.local).toEqual(['local', 'local-2', 'local-3']);
+    expect(parsed.routing.remote).toEqual(['remote', 'remote-2', 'remote-3']);
+    // One provider per server; a second Ollama server gets its own ID.
+    expect(parsed.models['local-2']?.provider).toBe('ollama');
+    expect(parsed.models['local-3']?.provider).toBe('ollama-2');
+    expect(parsed.providers['ollama-2']).toMatchObject({ baseUrl: 'http://gpu:11434/v1' });
+    expect(parsed.models['remote-2']).toMatchObject({ provider: 'deepseek', effort: 'high' });
+    expect(parsed.models['remote-3']?.provider).toBe('anthropic');
+    // Size aliases follow the preferred remote provider.
+    expect(parsed.models.haiku?.provider).toBe('openai');
+  });
+
   test('refuses an empty setup', () => {
-    expect(() =>
-      buildSetupConfig({ remote: { kind: 'none' }, escalationPolicy: 'auto' }),
-    ).toThrow();
+    expect(() => buildSetupConfig({ locals: [], remotes: [], escalationPolicy: 'auto' })).toThrow();
   });
 });
 
@@ -191,13 +226,15 @@ describe('writeConfigLayer', () => {
     const file = join(dir, '.harness', 'config.json');
     writeConfigLayer(file, { permissions: { bash: 'deny' } });
     const layer = buildSetupConfig({
-      local: {
-        providerId: 'lmstudio',
-        baseUrl: 'http://localhost:1234/v1',
-        model: 'm',
-        contextWindow: 8192,
-      },
-      remote: { kind: 'none' },
+      locals: [
+        {
+          providerId: 'lmstudio',
+          baseUrl: 'http://localhost:1234/v1',
+          model: 'm',
+          contextWindow: 8192,
+        },
+      ],
+      remotes: [],
       escalationPolicy: 'off',
     });
     const result = writeConfigLayer(file, layer);

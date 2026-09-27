@@ -41,6 +41,30 @@ If only one tier is configured:
 - With no local model, `auto` routing sends turns remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing. `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `harness init`.
 - With no remote model, turns stay local and escalation is unavailable.
 
+## Several providers at once
+
+Any number of providers can be configured together, including several local servers: Ollama on your laptop, vLLM on a GPU box, and your organization's servers side by side with OpenAI, Anthropic, and DeepSeek. Each model gets an alias, `routing.local` and `routing.remote` list aliases in order of preference, and agents can pin any alias (`model: gpu-coder`).
+
+```jsonc
+{
+  "providers": {
+    "ollama":   { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" },
+    "gpu":      { "type": "openai-compatible", "baseUrl": "http://gpu-box:8000/v1" },
+    "openai":   { "type": "openai" },
+    "deepseek": { "type": "deepseek" }
+  },
+  "models": {
+    "laptop":  { "provider": "ollama", "model": "qwen3:8b", "contextWindow": 32768 },
+    "big":     { "provider": "gpu", "model": "qwen3-coder-30b", "contextWindow": 131072 },
+    "sol":     { "provider": "openai", "model": "gpt-6-sol" },
+    "ds":      { "provider": "deepseek", "model": "deepseek-v4-pro", "effort": "high" }
+  },
+  "routing": { "local": ["laptop", "big"], "remote": ["sol", "ds"] }
+}
+```
+
+`harness init` builds this for you: after the first local model it offers to add more (from any detected server), and after the first remote provider it offers fallbacks. Unattended, repeat `--local-model` and `--remote`. How the router picks within a list is in [routing.md](routing.md).
+
 ## Keys
 
 ### `providers.<id>`

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import type { RemoteKind } from '@harness/engine';
 import { RoutePreference } from '@harness/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
@@ -36,15 +37,17 @@ Options
 
 init options (all optional; prompts cover anything not given)
   --scope <s>              user | project (default: user)
-  --local-url <url>        Local server, e.g. http://localhost:11434/v1
-  --local-model <name>     Local model name as the server lists it
-  --context-window <n>     Tokens the local server loads
+  --local-url <url>        Local server to probe, e.g. http://gpu-box:8000/v1
+  --local-model <name>     Local model name as the server lists it. Repeat for
+                           fallbacks and bigger-context models, in order
+  --context-window <n>     Tokens the server loads, per --local-model in order
   --no-local               Remote only
   --remote <r>             anthropic | openai | deepseek | bedrock | vertex |
-                           openai-compatible | none
-  --remote-model <m>       Model ID (see \`harness init\` for each provider's list)
+                           openai-compatible | none. Repeat for fallbacks
+  --remote-model <m>       Model ID per --remote, in order (see \`harness init\`)
   --remote-url <url>       openai-compatible: API base URL
   --remote-key-env <var>   openai-compatible: env var holding the API key
+  --remote-context-window <n>  openai-compatible: context window
   --region <r>             Bedrock or Vertex region
   --profile <p>            AWS profile (Bedrock)
   --project-id <id>        GCP project (Vertex)
@@ -108,12 +111,13 @@ async function main(argv: string[]): Promise<number> {
       continue: { type: 'boolean', short: 'c', default: false },
       session: { type: 'string' },
       scope: { type: 'string' },
-      'local-url': { type: 'string' },
-      'local-model': { type: 'string' },
-      'context-window': { type: 'string' },
+      'local-url': { type: 'string', multiple: true },
+      'local-model': { type: 'string', multiple: true },
+      'context-window': { type: 'string', multiple: true },
       'no-local': { type: 'boolean', default: false },
-      remote: { type: 'string' },
-      'remote-model': { type: 'string' },
+      remote: { type: 'string', multiple: true },
+      'remote-model': { type: 'string', multiple: true },
+      'remote-context-window': { type: 'string' },
       'remote-url': { type: 'string' },
       'remote-key-env': { type: 'string' },
       region: { type: 'string' },
@@ -167,8 +171,16 @@ async function main(argv: string[]): Promise<number> {
     case 'init': {
       const { init } = await import('./commands/init.ts');
       const { REMOTE_KINDS } = await import('@harness/engine');
-      const contextWindow = positive('context-window', values['context-window']);
-      const remote = oneOf('remote', values.remote, [...REMOTE_KINDS, 'none'] as const);
+      const contextWindows = (values['context-window'] ?? []).map(
+        (v) => positive('context-window', v) as number,
+      );
+      const remoteContextWindow = positive(
+        'remote-context-window',
+        values['remote-context-window'],
+      );
+      const remotes = (values.remote ?? []).map(
+        (v) => oneOf('remote', v, [...REMOTE_KINDS, 'none'] as const) as RemoteKind | 'none',
+      );
       const policy = oneOf('policy', values.policy, ['auto', 'ask', 'off'] as const);
       const dailyBudget = positive('daily-budget', values['daily-budget']);
       const monthlyBudget = positive('monthly-budget', values['monthly-budget']);
@@ -177,11 +189,12 @@ async function main(argv: string[]): Promise<number> {
         yes: values.yes,
         noLocal: values['no-local'],
         ...(scope ? { scope } : {}),
-        ...(values['local-url'] ? { localUrl: values['local-url'] } : {}),
-        ...(values['local-model'] ? { localModel: values['local-model'] } : {}),
-        ...(contextWindow ? { contextWindow } : {}),
-        ...(remote ? { remote } : {}),
-        ...(values['remote-model'] ? { remoteModel: values['remote-model'] } : {}),
+        localUrls: values['local-url'] ?? [],
+        localModels: values['local-model'] ?? [],
+        contextWindows,
+        remotes,
+        remoteModels: values['remote-model'] ?? [],
+        ...(remoteContextWindow ? { remoteContextWindow } : {}),
         ...(values['remote-url'] ? { remoteUrl: values['remote-url'] } : {}),
         ...(values['remote-key-env'] ? { remoteKeyEnv: values['remote-key-env'] } : {}),
         ...(values.region ? { region: values.region } : {}),

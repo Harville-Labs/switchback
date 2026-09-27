@@ -35,38 +35,45 @@ export async function doctor(flags: CommonFlags): Promise<number> {
 
   out('\nRouting');
   const r = config.routing;
-  out(
-    `  mode ${r.mode}; local=${r.local} (${config.models[r.local]?.model ?? 'not configured'}), remote=${r.remote} (${config.models[r.remote]?.model ?? 'not configured'})`,
-  );
+  out(`  mode ${r.mode}`);
+  const chainLine = (tier: 'local' | 'remote') =>
+    r[tier]
+      .map((alias) => `${alias} (${config.models[alias]?.model ?? 'not configured'})`)
+      .join(' → ');
+  out(`  local  ${chainLine('local')}`);
+  out(`  remote ${chainLine('remote')}`);
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,
   );
-  const local = config.models[r.local];
-  const localProvider = local && config.providers[local.provider];
-  if (local && localProvider) {
-    if (local.contextWindow) {
-      out(`  local context window ${local.contextWindow.toLocaleString('en-US')} (configured)`);
+  const locals = r.local.flatMap((alias) => {
+    const m = config.models[alias];
+    const pc = m && config.providers[m.provider];
+    return m && pc ? [{ alias, m, pc }] : [];
+  });
+  for (const { alias, m, pc } of locals) {
+    if (m.contextWindow) {
+      out(`  ${alias} context window ${m.contextWindow.toLocaleString('en-US')} (configured)`);
+      continue;
+    }
+    const found = await createProvider(m.provider, pc)
+      .contextWindow?.(m.model)
+      .catch(() => undefined);
+    if (found) {
+      out(
+        `  ${alias} context window ${found.contextWindow.toLocaleString('en-US')} (detected from ${found.source})`,
+      );
     } else {
-      const found = await createProvider(local.provider, localProvider)
-        .contextWindow?.(local.model)
-        .catch(() => undefined);
-      if (found) {
-        out(
-          `  local context window ${found.contextWindow.toLocaleString('en-US')} (detected from ${found.source})`,
-        );
-      } else {
-        problems++;
-        out(
-          `  ✗ local context window unknown; set models.${r.local}.contextWindow (assuming 8,192)`,
-        );
-      }
+      problems++;
+      out(
+        `  ✗ ${alias} context window unknown; set models.${alias}.contextWindow (assuming 8,192)`,
+      );
     }
   }
-  if (!local && r.mode !== 'remote-only') {
+  if (!locals.length && r.mode !== 'remote-only') {
     problems++;
     out('  ✗ no local model configured; run `harness init` to pick one');
   }
-  if (!config.models[r.remote] && r.mode !== 'local-only') {
+  if (!r.remote.some((a) => config.models[a]) && r.mode !== 'local-only') {
     problems++;
     out('  ✗ no remote model configured; run `harness init`');
   }

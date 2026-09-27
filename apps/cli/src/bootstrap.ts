@@ -32,9 +32,11 @@ export function mockify(config: HarnessConfig): HarnessConfig {
     providers[id] = { type: 'mock', tier: tierOf(pc) };
   const models = { ...config.models };
   for (const tier of ['local', 'remote'] as const) {
-    const alias = config.routing[tier];
+    const chain = config.routing[tier];
+    const alias = chain[0] ?? tier;
     // Never invent a remote tier that policy or config has switched off.
-    if (models[alias] || (tier === 'remote' && config.routing.mode === 'local-only')) continue;
+    if (chain.some((a) => models[a]) || (tier === 'remote' && config.routing.mode === 'local-only'))
+      continue;
     providers[`mock-${tier}`] = { type: 'mock', tier };
     models[alias] = {
       provider: `mock-${tier}`,

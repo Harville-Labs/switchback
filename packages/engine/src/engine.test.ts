@@ -396,6 +396,51 @@ describe('escalation cost and routing analytics', () => {
   });
 });
 
+describe('several providers at once', () => {
+  test('two local servers and two remote providers: a down local server falls to the other', async () => {
+    const laptop = Object.assign(new ScriptedProvider('laptop', 'local', [{ text: 'laptop' }]), {
+      health: async () => ({ ok: false, detail: 'connection refused' }),
+    });
+    const gpu = new ScriptedProvider('gpu', 'local', [{ text: 'from the gpu box' }]);
+    const openai = new ScriptedProvider('openai', 'remote', []);
+    const deepseek = new ScriptedProvider('deepseek', 'remote', []);
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: HarnessConfig.parse({
+        providers: {
+          laptop: { type: 'mock', tier: 'local' },
+          gpu: { type: 'mock', tier: 'local' },
+          openai: { type: 'mock', tier: 'remote' },
+          deepseek: { type: 'mock', tier: 'remote' },
+        },
+        models: {
+          small: { provider: 'laptop', model: 'qwen3:8b', contextWindow: 32_000 },
+          big: { provider: 'gpu', model: 'qwen3-coder-30b', contextWindow: 128_000 },
+          sol: { provider: 'openai', model: 'gpt-6-sol' },
+          pro: { provider: 'deepseek', model: 'deepseek-v4-pro' },
+        },
+        routing: { local: ['small', 'big'], remote: ['sol', 'pro'] },
+      }),
+      providers: new Map<string, Provider>([
+        ['laptop', laptop],
+        ['gpu', gpu],
+        ['openai', openai],
+        ['deepseek', deepseek],
+      ]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    const r = await engine.runTurn(engine.createSession({}).id, 'hi');
+    expect(r.text).toBe('from the gpu box');
+    expect(events.find((e) => e.type === 'route.decided')).toMatchObject({
+      tier: 'local',
+      rule: 'fallback',
+      model: { provider: 'gpu' },
+    });
+    expect(engine.initialize().models.map((m) => m.alias)).toEqual(['small', 'big', 'sol', 'pro']);
+  });
+});
+
 describe('token counting', () => {
   function withCounter(contextWindow: number, exact: number) {
     const counted: string[] = [];

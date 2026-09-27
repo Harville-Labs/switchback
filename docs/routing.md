@@ -5,6 +5,17 @@ Harness sends every model call to one of two tiers:
 - **local**: a model on the user's machine or network, reached through an OpenAI-compatible server. It costs nothing per token.
 - **remote**: a hosted model you choose: OpenAI, Anthropic, DeepSeek, Amazon Bedrock, Vertex AI, or any OpenAI-compatible API. It's billed per token.
 
+Each tier can hold several models, from any mix of providers, in order of preference:
+
+```jsonc
+"routing": {
+  "local":  ["laptop", "gpu-box"],     // Ollama on this machine, then vLLM on the team's GPU server
+  "remote": ["sol", "deepseek-pro"]    // OpenAI first, DeepSeek if OpenAI is down
+}
+```
+
+Within a tier the router uses the first model that is reachable and whose context window fits the prompt. A prompt too big for the laptop model goes to the GPU box (`rule: context-fit`), and a laptop server that's down hands over to the next one (`rule: fallback`), before anything is sent to a paid provider. A single alias (`"local": "laptop"`) works too.
+
 The goal is to do most of the work locally and pay only for the calls that need a stronger model. The router makes that decision for each step of the agent loop, not once per session, and tells the user why.
 
 ## Decision pipeline
@@ -14,19 +25,22 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | # | Rule (`rule` in events) | Fires when | Target |
 |---|---|---|---|
 | 1 | `user-override` | The prompt was sent with `route: local` or `route: remote` | That tier |
+| 1 | `escalation-declined` | An `ask` escalation was just declined (or the run is headless) | local |
 | 2 | `mode` | `routing.mode` is `local-only` or `remote-only` | That tier |
 | 3 | `agent-pin` | The agent's definition names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model or tier |
-| 4 | `context-overflow` | Input tokens exceed `escalation.contextHeadroom` × the local model's `contextWindow` (see [Counting tokens](#counting-tokens)) | remote (counts as an escalation) |
+| 4 | `context-overflow` | Input tokens exceed `escalation.contextHeadroom` × the `contextWindow` of every local model (see [Counting tokens](#counting-tokens)) | remote (counts as an escalation) |
 | 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` model calls | remote |
 | 6 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
 | 7 | `default` | Nothing else matched | local (remote if no local model is configured) |
 
 A tier pin in an agent definition (`route: local`) is a preference: if that tier has no model configured, the router skips the pin. A user override (`--route local`) or `mode: local-only` with no local model is blocked with a pointer to `harness init`.
 
+Whichever rule picks a tier, the model within it comes from that tier's list: the first that's reachable and fits. When that isn't the first model listed, the decision says so with `rule: context-fit` (an earlier model's window is too small) or `rule: fallback` (an earlier model's server is down), and the reason names both models.
+
 Two guards then run on the chosen target:
 
 - **Budget** (`rule: budget`). If the target is remote, the user didn't explicitly ask for remote, and daily or monthly spend has reached `routing.budget`, the call stays local (`onExceeded: local`) or is refused (`onExceeded: block`).
-- **Availability** (`rule: fallback`). If the target's provider failed its health check, the call moves to the other tier per `routing.fallback`. If that's also unavailable or over budget, the call is blocked with an explanation.
+- **Availability** (`rule: fallback`). If every model in the chosen tier failed its health check, the call moves to the other tier per `routing.fallback`. If that's also unavailable or over budget, the call is blocked with an explanation.
 
 ## Quality signals
 
@@ -87,8 +101,8 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
 ```jsonc
 "routing": {
   "mode": "auto",                 // auto | local-only | remote-only
-  "local": "local",               // model alias for local calls
-  "remote": "remote",             // model alias for remote calls (and the savings reference)
+  "local": ["local"],             // model aliases for local calls, in order of preference
+  "remote": ["remote"],           // model aliases for remote calls; the first is the savings reference
   "escalation": {
     "policy": "auto",             // auto | ask | off
     "maxConsecutiveToolErrors": 3,

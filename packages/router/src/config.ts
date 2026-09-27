@@ -26,12 +26,21 @@ export const BudgetConfig = z.object({
   onExceeded: z.enum(['local', 'block']).default('local'),
 });
 
+/**
+ * One model alias or an ordered list. The router uses the first model in the
+ * list that is reachable and whose context window fits the prompt, so a list
+ * can mix servers: `["laptop", "gpu-box"]`.
+ */
+const ModelChain = z
+  .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+  .transform((v) => (typeof v === 'string' ? [v] : v));
+
 export const RoutingConfig = z.object({
   mode: z.enum(['auto', 'local-only', 'remote-only']).default('auto'),
-  /** Model alias used for local turns. */
-  local: z.string().default('local'),
-  /** Model alias used for escalated/remote turns. */
-  remote: z.string().default('remote'),
+  /** Model aliases for local turns, in order of preference. */
+  local: ModelChain.default(['local']),
+  /** Model aliases for escalated and remote turns, in order of preference. */
+  remote: ModelChain.default(['remote']),
   escalation: EscalationConfig.prefault({}),
   budget: BudgetConfig.prefault({}),
   fallback: z

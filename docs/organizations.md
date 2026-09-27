@@ -31,9 +31,12 @@ After signing in, the org's policy applies to the TUI, VS Code, and `harness run
       "openai": { "type": "openai", "baseUrl": "https://llm-gateway.acme.internal/openai/v1" }
     },
     "models": {
-      "local": { "provider": "acme-gpu", "model": "acme-coder-32b", "contextWindow": 65536 },
+      "acme-coder": { "provider": "acme-gpu", "model": "acme-coder-32b", "contextWindow": 65536 },
       "remote": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000 }
-    }
+    },
+    // A user's own local model (alias "local") stays first; the company GPU takes
+    // prompts too big for it, and everything when the user has no local model.
+    "routing": { "local": ["local", "acme-coder"] }
   },
   "enforced": {                                     // a config layer above everything; users can't override
     "permissions": { "bash": "ask" },

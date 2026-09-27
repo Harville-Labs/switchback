@@ -200,3 +200,97 @@ describe('Router', () => {
     });
   });
 });
+
+describe('multiple models per tier', () => {
+  const LAPTOP: ModelInfo = {
+    alias: 'laptop',
+    ref: { provider: 'ollama', model: 'qwen3:8b' },
+    tier: 'local',
+    contextWindow: 8_000,
+    available: true,
+  };
+  const GPU: ModelInfo = {
+    alias: 'gpu',
+    ref: { provider: 'vllm', model: 'qwen3-coder-30b' },
+    tier: 'local',
+    contextWindow: 128_000,
+    available: true,
+  };
+  const OPENAI: ModelInfo = {
+    alias: 'sol',
+    ref: { provider: 'openai', model: 'gpt-6-sol' },
+    tier: 'remote',
+    contextWindow: 400_000,
+    available: true,
+  };
+  const chain = (overrides: Partial<Record<string, ModelInfo>> = {}, config: object = {}) =>
+    router(
+      { local: ['laptop', 'gpu'], remote: ['remote', 'sol'], ...config },
+      { laptop: LAPTOP, gpu: GPU, sol: OPENAI, ...overrides },
+    );
+
+  test('a single alias string still works', () => {
+    expect(RoutingConfig.parse({ local: 'laptop' }).local).toEqual(['laptop']);
+  });
+
+  test('uses the first local model when it fits', () => {
+    const d = routed(chain().decide(input()));
+    expect(d).toMatchObject({ rule: 'default', model: { alias: 'laptop' } });
+  });
+
+  test('a prompt too big for the first local model goes to a bigger local one, not remote', () => {
+    const d = routed(chain().decide(input({ estimatedInputTokens: 20_000 })));
+    expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'gpu' }, escalated: false });
+    expect(d.reason).toContain("exceeds laptop's window; using gpu");
+  });
+
+  test('escalates only when no local model fits', () => {
+    const d = routed(chain().decide(input({ estimatedInputTokens: 200_000 })));
+    expect(d).toMatchObject({ rule: 'context-overflow', model: { alias: 'remote' } });
+    expect(d.reason).toContain('largest local window (128000)');
+  });
+
+  test('a down local server falls back to the next local one before going remote', () => {
+    const d = routed(chain({ laptop: { ...LAPTOP, available: false } }).decide(input()));
+    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'gpu' } });
+  });
+
+  test('all local servers down: cross-tier fallback to the first reachable remote', () => {
+    const d = routed(
+      chain({
+        laptop: { ...LAPTOP, available: false },
+        gpu: { ...GPU, available: false },
+        remote: { ...REMOTE, available: false },
+      }).decide(input()),
+    );
+    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'sol' } });
+  });
+
+  test('remote chains fall back across providers', () => {
+    const d = routed(
+      chain({ remote: { ...REMOTE, available: false } }).decide(input({ preference: 'remote' })),
+    );
+    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'sol' } });
+    expect(d.reason).toContain('user requested remote');
+  });
+
+  test('aliases without a model are skipped', () => {
+    const d = routed(router({ local: ['missing', 'gpu'] }, { gpu: GPU }).decide(input()));
+    expect(d).toMatchObject({ rule: 'default', model: { alias: 'gpu' } });
+  });
+
+  test('local-only mode still prefers a local model that fits', () => {
+    const d = routed(
+      chain({}, { mode: 'local-only' }).decide(input({ estimatedInputTokens: 20_000 })),
+    );
+    expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'gpu' } });
+  });
+});
+
+test('a declined escalation stays local and says why', () => {
+  const signals = { ...input().signals, localTurnFailed: true };
+  const d = routed(
+    router({ escalation: { policy: 'ask' } }).decide(input({ signals, escalationDeclined: true })),
+  );
+  expect(d).toMatchObject({ rule: 'escalation-declined', model: { alias: 'local' } });
+});

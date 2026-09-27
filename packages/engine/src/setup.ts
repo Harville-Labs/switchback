@@ -45,64 +45,88 @@ export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
   return kind;
 }
 
+export interface LocalAnswer {
+  providerId: string;
+  baseUrl: string;
+  model: string;
+  contextWindow: number;
+  apiKeyEnv?: string;
+}
+
+export type RemoteAnswer =
+  | { kind: 'anthropic' | 'openai' | 'deepseek'; model: string }
+  | { kind: 'bedrock'; model: string; region: string; profile?: string }
+  | { kind: 'vertex'; model: string; projectId: string; region: string }
+  | {
+      kind: 'openai-compatible';
+      model: string;
+      baseUrl: string;
+      apiKeyEnv?: string;
+      contextWindow: number;
+    };
+
 export interface SetupAnswers {
-  local?: {
-    providerId: string;
-    baseUrl: string;
-    model: string;
-    contextWindow: number;
-    apiKeyEnv?: string;
-  };
-  remote:
-    | { kind: 'none' }
-    | { kind: 'anthropic' | 'openai' | 'deepseek'; model: string }
-    | { kind: 'bedrock'; model: string; region: string; profile?: string }
-    | { kind: 'vertex'; model: string; projectId: string; region: string }
-    | {
-        kind: 'openai-compatible';
-        model: string;
-        baseUrl: string;
-        apiKeyEnv?: string;
-        contextWindow: number;
-      };
+  /** Local models in order of preference: later ones take over when earlier ones are down or too small. */
+  locals: LocalAnswer[];
+  /** Remote providers in order of preference: later ones are fallbacks. */
+  remotes: RemoteAnswer[];
   escalationPolicy: 'auto' | 'ask' | 'off';
   budget?: { dailyUsd?: number; monthlyUsd?: number };
 }
 
+/** `base`, then `base-2`, `base-3`, ... whichever isn't taken. */
+function unique(base: string, taken: Record<string, unknown>): string {
+  if (!(base in taken)) return base;
+  let n = 2;
+  while (`${base}-${n}` in taken) n++;
+  return `${base}-${n}`;
+}
+
 /** Build the config layer described by the answers. */
 export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
-  if (!a.local && a.remote.kind === 'none') {
+  if (!a.locals.length && !a.remotes.length) {
     throw new Error('configure at least a local model or a remote provider');
   }
   const providers: Record<string, unknown> = {};
   const models: Record<string, unknown> = {};
   const routing: Record<string, unknown> = { escalation: { policy: a.escalationPolicy } };
 
-  if (a.local) {
-    providers[a.local.providerId] = {
-      type: 'openai-compatible',
-      baseUrl: a.local.baseUrl,
-      tier: 'local',
-      ...(a.local.apiKeyEnv ? { apiKey: `{env:${a.local.apiKeyEnv}}` } : {}),
-    };
-    models.local = {
-      provider: a.local.providerId,
-      model: a.local.model,
-      contextWindow: a.local.contextWindow,
-    };
+  // One provider per server (several models may share it), one alias per model.
+  const localIds = new Map<string, string>();
+  const localAliases: string[] = [];
+  for (const l of a.locals) {
+    let id = localIds.get(l.baseUrl);
+    if (!id) {
+      id = unique(l.providerId, providers);
+      localIds.set(l.baseUrl, id);
+      providers[id] = {
+        type: 'openai-compatible',
+        baseUrl: l.baseUrl,
+        tier: 'local',
+        ...(l.apiKeyEnv ? { apiKey: `{env:${l.apiKeyEnv}}` } : {}),
+      };
+    }
+    const alias = localAliases.length ? `local-${localAliases.length + 1}` : 'local';
+    models[alias] = { provider: id, model: l.model, contextWindow: l.contextWindow };
+    localAliases.push(alias);
   }
 
-  const r = a.remote;
-  if (r.kind === 'openai-compatible') {
-    providers.remote = {
-      type: 'openai-compatible',
-      baseUrl: r.baseUrl,
-      tier: 'remote',
-      ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
-    };
-    models.remote = { provider: 'remote', model: r.model, contextWindow: r.contextWindow };
-  } else if (r.kind !== 'none') {
-    const id = r.kind;
+  const remoteAliases: string[] = [];
+  for (const r of a.remotes) {
+    const alias = remoteAliases.length ? `remote-${remoteAliases.length + 1}` : 'remote';
+    remoteAliases.push(alias);
+    if (r.kind === 'openai-compatible') {
+      const id = unique('remote', providers);
+      providers[id] = {
+        type: 'openai-compatible',
+        baseUrl: r.baseUrl,
+        tier: 'remote',
+        ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
+      };
+      models[alias] = { provider: id, model: r.model, contextWindow: r.contextWindow };
+      continue;
+    }
+    const id = unique(r.kind, providers);
     providers[id] =
       r.kind === 'bedrock'
         ? { type: 'bedrock', region: r.region, ...(r.profile ? { profile: r.profile } : {}) }
@@ -121,13 +145,18 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       ...(catalog === 'deepseek' ? { effort: 'high' } : {}),
     });
     const chosen = CATALOG[catalog].models.find((m) => m.id === r.model);
-    models.remote = chosen ? entry(chosen) : { provider: id, model: wire(r.model) };
-    // Agent aliases (`model: opus|sonnet|haiku`) mean large/medium/small on the chosen provider.
-    for (const [alias, m] of Object.entries(aliasModels(catalog))) models[alias] = entry(m);
+    models[alias] = chosen ? entry(chosen) : { provider: id, model: wire(r.model) };
+    // Agent aliases (`model: opus|sonnet|haiku`) mean large/medium/small on the
+    // first (preferred) remote provider.
+    if (remoteAliases.length === 1)
+      for (const [tierAlias, m] of Object.entries(aliasModels(catalog)))
+        models[tierAlias] = entry(m);
   }
 
-  // Always explicit, so re-running setup replaces a previous mode.
-  routing.mode = !a.local ? 'remote-only' : r.kind === 'none' ? 'local-only' : 'auto';
+  // Always explicit, so re-running setup replaces a previous mode and chains.
+  routing.mode = !a.locals.length ? 'remote-only' : !a.remotes.length ? 'local-only' : 'auto';
+  if (localAliases.length) routing.local = localAliases;
+  if (remoteAliases.length) routing.remote = remoteAliases;
   if (a.budget?.dailyUsd || a.budget?.monthlyUsd) {
     routing.budget = {
       ...(a.budget.dailyUsd ? { dailyUsd: a.budget.dailyUsd } : {}),

@@ -103,6 +103,12 @@ const UNKNOWN_LOCAL_CONTEXT = 8_192;
 const UNKNOWN_REMOTE_CONTEXT = 200_000;
 const HEALTH_TTL_FAIL_MS = 5_000;
 
+/** The model whose prices define "saved": the first configured remote model. */
+function referenceModel(config: HarnessConfig): string | undefined {
+  const alias = config.routing.remote.find((a) => config.models[a]);
+  return alias ? config.models[alias]?.model : undefined;
+}
+
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
   private sessions = new Map<string, LiveSession>();
@@ -130,7 +136,7 @@ export class Engine {
     }
     for (const [id, p] of options.providers ?? []) this.providers.set(id, p);
     this.router = new Router(config.routing, (alias) => this.modelInfo(alias));
-    const reference = config.models[config.routing.remote]?.model;
+    const reference = referenceModel(config);
     this.ledger = new UsageLedger(options.ledgerFile, options.prices ?? {}, reference, options.now);
     this.store = options.store ?? new MemorySessionStore();
     this.agents = options.agents ?? loadAgents([]).agents;
@@ -384,10 +390,7 @@ export class Engine {
     this.options.config = next.config;
     if (next.org) this.options.org = next.org;
     this.router = new Router(next.config.routing, (alias) => this.modelInfo(alias));
-    this.ledger.setPricing(
-      next.prices ?? {},
-      next.config.models[next.config.routing.remote]?.model,
-    );
+    this.ledger.setPricing(next.prices ?? {}, referenceModel(next.config));
     this.emit({
       type: 'config.updated',
       ...(next.org
@@ -439,7 +442,8 @@ export class Engine {
 
       const inputTokens = await this.countPrompt(s, specsJson, signal);
       const decision = this.router.decide({
-        preference: forceLocal ? 'local' : preference,
+        preference,
+        escalationDeclined: forceLocal,
         agent: {
           name: agent.name,
           route: agent.route,
@@ -925,16 +929,21 @@ export class Engine {
   private async countPrompt(s: LiveSession, specsJson: string, signal: AbortSignal) {
     const estimate = promptTokens(s.header.system, s.messages, specsJson);
     const routing = this.options.config.routing;
-    const local = this.modelInfo(routing.local);
-    if (!local || local.tier !== 'local' || !local.available) return estimate;
-    if (!nearThreshold(estimate, local.contextWindow * routing.escalation.contextHeadroom))
-      return estimate;
-    const provider = this.providers.get(local.ref.provider);
-    const exact = await provider
-      ?.countTokens?.(local.ref.model, promptText(s.header.system, s.messages, specsJson), signal)
-      .catch(() => undefined);
-    // The server counts raw text; add the same per-message template allowance.
-    return exact === undefined ? estimate : exact + PER_MESSAGE_OVERHEAD * s.messages.length;
+    // With several local models, ask the first reachable one whose threshold
+    // is close; the others either clearly fit or clearly don't.
+    for (const alias of routing.local) {
+      const local = this.modelInfo(alias);
+      if (!local || local.tier !== 'local' || !local.available) continue;
+      if (!nearThreshold(estimate, local.contextWindow * routing.escalation.contextHeadroom))
+        continue;
+      const provider = this.providers.get(local.ref.provider);
+      const exact = await provider
+        ?.countTokens?.(local.ref.model, promptText(s.header.system, s.messages, specsJson), signal)
+        .catch(() => undefined);
+      // The server counts raw text; add the same per-message template allowance.
+      if (exact !== undefined) return exact + PER_MESSAGE_OVERHEAD * s.messages.length;
+    }
+    return estimate;
   }
 
   /** Configured window, else what the server reported, else a conservative guess. */
