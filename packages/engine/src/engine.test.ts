@@ -108,6 +108,30 @@ describe('Engine', () => {
     });
   });
 
+  test('client attachments become attachment parts (files confined to the workspace)', async () => {
+    const { engine, lp } = setup([{ text: 'ok' }], []);
+    const s = engine.createSession({});
+    writeFileSync(join(root, 'code.ts'), 'a\nb\nc\nd\n');
+    await engine.runTurn(s.id, 'explain', 'auto', undefined, undefined, [
+      { kind: 'file', path: 'code.ts', startLine: 2, endLine: 3 },
+      { kind: 'text', label: 'Problems', text: 'code.ts:2 error: nope' },
+      { kind: 'file', path: '../../etc/passwd' },
+    ]);
+    const parts = lp.requests[0]?.messages[0]?.parts ?? [];
+    expect(parts.slice(1)).toEqual([
+      {
+        type: 'text',
+        text: '<file path="code.ts" lines="2-3">\nb\nc\n</file>',
+        attachment: { path: 'code.ts:2-3' },
+      },
+      {
+        type: 'text',
+        text: '<context label="Problems">\ncode.ts:2 error: nope\n</context>',
+        attachment: { path: 'Problems' },
+      },
+    ]);
+  });
+
   test('runs tools and feeds results back', async () => {
     const { engine, lp } = setup(
       [

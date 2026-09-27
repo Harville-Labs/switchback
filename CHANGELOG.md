@@ -9,6 +9,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - VS Code: Markdown rendering in chat (raw HTML escaped, http(s)/mailto links only, DOMPurify as a second layer) with Copy / Insert-at-cursor on code blocks; session history picker
 - VS Code integration tests running inside a real VS Code instance in CI
 - VS Code: review proposed edits in the diff editor with Accept / Reject in the editor title; protocol adds `proposed` (full new file) to `permission.requested` and `permission.resolved` / `escalation.resolved` events so every client clears answered prompts
+- Prompt attachments in the protocol (`file` ranges read by the engine, labeled `text`); VS Code chips attach the selection, active file, or its problems
 - Mock provider can script a tool call (`mock:tool {json}`) for demos and client development
 
 ## [0.2.0] - 2026-09-27

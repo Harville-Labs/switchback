@@ -3,7 +3,7 @@
  * message, so every client gets mentions for free.
  */
 import { readFile, stat } from 'node:fs/promises';
-import type { TextPart } from '@harness/protocol';
+import type { Attachment, TextPart } from '@harness/protocol';
 import { resolveInWorkspace } from './tools/tool.ts';
 
 const MAX_FILES = 10;
@@ -45,4 +45,52 @@ export async function expandMentions(text: string, root: string): Promise<TextPa
     });
   }
   return parts;
+}
+
+/** Turn client attachments into attachment parts. Files are read from the workspace only. */
+export async function expandAttachments(
+  attachments: Attachment[],
+  root: string,
+): Promise<TextPart[]> {
+  const parts: TextPart[] = [];
+  let total = 0;
+  for (const a of attachments) {
+    if (a.kind === 'text') {
+      if (total + a.text.length > MAX_TOTAL_BYTES) continue;
+      total += a.text.length;
+      parts.push({
+        type: 'text',
+        text: `<context label="${escAttr(a.label)}">\n${a.text}\n</context>`,
+        attachment: { path: a.label },
+      });
+      continue;
+    }
+    let file: string;
+    try {
+      file = resolveInWorkspace(root, a.path);
+    } catch {
+      continue;
+    }
+    const info = await stat(file).catch(() => undefined);
+    if (!info?.isFile() || info.size > MAX_FILE_BYTES * 5) continue;
+    const content = await readFile(file, 'utf8');
+    if (content.includes('\u0000')) continue;
+    const lines = content.split('\n');
+    const start = a.startLine ?? 1;
+    const end = Math.min(a.endLine ?? lines.length, lines.length);
+    const slice = lines.slice(start - 1, end).join('\n');
+    if (total + slice.length > MAX_TOTAL_BYTES) continue;
+    total += slice.length;
+    const range = a.startLine ? `:${start}-${end}` : '';
+    parts.push({
+      type: 'text',
+      text: `<file path="${escAttr(a.path)}"${a.startLine ? ` lines="${start}-${end}"` : ''}>\n${slice}\n</file>`,
+      attachment: { path: `${a.path}${range}` },
+    });
+  }
+  return parts;
+}
+
+function escAttr(s: string): string {
+  return s.replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`);
 }

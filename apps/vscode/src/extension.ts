@@ -9,10 +9,12 @@ import { HarnessClient, spawnEngine } from '@harness/client';
 import type {
   EngineEvent,
   InitializeResult,
+  Message,
   RoutePreference,
   SessionSummary,
 } from '@harness/protocol';
 import * as vscode from 'vscode';
+import { type AttachChoice, EditorContext } from './context.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
@@ -43,6 +45,7 @@ class EngineConnection implements vscode.Disposable {
   init: InitializeResult | undefined;
   session: SessionSummary | undefined;
   route: RoutePreference;
+  context: EditorContext | undefined;
   private readonly listeners = new Set<(m: HostToWebview) => void>();
 
   constructor(
@@ -109,6 +112,7 @@ class EngineConnection implements vscode.Disposable {
     this.session = await client.request('session.create', {});
     this.updateStatus(0);
     this.broadcast({ type: 'ready', init: this.init, session: this.session, route: this.route });
+    if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
   }
 
   /** Pick a saved session and show it in the chat. */
@@ -149,8 +153,8 @@ class EngineConnection implements vscode.Disposable {
     this.broadcast({ type: 'route', route });
   }
 
-  prefill(text: string) {
-    this.broadcast({ type: 'prefill', text });
+  post(m: HostToWebview) {
+    this.broadcast(m);
   }
 
   async handle(m: WebviewToHost): Promise<void> {
@@ -188,6 +192,7 @@ class EngineConnection implements vscode.Disposable {
           session: this.session,
           route: this.route,
         });
+      if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
       return;
     }
     if (!c || !this.session) return;
@@ -197,6 +202,7 @@ class EngineConnection implements vscode.Disposable {
           sessionId: this.session.id,
           text: m.text,
           route: this.route,
+          ...(m.attach && this.context ? { attachments: this.context.attachments(m.attach) } : {}),
         });
         return;
       case 'cancel':
@@ -292,7 +298,8 @@ export interface HarnessTestApi {
   pendingReviews(): string[];
   init(): InitializeResult | undefined;
   onEvent(listener: (event: EngineEvent) => void): vscode.Disposable;
-  prompt(text: string): Promise<void>;
+  prompt(text: string, attach?: AttachChoice): Promise<void>;
+  transcript(): Promise<Message[]>;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<HarnessTestApi> {
@@ -319,6 +326,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
 
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const review = new EditReview();
+  const editorContext = root
+    ? new EditorContext(root, (state) => engine?.post({ type: 'context', state }))
+    : undefined;
+  if (editorContext) context.subscriptions.push(editorContext);
   context.subscriptions.push(
     review,
     vscode.workspace.registerTextDocumentContentProvider(PROPOSED_SCHEME, review),
@@ -346,6 +357,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       return;
     }
     engine = new EngineConnection(root, log, status, review);
+    engine.context = editorContext;
     engine.onMessage((m) => chat.post(m));
     try {
       await engine.start();
@@ -415,13 +427,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       if (pick) engine?.setRoute(pick.label as RoutePreference);
     }),
     vscode.commands.registerCommand('harness.askAboutSelection', async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || !root) return;
-      const rel = vscode.workspace.asRelativePath(editor.document.uri);
-      const { start: s, end } = editor.selection;
-      const code = editor.document.getText(editor.selection);
+      if (!root || !editorContext) return;
+      engine?.post({ type: 'context', state: editorContext.state() });
       await vscode.commands.executeCommand('harness.chat.focus');
-      engine?.prefill(`In ${rel}:${s.line + 1}-${end.line + 1}:\n\`\`\`\n${code}\n\`\`\`\n`);
+      engine?.post({ type: 'attachSelection' });
     }),
     { dispose: () => engine?.dispose() },
   );
@@ -436,8 +445,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       engine?.onMessage((m) => {
         if (m.type === 'event') listener(m.event);
       }) ?? new vscode.Disposable(() => {}),
-    prompt: async (text) => {
-      await engine?.handle({ type: 'prompt', text });
+    prompt: async (text, attach) => {
+      await engine?.handle({ type: 'prompt', text, ...(attach ? { attach } : {}) });
+    },
+    transcript: async () => {
+      const c = engine?.client;
+      const id = engine?.session?.id;
+      return c && id ? (await c.request('session.get', { sessionId: id })).messages : [];
     },
   };
 }

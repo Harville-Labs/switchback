@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import {
   type AgentSummary,
+  type Attachment,
   type EngineEvent,
   ErrorCode,
   type InitializeResult,
@@ -36,7 +37,7 @@ import { estimateTokens, type ModelInfo, Router, SignalTracker } from '@harness/
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import type { HarnessConfig } from './config.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
-import { expandMentions } from './mentions.ts';
+import { expandAttachments, expandMentions } from './mentions.ts';
 import type { OrgStatus } from './org/policy.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
 import { Semaphore } from './semaphore.ts';
@@ -260,12 +261,24 @@ export class Engine {
   }
 
   /** Start a turn and return immediately; progress arrives as events. */
-  prompt(params: { sessionId: string; text: string; route?: RoutePreference }): { turnId: string } {
+  prompt(params: {
+    sessionId: string;
+    text: string;
+    route?: RoutePreference;
+    attachments?: Attachment[];
+  }): { turnId: string } {
     const s = this.live(params.sessionId);
     if (s.controller)
       throw new RpcError(ErrorCode.SessionBusy, 'session is already running a turn');
     const turnId = `turn_${crypto.randomUUID().slice(0, 8)}`;
-    void this.runTurn(s, params.text, params.route ?? 'auto', turnId).catch((err) => {
+    void this.runTurn(
+      s,
+      params.text,
+      params.route ?? 'auto',
+      turnId,
+      undefined,
+      params.attachments ?? [],
+    ).catch((err) => {
       this.emit({ type: 'error', ...this.scope(s), turnId, message: (err as Error).message });
     });
     return { turnId };
@@ -278,6 +291,7 @@ export class Engine {
     route: RoutePreference = 'auto',
     turnId = `turn_${crypto.randomUUID().slice(0, 8)}`,
     parentSignal?: AbortSignal,
+    extra: Attachment[] = [],
   ): Promise<TurnResult> {
     const session = typeof s === 'string' ? this.live(s) : s;
     if (session.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is busy');
@@ -288,7 +302,10 @@ export class Engine {
     if (!session.header.title) session.header.title = text.slice(0, 60);
 
     this.emit({ type: 'turn.started', ...this.scope(session), turnId });
-    const attachments = await expandMentions(text, this.options.workspaceRoot).catch(() => []);
+    const attachments = [
+      ...(await expandAttachments(extra, this.options.workspaceRoot).catch(() => [])),
+      ...(await expandMentions(text, this.options.workspaceRoot).catch(() => [])),
+    ];
     this.append(session, { role: 'user', parts: [{ type: 'text', text }, ...attachments] });
     session.signals.startUserTurn();
 

@@ -9,7 +9,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `harness
 - **Session history**: the history button (or **Harness: Open Session…**) lists saved sessions for the workspace and reopens one.
 - **Routing control**: a dropdown in the chat, the status bar item (click to change), and the **Harness: Set Routing** command.
 - **Status bar**: current route preference, last tier used (`$(home)` local, `$(cloud)` remote), and session cost.
-- **Ask About Selection** (editor context menu) pre-fills the chat with the selected code and its location.
+- **Editor context chips** above the input: the current selection (on by default when you have one), the active file, and its problems (errors and warnings). Included chips are sent as prompt attachments; the engine reads the file range itself, so what the model sees is exactly what's on disk. **Ask About Selection** (editor context menu) turns on the selection chip and focuses the chat.
 - **Edit review in the diff editor.** Proposed edits open side by side with the file on disk, with **Accept** / **Reject** buttons in the editor title (also in the chat and the command palette). The tab closes when the request is answered anywhere. Turn off with `harness.reviewEditsInDiffEditor`.
 - **Permission and escalation prompts** appear inline in the chat.
 - **Setup**: if no local model is configured, the extension offers **Set Up Models**, which runs `harness init` in a terminal and restarts the engine when it closes.
@@ -42,4 +42,4 @@ Each release publishes one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `
 
 ## Planned
 
-Editor context (open files, diagnostics, selection) as prompt attachments, Markdown rendering, a session history view, attaching to a shared engine daemon so the TUI and VS Code can share a live session, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).
+Terminal output as an attachment, attaching to a shared engine daemon so the TUI and VS Code can share a live session, and bundling a platform-specific engine binary in the `.vsix`. See the [roadmap](../roadmap.md).

@@ -64,9 +64,24 @@ export interface SessionGetResult {
   messages: Message[];
 }
 
+/** Context a client attaches to a prompt (editor selection, open file, diagnostics). */
+export const Attachment = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('file'),
+    /** Workspace-relative path. */
+    path: z.string(),
+    /** 1-based, inclusive. Omit for the whole file. */
+    startLine: z.number().int().positive().optional(),
+    endLine: z.number().int().positive().optional(),
+  }),
+  z.object({ kind: z.literal('text'), label: z.string(), text: z.string().max(200_000) }),
+]);
+export type Attachment = z.infer<typeof Attachment>;
+
 export const SessionPromptParams = z.object({
   sessionId: z.string(),
   text: z.string().min(1),
+  attachments: z.array(Attachment).max(20).optional(),
   /** Per-turn routing override. `auto` defers to the configured policy. */
   route: RoutePreference.default('auto'),
 });

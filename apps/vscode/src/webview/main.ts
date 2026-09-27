@@ -15,6 +15,7 @@ import {
   type ViewState,
 } from '@harness/client/view';
 import type { RoutePreference } from '@harness/protocol';
+import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, WebviewToHost } from '../messages.ts';
 import { renderMarkdown } from './markdown.ts';
 
@@ -53,6 +54,9 @@ app.innerHTML = `
   .info { opacity: .7; white-space: pre-wrap; }
   .prompt { border: 1px solid var(--vscode-focusBorder); border-radius: 4px; padding: 8px; margin: 6px 10px; }
   .prompt button { margin: 6px 6px 0 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .chip { font-size: .8em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--vscode-panel-border); background: transparent; color: var(--vscode-foreground); opacity: .7; }
+  .chip.on { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: transparent; opacity: 1; }
   .diff { font-family: var(--vscode-editor-font-family); font-size: .85em; max-height: 45vh; overflow: auto; margin: 6px 0; white-space: pre; border: 1px solid var(--vscode-panel-border); }
   .diff .add { background: var(--vscode-diffEditor-insertedLineBackground, rgba(0,160,0,.15)); }
   .diff .del { background: var(--vscode-diffEditor-removedLineBackground, rgba(200,0,0,.15)); }
@@ -67,6 +71,7 @@ app.innerHTML = `
 <div id="log"></div>
 <div id="prompts"></div>
 <footer>
+  <div id="chips" class="chips"></div>
   <textarea id="input" placeholder="Ask anything (Enter to send, Shift+Enter for a newline)"></textarea>
   <div class="bar">
     <span><select id="route"><option>auto</option><option>local</option><option>remote</option></select> <span id="status"></span></span>
@@ -202,6 +207,42 @@ prompts.addEventListener('click', (e) => {
   render();
 });
 
+// Editor context offered as attachments. Selection is on by default (and
+// visible as a chip); file and problems are opt-in.
+let ctx: EditorContextState = { problems: 0 };
+const attach = { file: false, selection: true, problems: false };
+const chips = $<HTMLDivElement>('chips');
+
+function renderChips() {
+  const items: { key: keyof typeof attach; label: string }[] = [];
+  if (ctx.selection)
+    items.push({
+      key: 'selection',
+      label: `${ctx.selection.path}:${ctx.selection.startLine}-${ctx.selection.endLine}`,
+    });
+  else if (ctx.file) items.push({ key: 'file', label: ctx.file });
+  if (ctx.problems)
+    items.push({
+      key: 'problems',
+      label: `${ctx.problems} problem${ctx.problems === 1 ? '' : 's'}`,
+    });
+  chips.innerHTML = items
+    .map(
+      (c) =>
+        `<button class="chip${attach[c.key] ? ' on' : ''}" data-chip="${c.key}" title="Include with the next prompt">${attach[c.key] ? '✓' : '+'} ${esc(c.label)}</button>`,
+    )
+    .join('');
+}
+
+chips.addEventListener('click', (e) => {
+  const key = (e.target as HTMLElement).closest('button')?.dataset.chip as
+    | keyof typeof attach
+    | undefined;
+  if (!key) return;
+  attach[key] = !attach[key];
+  renderChips();
+});
+
 function send() {
   const text = input.value.trim();
   if (!text || view.running || !connected) return;
@@ -210,8 +251,21 @@ function send() {
     vscode.postMessage({ type: 'newSession', agent: text.slice(7).trim() });
     return;
   }
+  const choice = {
+    selection: attach.selection && !!ctx.selection,
+    file: attach.file && !ctx.selection && !!ctx.file,
+    problems: attach.problems && ctx.problems > 0,
+  };
   view = addUserPrompt(view, text);
-  vscode.postMessage({ type: 'prompt', text });
+  const sent = [
+    choice.selection && ctx.selection
+      ? `${ctx.selection.path}:${ctx.selection.startLine}-${ctx.selection.endLine}`
+      : '',
+    choice.file ? ctx.file : '',
+    choice.problems ? `problems in ${ctx.file}` : '',
+  ].filter(Boolean);
+  if (sent.length) view = addInfo(view, sent.map((x) => `📎 ${x}`).join('\n'));
+  vscode.postMessage({ type: 'prompt', text, attach: choice });
   render();
 }
 
@@ -266,6 +320,15 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       break;
     case 'prefill':
       input.value = m.text + input.value;
+      input.focus();
+      break;
+    case 'context':
+      ctx = m.state;
+      renderChips();
+      break;
+    case 'attachSelection':
+      attach.selection = true;
+      renderChips();
       input.focus();
       break;
     case 'disconnected':
