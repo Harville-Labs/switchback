@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadAgents, parseAgentFile } from './agents.ts';
-import { ConfigError, loadConfig, stripJsonComments } from './config.ts';
+import { ConfigError, loadConfig, parseJsonc } from './config.ts';
 
 let dir: string;
 beforeEach(() => {
@@ -57,10 +57,9 @@ describe('config', () => {
     expect(() => loadConfig(dir, { HARNESS_HOME: join(dir, 'home') })).toThrow(ConfigError);
   });
 
-  test('comment stripping leaves strings alone', () => {
-    expect(JSON.parse(stripJsonComments('{"url":"http://x//y" /* c */}'))).toEqual({
-      url: 'http://x//y',
-    });
+  test('JSONC: comments and trailing commas, strings untouched, errors located', () => {
+    expect(parseJsonc('{"url":"http://x//y" /* c */, // t\n}')).toEqual({ url: 'http://x//y' });
+    expect(() => parseJsonc('{\n  "a": 1\n  "b": 2\n}')).toThrow('line 3, column 3: CommaExpected');
   });
 });
 

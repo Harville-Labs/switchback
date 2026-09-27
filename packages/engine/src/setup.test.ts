@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { probeContextWindow } from '@harness/providers';
-import { HarnessConfig, loadConfig } from './config.ts';
+import { HarnessConfig, loadConfig, parseJsonc } from './config.ts';
 import {
   buildSetupConfig,
   detectLocalServers,
@@ -208,6 +208,29 @@ describe('writeConfigLayer', () => {
     // The written project file loads cleanly through the normal path.
     const { config } = loadConfig(dir, { HARNESS_HOME: join(dir, 'home') });
     expect(config.routing.mode).toBe('local-only');
+  });
+
+  test('keeps the user’s comments and formatting', () => {
+    const file = join(dir, 'config.json');
+    const original = `{
+  // my GPU box
+  "providers": { "gpu": { "type": "openai-compatible", "baseUrl": "http://gpu:8000/v1" } },
+  "models": { "local": { "provider": "gpu", "model": "old", "contextWindow": 32768 } }, // tuned
+}
+`;
+    writeFileSync(file, original);
+    const result = writeConfigLayer(file, {
+      models: { local: { provider: 'gpu', model: 'new' } },
+      routing: { escalation: { policy: 'ask' } },
+    });
+    const text = readFileSync(file, 'utf8');
+    expect(text).toContain('// my GPU box');
+    expect(text).toContain('// tuned');
+    expect(parseJsonc(text)).toEqual(result.config);
+    expect(result.config).toMatchObject({
+      models: { local: { model: 'new', contextWindow: 32768 } },
+      routing: { escalation: { policy: 'ask' } },
+    });
   });
 
   test('refuses to write an invalid result', () => {

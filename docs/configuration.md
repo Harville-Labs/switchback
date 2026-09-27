@@ -11,7 +11,7 @@ Layers deep-merge in this order, with later layers winning:
 5. Organization policy `enforced`, then its `restrictions`
 6. `--mock` (any command) then swaps every provider for a scripted mock
 
-Files are JSON with `//` and `/* */` comments allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `harness doctor` shows which files were loaded.
+Files are JSONC: `//` and `/* */` comments and trailing commas are allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `harness doctor` shows which files were loaded.
 
 `HARNESS_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/agents/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
@@ -26,7 +26,7 @@ harness config edit       # open the user config in $EDITOR (--scope project for
 harness config schema     # JSON Schema for editor validation
 ```
 
-`harness init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It merges into an existing file, keeping unrelated keys, and saves the previous version as `config.json.bak` (comments are not preserved). Every prompt has a flag; see `harness --help`.
+`harness init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `harness --help`.
 
 Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config.
 

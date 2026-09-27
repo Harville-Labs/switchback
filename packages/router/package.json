@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@harness/protocol": "workspace:*",
+    "safe-stable-stringify": "^2.5.0",
     "zod": "^4.6.5"
   }
 }

@@ -2,6 +2,7 @@
  * Pure editing logic for the prompt input: a string plus a cursor offset.
  * Kept free of Ink so it can be unit-tested.
  */
+import { Fzf } from 'fzf';
 
 export interface EditorState {
   value: string;
@@ -23,14 +24,34 @@ export function insert(s: EditorState, text: string): EditorState {
   };
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/**
+ * Cursor offset one user-perceived character away, so emoji, flags, and
+ * combining accents are never split into invalid halves.
+ */
+function step(value: string, cursor: number, dir: -1 | 1): number {
+  if (dir < 0) {
+    if (cursor <= 0) return 0;
+    let prev = 0;
+    for (const { index } of graphemes.segment(value.slice(0, cursor))) prev = index;
+    return prev;
+  }
+  if (cursor >= value.length) return value.length;
+  const first = graphemes.segment(value.slice(cursor))[Symbol.iterator]().next().value;
+  return cursor + (first?.segment.length ?? 1);
+}
+
 export function backspace(s: EditorState): EditorState {
   if (s.cursor === 0) return s;
-  return { value: s.value.slice(0, s.cursor - 1) + s.value.slice(s.cursor), cursor: s.cursor - 1 };
+  const from = step(s.value, s.cursor, -1);
+  return { value: s.value.slice(0, from) + s.value.slice(s.cursor), cursor: from };
 }
 
 export function deleteForward(s: EditorState): EditorState {
   if (s.cursor >= s.value.length) return s;
-  return { value: s.value.slice(0, s.cursor) + s.value.slice(s.cursor + 1), cursor: s.cursor };
+  const to = step(s.value, s.cursor, 1);
+  return { value: s.value.slice(0, s.cursor) + s.value.slice(to), cursor: s.cursor };
 }
 
 /** Delete the word before the cursor (ctrl+w). */
@@ -48,7 +69,9 @@ export function deleteToLineStart(s: EditorState): EditorState {
 }
 
 export function moveHorizontal(s: EditorState, delta: number): EditorState {
-  return { ...s, cursor: Math.max(0, Math.min(s.value.length, s.cursor + delta)) };
+  let cursor = s.cursor;
+  for (let i = 0; i < Math.abs(delta); i++) cursor = step(s.value, cursor, delta < 0 ? -1 : 1);
+  return { ...s, cursor };
 }
 
 export function lineStart(s: EditorState): EditorState {
@@ -109,39 +132,34 @@ export function completeMention(s: EditorState, path: string): EditorState {
   };
 }
 
+const finders = new WeakMap<string[], Fzf<string[]>>();
+
+const stem = (p: string) =>
+  p
+    .slice(p.lastIndexOf('/') + 1)
+    .replace(/\.[^.]*$/, '')
+    .toLowerCase();
+
 /**
- * Rank paths for a query: subsequence match, preferring matches in the file
- * name, contiguous runs, and shorter paths.
+ * Rank paths for a query with fzf's algorithm (word-boundary and path-segment
+ * bonuses). Equal scores prefer an exact file name (`main` → `main.ts` over
+ * `main-notes.md`), then shorter paths. The finder is cached per file list so
+ * each keystroke doesn't rebuild it.
  */
 export function rankFiles(files: string[], query: string, limit = 8): string[] {
   if (!query) return files.slice(0, limit);
-  const q = query.toLowerCase();
-  const scored: { path: string; score: number }[] = [];
-  for (const path of files) {
-    const p = path.toLowerCase();
-    let score = 0;
-    let pi = 0;
-    let run = 0;
-    for (const ch of q) {
-      const found = p.indexOf(ch, pi);
-      if (found === -1) {
-        score = -1;
-        break;
-      }
-      run = found === pi ? run + 1 : 0;
-      score += 1 + run * 2;
-      pi = found + 1;
-    }
-    if (score < 0) continue;
-    const name = p.slice(p.lastIndexOf('/') + 1);
-    if (name.replace(/\.[^.]*$/, '') === q) score += 30;
-    if (name.includes(q)) score += 20;
-    if (name.startsWith(q)) score += 10;
-    score -= path.length * 0.05;
-    scored.push({ path, score });
+  let fzf = finders.get(files);
+  if (!fzf) {
+    fzf = new Fzf(files, { casing: 'case-insensitive' });
+    finders.set(files, fzf);
   }
-  return scored
-    .sort((a, b) => b.score - a.score)
+  const q = query.toLowerCase();
+  const exact = (p: string) => Number(stem(p) === q);
+  return fzf
+    .find(query)
+    .sort(
+      (a, b) => b.score - a.score || exact(b.item) - exact(a.item) || a.item.length - b.item.length,
+    )
     .slice(0, limit)
-    .map((x) => x.path);
+    .map((r) => r.item);
 }

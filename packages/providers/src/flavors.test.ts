@@ -160,3 +160,95 @@ describe('hosted providers', () => {
     expect(aliasModels('openai').haiku.id).toBe('gpt-6-luna');
   });
 });
+
+describe('openai SDK transport', () => {
+  function recorder(status = 200) {
+    const seen: { url: string; headers: Headers }[] = [];
+    const fetchStub = (async (url: string, init: RequestInit) => {
+      seen.push({ url: String(url), headers: new Headers(init.headers) });
+      if (status !== 200) return new Response('{"error":{"message":"busy"}}', { status });
+      return new Response(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+      );
+    }) as unknown as typeof fetch;
+    return { seen, fetchStub };
+  }
+
+  test('never picks up OPENAI_* from the environment', async () => {
+    const saved = { ...process.env };
+    process.env.OPENAI_API_KEY = 'sk-should-not-leak';
+    process.env.OPENAI_BASE_URL = 'https://wrong.example/v1';
+    process.env.OPENAI_ORG_ID = 'org-leak';
+    try {
+      const { seen, fetchStub } = recorder();
+      const p = new OpenAICompatibleProvider({
+        id: 'ollama',
+        baseUrl: 'http://localhost:11434/v1',
+        tier: 'local',
+        fetch: fetchStub,
+      });
+      await drain(p, {});
+      expect(seen[0]?.url).toBe('http://localhost:11434/v1/chat/completions');
+      expect(seen[0]?.headers.get('authorization')).toBeNull();
+      expect(seen[0]?.headers.get('openai-organization')).toBeNull();
+    } finally {
+      process.env = saved;
+    }
+  });
+
+  test('sends the configured key and extra headers', async () => {
+    const { seen, fetchStub } = recorder();
+    const p = new OpenAICompatibleProvider({
+      id: 'router',
+      baseUrl: 'https://api.example/v1',
+      tier: 'remote',
+      apiKey: 'k1',
+      headers: { 'x-title': 'harness' },
+      fetch: fetchStub,
+    });
+    await drain(p, {});
+    expect(seen[0]?.headers.get('authorization')).toBe('Bearer k1');
+    expect(seen[0]?.headers.get('x-title')).toBe('harness');
+  });
+
+  test('5xx from a local server is retryable and not retried by the SDK', async () => {
+    const { seen, fetchStub } = recorder(503);
+    const p = new OpenAICompatibleProvider({
+      id: 'ollama',
+      baseUrl: 'http://localhost:11434/v1',
+      tier: 'local',
+      fetch: fetchStub,
+    });
+    const err = await drain(p, {}).catch((e) => e);
+    expect(err).toMatchObject({ name: 'ProviderError', retryable: true });
+    expect(seen).toHaveLength(1);
+  });
+
+  test('400 is not retryable', async () => {
+    const { fetchStub } = recorder(400);
+    const p = new OpenAICompatibleProvider({
+      id: 'x',
+      baseUrl: 'http://localhost:1/v1',
+      tier: 'local',
+      fetch: fetchStub,
+    });
+    expect(await drain(p, {}).catch((e) => e)).toMatchObject({ retryable: false });
+  });
+
+  test('health reports HTTP status and unreachable servers', async () => {
+    const down = new OpenAICompatibleProvider({
+      id: 'x',
+      baseUrl: 'http://127.0.0.1:9/v1',
+      tier: 'local',
+    });
+    expect((await down.health()).ok).toBe(false);
+    const { fetchStub } = recorder(401);
+    const denied = new OpenAICompatibleProvider({
+      id: 'x',
+      baseUrl: 'http://localhost:1/v1',
+      tier: 'local',
+      fetch: fetchStub,
+    });
+    expect((await denied.health()).detail).toContain('HTTP 401');
+  });
+});

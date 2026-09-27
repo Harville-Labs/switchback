@@ -3,11 +3,13 @@ import {
   at,
   backspace,
   completeMention,
+  deleteForward,
   deleteToLineStart,
   deleteWord,
   empty,
   insert,
   mentionAt,
+  moveHorizontal,
   moveVertical,
   position,
   rankFiles,
@@ -17,6 +19,15 @@ describe('editing', () => {
   test('insert normalizes pasted line endings and moves the cursor', () => {
     const s = insert(empty, 'a\r\nb\rc');
     expect(s).toEqual({ value: 'a\nb\nc', cursor: 5 });
+  });
+
+  test('edits whole characters: emoji, flags, and combining accents', () => {
+    expect(backspace(at('hi 👍🏽')).value).toBe('hi ');
+    expect(backspace(at('🇺🇸')).value).toBe('');
+    expect(backspace(at('cafe\u0301')).value).toBe('caf'); // e + combining acute
+    expect(deleteForward({ value: '👨‍👩‍👧x', cursor: 0 }).value).toBe('x');
+    expect(moveHorizontal(at('a👍🏽'), -1).cursor).toBe(1);
+    expect(moveHorizontal({ value: 'a👍🏽b', cursor: 1 }, 1).cursor).toBe(5);
   });
 
   test('backspace, word delete, and line delete', () => {

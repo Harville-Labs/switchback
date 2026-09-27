@@ -8,6 +8,12 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Escalation prompts show an estimated cost (`≈ $0.04`) in the TUI and VS Code; `escalation.requested` carries `estimatedCostUsd` (#13)
 - Routing analytics: ledger entries record the routing rule and agent; `harness usage --period today|week|month --by rule|agent|model`, `/usage` shows the week with a breakdown, and the remote cache hit rate is reported (#17, part of #15)
 
+### Changed
+- OpenAI-compatible providers (OpenAI, DeepSeek, Ollama, vLLM, llama.cpp, LM Studio, hosted gateways) now use the official `openai` SDK: typed errors, backoff on 429/5xx for hosted APIs, and fail-fast for local servers. Environment variables such as `OPENAI_API_KEY` are never picked up implicitly, so a key can't leak to another server
+- Config files are parsed with `jsonc-parser` (trailing commas allowed, errors give line and column), and `harness init` edits existing files in place, keeping comments and formatting
+- TUI `@` file completion uses fzf's matching algorithm
+- TUI prompt editing moves and deletes by whole characters (emoji, flags, combining accents)
+
 ## [0.3.0] - 2026-09-27
 
 ### Added

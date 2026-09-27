@@ -11,6 +11,7 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "@anthropic-ai/vertex-sdk": "^0.19.11",
     "@harness/protocol": "workspace:*",
+    "openai": "^7.23.0",
     "zod": "^4.6.5"
   }
 }

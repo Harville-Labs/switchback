@@ -11,13 +11,8 @@ import {
   type CatalogModel,
   type HostedProviderKind,
 } from '@harness/providers';
-import {
-  deepMerge,
-  defaultConfig,
-  HarnessConfig,
-  referenceProblem,
-  stripJsonComments,
-} from './config.ts';
+import { applyEdits, type JSONPath, modify } from 'jsonc-parser';
+import { deepMerge, defaultConfig, HarnessConfig, parseJsonc, referenceProblem } from './config.ts';
 
 export {
   type DetectedModel,
@@ -148,26 +143,42 @@ export interface WriteResult {
   config: Record<string, unknown>;
 }
 
+/** Each leaf of a layer as a JSON path; arrays and empty objects are leaves. */
+function leaves(layer: Record<string, unknown>, prefix: JSONPath = []): [JSONPath, unknown][] {
+  return Object.entries(layer).flatMap(([k, v]) =>
+    v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length
+      ? leaves(v as Record<string, unknown>, [...prefix, k])
+      : [[[...prefix, k], v] as [JSONPath, unknown]],
+  );
+}
+
 /**
  * Merge a layer into a config file (creating it if needed), validating the
- * result against the schema first. Existing files are backed up to `.bak`
- * because rewriting drops comments.
+ * result against the schema first. Edits are applied in place, so the user's
+ * comments and formatting survive; the previous file is still kept as `.bak`.
  */
 export function writeConfigLayer(file: string, layer: Record<string, unknown>): WriteResult {
-  let existing: Record<string, unknown> = {};
+  let text = '{}';
   let backup: string | undefined;
   if (existsSync(file)) {
-    existing = JSON.parse(stripJsonComments(readFileSync(file, 'utf8')));
+    text = readFileSync(file, 'utf8');
     backup = `${file}.bak`;
     copyFileSync(file, backup);
   }
+  const existing = parseJsonc(text) as Record<string, unknown>;
   const merged = deepMerge(existing, layer);
   const check = HarnessConfig.safeParse(deepMerge(defaultConfig(), merged));
   const problem = check.success
     ? referenceProblem(check.data)
     : check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
   if (problem) throw new Error(`setup produced an invalid config: ${problem}`);
+  for (const [path, value] of leaves(layer)) {
+    text = applyEdits(
+      text,
+      modify(text, path, value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
+    );
+  }
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`);
+  writeFileSync(file, text.endsWith('\n') ? text : `${text}\n`);
   return { file, ...(backup ? { backup } : {}), config: merged };
 }

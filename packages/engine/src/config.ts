@@ -4,9 +4,11 @@
  * String values of the form `{env:NAME}` are replaced with the environment
  * variable so secrets never need to live in a config file.
  */
+
 import { existsSync, readFileSync } from 'node:fs';
 import { type Price, ProviderConfig } from '@harness/providers';
 import { RoutingConfig } from '@harness/router';
+import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
 import { applyRestrictions, leafPaths, type OrgPolicy, type OrgStatus } from './org/policy.ts';
 import { readCachedPolicy } from './org/store.ts';
@@ -108,9 +110,9 @@ export function loadConfig(
     if (!existsSync(file)) continue;
     let parsed: unknown;
     try {
-      parsed = JSON.parse(stripJsonComments(readFileSync(file, 'utf8')));
+      parsed = parseJsonc(readFileSync(file, 'utf8'));
     } catch (err) {
-      throw new ConfigError(`invalid JSON: ${(err as Error).message}`, file);
+      throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
     merged = deepMerge(merged, parsed as Record<string, unknown>);
     sources.push(file);
@@ -181,32 +183,21 @@ function resolveEnv(value: unknown, env: Record<string, string | undefined>): un
   return value;
 }
 
-/** Allow `//` and `/* *\/` comments in config files (strings are respected). */
-export function stripJsonComments(text: string): string {
-  let out = '';
-  let inString = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    const next = text[i + 1];
-    if (inString) {
-      out += c;
-      if (c === '\\') out += text[++i] ?? '';
-      else if (c === '"') inString = false;
-    } else if (c === '"') {
-      inString = true;
-      out += c;
-    } else if (c === '/' && next === '/') {
-      while (i < text.length && text[i] !== '\n') i++;
-      out += '\n';
-    } else if (c === '/' && next === '*') {
-      i += 2;
-      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++;
-      i++;
-    } else {
-      out += c;
-    }
+/**
+ * Parse a JSONC config file: comments and trailing commas allowed. Errors say
+ * where (`line 4, column 12: CommaExpected`).
+ */
+export function parseJsonc(text: string): unknown {
+  const errors: ParseError[] = [];
+  const value = parseJsoncText(text, errors, { allowTrailingComma: true });
+  const first = errors[0];
+  if (first) {
+    const before = text.slice(0, first.offset);
+    const line = before.split('\n').length;
+    const column = first.offset - before.lastIndexOf('\n');
+    throw new SyntaxError(`line ${line}, column ${column}: ${printParseErrorCode(first.error)}`);
   }
-  return out;
+  return value;
 }
 
 /** JSON Schema for config files (input shape: everything with a default is optional). */

@@ -82,7 +82,8 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 - Use Conventional Commits (`feat(router): add latency budget rule`). Reference the issue in the PR body (`Closes #12`).
 - `bun run check` must pass. CI runs the same checks plus the VS Code and binary builds.
 - Update docs in the same PR as behavior changes. A new config key without a line in [docs/configuration.md](docs/configuration.md) is incomplete.
-- Don't add dependencies casually. Every runtime dependency ships to customers. Justify new ones in the PR.
+- Don't hand-roll what a well-maintained library already does well (protocol SDKs, parsers, tokenizers, fuzzy matching). Use the vendor's official SDK for every provider that has one. Every runtime dependency ships to customers, so justify new ones in the PR; small, audited libraries beat home-grown code with edge-case bugs.
+- Deliberately hand-rolled, with reasons: NDJSON framing and the JSON-RPC dispatcher (about 100 lines; `vscode-jsonrpc` uses LSP `Content-Length` framing and would not simplify our transports), `deepMerge` (arrays replace rather than concatenate, which org-enforced settings rely on), the abortable `Semaphore` (per-waiter abort, which `p-limit` lacks), and the TUI's multiline editor (no Ink library does multiline).
 
 ## Things not to do
 

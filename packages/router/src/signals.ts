@@ -3,6 +3,7 @@
  * happened on each turn; the router reads a snapshot when routing the next one.
  */
 import type { Tier } from '@harness/protocol';
+import stableStringify from 'safe-stable-stringify';
 import type { EscalationConfig } from './config.ts';
 
 export interface SignalSnapshot {
@@ -79,13 +80,4 @@ export class SignalTracker {
     this.recentCalls = [];
     this.localTurnFailed = false;
   }
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'undefined';
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
 }

@@ -10,6 +10,7 @@
  * Fireworks, ...) as `generic` with `tier: remote`.
  */
 import type { ModelRef, Part, StopReason, Tier, Usage } from '@harness/protocol';
+import OpenAI from 'openai';
 import { probeContextWindow } from './local-detect.ts';
 import {
   type ChatEvent,
@@ -125,6 +126,7 @@ export function normalizeUsage(u: {
   prompt_tokens?: number;
   completion_tokens?: number;
   prompt_tokens_details?: { cached_tokens?: number } | null;
+  /** DeepSeek's name for cached input. */
   prompt_cache_hit_tokens?: number;
 }): Usage {
   const prompt = u.prompt_tokens ?? 0;
@@ -137,23 +139,6 @@ export function normalizeUsage(u: {
   };
 }
 
-/** Parse a `text/event-stream` body into `data:` payloads. */
-export async function* sseData(body: ReadableStream<Uint8Array>): AsyncIterable<string> {
-  const decoder = new TextDecoder();
-  let buffer = '';
-  for await (const chunk of body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    let nl = buffer.indexOf('\n');
-    while (nl !== -1) {
-      const line = buffer.slice(0, nl).replace(/\r$/, '');
-      buffer = buffer.slice(nl + 1);
-      if (line.startsWith('data:')) yield line.slice(5).trimStart();
-      nl = buffer.indexOf('\n');
-    }
-  }
-  if (buffer.startsWith('data:')) yield buffer.slice(5).trimStart();
-}
-
 const STOP_MAP: Record<string, StopReason> = {
   stop: 'end_turn',
   tool_calls: 'tool_use',
@@ -162,25 +147,54 @@ const STOP_MAP: Record<string, StopReason> = {
   content_filter: 'refusal',
 };
 
+/** Retryable: connection failures, timeouts, rate limits, and server errors. */
+function toProviderError(err: unknown, id: string): ProviderError {
+  if (err instanceof OpenAI.APIConnectionError)
+    return new ProviderError(`${id} is unreachable: ${err.message}`, id, true, { cause: err });
+  if (err instanceof OpenAI.APIError) {
+    const status = err.status ?? 0;
+    return new ProviderError(
+      `HTTP ${status} from ${id}: ${err.message.slice(0, 500)}`,
+      id,
+      status === 408 || status === 429 || status >= 500,
+      { cause: err },
+    );
+  }
+  return new ProviderError(`${id} failed: ${(err as Error).message}`, id, false, { cause: err });
+}
+
+/** Extra wire fields the SDK's types don't declare (DeepSeek, Ollama, vLLM). */
+type Delta = OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta & {
+  reasoning_content?: string | null;
+  reasoning?: string | null;
+};
+
 export class OpenAICompatibleProvider implements Provider {
   readonly id: string;
   readonly tier: Tier;
   private readonly baseUrl: string;
-  private readonly fetchImpl: typeof fetch;
+  private readonly client: OpenAI;
 
   constructor(private readonly options: OpenAICompatibleOptions) {
     this.id = options.id;
     this.tier = options.tier;
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
-    this.fetchImpl = options.fetch ?? fetch;
-  }
-
-  private headers(): Record<string, string> {
-    return {
-      'content-type': 'application/json',
-      ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
-      ...this.options.headers,
-    };
+    this.client = new OpenAI({
+      baseURL: this.baseUrl,
+      // Every option is explicit so the SDK never picks up OPENAI_* variables
+      // from the environment and sends an OpenAI key to some other server.
+      // Keyless local servers get no Authorization header at all.
+      apiKey: options.apiKey ?? 'unused',
+      adminAPIKey: null,
+      organization: null,
+      project: null,
+      webhookSecret: null,
+      defaultHeaders: { ...(options.apiKey ? {} : { Authorization: null }), ...options.headers },
+      // Local servers fail fast so the router can fall back; hosted APIs get
+      // the SDK's backoff for 429s and transient 5xx.
+      maxRetries: options.tier === 'local' ? 0 : 2,
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    });
   }
 
   private get flavor(): ChatFlavor {
@@ -193,15 +207,20 @@ export class OpenAICompatibleProvider implements Provider {
     }
     const started = performance.now();
     try {
-      const res = await this.fetchImpl(`${this.baseUrl}/models`, {
-        headers: this.headers(),
-        signal: signal ?? AbortSignal.timeout(2000),
+      await this.client.models.list({
+        maxRetries: 0,
+        timeout: 2000,
+        ...(signal ? { signal } : {}),
       });
-      const latencyMs = Math.round(performance.now() - started);
-      return res.ok
-        ? { ok: true, detail: `reachable at ${this.baseUrl}`, latencyMs }
-        : { ok: false, detail: `HTTP ${res.status} from ${this.baseUrl}/models`, latencyMs };
+      return {
+        ok: true,
+        detail: `reachable at ${this.baseUrl}`,
+        latencyMs: Math.round(performance.now() - started),
+      };
     } catch (err) {
+      const latencyMs = Math.round(performance.now() - started);
+      if (err instanceof OpenAI.APIError && err.status)
+        return { ok: false, detail: `HTTP ${err.status} from ${this.baseUrl}/models`, latencyMs };
       return { ok: false, detail: `unreachable at ${this.baseUrl}: ${(err as Error).message}` };
     }
   }
@@ -209,16 +228,20 @@ export class OpenAICompatibleProvider implements Provider {
   async contextWindow(model: string) {
     // Local servers can say what they load; hosted APIs are configured from the catalog.
     if (this.tier === 'remote') return undefined;
-    return probeContextWindow(this.baseUrl, model, { fetch: this.fetchImpl });
+    return probeContextWindow(this.baseUrl, model, {
+      ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+    });
   }
 
   async *stream(request: ChatRequest): AsyncIterable<ChatEvent> {
     const flavor = this.flavor;
     const origin: ModelRef = { provider: this.id, model: request.model };
     const effort = request.effort;
+    // Built loosely typed: DeepSeek's `thinking` and replayed `reasoning_content`
+    // aren't in the SDK's types, and the SDK sends the body as given.
     const body = {
       model: request.model,
-      stream: true,
+      stream: true as const,
       stream_options: { include_usage: true },
       // OpenAI's reasoning models reject max_tokens.
       ...(flavor === 'openai'
@@ -237,33 +260,12 @@ export class OpenAICompatibleProvider implements Provider {
       ...(request.tools.length
         ? {
             tools: request.tools.map((t) => ({
-              type: 'function',
+              type: 'function' as const,
               function: { name: t.name, description: t.description, parameters: t.inputSchema },
             })),
           }
         : {}),
-    };
-
-    let res: Response;
-    try {
-      res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: this.headers(),
-        body: JSON.stringify(body),
-        signal: request.signal ?? null,
-      });
-    } catch (err) {
-      if (request.signal?.aborted) throw err;
-      throw new ProviderError(`request to ${this.baseUrl} failed`, this.id, true, { cause: err });
-    }
-    if (!res.ok || !res.body) {
-      const detail = await res.text().catch(() => '');
-      throw new ProviderError(
-        `HTTP ${res.status} from ${this.id}: ${detail.slice(0, 500)}`,
-        this.id,
-        res.status >= 500 || res.status === 429,
-      );
-    }
+    } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
 
     let text = '';
     let reasoningText = '';
@@ -271,50 +273,36 @@ export class OpenAICompatibleProvider implements Provider {
     let usage: Usage = { inputTokens: 0, outputTokens: 0 };
     let finish: string | undefined;
 
-    for await (const data of sseData(res.body)) {
-      if (data === '[DONE]') break;
-      let chunk: {
-        choices?: {
-          delta?: {
-            content?: string | null;
-            reasoning_content?: string | null;
-            reasoning?: string | null;
-            tool_calls?: {
-              index: number;
-              id?: string;
-              function?: { name?: string; arguments?: string };
-            }[];
-          };
-          finish_reason?: string | null;
-        }[];
-        usage?: Parameters<typeof normalizeUsage>[0] | null;
-      };
-      try {
-        chunk = JSON.parse(data);
-      } catch {
-        continue;
+    try {
+      const stream = await this.client.chat.completions.create(body, {
+        ...(request.signal ? { signal: request.signal } : {}),
+      });
+      for await (const chunk of stream) {
+        if (chunk.usage) usage = normalizeUsage(chunk.usage);
+        const choice = chunk.choices?.[0];
+        if (!choice) continue;
+        const delta = (choice.delta ?? {}) as Delta;
+        const reasoning = delta.reasoning_content ?? delta.reasoning;
+        if (reasoning) {
+          reasoningText += reasoning;
+          yield { type: 'reasoning.delta', text: reasoning };
+        }
+        if (delta.content) {
+          text += delta.content;
+          yield { type: 'text.delta', text: delta.content };
+        }
+        for (const tc of delta.tool_calls ?? []) {
+          const existing = calls.get(tc.index) ?? { id: '', name: '', args: '' };
+          if (tc.id) existing.id = tc.id;
+          if (tc.function?.name) existing.name += tc.function.name;
+          if (tc.function?.arguments) existing.args += tc.function.arguments;
+          calls.set(tc.index, existing);
+        }
+        if (choice.finish_reason) finish = choice.finish_reason;
       }
-      if (chunk.usage) usage = normalizeUsage(chunk.usage);
-      const choice = chunk.choices?.[0];
-      if (!choice) continue;
-      const delta = choice.delta ?? {};
-      const reasoning = delta.reasoning_content ?? delta.reasoning;
-      if (reasoning) {
-        reasoningText += reasoning;
-        yield { type: 'reasoning.delta', text: reasoning };
-      }
-      if (delta.content) {
-        text += delta.content;
-        yield { type: 'text.delta', text: delta.content };
-      }
-      for (const tc of delta.tool_calls ?? []) {
-        const existing = calls.get(tc.index) ?? { id: '', name: '', args: '' };
-        if (tc.id) existing.id = tc.id;
-        if (tc.function?.name) existing.name += tc.function.name;
-        if (tc.function?.arguments) existing.args += tc.function.arguments;
-        calls.set(tc.index, existing);
-      }
-      if (choice.finish_reason) finish = choice.finish_reason;
+    } catch (err) {
+      if (request.signal?.aborted) throw err;
+      throw toProviderError(err, this.id);
     }
 
     const parts: Part[] = [];
