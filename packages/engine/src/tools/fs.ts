@@ -1,5 +1,5 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
 import { defineTool, diffPreview, resolveInWorkspace, ToolError, truncate } from './tool.ts';
@@ -134,10 +134,97 @@ export const globTool = defineTool({
   },
 });
 
+const GREP_LIMIT = 300;
+
+export interface GrepInput {
+  pattern: string;
+  path?: string | undefined;
+  glob?: string | undefined;
+  ignoreCase?: boolean | undefined;
+}
+
+/** Plain JavaScript search: the fallback when ripgrep is missing or rejects the regex. */
+export async function grepJs(input: GrepInput, cwd: string, root: string): Promise<string[]> {
+  let re: RegExp;
+  try {
+    re = new RegExp(input.pattern, input.ignoreCase ? 'i' : '');
+  } catch (err) {
+    throw new ToolError(`invalid regex: ${(err as Error).message}`);
+  }
+  const out: string[] = [];
+  for await (const f of new Glob(input.glob ?? '**/*').scan({ cwd, onlyFiles: true })) {
+    if (IGNORED.test(f)) continue;
+    const full = `${cwd}/${f}`;
+    const text = await readFile(full, 'utf8').catch(() => '');
+    if (text.includes('\u0000')) continue; // binary
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (re.test(lines[i] ?? '')) {
+        out.push(`${relative(root, full)}:${i + 1}: ${(lines[i] ?? '').slice(0, 300)}`);
+        if (out.length >= GREP_LIMIT) return out;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * ripgrep search: much faster, and honors .gitignore. Returns undefined when
+ * rg can't handle the pattern (its regex dialect lacks lookaround), so the
+ * caller can fall back.
+ */
+export async function grepRipgrep(
+  rg: string,
+  input: GrepInput,
+  cwd: string,
+  root: string,
+): Promise<string[] | undefined> {
+  const args = ['--json', '--no-config', '--no-require-git', '--max-columns', '300'];
+  if (input.ignoreCase) args.push('-i');
+  for (const dir of ['node_modules', '.git', 'dist', '.tsbuild', '.next', 'target', '.venv'])
+    args.push('--glob', `!${dir}`);
+  if (input.glob) args.push('--glob', input.glob);
+  args.push('-e', input.pattern);
+  const proc = Bun.spawn([rg, ...args], { cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' });
+  const out: string[] = [];
+  let buffer = '';
+  const decoder = new TextDecoder();
+  for await (const chunk of proc.stdout) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let nl = buffer.indexOf('\n');
+    while (nl !== -1) {
+      const line = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 1);
+      nl = buffer.indexOf('\n');
+      const ev = JSON.parse(line) as {
+        type: string;
+        data: { path?: { text?: string }; lines?: { text?: string }; line_number?: number };
+      };
+      if (ev.type !== 'match' || !ev.data.path?.text) continue;
+      const text = (ev.data.lines?.text ?? '').replace(/\r?\n$/, '');
+      out.push(`${relative(root, join(cwd, ev.data.path.text))}:${ev.data.line_number}: ${text}`);
+      if (out.length >= GREP_LIMIT) {
+        proc.kill();
+        return out;
+      }
+    }
+  }
+  const code = await proc.exited;
+  if (code === 2) {
+    const stderr = await new Response(proc.stderr).text();
+    // A pattern rg rejects may still be a valid JavaScript regex (e.g. lookaround).
+    if (/regex parse error|error parsing regex/i.test(stderr)) return undefined;
+    throw new ToolError(stderr.trim().split('\n')[0] ?? 'ripgrep failed');
+  }
+  return out;
+}
+
+let ripgrep: string | null | undefined;
+
 export const grepTool = defineTool({
   name: 'grep',
   description:
-    'Search file contents with a regular expression. Returns path:line: text. Optionally filter files with a glob.',
+    'Search file contents with a regular expression. Returns path:line: text. Optionally filter files with a glob. Respects .gitignore when ripgrep is installed.',
   schema: z.object({
     pattern: z.string(),
     path: z.string().optional(),
@@ -149,28 +236,12 @@ export const grepTool = defineTool({
   summarize: (i) => `grep ${i.pattern}`,
   async run(input, ctx) {
     const cwd = resolveInWorkspace(ctx.workspaceRoot, input.path ?? '.');
-    let re: RegExp;
-    try {
-      re = new RegExp(input.pattern, input.ignoreCase ? 'i' : '');
-    } catch (err) {
-      throw new ToolError(`invalid regex: ${(err as Error).message}`);
-    }
-    const out: string[] = [];
-    for await (const f of new Glob(input.glob ?? '**/*').scan({ cwd, onlyFiles: true })) {
-      if (IGNORED.test(f)) continue;
-      const full = `${cwd}/${f}`;
-      const text = await readFile(full, 'utf8').catch(() => '');
-      if (text.includes('\u0000')) continue; // binary
-      const lines = text.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        if (re.test(lines[i] ?? '')) {
-          out.push(
-            `${relative(ctx.workspaceRoot, full)}:${i + 1}: ${(lines[i] ?? '').slice(0, 300)}`,
-          );
-          if (out.length >= 300) return truncate(`${out.join('\n')}\n[result limit reached]`);
-        }
-      }
-    }
-    return out.length ? truncate(out.join('\n')) : 'no matches';
+    if (ripgrep === undefined) ripgrep = process.env.HARNESS_NO_RIPGREP ? null : Bun.which('rg');
+    const out =
+      (ripgrep ? await grepRipgrep(ripgrep, input, cwd, ctx.workspaceRoot) : undefined) ??
+      (await grepJs(input, cwd, ctx.workspaceRoot));
+    if (!out.length) return 'no matches';
+    const body = out.join('\n');
+    return truncate(out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body);
   },
 });
