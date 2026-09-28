@@ -41,15 +41,16 @@ Escalate less often and more precisely.
 - Append-only context compaction for long sessions
 - Routing analytics: `harness usage --by rule|agent|model`, cache hit rate
 
-## v0.5 Subagents and integrations
+## v0.5 Subagents and integrations (released)
 
-- Subagent tree view with drill-down in both clients
+- Subagent drill-down in both clients (nested subagents included)
 - Background subagents that report later
 - Git worktree isolation for parallel editing subagents
-- MCP client support (tools and resources from MCP servers)
-- External agent runtimes as subagents: Claude Agent SDK, Claude Managed Agents, OpenAI Agents SDK, Amazon Bedrock AgentCore
+- MCP client support (tools; resources are next)
+- External agent runtimes as subagents, starting with Claude Code via the Claude Agent SDK (Managed Agents, OpenAI Agents SDK, and Bedrock AgentCore are next)
 - Per-agent budgets
-- More providers: Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry
+- More providers: Google Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry
+- `harness agents new` for guided agent authoring
 
 ## v1.0 Product readiness
 

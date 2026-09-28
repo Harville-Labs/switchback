@@ -4,6 +4,8 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
 ### Added
 - Subagent drill-down: the shared view keeps a nested view per subagent. VS Code rows expand to show a subagent's routes, tool calls, nested subagents, and report; the TUI shows running subagents' activity inline and adds `/subagents` and `/subagent <n>` (#18)
 - MCP client support with the official SDK: stdio, streamable HTTP, and SSE servers under `mcpServers` (Claude Code's format; a project's `.mcp.json` is read too). Tools appear as `mcp__<server>__<tool>`, agents can list them, and a new `permissions.mcp` category (default `ask`) can be overridden per server. Project-defined servers start only after `harness mcp trust`. `harness mcp`, `/mcp`, `mcp.list`, and a doctor section show server state; orgs can set `allowUserMcpServers: false` (#21)
