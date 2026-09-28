@@ -180,4 +180,34 @@ describe('external runtime as a subagent', () => {
       .find((p) => p.type === 'tool_result');
     expect(report?.type === 'tool_result' && report.content).toContain('local-only');
   });
+
+  test('a runtime may not touch private files, whatever the permission policy', async () => {
+    const { e } = engine({
+      interaction: 'approve',
+      config: { privacy: { localOnlyPaths: ['a.ts'] } },
+    });
+    const s = e.createSession({});
+    await e.runTurn(s.id, 'go');
+    const report = e
+      .getSession(s.id)
+      .messages.flatMap((m) => m.parts)
+      .find((p) => p.type === 'tool_result');
+    expect(report?.type === 'tool_result' && report.content).toBe('Could not edit.');
+  });
+
+  test('a private session never starts an external runtime', async () => {
+    const { e, calls } = engine({
+      interaction: 'approve',
+      config: { privacy: { localOnlyPaths: ['secret.txt'] } },
+    });
+    Bun.write(join(root, 'secret.txt'), 'hunter2');
+    const s = e.createSession({});
+    await e.runTurn(s.id, 'go, see @secret.txt');
+    expect(calls).toHaveLength(0);
+    const report = e
+      .getSession(s.id)
+      .messages.flatMap((m) => m.parts)
+      .find((p) => p.type === 'tool_result');
+    expect(report?.type === 'tool_result' && report.content).toContain('never leaves this machine');
+  });
 });

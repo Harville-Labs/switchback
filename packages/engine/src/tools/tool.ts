@@ -11,6 +11,8 @@ export interface SubagentResult {
   ok: boolean;
   text: string;
   sessionId: string;
+  /** Why the report must stay local: the subagent saw private content. */
+  private?: string;
 }
 
 export interface ToolContext {

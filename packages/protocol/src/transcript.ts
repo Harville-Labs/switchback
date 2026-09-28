@@ -21,6 +21,8 @@ export interface TextPart {
   attachment?: { path: string };
   /** Set on the message that delivers a background subagent's report to its parent. */
   backgroundTask?: { sessionId: string; agent: string; ok: boolean };
+  /** Why this part must never be sent to a remote model (see `privacy` in docs/configuration.md). */
+  private?: string;
 }
 
 /**
@@ -48,6 +50,8 @@ export interface ToolResultPart {
   callId: string;
   content: string;
   isError?: boolean;
+  /** Why this result must never be sent to a remote model, e.g. `read secrets/prod.env`. */
+  private?: string;
 }
 
 /**

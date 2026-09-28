@@ -36,7 +36,10 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
         item.status === 'error' && item.output
           ? `<div class="detail error">${esc(item.output.split('\n')[0] ?? '')}</div>`
           : '';
-      return `<div class="tool"><span class="${item.status}">${icon}</span> ${esc(toolLabel(item.name, item.input))}</div>${detail}`;
+      const lock = item.private
+        ? ` <span class="private" title="${esc(item.private)}: this session now stays on local models">🔒 stays local</span>`
+        : '';
+      return `<div class="tool"><span class="${item.status}">${icon}</span> ${esc(toolLabel(item.name, item.input))}${lock}</div>${detail}`;
     }
     case 'subagent': {
       const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';

@@ -87,6 +87,7 @@ Usage reports contain only token counts and costs per model per day, never promp
 
 ## Security and enforcement
 
+- Put `privacy.localOnlyPaths` and `privacy.secrets` in `enforced` to guarantee that matching files never reach a remote model on any member's machine, whatever their own settings say ([privacy.md](privacy.md)). An enforced list replaces the user's list rather than adding to it; put the org's paths in `defaults` instead if users should be able to extend it (they can then also shorten it).
 - Credentials live in `~/.config/harness/auth.json` and the cached policy in the data directory, both readable only by the user (mode 0600).
 - If a policy can't be refreshed (server down, token revoked), the last cached policy keeps applying. It's removed only by `harness logout`.
 - **Enforcement happens on the client.** It reliably governs cooperative users and every Harness client, but someone with control of their own machine can sign out or modify the binary. For hard guarantees:

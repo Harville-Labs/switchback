@@ -608,6 +608,25 @@
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
+    "privacy": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "localOnlyPaths": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "secrets": {
+          "default": "redact",
+          "type": "string",
+          "enum": ["redact", "block", "off"]
+        }
+      }
+    },
     "compaction": {
       "default": {},
       "type": "object",

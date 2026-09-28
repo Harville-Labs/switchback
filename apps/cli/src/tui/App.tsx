@@ -393,6 +393,7 @@ function StatusBar({
         {session.agent} · route {route}
         {tier ? ' · last ' : ''}
         {tier ? <Text color={tier === 'local' ? 'green' : 'yellow'}>{tier}</Text> : null}
+        {view.private ? <Text color="cyan"> · 🔒 local only</Text> : null}
       </Text>
       <Text dimColor>
         session ${view.costUsd.toFixed(4)}
@@ -522,6 +523,7 @@ function Item({
         <Box flexDirection="column">
           <Text>
             <Text color={color}>{icon}</Text> {toolLabel(item.name, item.input)}
+            {item.private ? <Text color="cyan"> 🔒 stays local</Text> : null}
           </Text>
           {item.status === 'error' && item.output ? (
             <Text color="red" dimColor>

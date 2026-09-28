@@ -59,6 +59,7 @@ app.innerHTML = `
   .prompt { border: 1px solid var(--vscode-focusBorder); border-radius: 4px; padding: 8px; margin: 6px 10px; }
   .prompt button { margin: 6px 6px 0 0; }
   .prompt .estimate { color: var(--vscode-charts-yellow); }
+  .tool .private { color: var(--vscode-charts-blue); font-size: 0.9em; }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
   .chip { font-size: .8em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--vscode-panel-border); background: transparent; color: var(--vscode-foreground); opacity: .7; }
   .chip.on { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: transparent; opacity: 1; }
@@ -111,7 +112,7 @@ function render() {
   cancelBtn.hidden = !view.running;
   routeSelect.value = route;
   statusEl.textContent = connected
-    ? `${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}`
+    ? `${view.private ? '🔒 local only · ' : ''}${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}`
     : 'disconnected';
 }
 

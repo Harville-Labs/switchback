@@ -201,6 +201,53 @@ describe('Router', () => {
   });
 });
 
+describe('privacy', () => {
+  const privacy = { reason: 'read secrets/prod.env' };
+
+  test('keeps a private session local, even on an explicit remote request', () => {
+    const d = routed(router().decide(input({ preference: 'remote', privacy })));
+    expect(d.model.alias).toBe('local');
+    expect(d.rule).toBe('privacy');
+    expect(d.reason).toContain('secrets/prod.env');
+  });
+
+  test('beats remote-only mode, agent pins, and context overflow', () => {
+    for (const r of [
+      routed(router({ mode: 'remote-only' }).decide(input({ privacy }))),
+      routed(router().decide(input({ privacy, agent: { name: 'x', route: 'remote' } }))),
+      routed(router().decide(input({ privacy, estimatedInputTokens: 30_000 }))),
+    ]) {
+      expect(r.model.tier).toBe('local');
+      expect(r.rule).toBe('privacy');
+    }
+  });
+
+  test('does not ask to escalate a private session', () => {
+    const cfg = RoutingConfig.parse({ escalation: { policy: 'ask' } });
+    const t = new SignalTracker(cfg.escalation);
+    t.startUserTurn();
+    t.recordLocalFailure();
+    const d = routed(
+      router({ escalation: { policy: 'ask' } }).decide(input({ privacy, signals: t.snapshot() })),
+    );
+    expect(d.rule).toBe('privacy');
+    expect(d.reason).toContain('local model failed');
+  });
+
+  test('blocks rather than falling back to remote when local is down', () => {
+    const down = { ...LOCAL, available: false };
+    const d = router({}, { local: down }).decide(input({ privacy }));
+    expect(d.kind).toBe('block');
+    expect(d.rule).toBe('privacy');
+    expect(d.reason).toContain('no local model is available');
+  });
+
+  test('a session without private content routes normally', () => {
+    const d = routed(router().decide(input({ preference: 'remote' })));
+    expect(d.model.alias).toBe('remote');
+  });
+});
+
 describe('multiple models per tier', () => {
   const LAPTOP: ModelInfo = {
     alias: 'laptop',

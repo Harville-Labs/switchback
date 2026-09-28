@@ -49,6 +49,12 @@ export interface RouteInput {
   difficulty?: Difficulty;
   /** A subagent invocation's own budget and what it (and its subagents) spent so far. */
   invocationBudget?: { agent: string; limitUsd: number; spentUsd: number };
+  /**
+   * The session holds content that must never reach a remote model (a
+   * `privacy.localOnlyPaths` match, or a secret under `privacy.secrets:
+   * block`). Wins over every rule, including an explicit remote request.
+   */
+  privacy?: { reason: string };
 }
 
 export type RouteDecision =
@@ -209,6 +215,7 @@ export class Router {
     if (d && c && remote.model && LEVEL[d.level] >= LEVEL[c.escalateOn]) {
       const reason = `classifier rated the prompt ${d.level}${d.reason ? `: ${d.reason}` : ''}`;
       const policy = this.config.escalation.policy;
+      if (input.privacy) return this.privateLocal(input.privacy, local, reason);
       if (policy === 'auto' || input.escalationApproved)
         return route(remote, 'classifier', reason, true);
       if (policy === 'ask')
@@ -219,6 +226,7 @@ export class Router {
     const why = this.qualityProblem(input.signals);
     if (why && remote.model) {
       const policy = this.config.escalation.policy;
+      if (input.privacy) return this.privateLocal(input.privacy, local, why);
       if (policy === 'auto' || input.escalationApproved)
         return route(remote, 'escalation', why, true);
       if (policy === 'ask')
@@ -229,6 +237,28 @@ export class Router {
     return local.model
       ? route(local, 'default', 'local by default')
       : route(remote, 'default', 'no local model configured (run `harness init`)');
+  }
+
+  /** A would-be remote turn kept local for privacy; blocked when no local model can take it. */
+  private privateLocal(
+    privacy: { reason: string },
+    local: Choice,
+    why?: string,
+  ): Extract<RouteDecision, { kind: 'route' | 'block' }> {
+    const reason = `${why ? `${why}, but ` : ''}this session holds private content (${privacy.reason}), which never leaves this machine`;
+    if (!local.model?.available)
+      return {
+        kind: 'block',
+        rule: 'privacy',
+        reason: `${reason}, and no local model is available`,
+      };
+    return {
+      kind: 'route',
+      model: local.model,
+      rule: 'privacy',
+      reason: `${reason}; staying local`,
+      escalated: false,
+    };
   }
 
   private qualityProblem(s: SignalSnapshot): string | undefined {
@@ -249,6 +279,9 @@ export class Router {
     remoteChain: string[],
   ): RouteDecision {
     let d = decision;
+
+    // Privacy first: nothing else may send private content to a remote model.
+    if (d.model.tier === 'remote' && input.privacy) return this.privateLocal(input.privacy, local);
 
     // A subagent's own budget: once spent, it continues locally or stops.
     const ib = input.invocationBudget;
@@ -282,6 +315,7 @@ export class Router {
     }
 
     // Availability: every model in the chosen tier is down, so fall back across tiers.
+    if (!d.model.available && input.privacy) return this.privateLocal(input.privacy, local);
     if (!d.model.available) {
       const fb = this.config.fallback;
       const other =

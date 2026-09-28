@@ -39,7 +39,9 @@ A tier pin in an agent definition (`route: local`) is a preference: if that tier
 
 Whichever rule picks a tier, the model within it comes from that tier's list: the first that's reachable and fits. When that isn't the first model listed, the decision says so with `rule: context-fit` (an earlier model's window is too small) or `rule: fallback` (an earlier model's server is down), and the reason names both models.
 
-Three guards then run on the chosen target:
+Four guards then run on the chosen target:
+
+- **Privacy** (`rule: privacy`). A session holding private content (a `privacy.localOnlyPaths` match, or a secret under `privacy.secrets: block`) never goes remote, whatever picked the target: not for a user override, `remote-only` mode, an agent pin, or a fallback when the local server is down. The call runs on a local model or is blocked. See [privacy.md](privacy.md).
 
 - **Agent budget** (`rule: agent-budget`). A subagent invocation with `budgetUsd` (its own or `subagents.budgetUsd`) that has spent it, counting its own subagents, continues locally; with no local model it's stopped and its parent is told why. Nested subagents count against every budgeted invocation above them.
 

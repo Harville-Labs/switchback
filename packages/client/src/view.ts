@@ -25,6 +25,8 @@ export type ViewItem =
       input: unknown;
       status: 'running' | 'ok' | 'error';
       output?: string;
+      /** The result carried private content (`privacy.localOnlyPaths`). */
+      private?: string;
     }
   | {
       kind: 'subagent';
@@ -63,6 +65,19 @@ function compactedLabel(messages: number, before: number, after: number): string
   return `Compacted ${messages} earlier messages into a summary (~${k(before)} → ~${k(after)} tokens). The full history is kept.`;
 }
 
+/** `Redacted 2 secrets (GITHUB_TOKEN ×2) before sending to claude-opus-5`. */
+export function redactedLabel(kinds: string[], model: ModelRef): string {
+  const counts = new Map<string, number>();
+  for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
+  const list = [...counts].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(', ');
+  return `Redacted ${kinds.length} secret${kinds.length === 1 ? '' : 's'} (${list}) before sending to ${model.model}; the model sees placeholders.`;
+}
+
+/** Shown when a session becomes pinned local. */
+export function privateLabel(reason: string): string {
+  return `🔒 This session now stays on local models: ${reason} (privacy.localOnlyPaths).`;
+}
+
 /** `≈ $0.04`, shared by both clients' escalation prompts; empty when unknown. */
 export function estimateLabel(usd: number | undefined): string {
   if (usd === undefined) return '';
@@ -78,6 +93,8 @@ export interface ViewState {
   escalations: PendingEscalation[];
   costUsd: number;
   lastTier?: Tier;
+  /** Why the session is pinned local for privacy; set once and never cleared. */
+  private?: string;
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
   children: Record<string, ViewState>;
 }
@@ -154,6 +171,7 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
           if (t) {
             t.status = p.isError ? 'error' : 'ok';
             t.output = p.content;
+            if (p.private) t.private = p.private;
           }
         }
       }
@@ -186,9 +204,13 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
     });
   });
   const lastRoute = items.findLast((i) => i.kind === 'route');
+  const priv = messages
+    .flatMap((m) => m.parts)
+    .find((p) => (p.type === 'text' || p.type === 'tool_result') && p.private);
   return {
     ...initialView(session.id),
     items,
+    ...(priv && 'private' in priv && priv.private ? { private: priv.private } : {}),
     // Joining a session mid-turn: the live events that follow will finish it.
     running: !!session.running,
     costUsd: session.costUsd,
@@ -354,8 +376,13 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
           ...(items[i] as Extract<ViewItem, { kind: 'tool' }>),
           status: updated.status,
           output: event.output,
+          ...(event.private ? { private: event.private } : {}),
         };
-      else items.push(updated);
+      else items.push({ ...updated, ...(event.private ? { private: event.private } : {}) });
+      if (event.private && !state.private) {
+        items.push({ kind: 'info', id: `p${items.length}`, text: privateLabel(event.private) });
+        return { ...state, items, private: event.private };
+      }
       return { ...state, items };
     }
     case 'subagent.started':
@@ -410,6 +437,13 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
           },
         ],
       };
+    case 'secrets.redacted':
+      items.push({
+        kind: 'info',
+        id: `s${items.length}`,
+        text: redactedLabel(event.kinds, event.model),
+      });
+      return { ...state, items };
     case 'context.compacted':
       items.push({
         kind: 'info',

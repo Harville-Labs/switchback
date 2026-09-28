@@ -56,7 +56,8 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
 | `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step |
 | `text.delta` / `reasoning.delta` | Streaming output |
-| `tool.started` / `tool.completed` | Tool calls, with output and `isError` |
+| `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local |
+| `secrets.redacted` | Secrets were replaced with placeholders in a request to a remote model; `kinds` names each one (repeats included) and `model` the recipient. Sent only when a request contains more than the previous one |
 | `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file |
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |

@@ -4,6 +4,9 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- Privacy: `privacy.localOnlyPaths` pins a session to local models for good once content from a matching file enters it (reads, grep hits, edits, mentions, attachments, bash commands naming the path, subagent reports). A new router guard, `privacy`, overrides every other rule, including explicit remote requests. The mark lives in the transcript, is inherited by subagents, and blocks external runtimes and remote compaction. `privacy.secrets` (default `redact`) scans every remote request with secretlint and replaces credentials with placeholders in the outbound copy only (`block` keeps the turn local instead). A `secrets.redacted` event and `🔒` markers in both clients show what happened (#45)
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

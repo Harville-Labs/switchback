@@ -57,6 +57,14 @@ import { allowsMcpTool, McpHub } from './mcp/hub.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import type { OrgStatus } from './org/policy.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
+import {
+  type PrivatePathMatcher,
+  privatePathMatcher,
+  privateReason,
+  privateToolUse,
+  redactOutbound,
+  redactSecrets,
+} from './privacy.ts';
 import { ClaudeAgentSdkRuntime } from './runtimes/claude-agent-sdk.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
 import { Semaphore } from './semaphore.ts';
@@ -138,6 +146,10 @@ interface LiveSession {
   /** The previous remote call, to check that the next one hits the prompt cache. */
   lastRemote?: { key: string; at: number };
   cacheWarned?: boolean;
+  /** Why the session holds private content and must stay local; never cleared. */
+  private?: string;
+  /** Secrets redacted from the last remote request, to report only new ones. */
+  redacted?: number;
 }
 
 /** Shortest cache lifetime among providers (Anthropic's default TTL). */
@@ -185,6 +197,7 @@ export class Engine {
   private agentErrorsSeen = new Set<string>();
   private readonly now: () => Date;
   private mcp: McpHub | undefined;
+  private privateMatcher: { key: string; matches: PrivatePathMatcher | undefined } | undefined;
 
   constructor(private readonly options: EngineOptions) {
     const { config } = options;
@@ -419,7 +432,7 @@ export class Engine {
     turnId = `turn_${crypto.randomUUID().slice(0, 8)}`,
     parentSignal?: AbortSignal,
     extra: Attachment[] = [],
-    options: { waitForBackground?: boolean } = {},
+    options: { waitForBackground?: boolean; private?: string } = {},
   ): Promise<TurnResult> {
     const session = typeof s === 'string' ? this.live(s) : s;
     if (session.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is busy');
@@ -432,11 +445,22 @@ export class Engine {
     this.emit({ type: 'turn.started', ...this.scope(session), turnId });
     // An empty prompt continues the session with whatever reports are waiting.
     if (text) {
+      const matches = this.privatePaths();
       const attachments = [
         ...(await expandAttachments(extra, this.rootOf(session)).catch(() => [])),
         ...(await expandMentions(text, this.rootOf(session)).catch(() => [])),
-      ];
-      this.append(session, { role: 'user', parts: [{ type: 'text', text }, ...attachments] });
+      ].map((p) => {
+        // A file attachment's path may carry a line range (`src/a.ts:3-9`).
+        const path = p.attachment?.path.replace(/:\d+-\d+$/, '');
+        return path && matches?.(path) ? { ...p, private: `attached ${path}` } : p;
+      });
+      this.append(session, {
+        role: 'user',
+        parts: [
+          { type: 'text', text, ...(options.private ? { private: options.private } : {}) },
+          ...attachments,
+        ],
+      });
     }
     session.signals.startUserTurn();
 
@@ -603,6 +627,7 @@ export class Engine {
         refused,
         refusalRetry,
         ...(difficulty ? { difficulty } : {}),
+        ...(await this.privacyOf(s)),
         ...this.invocationBudget(s),
         agent: {
           name: agent.name,
@@ -670,14 +695,15 @@ export class Engine {
       if (!provider) throw new Error(`provider "${model.ref.provider}" is not configured`);
       const modelConfig = this.options.config.models[model.alias];
 
+      // A fresh array (so providers never observe later appends), built from
+      // the latest compaction marker; for remote models, with secrets redacted.
+      const outbound = await this.outbound(s, model, s.header.system, contextOf(s.messages));
       let done: Extract<ChatEvent, { type: 'done' }> | undefined;
       try {
         for await (const ev of provider.stream({
           model: model.ref.model,
-          system: s.header.system,
-          // A fresh array (so providers never observe later appends), built
-          // from the latest compaction marker.
-          messages: contextOf(s.messages),
+          system: outbound.system,
+          messages: outbound.messages,
           tools: specs,
           maxTokens: modelConfig?.maxOutputTokens ?? 16_000,
           ...(modelConfig?.effort ? { effort: modelConfig.effort } : {}),
@@ -967,7 +993,7 @@ export class Engine {
     const keepFrom = chooseBoundary(s.messages, start, keep);
     if (keepFrom === undefined) return false;
 
-    const summarizer = this.summarizerModel(before);
+    const summarizer = this.summarizerModel(before, s);
     if (!summarizer) {
       this.notify('warn', 'context is large but no model is available to summarize it');
       return false;
@@ -1029,13 +1055,13 @@ export class Engine {
    * routing allows remote and the budget isn't spent (local never silently
    * costs money).
    */
-  private summarizerModel(tokens: number): ModelInfo | undefined {
+  private summarizerModel(tokens: number, s?: LiveSession): ModelInfo | undefined {
     const routing = this.options.config.routing;
     const local = routing.local
       .flatMap((a) => this.modelInfo(a) ?? [])
       .find((m) => m.tier === 'local' && m.available);
     if (local) return local;
-    if (routing.mode === 'local-only') return undefined;
+    if (routing.mode === 'local-only' || s?.private) return undefined;
     const spend = this.ledger.spend();
     const b = routing.budget;
     if (
@@ -1056,13 +1082,16 @@ export class Engine {
     chunk: string,
     signal: AbortSignal,
   ): Promise<string> {
+    const request = summaryRequest(previous, chunk);
+    const text =
+      model.tier === 'remote' && this.options.config.privacy.secrets !== 'off'
+        ? (await redactSecrets(request)).text
+        : request;
     let done: Extract<ChatEvent, { type: 'done' }> | undefined;
     for await (const ev of provider.stream({
       model: model.ref.model,
       system: SUMMARIZER_PROMPT,
-      messages: [
-        { role: 'user', parts: [{ type: 'text', text: summaryRequest(previous, chunk) }] },
-      ],
+      messages: [{ role: 'user', parts: [{ type: 'text', text }] }],
       tools: [],
       maxTokens: 4_000,
       signal,
@@ -1074,12 +1103,12 @@ export class Engine {
       rule: 'compaction',
       agent: s.header.agent,
     });
-    const text = done.parts
+    const summary = done.parts
       .flatMap((p) => (p.type === 'text' ? [p.text] : []))
       .join('')
       .trim();
-    if (!text) throw new Error(`${model.alias} returned an empty summary`);
-    return text;
+    if (!summary) throw new Error(`${model.alias} returned an empty summary`);
+    return summary;
   }
 
   private async runTools(
@@ -1098,8 +1127,19 @@ export class Engine {
       runSubagent: (agent, prompt, description, options) =>
         this.runSubagent(s, agent, prompt, description, signal, options),
     };
+    const matches = this.privatePaths();
     const runOne = async (call: (typeof calls)[number]): Promise<ToolResultPart> => {
       const tool = tools.find((t) => t.name === call.name);
+      // A subagent that saw private content passes that on with its report.
+      let fromSubagent: string | undefined;
+      const callCtx: ToolContext = {
+        ...ctx,
+        runSubagent: async (agent, prompt, description, options) => {
+          const r = await this.runSubagent(s, agent, prompt, description, signal, options);
+          if (r.private) fromSubagent ??= r.private;
+          return r;
+        },
+      };
       const parsed = tool?.schema.safeParse(call.input);
       if (!tool || !parsed?.success) {
         s.signals.recordMalformedToolCall();
@@ -1129,21 +1169,29 @@ export class Engine {
 
       let output: string;
       let isError = false;
-      const permission = await this.checkPermission(s, tool, parsed.data, ctx, signal);
+      let ran = false;
+      const permission = await this.checkPermission(s, tool, parsed.data, callCtx, signal);
       if (!permission.allowed) {
         output =
           permission.error ??
           'The user denied this action. Do not retry it; ask the user how to proceed.';
         isError = true;
       } else {
+        ran = true;
         try {
-          output = await tool.run(parsed.data, ctx);
+          output = await tool.run(parsed.data, callCtx);
         } catch (err) {
           output = (err as Error).message;
           isError = true;
         }
       }
       s.signals.recordToolResult(!isError);
+      // Even a failed call may have printed private content (a bash error, say).
+      const priv =
+        fromSubagent ??
+        (ran && matches
+          ? privateToolUse(matches, ctx.workspaceRoot, call.name, parsed.data, output)
+          : undefined);
       this.emit({
         type: 'tool.completed',
         ...this.scope(s),
@@ -1152,12 +1200,14 @@ export class Engine {
         name: call.name,
         output,
         isError,
+        ...(priv ? { private: priv } : {}),
       });
       return {
         type: 'tool_result',
         callId: call.id,
         content: output,
         ...(isError ? { isError } : {}),
+        ...(priv ? { private: priv } : {}),
       };
     };
 
@@ -1229,10 +1279,14 @@ export class Engine {
         });
         const def = this.agents.get(agent);
         const childLive = this.sessions.get(child.id);
+        // The brief was written with the parent's context, so it's private if that is.
+        if (childLive && parent.private) childLive.private = `from its parent: ${parent.private}`;
         const result =
           def?.runtime && childLive
             ? await this.runExternal(childLive, def, prompt, runSignal)
-            : await this.runTurn(child.id, prompt, 'auto', undefined, runSignal);
+            : await this.runTurn(child.id, prompt, 'auto', undefined, runSignal, [], {
+                ...(parent.private ? { private: `from its parent: ${parent.private}` } : {}),
+              });
         const ok = result.stopReason === 'end_turn';
         this.emit({
           type: 'subagent.completed',
@@ -1245,10 +1299,12 @@ export class Engine {
         const text = ok
           ? result.text
           : `${result.stopReason}: ${this.sessions.get(child.id)?.lastError ?? result.text}`;
+        const priv = this.sessions.get(child.id)?.private;
         return {
           ok,
           text: worktree ? await this.finishIsolated(worktree, ok, description, text) : text,
           sessionId: child.id,
+          ...(priv && !parent.private ? { private: `subagent ${agent}: ${priv}` } : {}),
         };
       } finally {
         slots.release();
@@ -1324,6 +1380,10 @@ export class Engine {
         result = fail(`external runtimes are disabled by ${this.options.org.name} policy`);
       else if (routing.mode === 'local-only')
         result = fail('routing mode is local-only; external runtimes are remote');
+      else if (s.private)
+        result = fail(
+          `this task carries private content (${s.private}), which never leaves this machine; external runtimes are remote`,
+        );
       else if (over) result = fail('the remote budget is spent');
       else if (budget && budget.spentUsd >= budget.limitUsd)
         result = fail(
@@ -1351,13 +1411,33 @@ export class Engine {
           cwd: this.rootOf(s),
           signal: controller.signal,
           ...(budget ? { budgetUsd: Math.max(0, budget.limitUsd - budget.spentUsd) } : {}),
-          canUseTool: (tool, input) =>
-            this.checkPermission(s, externalTool(tool), input, ctx, controller.signal).then(
-              (p) => ({
-                allowed: p.allowed,
-                ...(p.error ? { message: p.error } : {}),
-              }),
-            ),
+          canUseTool: async (tool, input) => {
+            // The runtime's model is remote: it may not read private files.
+            const i = (input ?? {}) as Record<string, unknown>;
+            const matches = this.privatePaths();
+            const named = matches
+              ? (privateToolUse(
+                  matches,
+                  ctx.workspaceRoot,
+                  'read',
+                  { path: i.file_path ?? i.path },
+                  '',
+                ) ?? privateToolUse(matches, ctx.workspaceRoot, 'bash', { command: i.command }, ''))
+              : undefined;
+            if (named)
+              return {
+                allowed: false,
+                message: `${named.replace(/^(read|a command named) /, '')} is private (privacy.localOnlyPaths) and can't be sent to a remote model`,
+              };
+            const p = await this.checkPermission(
+              s,
+              externalTool(tool),
+              input,
+              ctx,
+              controller.signal,
+            );
+            return { allowed: p.allowed, ...(p.error ? { message: p.error } : {}) };
+          },
           onEvent: (ev) => {
             if (ev.type === 'text')
               this.emit({ type: 'text.delta', ...this.scope(s), turnId, text: ev.text });
@@ -1451,6 +1531,7 @@ export class Engine {
       type: 'text',
       text: `Background task "${description}" (${agent}) ${result.ok ? 'finished' : 'failed'}:\n\n${result.text || '(no report)'}`,
       backgroundTask: { sessionId: childId, agent, ok: result.ok },
+      ...(result.private ? { private: result.private } : {}),
     });
     if (!parent.controller && !parent.header.parentId) {
       void this.runTurn(parent, '', 'auto', undefined, undefined, [], {
@@ -1588,15 +1669,56 @@ export class Engine {
       depth: parent ? parent.depth + 1 : stored.header.parentId ? 1 : 0,
       background: new Map(),
       inbox: [],
+      ...(privateReason(stored.messages) ? { private: privateReason(stored.messages) } : {}),
     };
     this.sessions.set(sessionId, live);
     return live;
   }
 
   private append(s: LiveSession, message: Message): void {
+    s.private ??= privateReason([message]);
     s.messages.push(message);
     s.updatedAt = this.now().toISOString();
     this.store.append(s.header.id, message);
+  }
+
+  /** Matcher for `privacy.localOnlyPaths`, rebuilt when the patterns change. */
+  private privatePaths(): PrivatePathMatcher | undefined {
+    const patterns = this.options.config.privacy.localOnlyPaths;
+    const key = JSON.stringify(patterns);
+    if (this.privateMatcher?.key !== key)
+      this.privateMatcher = { key, matches: privatePathMatcher(patterns) };
+    return this.privateMatcher.matches;
+  }
+
+  /**
+   * Why this session must stay local: private content in it, or (with
+   * `privacy.secrets: block`) a secret in what would be sent.
+   */
+  private async privacyOf(s: LiveSession): Promise<{ privacy?: { reason: string } }> {
+    if (s.private) return { privacy: { reason: s.private } };
+    if (this.options.config.privacy.secrets !== 'block') return {};
+    const { found } = await redactOutbound(s.header.system, contextOf(s.messages));
+    return found.length
+      ? { privacy: { reason: `the conversation contains a secret (${found[0]})` } }
+      : {};
+  }
+
+  /** What a model is sent: for remote models, with secrets redacted (`privacy.secrets`). */
+  private async outbound(
+    s: LiveSession,
+    model: ModelInfo,
+    system: string,
+    messages: Message[],
+  ): Promise<{ system: string; messages: Message[] }> {
+    if (model.tier !== 'remote' || this.options.config.privacy.secrets !== 'redact')
+      return { system, messages };
+    const r = await redactOutbound(system, messages);
+    // Each request resends the conversation; report only when more are found.
+    if (r.found.length > (s.redacted ?? 0))
+      this.emit({ type: 'secrets.redacted', ...this.scope(s), kinds: r.found, model: model.ref });
+    s.redacted = r.found.length;
+    return r;
   }
 
   private recordUsage(

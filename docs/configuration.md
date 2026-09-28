@@ -137,6 +137,15 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 
 **Project servers need trust.** A server defined in a project's `.harness/config.json` or `.mcp.json` runs a command from the repository, so it doesn't start until you approve it with `harness mcp trust` (or `harness mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `harness mcp` and `harness doctor` show every server's state and tool count.
 
+### `privacy`
+
+| Key | Default | |
+|---|---|---|
+| `localOnlyPaths` | `[]` | Globs, relative to the workspace. Once content from a matching file enters a session, the session stays on local models for good. A pattern without a slash matches by file name anywhere (`*.pem`, `.env*`) |
+| `secrets` | `redact` | Credentials in what's about to be sent to a remote model: `redact` replaces them with placeholders in the outbound copy, `block` keeps the turn local, `off` sends them unchanged |
+
+See [privacy.md](privacy.md) for what's detected and the limits.
+
 ### Other keys
 
 | Key | Default | |

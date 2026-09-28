@@ -83,6 +83,23 @@ export const HarnessConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
+  /** Content that must never reach a remote model (docs/privacy.md). */
+  privacy: z
+    .object({
+      /**
+       * Globs, relative to the workspace. Once content from a matching file
+       * enters a session, the session stays local. A pattern without a slash
+       * matches by file name anywhere (`*.pem`, `.env*`).
+       */
+      localOnlyPaths: z.array(z.string().min(1)).default([]),
+      /**
+       * Credentials in what is about to be sent to a remote model: `redact`
+       * replaces them with placeholders in the outbound copy, `block` keeps the
+       * turn local, `off` sends them as they are.
+       */
+      secrets: z.enum(['redact', 'block', 'off']).default('redact'),
+    })
+    .prefault({}),
   /** Append-only context compaction (docs/adr/0008-append-only-compaction.md). */
   compaction: z
     .object({

@@ -227,6 +227,8 @@ export type EngineEvent =
       name: string;
       output: string;
       isError: boolean;
+      /** Set when the result carries private content, so the session now stays local. */
+      private?: string;
     } & SessionScoped)
   | ({
       type: 'permission.requested';
@@ -278,6 +280,12 @@ export type EngineEvent =
       agent: string;
       ok: boolean;
       background?: boolean;
+    } & SessionScoped)
+  | ({
+      type: 'secrets.redacted';
+      /** Secrets replaced in this request, e.g. `GITHUB_TOKEN`; counts repeats. */
+      kinds: string[];
+      model: ModelRef;
     } & SessionScoped)
   | ({ type: 'usage.updated'; usage: Usage; costUsd: number; tier: Tier } & SessionScoped)
   | ({ type: 'turn.completed'; turnId: string; stopReason: StopReason } & SessionScoped)
