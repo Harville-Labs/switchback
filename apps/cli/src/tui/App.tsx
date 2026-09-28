@@ -173,11 +173,13 @@ export function App({
           return;
         case 'agent':
           return newSession(args[0]);
-        case 'agents':
+        case 'agents': {
+          // Asked each time, so agents created meanwhile (harness agents new) show up.
+          const agents = await client.request('agents.list', {}).catch(() => init.agents);
           setView((v) =>
             addInfo(
               v,
-              init.agents
+              agents
                 .map(
                   (a) =>
                     `${a.name} [${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}]: ${a.description}`,
@@ -186,6 +188,7 @@ export function App({
             ),
           );
           return;
+        }
         case 'new':
           return newSession();
         case 'sessions':

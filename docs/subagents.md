@@ -45,6 +45,16 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 
 The body is the system prompt. Harness appends an environment section and the project's `AGENTS.md` (or `CLAUDE.md`) to it.
 
+### Creating one
+
+`harness agents new` interviews you for the name, a description (what the agent does and when the parent should use it), tools, where it runs, an optional budget, and worktree isolation. It can draft the system prompt with your model (the local one when available), then validates the file and writes it to `.harness/agents/` or `~/.config/harness/agents/`. New and edited agent files are picked up without restarting: `/agents`, `harness agents`, and new sessions see them right away. Every question has a flag for scripted use:
+
+```sh
+harness agents new --yes --name reviewer --tools read,grep,glob --model local \
+  --description "Reviews a diff for correctness bugs. Use after making changes." \
+  --prompt "You review diffs for bugs; report each with file:line."
+```
+
 ### Lookup order
 
 Later locations override earlier ones by name:

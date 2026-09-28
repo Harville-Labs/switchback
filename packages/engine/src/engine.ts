@@ -94,6 +94,8 @@ export interface EngineOptions {
   store?: SessionStore;
   ledgerFile?: string;
   agents?: Map<string, AgentDefinition>;
+  /** Where agent files live; rescanned so new agents appear without a restart. */
+  agentDirs?: { dir: string; source: AgentDefinition['source'] }[];
   /** Project instructions (AGENTS.md / CLAUDE.md contents). */
   instructions?: string;
   /**
@@ -174,7 +176,8 @@ export class Engine {
   /** Provider config each live provider was built from, to rebuild only what changed. */
   private providerConfigs = new Map<string, string>();
   private readonly store: SessionStore;
-  private readonly agents: Map<string, AgentDefinition>;
+  private agents: Map<string, AgentDefinition>;
+  private agentErrorsSeen = new Set<string>();
   private readonly now: () => Date;
   private mcp: McpHub | undefined;
 
@@ -225,17 +228,19 @@ export class Engine {
   ): { engine: Engine; agentErrors: string[] } {
     const hp = harnessPaths();
     const pp = projectPaths(workspaceRoot);
-    const { agents, errors } = loadAgents([
+    const agentDirs: EngineOptions['agentDirs'] = [
       { dir: hp.agentsDir, source: 'user' },
       { dir: pp.claudeAgentsDir, source: 'claude-compat' },
       { dir: pp.agentsDir, source: 'project' },
-    ]);
+    ];
+    const { agents, errors } = loadAgents(agentDirs);
     const instructionFile = pp.instructionFiles.find((f) => existsSync(f));
     const instructions = instructionFile ? readFileSync(instructionFile, 'utf8') : undefined;
     const engine = new Engine({
       workspaceRoot,
       config,
       agents,
+      agentDirs,
       ...(instructions ? { instructions } : {}),
       ledgerFile: hp.usageFile,
       store: new FileSessionStore(hp.sessionsDir),
@@ -297,7 +302,21 @@ export class Engine {
   }
 
   listAgents(): AgentSummary[] {
+    this.refreshAgents();
     return [...this.agents.values()].map(summarize);
+  }
+
+  /** Pick up agent files added or changed since startup (a few small files). */
+  private refreshAgents(): void {
+    const dirs = this.options.agentDirs;
+    if (!dirs) return;
+    const { agents, errors } = loadAgents(dirs);
+    this.agents = agents;
+    for (const e of errors) {
+      if (this.agentErrorsSeen.has(e)) continue;
+      this.agentErrorsSeen.add(e);
+      this.notify('warn', `agent definition skipped: ${e}`);
+    }
   }
 
   createSession(params: {
@@ -307,6 +326,7 @@ export class Engine {
     worktree?: Worktree;
   }): SessionSummary {
     const agentName = params.agent ?? this.options.config.defaultAgent;
+    if (!params.parentId) this.refreshAgents();
     const agent = this.agents.get(agentName);
     if (!agent) throw new RpcError(ErrorCode.InvalidParams, `unknown agent "${agentName}"`);
     const parent = params.parentId ? this.sessions.get(params.parentId) : undefined;
@@ -817,6 +837,54 @@ export class Engine {
   // -------------------------------------------------------------------------
   // Compaction (ADR 0008)
   // -------------------------------------------------------------------------
+
+  /**
+   * Draft a system prompt for a new agent (`harness agents new`). A single
+   * tool-free call on the same model choice as summaries: local when
+   * reachable, remote only when routing and budget allow.
+   */
+  async draftAgentPrompt(spec: {
+    name: string;
+    purpose: string;
+    description: string;
+    tools?: string[];
+  }): Promise<string> {
+    const controller = new AbortController();
+    await this.refreshHealth(controller.signal);
+    const model = this.summarizerModel(0);
+    const provider = model && this.providers.get(model.ref.provider);
+    if (!model || !provider) throw new Error('no model is available to draft the prompt');
+    const request = [
+      `Write the system prompt for a coding subagent named "${spec.name}".`,
+      `Purpose: ${spec.purpose}`,
+      `The parent agent delegates to it when: ${spec.description}`,
+      `Tools it can use: ${spec.tools?.join(', ') ?? 'all tools (read, glob, grep, edit, write, bash, task, and MCP tools)'}`,
+      'It starts with no conversation history and must return one final report to the parent.',
+      'Write in the second person ("You are..."). Cover how to approach the work, what to check, what not to do, and exactly what the final report should contain. Plain text, no preamble, under 250 words.',
+    ].join('\n');
+    let done: Extract<ChatEvent, { type: 'done' }> | undefined;
+    for await (const ev of provider.stream({
+      model: model.ref.model,
+      system: 'You write concise, specific system prompts for software engineering agents.',
+      messages: [{ role: 'user', parts: [{ type: 'text', text: request }] }],
+      tools: [],
+      maxTokens: 2_000,
+      signal: controller.signal,
+    })) {
+      if (ev.type === 'done') done = ev;
+    }
+    if (!done) throw new Error('the model returned no draft');
+    this.ledger.record('authoring', model.tier, model.ref, done.usage, {
+      rule: 'authoring',
+      agent: spec.name,
+    });
+    const text = done.parts
+      .flatMap((p) => (p.type === 'text' ? [p.text] : []))
+      .join('')
+      .trim();
+    if (!text) throw new Error('the model returned an empty draft');
+    return text;
+  }
 
   /** Remote spend of a session and all its descendant sessions. */
   private treeCost(sessionId: string): number {

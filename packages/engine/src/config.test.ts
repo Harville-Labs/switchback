@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadAgents, parseAgentFile } from './agents.ts';
+import { loadAgents, parseAgentFile, renderAgentFile } from './agents.ts';
 import { ConfigError, loadConfig, parseJsonc } from './config.ts';
 
 let dir: string;
@@ -105,5 +105,35 @@ You review code.`,
     expect(agents.get('explore')?.description).toBe('custom explore');
     expect(agents.get('build')?.source).toBe('builtin');
     expect(errors).toHaveLength(1);
+  });
+});
+
+describe('agent files', () => {
+  test('renderAgentFile round-trips through the parser, harness extensions included', () => {
+    const text = renderAgentFile({
+      name: 'db-migrator',
+      description: 'Writes schema migrations: "safe" ones only. Use for any DB change.',
+      prompt: 'You write migrations.',
+      tools: ['read', 'edit', 'mcp__postgres'],
+      model: 'local',
+      budgetUsd: 0.25,
+      isolation: 'worktree',
+    });
+    const agent = parseAgentFile(text, 'db-migrator.md', 'project');
+    expect(agent).toMatchObject({
+      name: 'db-migrator',
+      description: 'Writes schema migrations: "safe" ones only. Use for any DB change.',
+      tools: ['read', 'edit', 'mcp__postgres'],
+      route: 'local',
+      budgetUsd: 0.25,
+      isolation: 'worktree',
+      prompt: 'You write migrations.',
+    });
+    expect(() => renderAgentFile({ name: 'Bad', description: 'd', prompt: 'p' })).toThrow(
+      'lowercase',
+    );
+    expect(() => renderAgentFile({ name: 'ok', description: ' ', prompt: 'p' })).toThrow(
+      'description',
+    );
   });
 });

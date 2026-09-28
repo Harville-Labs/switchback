@@ -11,7 +11,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { AgentSummary, RoutePreference } from '@harness/protocol';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export interface AgentDefinition {
   name: string;
@@ -174,4 +174,41 @@ export function summarize(agent: AgentDefinition): AgentSummary {
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.budgetUsd !== undefined ? { budgetUsd: agent.budgetUsd } : {}),
   };
+}
+
+/** Agent names become file names and tool arguments. */
+export const AGENT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
+
+/**
+ * Render an agent definition as a Markdown file in Claude Code's format (plus
+ * harness extensions only when set). The result always parses back to the
+ * same definition; `renderAgentFile` throws if it wouldn't.
+ */
+export function renderAgentFile(agent: {
+  name: string;
+  description: string;
+  prompt: string;
+  tools?: string[];
+  model?: string;
+  budgetUsd?: number;
+  isolation?: 'worktree';
+}): string {
+  if (!AGENT_NAME.test(agent.name))
+    throw new Error(
+      'agent names use lowercase letters, digits, and dashes, starting with a letter',
+    );
+  if (!agent.description.trim()) throw new Error('a description is required');
+  if (!agent.prompt.trim()) throw new Error('a system prompt is required');
+  const meta: Record<string, unknown> = { name: agent.name, description: agent.description.trim() };
+  if (agent.tools) meta.tools = agent.tools.join(', ');
+  if (agent.model) meta.model = agent.model;
+  if (agent.budgetUsd !== undefined) meta.budgetUsd = agent.budgetUsd;
+  if (agent.isolation) meta.isolation = agent.isolation;
+  const text = `---\n${stringifyYaml(meta, { lineWidth: 0 }).trimEnd()}\n---\n${agent.prompt.trim()}\n`;
+  const parsed = parseAgentFile(text, `${agent.name}.md`, 'project');
+  if (parsed.name !== agent.name || parsed.description !== agent.description.trim())
+    throw new Error(
+      'the agent file did not round-trip; check the description for unusual characters',
+    );
+  return text;
 }

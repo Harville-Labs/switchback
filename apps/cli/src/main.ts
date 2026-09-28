@@ -16,6 +16,7 @@ Usage
   harness config [action]         path | show | schema | edit
   harness doctor                  Check configuration, providers, and agents
   harness mcp [trust [name...]]   Show MCP servers; trust a project's servers
+  harness agents [new]            List agents, or create one (interview, optional drafted prompt)
   harness usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
   harness login [--server <url>]  Sign in to your organization (applies its policy)
@@ -57,6 +58,10 @@ init options (all optional; prompts cover anything not given)
   --resource <name>        Foundry resource (Microsoft Foundry)
   --policy <p>             Escalation: auto | ask | off
   --daily-budget <usd>     --monthly-budget <usd>
+
+agents new options (prompts cover anything not given; --yes for none)
+  --name <n> --description <text> --tools <read,grep,...|all>
+  --model <local|remote|alias> --prompt <text> --budget <usd> --isolation worktree
 
 login options
   --server <url>           Organization server (default: previous or $HARNESS_ORG_SERVER)
@@ -135,6 +140,13 @@ async function main(argv: string[]): Promise<number> {
       server: { type: 'string' },
       token: { type: 'string' },
       by: { type: 'string' },
+      name: { type: 'string' },
+      description: { type: 'string' },
+      tools: { type: 'string' },
+      model: { type: 'string' },
+      prompt: { type: 'string' },
+      budget: { type: 'string' },
+      isolation: { type: 'string' },
       period: { type: 'string' },
       version: { type: 'boolean', short: 'v', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -239,6 +251,23 @@ async function main(argv: string[]): Promise<number> {
         throw new UsageError('a shared daemon never runs mock providers; use --stdio with --mock');
       const { serve } = await import('./commands/serve.ts');
       return serve({ ...common, socket: values.socket });
+    }
+    case 'agents': {
+      const { agents } = await import('./commands/agents.ts');
+      const budget = positive('budget', values.budget);
+      const isolation = oneOf('isolation', values.isolation, ['worktree', 'none'] as const);
+      return agents(rest[0], {
+        ...common,
+        yes: values.yes,
+        ...(scope ? { scope } : {}),
+        ...(values.name ? { name: values.name } : {}),
+        ...(values.description ? { description: values.description } : {}),
+        ...(values.tools !== undefined ? { tools: values.tools } : {}),
+        ...(values.model ? { model: values.model } : {}),
+        ...(values.prompt ? { prompt: values.prompt } : {}),
+        ...(budget !== undefined ? { budget } : {}),
+        ...(isolation ? { isolation: isolation === 'worktree' } : {}),
+      });
     }
     case 'mcp': {
       const { mcp } = await import('./commands/mcp.ts');
