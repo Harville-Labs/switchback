@@ -6,8 +6,8 @@
  * the branch name and diff and decides whether to merge. On failure the
  * worktree is kept for inspection.
  */
-import { mkdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { mkdirSync, realpathSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
 
 export interface Worktree {
   /** The repository's top-level directory. */
@@ -68,7 +68,11 @@ export async function createWorktree(
   const path = join(baseDir, id);
   const branch = `harness/${id}`;
   await serialized(repo, () => git(repo, ['worktree', 'add', '-b', branch, path, base]));
-  return { repo, path, root: join(path, relative(repo, workspaceRoot)), branch, base };
+  // git prints `C:/Users/...` while the workspace may be spelled `C:\Users\RUNNER~1\...`;
+  // compare canonical paths, and never let the root escape the worktree.
+  const rel = relative(realpathSync.native(repo), realpathSync.native(workspaceRoot));
+  const inside = rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : '';
+  return { repo, path, root: join(path, inside), branch, base };
 }
 
 export interface WorktreeResult {

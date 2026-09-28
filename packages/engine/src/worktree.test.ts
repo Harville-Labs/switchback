@@ -96,6 +96,13 @@ describe('worktree isolation', () => {
     const r = await engine.runTurn(s.id, 'go');
     expect(r.text).toBe('parent done');
 
+    // Every subagent succeeded (on failure, show what it said).
+    const errors = engine
+      .getSession(s.id)
+      .messages.flatMap((m) => m.parts)
+      .filter((p) => p.type === 'tool_result' && p.isError);
+    expect(errors).toEqual([]);
+
     // Main working tree untouched.
     expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toBe('original\n');
     expect(existsSync(join(repo, 'one.txt'))).toBe(false);

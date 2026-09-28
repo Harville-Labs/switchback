@@ -58,7 +58,8 @@ test('agents new writes a valid file that a running engine picks up without a re
   const transport = spawnEngine({
     command: process.execPath,
     args: [main, 'serve', '--stdio', '--mock', '--cwd', ws],
-    cwd: ws,
+    // Not the workspace itself: Windows can't delete a directory a live process sits in.
+    cwd: import.meta.dir,
     env: { HARNESS_HOME: home },
   });
   const client = new HarnessClient(transport);
