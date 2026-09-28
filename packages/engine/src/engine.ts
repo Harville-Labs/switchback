@@ -39,6 +39,7 @@ import {
   tierOf,
 } from '@harness/providers';
 import { type Difficulty, type ModelInfo, Router, SignalTracker } from '@harness/router';
+import { z } from 'zod';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import { classifyPrompt } from './classifier.ts';
 import {
@@ -56,6 +57,8 @@ import { allowsMcpTool, McpHub } from './mcp/hub.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import type { OrgStatus } from './org/policy.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
+import { ClaudeAgentSdkRuntime } from './runtimes/claude-agent-sdk.ts';
+import type { AgentRuntime } from './runtimes/runtime.ts';
 import { Semaphore } from './semaphore.ts';
 import {
   FileSessionStore,
@@ -94,6 +97,8 @@ export interface EngineOptions {
   store?: SessionStore;
   ledgerFile?: string;
   agents?: Map<string, AgentDefinition>;
+  /** External agent runtimes by name, overriding `runtimes` in config (tests, embedding). */
+  runtimes?: Map<string, AgentRuntime>;
   /** Where agent files live; rescanned so new agents appear without a restart. */
   agentDirs?: { dir: string; source: AgentDefinition['source'] }[];
   /** Project instructions (AGENTS.md / CLAUDE.md contents). */
@@ -787,7 +792,7 @@ export class Engine {
       return undefined;
     if (!routing.remote.some((a) => this.options.config.models[a])) return undefined;
     const model = this.modelInfo(c.model);
-    if (!model || model.tier !== 'local') {
+    if (model?.tier !== 'local') {
       this.notify('warn', `routing.classifier.model "${c.model}" must be a configured local model`);
       return undefined;
     }
@@ -1222,7 +1227,12 @@ export class Engine {
           task: description,
           ...(background ? { background } : {}),
         });
-        const result = await this.runTurn(child.id, prompt, 'auto', undefined, runSignal);
+        const def = this.agents.get(agent);
+        const childLive = this.sessions.get(child.id);
+        const result =
+          def?.runtime && childLive
+            ? await this.runExternal(childLive, def, prompt, runSignal)
+            : await this.runTurn(child.id, prompt, 'auto', undefined, runSignal);
         const ok = result.stopReason === 'end_turn';
         this.emit({
           type: 'subagent.completed',
@@ -1257,6 +1267,144 @@ export class Engine {
       .finally(() => parent.background.delete(child.id));
     parent.background.set(child.id, done);
     return { ok: true, text: '', sessionId: child.id };
+  }
+
+  private runtime(name: string): AgentRuntime | undefined {
+    const injected = this.options.runtimes?.get(name);
+    if (injected) return injected;
+    const cfg = this.options.config.runtimes[name];
+    if (!cfg) return undefined;
+    return new ClaudeAgentSdkRuntime({
+      name,
+      ...(cfg.model ? { model: cfg.model } : {}),
+      ...(cfg.maxTurns ? { maxTurns: cfg.maxTurns } : {}),
+      ...(cfg.executable ? { executable: cfg.executable } : {}),
+    });
+  }
+
+  /**
+   * Run a subagent on an external runtime (ADR 0009). It's remote spend, so it
+   * obeys routing like any remote call; its tools go through the permission
+   * policy; its progress is emitted on the child session; its cost is ledgered.
+   */
+  private async runExternal(
+    s: LiveSession,
+    agent: AgentDefinition,
+    prompt: string,
+    parentSignal: AbortSignal,
+  ): Promise<TurnResult> {
+    const turnId = `turn_${crypto.randomUUID().slice(0, 8)}`;
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    parentSignal.addEventListener('abort', onAbort, { once: true });
+    s.controller = controller;
+    const name = agent.runtime as string;
+    this.emit({ type: 'turn.started', ...this.scope(s), turnId });
+    this.append(s, { role: 'user', parts: [{ type: 'text', text: prompt }] });
+    const fail = (message: string): TurnResult => {
+      s.lastError = message;
+      this.emit({ type: 'error', ...this.scope(s), turnId, message });
+      return { stopReason: 'error', text: '' };
+    };
+    let result: TurnResult;
+    try {
+      const runtime = this.runtime(name);
+      const routing = this.options.config.routing;
+      const spend = this.ledger.spend();
+      const b = routing.budget;
+      const over =
+        (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd) ||
+        (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd);
+      const budget = this.invocationBudget(s).invocationBudget;
+      if (!runtime)
+        result = fail(
+          `agent "${agent.name}" names runtime "${name}", which isn't configured under runtimes`,
+        );
+      else if (this.options.org?.remoteDisabled)
+        result = fail(`external runtimes are disabled by ${this.options.org.name} policy`);
+      else if (routing.mode === 'local-only')
+        result = fail('routing mode is local-only; external runtimes are remote');
+      else if (over) result = fail('the remote budget is spent');
+      else if (budget && budget.spentUsd >= budget.limitUsd)
+        result = fail(
+          `subagent "${budget.agent}" has spent its $${budget.limitUsd.toFixed(2)} budget`,
+        );
+      else {
+        const model = { provider: name, model: this.options.config.runtimes[name]?.model ?? name };
+        this.emit({
+          type: 'route.decided',
+          ...this.scope(s),
+          turnId,
+          tier: 'remote',
+          model,
+          rule: 'runtime',
+          reason: `agent "${agent.name}" runs on ${runtime.label}`,
+        });
+        const ctx: ToolContext = {
+          workspaceRoot: this.rootOf(s),
+          sessionId: s.header.id,
+          signal: controller.signal,
+          agentCatalog: [],
+        };
+        const r = await runtime.run({
+          prompt,
+          cwd: this.rootOf(s),
+          signal: controller.signal,
+          ...(budget ? { budgetUsd: Math.max(0, budget.limitUsd - budget.spentUsd) } : {}),
+          canUseTool: (tool, input) =>
+            this.checkPermission(s, externalTool(tool), input, ctx, controller.signal).then(
+              (p) => ({
+                allowed: p.allowed,
+                ...(p.error ? { message: p.error } : {}),
+              }),
+            ),
+          onEvent: (ev) => {
+            if (ev.type === 'text')
+              this.emit({ type: 'text.delta', ...this.scope(s), turnId, text: ev.text });
+            else if (ev.type === 'tool.started')
+              this.emit({
+                type: 'tool.started',
+                ...this.scope(s),
+                turnId,
+                callId: ev.callId,
+                name: ev.name,
+                input: ev.input,
+              });
+            else
+              this.emit({
+                type: 'tool.completed',
+                ...this.scope(s),
+                turnId,
+                callId: ev.callId,
+                name: ev.name,
+                output: ev.output,
+                isError: ev.isError,
+              });
+          },
+        });
+        for (const call of r.calls)
+          this.recordUsage(s, 'remote', call.model, call.usage, {
+            rule: 'runtime',
+            agent: agent.name,
+            costUsd: call.costUsd,
+          });
+        this.append(s, {
+          role: 'assistant',
+          parts: [{ type: 'text', text: r.text }],
+          meta: { model, tier: 'remote', routeReason: `runs on ${runtime.label}` },
+        });
+        result = r.ok
+          ? { stopReason: 'end_turn', text: r.text }
+          : controller.signal.aborted
+            ? { stopReason: 'cancelled', text: r.text }
+            : fail(r.text);
+      }
+    } finally {
+      s.controller = undefined;
+      parentSignal.removeEventListener('abort', onAbort);
+    }
+    this.emit({ type: 'turn.completed', ...this.scope(s), turnId, stopReason: result.stopReason });
+    return result;
   }
 
   /** Worktrees live in the data directory, one folder per repository. */
@@ -1456,7 +1604,7 @@ export class Engine {
     tier: Tier,
     model: ModelRef,
     usage: Usage,
-    meta: { rule: string; agent: string },
+    meta: { rule: string; agent: string; costUsd?: number },
   ): void {
     this.ledger.record(s.header.id, tier, model, usage, meta);
     if (tier === 'remote') this.checkCache(s, model, usage);
@@ -1567,7 +1715,7 @@ export class Engine {
     // is close; the others either clearly fit or clearly don't.
     for (const alias of routing.local) {
       const local = this.modelInfo(alias);
-      if (!local || local.tier !== 'local' || !local.available) continue;
+      if (local?.tier !== 'local' || !local.available) continue;
       if (!nearThreshold(estimate, local.contextWindow * routing.escalation.contextHeadroom))
         continue;
       const provider = this.providers.get(local.ref.provider);
@@ -1626,4 +1774,35 @@ export class Engine {
     );
     await this.detectContextWindows();
   }
+}
+
+/**
+ * A stand-in Tool for a call an external runtime wants to make, so the
+ * engine's permission policy applies. Unknown tools are treated like `bash`.
+ */
+function externalTool(name: string): Tool {
+  const category: Tool['permission'] = /^(Read|Glob|Grep|LS|NotebookRead|TodoWrite|Task)$/.test(
+    name,
+  )
+    ? 'read'
+    : /^(Edit|MultiEdit|Write|NotebookEdit)$/.test(name)
+      ? 'edit'
+      : name.startsWith('mcp__')
+        ? 'mcp'
+        : 'bash';
+  return {
+    name,
+    description: '',
+    schema: z.unknown(),
+    permission: category,
+    permissionKey: category === 'mcp' ? `mcp:${name.split('__')[1] ?? ''}` : category,
+    mutating: category !== 'read',
+    summarize: (input) => {
+      const args = JSON.stringify(input ?? {});
+      return `${name} ${args.length > 120 ? `${args.slice(0, 120)}…` : args}`;
+    },
+    run: async () => {
+      throw new Error('external tools run in their runtime');
+    },
+  };
 }

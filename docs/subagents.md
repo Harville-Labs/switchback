@@ -40,6 +40,7 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and harness names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`haiku`, `sonnet`, `opus`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Harness extension; same effect as `model: local`/`remote` |
+| `runtime` | name under `runtimes` | Harness extension. Run on an external agent runtime such as Claude Code (see below) |
 | `isolation` | `worktree` | Harness extension. Always run this agent in its own git worktree (see below) |
 | `budgetUsd` | dollars | Harness extension. Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
 
@@ -80,6 +81,31 @@ Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the lar
 - Only the subagent's final text returns to the parent. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model.
 - A subagent that fails or is cancelled returns an error result, which the parent can handle.
 - Cancelling the parent turn cancels its subagents.
+
+### External runtimes
+
+An agent can run on a complete external agent instead of the Harness loop ([ADR 0009](adr/0009-external-agent-runtimes.md)). The first supported runtime is **Claude Code, through the Claude Agent SDK**:
+
+```jsonc
+// config
+"runtimes": { "claude": { "type": "claude-agent-sdk", "model": "claude-sonnet-5", "maxTurns": 30 } }
+```
+
+```markdown
+---
+name: claude-coder
+description: Hands a self-contained coding task to Claude Code. Use for larger changes.
+runtime: claude
+budgetUsd: 2
+isolation: worktree
+---
+```
+
+- The parent delegates with the ordinary `task` tool. The subagent row shows Claude Code's text and tool calls as they happen.
+- Every tool Claude Code wants to use goes through the Harness permission policy (`Read`/`Grep`/`Glob` as `read`, `Edit`/`Write` as `edit`, MCP tools as `mcp`, everything else as `bash`), including org-enforced denials.
+- It's remote spend: it doesn't start in `local-only` mode, when an organization disables remote models, or when the budget is spent. The agent's `budgetUsd` becomes Claude Code's own spending limit. Its cost, as reported by the SDK, is recorded per model under rule `runtime`, so `harness usage --by rule` shows it.
+- It uses Claude Code's credentials (`ANTHROPIC_API_KEY` or a Claude login). Claude Code itself isn't bundled with Harness: install it so `claude` is on `PATH`, or set `runtimes.<name>.executable`.
+- Only the final report returns to the parent, like any subagent. `isolation: worktree` works as usual.
 
 ### Worktree isolation
 

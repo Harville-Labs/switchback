@@ -87,7 +87,7 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 
 ## Things not to do
 
-- Don't call provider SDKs from anywhere except `packages/providers`.
+- Don't call provider SDKs from anywhere except `packages/providers`. The one exception is external agent runtimes (complete agents such as the Claude Agent SDK), which live in `packages/engine/src/runtimes/` ([ADR 0009](docs/adr/0009-external-agent-runtimes.md)).
 - Don't add a "just for the TUI" or "just for VS Code" behavior path in the engine.
 - Don't read `process.env` outside config loading and provider credential resolution.
 - Don't log prompts, file contents, or credentials at `info` level or above.

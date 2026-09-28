@@ -13,6 +13,7 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 - Providers: Claude Platform on AWS (`anthropic-aws`, with server-side refusal fallbacks) and Microsoft Foundry (`foundry`), on the shared Claude adapter; both in `harness init` and `doctor` (part of #24)
 - Google Gemini (`type: gemini`, Gemini API or Vertex AI) via `@google/genai`: thought signatures replayed verbatim to the same model, thinking levels and budgets from `effort`, safety stops as refusals, and Gemini 3.1 Pro / 3.8 Flash / 2.5 Flash in the catalog and `harness init` (#24)
 - `harness agents new`: an interview (with flags for scripted use) that writes a validated agent file, optionally with a system prompt drafted by your model; `harness agents` lists agents, and new or edited agent files are picked up without a restart (#25)
+- External agent runtimes as subagents (ADR 0009), starting with Claude Code through the Claude Agent SDK: `runtime: <name>` in an agent file. Its tool calls go through the Harness permission policy, its progress appears in the subagent tree, it obeys routing and budgets like any remote call, and its reported cost is recorded under rule `runtime` (#22)
 - OpenAI Responses API (`api: "responses"` on an `openai` provider): reasoning is kept between tool calls as encrypted items (`store: false`) and replayed only to the model that produced it (part of #24)
 
 ## [0.4.0] - 2026-09-27

@@ -544,6 +544,38 @@
         ]
       }
     },
+    "runtimes": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "claude-agent-sdk"
+              },
+              "model": {
+                "type": "string"
+              },
+              "maxTurns": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "executable": {
+                "type": "string"
+              }
+            },
+            "required": ["type"]
+          }
+        ]
+      }
+    },
     "defaultAgent": {
       "default": "build",
       "type": "string"

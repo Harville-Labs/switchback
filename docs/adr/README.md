@@ -12,3 +12,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0006](0006-provider-neutrality.md) | No default vendor; every provider gets equal treatment | Accepted |
 | [0007](0007-organization-policy.md) | Organization policy from a config server | Accepted |
 | [0008](0008-append-only-compaction.md) | Append-only context compaction | Accepted |
+| [0009](0009-external-agent-runtimes.md) | External agent runtimes as subagents | Accepted |

@@ -79,9 +79,11 @@ export class UsageLedger {
     tier: Tier,
     model: ModelRef,
     usage: Usage,
-    meta: { rule?: string; agent?: string } = {},
+    meta: { rule?: string; agent?: string; costUsd?: number } = {},
   ): LedgerEntry {
-    const cost = tier === 'local' ? 0 : costUsd(usage, priceFor(model.model, this.prices));
+    // A runtime that reports its own cost (external agents) is taken at its word.
+    const cost =
+      tier === 'local' ? 0 : (meta.costUsd ?? costUsd(usage, priceFor(model.model, this.prices)));
     const reference = this.referenceModel ? priceFor(this.referenceModel, this.prices) : undefined;
     const savings = tier === 'local' ? costUsd(usage, reference) : 0;
     const entry: LedgerEntry = {

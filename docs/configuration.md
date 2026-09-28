@@ -144,6 +144,7 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 | `defaultAgent` | `build` | Agent for new sessions |
 | `subagents.maxConcurrent` | 4 | Concurrent subagents per depth |
 | `subagents.maxDepth` | 2 | Maximum nesting |
+| `runtimes.<name>` | none | External agent runtimes agents can use with `runtime: <name>`. `type: "claude-agent-sdk"` with optional `model`, `maxTurns`, `executable`. See [subagents.md](subagents.md#external-runtimes) |
 | `subagents.budgetUsd` | none | Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it |
 | `maxStepsPerTurn` | 50 | Model calls per user prompt before stopping |
 | `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |

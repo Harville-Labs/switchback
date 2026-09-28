@@ -56,6 +56,22 @@ export const HarnessConfig = z.object({
     .prefault({}),
   /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
   mcpServers: z.record(McpServerName, McpServerConfig).default({}),
+  /** External agent runtimes that agents can run on (`runtime: <name>`); see ADR 0009. */
+  runtimes: z
+    .record(
+      z.string(),
+      z.discriminatedUnion('type', [
+        z.object({
+          type: z.literal('claude-agent-sdk'),
+          /** Claude model for the runtime; defaults to Claude Code's own default. */
+          model: z.string().optional(),
+          maxTurns: z.number().int().positive().optional(),
+          /** Path to Claude Code; defaults to `claude` on PATH. */
+          executable: z.string().optional(),
+        }),
+      ]),
+    )
+    .default({}),
   defaultAgent: z.string().default('build'),
   subagents: z
     .object({

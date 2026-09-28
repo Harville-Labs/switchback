@@ -26,6 +26,8 @@ export interface AgentDefinition {
   budgetUsd?: number;
   /** Run as a subagent in its own git worktree. */
   isolation?: 'worktree';
+  /** Run on an external agent runtime (`runtimes.<name>`) instead of the harness loop. */
+  runtime?: string;
   source: AgentSummary['source'];
   file?: string;
 }
@@ -134,6 +136,7 @@ export function parseAgentFile(
     ...(model ? { model } : {}),
     ...(budgetUsd !== undefined ? { budgetUsd } : {}),
     ...(meta.isolation === 'worktree' ? { isolation: 'worktree' as const } : {}),
+    ...(typeof meta.runtime === 'string' && meta.runtime ? { runtime: meta.runtime } : {}),
     source,
     file,
   };
