@@ -11,6 +11,7 @@
 - [Draft locally, review remotely](review.md): a stronger model reviews what the local model changed
 - [Telemetry](telemetry.md): opt-in anonymous usage statistics, field by field
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
+- [Sites](sites.md): your company's site on harness.harville.ai: seats, members, roles, policy, devices
 - [Terminal UI](clients/tui.md) · [VS Code extension](clients/vscode.md)
 
 ## Building Harness

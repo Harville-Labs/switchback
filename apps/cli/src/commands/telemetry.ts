@@ -8,8 +8,10 @@ import {
   optIn,
   optOut,
   pendingReports,
+  readAuth,
   readTelemetryState,
   telemetryOptedOut,
+  telemetryTarget,
   todaysReport,
   writeConfigLayer,
 } from '@harness/engine';
@@ -49,7 +51,10 @@ export async function telemetry(sub: string | undefined, flags: CommonFlags): Pr
       console.log(
         `${bold('Telemetry')} ${config.telemetry.enabled ? green('on') : 'off'}${telemetryOptedOut(process.env) ? dim(' (forced off by DO_NOT_TRACK / HARNESS_TELEMETRY)') : ''}`,
       );
-      console.log(`  endpoint     ${config.telemetry.endpoint}`);
+      const auth = readAuth();
+      console.log(
+        `  sent to      ${telemetryTarget({ config, ...(auth ? { site: { server: auth.server, accessToken: '' } } : {}) })}${auth ? dim(` (your site, ${auth.org.name})`) : ''}`,
+      );
       if (state) {
         console.log(`  install ID   ${state.installId} ${dim('(random; identifies nothing)')}`);
         console.log(`  opted in     ${state.enabledAt.slice(0, 10)}`);

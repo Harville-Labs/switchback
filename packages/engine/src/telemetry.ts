@@ -15,11 +15,11 @@ import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { EngineEvent, StopReason } from '@harness/protocol';
 import { CATALOG } from '@harness/providers';
-import { z } from 'zod';
 import type { HarnessConfig } from './config.ts';
 import type { LedgerEntry } from './ledger.ts';
+import { type DailyReport, TELEMETRY_SCHEMA } from './telemetry-schema.ts';
 
-export const TELEMETRY_SCHEMA = 1;
+export { TELEMETRY_SCHEMA } from './telemetry-schema.ts';
 export const DEFAULT_TELEMETRY_ENDPOINT = 'https://harness.harville.ai/api/telemetry/v1';
 
 /** Routing rules Harness defines; anything else is reported as `other`. */
@@ -55,54 +55,7 @@ function publicModel(model: string): string {
   return KNOWN_MODELS.has(bare) ? bare : 'custom';
 }
 
-export const DailyReport = z.object({
-  schema: z.literal(TELEMETRY_SCHEMA),
-  installId: z.string(),
-  day: z.string(),
-  version: z.string(),
-  os: z.string(),
-  arch: z.string(),
-  calls: z.object({ local: z.number(), remote: z.number() }),
-  tokens: z.object({
-    local: z.object({ input: z.number(), output: z.number() }),
-    remote: z.object({
-      input: z.number(),
-      output: z.number(),
-      cacheRead: z.number(),
-      cacheWrite: z.number(),
-    }),
-  }),
-  /** Remote spend, estimated savings, and what running it all remote would have cost. */
-  costUsd: z.number(),
-  savingsUsd: z.number(),
-  allRemoteUsd: z.number(),
-  byRule: z.record(
-    z.string(),
-    z.object({ local: z.number(), remote: z.number(), costUsd: z.number() }),
-  ),
-  /** Remote calls per catalog model ID (`custom` for anything else). */
-  remoteModels: z.record(z.string(), z.number()),
-  /** Configured provider types, e.g. `ollama`, `anthropic`; never IDs or URLs. */
-  providerTypes: z.array(z.string()),
-  features: z.object({
-    localModels: z.number(),
-    remoteModels: z.number(),
-    escalationPolicy: z.string(),
-    classifier: z.boolean(),
-    compaction: z.boolean(),
-    privatePaths: z.boolean(),
-    secrets: z.string(),
-    mcpServers: z.number(),
-    runtimes: z.number(),
-    budget: z.boolean(),
-    organization: z.boolean(),
-  }),
-  /** How top-level turns ended. */
-  turns: z.record(z.string(), z.number()),
-  errors: z.number(),
-  crashes: z.array(z.object({ name: z.string(), message: z.string(), stack: z.string() })),
-});
-export type DailyReport = z.infer<typeof DailyReport>;
+export { DailyReport } from './telemetry-schema.ts';
 
 // ---------------------------------------------------------------------------
 // State and counters (data directory)
@@ -339,6 +292,18 @@ export interface TelemetryContext {
   version: string;
   ledger: LedgerEntry[];
   now: Date;
+  /**
+   * Where reports go when signed in to a site (ADR 0010): the site's
+   * `/v1/telemetry` with the member's token. Otherwise `telemetry.endpoint`.
+   */
+  site?: { server: string; accessToken: string };
+}
+
+/** The URL reports are sent to, for display and sending. */
+export function telemetryTarget(ctx: Pick<TelemetryContext, 'config' | 'site'>): string {
+  return ctx.site
+    ? `${ctx.site.server.replace(/\/+$/, '')}/v1/telemetry`
+    : ctx.config.telemetry.endpoint;
 }
 
 /** Reports due now (complete days since opt-in, not yet sent). */
@@ -378,9 +343,12 @@ export async function sendTelemetry(
   const reports = pendingReports(ctx);
   if (!state || !reports.length) return { sent: 0 };
   try {
-    const res = await fetchImpl(ctx.config.telemetry.endpoint, {
+    const res = await fetchImpl(telemetryTarget(ctx), {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(ctx.site ? { authorization: `Bearer ${ctx.site.accessToken}` } : {}),
+      },
       body: JSON.stringify({ reports }),
       signal: AbortSignal.timeout(timeoutMs),
     });

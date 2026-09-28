@@ -1,6 +1,6 @@
 # Organizations: centrally managed configuration
 
-An organization can run a config server that pushes policy to everyone who signs in to Harness. With it, admins can:
+An organization's policy is pushed to everyone who signs in to Harness. Companies get this from their site on harness.harville.ai, hosted by Harville Labs ([sites.md](sites.md)); any server implementing the [API below](#server-api) works too. With it, admins can:
 
 - **Provide models:** the company's local model servers (a GPU box, a vLLM cluster) and approved hosted providers, configured for users automatically.
 - **Set limits:** per-user daily and monthly caps on remote spend.
@@ -12,7 +12,8 @@ An organization can run a config server that pushes policy to everyone who signs
 ## For users
 
 ```sh
-harness login --server https://harness.acme.example   # opens the browser to confirm a code
+harness login --site acme                             # your company's site on harness.harville.ai
+harness login --server https://harness.acme.example   # or any compatible server
 harness whoami                                        # organization, policy revision, restrictions
 harness logout
 ```
@@ -79,7 +80,8 @@ Any server implementing these endpoints works. `packages/engine/src/org/dev-serv
 | `POST /v1/device/token` `{device_code}` | Poll. `400 {"error":"authorization_pending"\|"slow_down"\|"access_denied"\|"expired_token"}` until approved, then `200` token response. |
 | `POST /v1/token/refresh` `{refresh_token}` | New token response; `401` when the session is over. |
 | `GET /v1/policy` | The policy. Send an `ETag`; clients send `If-None-Match` and accept `304`. `401`/`403` for revoked access. |
-| `POST /v1/usage` `{entries}` | Optional. Daily aggregates per model: `date`, `tier`, `provider`, `model`, `calls`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `costUsd`. Return `404` if unsupported. |
+| `POST /v1/usage` `{entries}` | Optional. Daily aggregates per model: `date`, `tier`, `provider`, `model`, `calls`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `costUsd`. Reports are increments: add them to what the day already has. Return `404` if unsupported. |
+| `POST /v1/telemetry` `{reports}` | Optional. When the member has telemetry on, the [daily reports](telemetry.md) go here instead of to Harville Labs' public endpoint. |
 
 Token response: `{ access_token, refresh_token?, expires_in?, org: { id, name }, user: { email?, name? } }`. Clients refresh the token when it's within a minute of expiry.
 

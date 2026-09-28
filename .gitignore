@@ -11,3 +11,6 @@ coverage/
 apps/vscode/bin/
 .vscode-test/
 apps/vscode/out/
+apps/site/.svelte-kit/
+apps/site/build/
+apps/site/.data/

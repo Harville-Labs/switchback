@@ -17,5 +17,7 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["packages/*/src", "apps/*/src", "apps/*/scripts", "apps/*/test", "scripts", "tests"]
+  "include": ["packages/*/src", "apps/*/src", "apps/*/scripts", "apps/*/test", "scripts", "tests"],
+  // The site is a SvelteKit app with its own tsconfig; `bun run check` runs svelte-check on it.
+  "exclude": ["apps/site"]
 }

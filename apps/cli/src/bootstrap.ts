@@ -114,6 +114,8 @@ function startTelemetry(engine: Engine, loaded: ReturnType<typeof load>): void {
       // A full disk shouldn't break a session over statistics.
     }
   });
+  // Signed in to a site: its telemetry goes there (ADR 0010).
+  const auth = readAuth();
   void sendTelemetry({
     dataDir,
     config: loaded.config,
@@ -121,6 +123,7 @@ function startTelemetry(engine: Engine, loaded: ReturnType<typeof load>): void {
     version: CLI_VERSION,
     ledger: engine.usageEntriesSince(''),
     now: new Date(),
+    ...(auth ? { site: { server: auth.server, accessToken: auth.accessToken } } : {}),
   }).catch(() => {});
 }
 

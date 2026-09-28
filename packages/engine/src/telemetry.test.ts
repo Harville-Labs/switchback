@@ -226,6 +226,21 @@ describe('sending', () => {
     expect(await sendTelemetry(ctx(true), fetchOk)).toEqual({ sent: 0 });
   });
 
+  test('signed in to a site, reports go to the site with the member’s token', async () => {
+    optIn(dir, new Date('2026-09-25T10:00:00Z'));
+    let seen: { url: string; auth: string | null } | undefined;
+    const spy = (async (url: string, init: RequestInit) => {
+      seen = { url, auth: new Headers(init.headers).get('authorization') };
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+    const r = await sendTelemetry(
+      { ...ctx(true), site: { server: 'https://harness.test/s/acme/', accessToken: 'hsa_x' } },
+      spy,
+    );
+    expect(r.sent).toBe(2);
+    expect(seen).toEqual({ url: 'https://harness.test/s/acme/v1/telemetry', auth: 'Bearer hsa_x' });
+  });
+
   test('a failure changes nothing, and off sends nothing', async () => {
     optIn(dir, new Date('2026-09-25T10:00:00Z'));
     const failing = (async () => new Response('', { status: 503 })) as unknown as typeof fetch;

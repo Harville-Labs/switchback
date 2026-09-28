@@ -20,7 +20,7 @@ Usage
   harness usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
   harness telemetry [action]      status | on | off | preview (anonymous, off by default)
-  harness login [--server <url>]  Sign in to your organization (applies its policy)
+  harness login --site <id>       Sign in to your company's Harness site (applies its policy)
   harness logout | whoami         Sign out / show organization and policy
   harness serve --stdio           Serve the engine protocol to one client over stdin/stdout
   harness serve --socket          Run this workspace's shared engine (TUI and VS Code attach to it)
@@ -67,7 +67,8 @@ agents new options (prompts cover anything not given; --yes for none)
   --model <local|remote|alias> --prompt <text> --budget <usd> --isolation worktree
 
 login options
-  --server <url>           Organization server (default: previous or $HARNESS_ORG_SERVER)
+  --site <id>              Your company's site on harness.harville.ai
+  --server <url>           Any organization server (default: previous or $HARNESS_ORG_SERVER)
   --token <token>          Sign in with an access token instead of the browser (CI)
 `;
 
@@ -141,6 +142,7 @@ async function main(argv: string[]): Promise<number> {
       'daily-budget': { type: 'string' },
       'monthly-budget': { type: 'string' },
       server: { type: 'string' },
+      site: { type: 'string' },
       token: { type: 'string' },
       by: { type: 'string' },
       name: { type: 'string' },
@@ -292,6 +294,7 @@ async function main(argv: string[]): Promise<number> {
       return login({
         cwd: common.cwd,
         ...(values.server ? { server: values.server } : {}),
+        ...(values.site ? { site: values.site } : {}),
         ...(values.token ? { token: values.token } : {}),
       });
     }

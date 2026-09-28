@@ -20,7 +20,15 @@ import { bold, dim, green, yellow } from '../prompt.ts';
 export interface LoginFlags {
   cwd: string;
   server?: string;
+  /** A Harville Labs site ID: shorthand for its server URL (ADR 0010). */
+  site?: string;
   token?: string;
+}
+
+/** Where Harville Labs hosts sites; `HARNESS_SITES_URL` points elsewhere (staging, tests). */
+export function siteServer(site: string, env = process.env): string {
+  const base = (env.HARNESS_SITES_URL ?? 'https://harness.harville.ai').replace(/\/+$/, '');
+  return `${base}/s/${encodeURIComponent(site)}`;
 }
 
 function openBrowser(url: string) {
@@ -52,12 +60,19 @@ export function describeRestrictions(policy: OrgPolicy): string[] {
 }
 
 export async function login(flags: LoginFlags): Promise<number> {
-  const server = (flags.server ?? readAuth()?.server ?? process.env.HARNESS_ORG_SERVER)?.replace(
-    /\/+$/,
-    '',
-  );
+  if (flags.site && flags.server) {
+    console.error('harness login: pass --site or --server, not both');
+    return 2;
+  }
+  const server = (
+    (flags.site ? siteServer(flags.site) : flags.server) ??
+    readAuth()?.server ??
+    process.env.HARNESS_ORG_SERVER
+  )?.replace(/\/+$/, '');
   if (!server) {
-    console.error('harness login: pass --server <url> (your organization gives you this)');
+    console.error(
+      'harness login: pass --site <id> (your company’s Harness site) or --server <url>',
+    );
     return 2;
   }
   const client = new OrgClient(server);
@@ -146,7 +161,9 @@ export function logout(): number {
 export function whoami(cwd: string): number {
   const auth = readAuth();
   if (!auth) {
-    console.log('Not signed in to an organization. `harness login --server <url>` to sign in.');
+    console.log(
+      'Not signed in to an organization. `harness login --site <id>` (or `--server <url>`) to sign in.',
+    );
     return 0;
   }
   const cached = readCachedPolicy();

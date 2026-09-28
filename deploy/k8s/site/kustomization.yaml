@@ -1,0 +1,10 @@
+# Applied by Flux from the homelab repo (apps/harville-labs/harness-site). CI
+# (.github/workflows/site-image.yml) bumps the tag on every build of main.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+images:
+  - name: ghcr.io/harville-labs/harness-site
+    newTag: main

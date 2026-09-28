@@ -1,0 +1,92 @@
+# Harness sites (apps/site; docs/sites.md). Applied by Flux from the homelab
+# repo (apps/harville-labs/harness-site), which owns the namespace, Ingress,
+# Postgres cluster, and configuration.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harness-site
+  labels:
+    app.kubernetes.io/name: harness-site
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: harness-site
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: harness-site
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: harness-site
+      containers:
+        - name: site
+          image: ghcr.io/harville-labs/harness-site:main
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: ORIGIN
+              value: https://harness.harville.ai
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: harness-site-postgres-app
+                  key: uri
+            - name: SMTP_HOST
+              value: smtp.mx.cloudflare.net
+            - name: SMTP_PORT
+              value: "465"
+            - name: SMTP_USER
+              value: api_token
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-smtp
+                  key: CLOUDFLARE_SMTP_TOKEN
+            - name: EMAIL_FROM
+              value: Harness <harness@harville.ai>
+          envFrom:
+            # OPERATOR_EMAILS and any overrides, from the homelab repo.
+            - configMapRef:
+                name: harness-site-config
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]

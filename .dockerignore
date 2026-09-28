@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/build
+**/.svelte-kit
+**/.data
+.git
+apps/vscode/bin
+apps/vscode/out
+*.vsix
