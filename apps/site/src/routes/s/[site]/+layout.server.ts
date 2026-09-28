@@ -8,5 +8,6 @@ export const load: LayoutServerLoad = async (event) => {
     site: { slug: ctx.site.slug, name: ctx.site.name, seats: ctx.site.seats },
     manager: ctx.manager,
     role: ctx.membership?.role ?? null,
+    harnessManager: ctx.user.harnessManager,
   };
 };

@@ -12,7 +12,7 @@ let { data, children } = $props();
   <span class="text-sm opacity-60">by Harville Labs</span>
   {#if data.user}
     <nav class="ml-auto flex items-center gap-4 text-sm">
-      {#if data.user.operator}<a href="/admin" class="opacity-80 hover:opacity-100">Operator</a>{/if}
+      {#if data.user.harnessManager}<a href="/admin" class="opacity-80 hover:opacity-100">All sites</a>{/if}
       <span class="hidden opacity-60 sm:inline">{data.user.email}</span>
       <form method="POST" action="/logout">
         <button class="rounded border border-white/20 px-3 py-1 hover:bg-white/10">Sign out</button>

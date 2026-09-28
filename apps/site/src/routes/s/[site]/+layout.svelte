@@ -18,6 +18,12 @@ const isDevicePage = $derived(page.route.id?.endsWith('/device') ?? false);
 {#if !isDevicePage}
   <h1 class="text-2xl font-semibold">{data.site.name}</h1>
   <p class="muted mb-4">Connect Harness with <code>harness login --site {data.site.slug}</code></p>
+  {#if data.harnessManager && data.role !== 'operator'}
+    <p class="card mb-4 text-sm">
+      You're viewing this site as a Harness manager{data.role ? ` (you're also its ${data.role})` : ''}.
+      <a href="/admin/{data.site.slug}">Assign operators and seats</a>.
+    </p>
+  {/if}
   <nav class="mb-6 flex flex-wrap gap-1 border-b border-[var(--line)]" aria-label="Site">
     {#each tabs.filter((t) => t.show) as tab (tab.path)}
       {@const href = `${base}${tab.path}`}

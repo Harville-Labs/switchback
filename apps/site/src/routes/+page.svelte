@@ -5,6 +5,11 @@ let { data } = $props();
 <svelte:head><title>Your sites · Harness</title></svelte:head>
 
 <h1 class="mb-4 text-2xl font-semibold">Your sites</h1>
+{#if data.user?.harnessManager}
+  <p class="muted mb-4">
+    As a Harness manager you can see <a href="/admin">every site</a> and assign its operators.
+  </p>
+{/if}
 {#if data.sites.length}
   <div class="card overflow-x-auto p-0">
     <table class="table">
@@ -22,6 +27,6 @@ let { data } = $props();
   </div>
 {:else}
   <p class="muted">
-    You aren't a member of any site yet. Ask your company's Harness admin to invite {data.user?.email}.
+    You aren't a member of any site yet. Ask your company's Harness operator to invite {data.user?.email}.
   </p>
 {/if}

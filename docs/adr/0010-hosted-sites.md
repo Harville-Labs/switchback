@@ -1,6 +1,6 @@
 # 0010: Hosted, site-based control plane
 
-**Status:** Accepted · 2026-09-28 · Storage amended by [0011](0011-site-data-in-postgres-only.md)
+**Status:** Accepted · 2026-09-28 · Storage amended by [0011](0011-site-data-in-postgres-only.md); roles by [0012](0012-harness-managers-and-site-operators.md)
 
 ## Context
 

@@ -25,13 +25,20 @@ export async function siteContext(
   const site = await siteBySlug(app.ctx, event.params.site ?? '');
   if (!site) error(404, "There's no site with that ID.");
   const m = await membership(app.ctx, site, user);
-  if (!options.allowOutsiders && m?.status !== 'active' && !user.operator)
+  if (!options.allowOutsiders && m?.status !== 'active' && !user.harnessManager)
     error(403, `You aren't a member of ${site.name}.`);
   return { app, user, site, membership: m, manager: canManage(m, user) };
 }
 
 export function requireManager(manager: boolean): void {
-  if (!manager) error(403, 'Only owners and admins can see this.');
+  if (!manager) error(403, 'Only operators and admins can see this.');
+}
+
+/** Harville Labs staff only: the /admin console and its actions. */
+export function requireHarnessManager(event: Pick<RequestEvent, 'locals' | 'url'>): User {
+  const user = requireUser(event);
+  if (!user.harnessManager) error(403, 'Only Harness managers can see this.');
+  return user;
 }
 
 /** Run a change; a broken rule becomes a form error instead of a crash. */

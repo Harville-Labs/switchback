@@ -5,7 +5,7 @@
  *   PUBLIC_URL / ORIGIN   where it's served (adapter-node's ORIGIN wins)
  *   DATABASE_URL          postgres://…; required in production. Locally it defaults to
  *                         the `bun run db:up` container
- *   OPERATOR_EMAILS       Harville Labs staff, made operators at startup
+ *   MANAGER_EMAILS        Harville Labs staff, made Harness managers at startup
  *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, EMAIL_FROM   outgoing mail
  */
 import { z } from 'zod';
@@ -24,7 +24,7 @@ const Env = z.object({
   ORIGIN: z.url().optional(),
   PUBLIC_URL: z.url().default('http://localhost:8788'),
   DATABASE_URL: z.string().optional(),
-  OPERATOR_EMAILS: z.string().default(''),
+  MANAGER_EMAILS: z.string().default(''),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(465),
   SMTP_USER: z.string().default('api_token'),
@@ -44,7 +44,7 @@ async function fromEnv(env: Record<string, string | undefined>): Promise<SiteApp
     throw new Error('DATABASE_URL is required: the site keeps its data in Postgres.');
   database = await openDatabase(e.DATABASE_URL ?? LOCAL_DATABASE_URL);
   const ctx: Ctx = { db: database.db, now: () => new Date() };
-  for (const email of e.OPERATOR_EMAILS.split(',')
+  for (const email of e.MANAGER_EMAILS.split(',')
     .map((s) => s.trim())
     .filter(Boolean))
     await ensureUser(ctx, email, true);

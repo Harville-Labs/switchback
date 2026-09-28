@@ -16,14 +16,19 @@ export interface Ctx {
   now: () => Date;
 }
 
-export const ROLES = ['owner', 'admin', 'member'] as const;
+/**
+ * Roles within one site. Operators run it and are assigned by a Harness
+ * manager; operators and admins manage its members, policy, and devices.
+ */
+export const ROLES = ['operator', 'admin', 'member'] as const;
 export type Role = (typeof ROLES)[number];
 
 export interface User {
   id: string;
   email: string;
   name: string | null;
-  operator: boolean;
+  /** Harville Labs staff: see every site, create them, and assign their operators. */
+  harnessManager: boolean;
 }
 
 export interface Site {
@@ -67,7 +72,7 @@ const toUser = (r: typeof t.users.$inferSelect): User => ({
   id: r.id,
   email: r.email,
   name: r.name,
-  operator: r.operator,
+  harnessManager: r.harnessManager,
 });
 
 export async function userByEmail(ctx: Ctx, email: string): Promise<User | undefined> {
@@ -80,16 +85,16 @@ export async function userById(ctx: Ctx, id: string): Promise<User | undefined> 
   return r ? toUser(r) : undefined;
 }
 
-export async function ensureUser(ctx: Ctx, email: string, operator = false): Promise<User> {
+export async function ensureUser(ctx: Ctx, email: string, harnessManager = false): Promise<User> {
   const existing = await userByEmail(ctx, email);
   if (existing) {
-    if (operator && !existing.operator) {
-      await ctx.db.update(t.users).set({ operator: true }).where(eq(t.users.id, existing.id));
-      return { ...existing, operator: true };
+    if (harnessManager && !existing.harnessManager) {
+      await ctx.db.update(t.users).set({ harnessManager: true }).where(eq(t.users.id, existing.id));
+      return { ...existing, harnessManager: true };
     }
     return existing;
   }
-  const user: User = { id: newId(), email: email.toLowerCase(), name: null, operator };
+  const user: User = { id: newId(), email: email.toLowerCase(), name: null, harnessManager };
   await ctx.db
     .insert(t.users)
     .values({ ...user, createdAt: ctx.now() })
@@ -188,23 +193,41 @@ export async function siteBySlug(ctx: Ctx, slug: string): Promise<Site | undefin
   return r ? toSite(r) : undefined;
 }
 
-export async function listSites(ctx: Ctx): Promise<(Site & { used: number })[]> {
-  const rows = await ctx.db
-    .select({ site: t.sites, used: count(t.memberships.userId) })
-    .from(t.sites)
-    .leftJoin(t.memberships, eq(t.memberships.siteId, t.sites.id))
-    .groupBy(t.sites.id)
-    .orderBy(t.sites.name);
-  return rows.map((r) => ({ ...toSite(r.site), used: Number(r.used) }));
+function assertHarnessManager(actor: User, what: string): void {
+  if (!actor.harnessManager) throw new SiteError(`Only Harness managers can ${what}.`, 403);
 }
 
-/** Operator: create a site with its first owner (invited until they sign in). */
+/** Every site, for Harness managers: seats in use and who operates it. */
+export async function listSites(
+  ctx: Ctx,
+): Promise<(Site & { used: number; operators: string[] })[]> {
+  const rows = await ctx.db
+    .select({
+      site: t.sites,
+      used: count(t.memberships.userId),
+      operators: sql<
+        string[] | null
+      >`array_agg(${t.users.email} order by ${t.users.email}) filter (where ${t.memberships.role} = 'operator')`,
+    })
+    .from(t.sites)
+    .leftJoin(t.memberships, eq(t.memberships.siteId, t.sites.id))
+    .leftJoin(t.users, eq(t.users.id, t.memberships.userId))
+    .groupBy(t.sites.id)
+    .orderBy(t.sites.name);
+  return rows.map((r) => ({
+    ...toSite(r.site),
+    used: Number(r.used),
+    operators: r.operators ?? [],
+  }));
+}
+
+/** Create a site with its first operator (invited until they sign in). */
 export async function createSite(
   ctx: Ctx,
   actor: User,
-  input: { slug: string; name: string; seats: number; ownerEmail: string },
+  input: { slug: string; name: string; seats: number; operatorEmail: string },
 ): Promise<Site> {
-  if (!actor.operator) throw new SiteError('Only Harville Labs operators can create sites.', 403);
+  assertHarnessManager(actor, 'create sites');
   if (!SLUG.test(input.slug))
     throw new SiteError(
       'The site ID must be 3 to 40 lowercase letters, digits, or dashes, starting with a letter.',
@@ -220,24 +243,32 @@ export async function createSite(
     seats: input.seats,
     telemetry: 'on',
   };
-  const owner = await ensureUser(ctx, input.ownerEmail);
+  const email = Email.safeParse(input.operatorEmail);
+  if (!email.success) throw new SiteError('The operator needs a valid email address.');
+  const operator = await ensureUser(ctx, email.data);
   await ctx.db.transaction(async (tx) => {
     await tx.insert(t.sites).values({ ...site, createdAt: ctx.now() });
     await tx.insert(t.memberships).values({
       siteId: site.id,
-      userId: owner.id,
-      role: 'owner',
+      userId: operator.id,
+      role: 'operator',
       status: 'invited',
       invitedBy: actor.id,
       createdAt: ctx.now(),
     });
   });
-  await audit(ctx, site.id, actor, 'site.created', `${site.seats} seats, owner ${owner.email}`);
+  await audit(
+    ctx,
+    site.id,
+    actor,
+    'site.created',
+    `${site.seats} seats, operator ${operator.email}`,
+  );
   return site;
 }
 
 export async function setSeats(ctx: Ctx, actor: User, site: Site, seats: number): Promise<void> {
-  if (!actor.operator) throw new SiteError('Only Harville Labs operators can change seats.', 403);
+  assertHarnessManager(actor, 'change seats');
   if (!Number.isInteger(seats) || seats < 1) throw new SiteError('A site needs at least one seat.');
   await ctx.db.update(t.sites).set({ seats }).where(eq(t.sites.id, site.id));
   await audit(ctx, site.id, actor, 'site.seats', `${site.seats} → ${seats}`);
@@ -309,17 +340,21 @@ export async function listMembers(ctx: Ctx, site: Site): Promise<MemberRow[]> {
   }));
 }
 
-/** Owners and admins manage a site; operators manage every site. */
+/** Operators and admins manage a site; Harness managers manage every site. */
 export function canManage(m: Membership | undefined, user: User): boolean {
-  return user.operator || (m?.status === 'active' && (m.role === 'owner' || m.role === 'admin'));
-}
-
-function isOwner(m: Membership | undefined, user: User): boolean {
-  return user.operator || (m?.status === 'active' && m.role === 'owner');
+  return (
+    user.harnessManager || (m?.status === 'active' && (m.role === 'operator' || m.role === 'admin'))
+  );
 }
 
 function assertManager(m: Membership | undefined, user: User): void {
-  if (!canManage(m, user)) throw new SiteError('Only owners and admins can do that.', 403);
+  if (!canManage(m, user)) throw new SiteError('Only operators and admins can do that.', 403);
+}
+
+/** Operators are Harville Labs' contact at a company, so only a Harness manager assigns them. */
+function assertMayAssign(actor: User, from: Role | undefined, to: Role | undefined): void {
+  if ((from === 'operator' || to === 'operator') && !actor.harnessManager)
+    throw new SiteError('Only a Harness manager can assign or remove site operators.', 403);
 }
 
 /** Invite someone. Takes a seat right away, so a site can't be oversubscribed. */
@@ -334,8 +369,7 @@ export async function invite(
   assertManager(actorMembership, actor);
   const email = Email.safeParse(emailInput);
   if (!email.success) throw new SiteError(`"${emailInput}" isn't an email address.`);
-  if (role === 'owner' && !isOwner(actorMembership, actor))
-    throw new SiteError('Only owners can add owners.', 403);
+  assertMayAssign(actor, undefined, role);
   const user = await ensureUser(ctx, email.data);
   if (await membership(ctx, site, user))
     throw new SiteError(`${user.email} is already a member of ${site.name}.`, 409);
@@ -356,11 +390,11 @@ export async function invite(
   return user;
 }
 
-async function ownerCount(ctx: Ctx, site: Site): Promise<number> {
+async function operatorCount(ctx: Ctx, site: Site): Promise<number> {
   const [r] = await ctx.db
     .select({ n: count() })
     .from(t.memberships)
-    .where(and(eq(t.memberships.siteId, site.id), eq(t.memberships.role, 'owner')));
+    .where(and(eq(t.memberships.siteId, site.id), eq(t.memberships.role, 'operator')));
   return Number(r?.n ?? 0);
 }
 
@@ -375,10 +409,10 @@ export async function changeRole(
   assertManager(actorMembership, actor);
   const current = await membership(ctx, site, target);
   if (!current) throw new SiteError(`${target.email} isn't a member.`, 404);
-  if ((current.role === 'owner' || role === 'owner') && !isOwner(actorMembership, actor))
-    throw new SiteError('Only owners can add or change owners.', 403);
-  if (current.role === 'owner' && role !== 'owner' && (await ownerCount(ctx, site)) <= 1)
-    throw new SiteError('A site needs at least one owner. Make someone else an owner first.');
+  if (current.role === role) return;
+  assertMayAssign(actor, current.role, role);
+  if (current.role === 'operator' && (await operatorCount(ctx, site)) <= 1)
+    throw new SiteError('A site needs at least one operator. Assign another operator first.');
   await ctx.db
     .update(t.memberships)
     .set({ role })
@@ -397,10 +431,9 @@ export async function removeMember(
   assertManager(actorMembership, actor);
   const current = await membership(ctx, site, target);
   if (!current) throw new SiteError(`${target.email} isn't a member.`, 404);
-  if (current.role === 'owner' && !isOwner(actorMembership, actor))
-    throw new SiteError('Only owners can remove owners.', 403);
-  if (current.role === 'owner' && (await ownerCount(ctx, site)) <= 1)
-    throw new SiteError('A site needs at least one owner.');
+  assertMayAssign(actor, current.role, undefined);
+  if (current.role === 'operator' && (await operatorCount(ctx, site)) <= 1)
+    throw new SiteError('A site needs at least one operator. Assign another operator first.');
   await ctx.db.transaction(async (tx) => {
     await tx
       .delete(t.memberships)
@@ -417,6 +450,63 @@ export async function removeMember(
       );
   });
   await audit(ctx, site.id, actor, 'member.removed', target.email);
+}
+
+/**
+ * Harness manager: make someone an operator of a site. A member is promoted in
+ * place; anyone else is invited, which takes a seat like any invitation.
+ */
+export async function assignOperator(
+  ctx: Ctx,
+  site: Site,
+  actor: User,
+  emailInput: string,
+): Promise<User> {
+  assertHarnessManager(actor, 'assign site operators');
+  const email = Email.safeParse(emailInput);
+  if (!email.success) throw new SiteError(`"${emailInput}" isn't an email address.`);
+  const existing = await userByEmail(ctx, email.data);
+  if (existing && (await membership(ctx, site, existing))) {
+    await changeRole(ctx, site, actor, undefined, existing, 'operator');
+    return existing;
+  }
+  return invite(ctx, site, actor, undefined, email.data, 'operator');
+}
+
+// ---------------------------------------------------------------------------
+// Harness managers (Harville Labs staff)
+// ---------------------------------------------------------------------------
+
+export async function listHarnessManagers(ctx: Ctx): Promise<User[]> {
+  const rows = await ctx.db
+    .select()
+    .from(t.users)
+    .where(eq(t.users.harnessManager, true))
+    .orderBy(t.users.email);
+  return rows.map(toUser);
+}
+
+/**
+ * Grant or revoke Harness manager access. Nobody can revoke their own, so
+ * there's always someone left who can. Addresses in MANAGER_EMAILS are
+ * granted again at every startup.
+ */
+export async function setHarnessManager(
+  ctx: Ctx,
+  actor: User,
+  emailInput: string,
+  grant: boolean,
+): Promise<User> {
+  assertHarnessManager(actor, 'change who is a Harness manager');
+  const email = Email.safeParse(emailInput);
+  if (!email.success) throw new SiteError(`"${emailInput}" isn't an email address.`);
+  if (!grant && email.data === actor.email)
+    throw new SiteError("You can't remove your own Harness manager access.");
+  const user = grant ? await ensureUser(ctx, email.data) : await userByEmail(ctx, email.data);
+  if (!user) throw new SiteError(`${email.data} isn't a Harness manager.`, 404);
+  await ctx.db.update(t.users).set({ harnessManager: grant }).where(eq(t.users.id, user.id));
+  await audit(ctx, null, actor, grant ? 'manager.added' : 'manager.removed', user.email);
+  return { ...user, harnessManager: grant };
 }
 
 export async function setTelemetry(
@@ -746,7 +836,7 @@ export async function listDevices(ctx: Ctx, site: Site, onlyFor?: User) {
   return rows;
 }
 
-/** Members may sign out their own devices; owners and admins anyone's. */
+/** Members may sign out their own devices; operators and admins anyone's. */
 export async function revokeDevice(
   ctx: Ctx,
   site: Site,
@@ -909,7 +999,7 @@ export interface TelemetrySummary {
   crashes: { day: string; site: string; name: string; message: string; stack: string }[];
 }
 
-/** Operator view: telemetry across every site (and unaffiliated installs) for recent days. */
+/** Harness manager view: telemetry across every site (and unaffiliated installs) for recent days. */
 export async function telemetrySummary(ctx: Ctx, days = 30): Promise<TelemetrySummary> {
   const from = new Date(ctx.now().getTime() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
   const rows = await ctx.db
@@ -994,6 +1084,22 @@ export async function audit(
     detail: detail ?? null,
     at: ctx.now(),
   });
+}
+
+/** Changes made outside any one site, such as granting Harness manager access. */
+export async function platformAuditLog(ctx: Ctx, limit = 50) {
+  return ctx.db
+    .select({
+      at: t.auditLog.at,
+      actor: t.users.email,
+      action: t.auditLog.action,
+      detail: t.auditLog.detail,
+    })
+    .from(t.auditLog)
+    .leftJoin(t.users, eq(t.users.id, t.auditLog.actorId))
+    .where(isNull(t.auditLog.siteId))
+    .orderBy(desc(t.auditLog.at))
+    .limit(limit);
 }
 
 export async function auditLog(ctx: Ctx, site: Site, limit = 200) {

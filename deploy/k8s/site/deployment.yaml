@@ -62,7 +62,7 @@ spec:
             - name: EMAIL_FROM
               value: Harness <harness@harville.ai>
           envFrom:
-            # OPERATOR_EMAILS and any overrides, from the homelab repo.
+            # MANAGER_EMAILS and any overrides, from the homelab repo.
             - configMapRef:
                 name: harness-site-config
                 optional: true

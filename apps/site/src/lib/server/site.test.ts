@@ -70,10 +70,10 @@ async function acme(seats = 3) {
     slug: 'acme',
     name: 'Acme Corp',
     seats,
-    ownerEmail: 'owner@acme.com',
+    operatorEmail: 'operator@acme.com',
   });
-  const owner = await signIn('owner@acme.com');
-  return { site, owner, ownerM: await m.membership(app.ctx, site, owner) };
+  const operator = await signIn('operator@acme.com');
+  return { site, operator, operatorM: await m.membership(app.ctx, site, operator) };
 }
 
 async function signIn(email: string) {
@@ -81,8 +81,8 @@ async function signIn(email: string) {
   return (await m.redeemLoginLink(app.ctx, token)).user;
 }
 
-async function member(site: m.Site, owner: m.User, email: string, role: m.Role = 'member') {
-  await m.invite(app.ctx, site, owner, await m.membership(app.ctx, site, owner), email, role);
+async function member(site: m.Site, operator: m.User, email: string, role: m.Role = 'member') {
+  await m.invite(app.ctx, site, operator, await m.membership(app.ctx, site, operator), email, role);
   const user = await signIn(email);
   return { user, m: await m.membership(app.ctx, site, user) };
 }
@@ -90,10 +90,10 @@ async function member(site: m.Site, owner: m.User, email: string, role: m.Role =
 describe('sign-in links and sessions', () => {
   test('a link works once, then gives a session; invitations become active', async () => {
     const { site } = await acme();
-    const token = await m.createLoginLink(app.ctx, 'owner@acme.com', '/s/acme/');
+    const token = await m.createLoginLink(app.ctx, 'operator@acme.com', '/s/acme/');
     const r = await m.redeemLoginLink(app.ctx, token);
     expect(r.next).toBe('/s/acme/');
-    expect((await m.sessionUser(app.ctx, r.session))?.email).toBe('owner@acme.com');
+    expect((await m.sessionUser(app.ctx, r.session))?.email).toBe('operator@acme.com');
     await expect(m.redeemLoginLink(app.ctx, token)).rejects.toThrow('already used');
     expect((await m.membership(app.ctx, site, r.user))?.status).toBe('active');
     await m.endSession(app.ctx, r.session);
@@ -114,74 +114,154 @@ describe('sign-in links and sessions', () => {
 });
 
 describe('sites, seats, and roles', () => {
-  test('only operators create sites; IDs are validated and unique', async () => {
-    const { owner } = await acme();
+  test('only Harness managers create sites; IDs are validated and unique', async () => {
+    const { operator } = await acme();
     await expect(
-      m.createSite(app.ctx, owner, { slug: 'x-co', name: 'X', seats: 1, ownerEmail: 'a@x.co' }),
-    ).rejects.toThrow('operators');
+      m.createSite(app.ctx, operator, {
+        slug: 'x-co',
+        name: 'X',
+        seats: 1,
+        operatorEmail: 'a@x.co',
+      }),
+    ).rejects.toThrow('Only Harness managers');
     await expect(
-      m.createSite(app.ctx, ops, { slug: 'Bad Slug', name: 'X', seats: 1, ownerEmail: 'a@x.co' }),
+      m.createSite(app.ctx, ops, {
+        slug: 'Bad Slug',
+        name: 'X',
+        seats: 1,
+        operatorEmail: 'a@x.co',
+      }),
     ).rejects.toThrow('site ID');
     await expect(
-      m.createSite(app.ctx, ops, { slug: 'acme', name: 'X', seats: 1, ownerEmail: 'a@x.co' }),
+      m.createSite(app.ctx, ops, { slug: 'acme', name: 'X', seats: 1, operatorEmail: 'a@x.co' }),
     ).rejects.toThrow('already exists');
-    expect((await m.listSites(app.ctx))[0]).toMatchObject({ slug: 'acme', used: 1 });
+    await expect(
+      m.createSite(app.ctx, ops, { slug: 'y-co', name: 'Y', seats: 1, operatorEmail: 'nope' }),
+    ).rejects.toThrow('valid email');
+    expect((await m.listSites(app.ctx))[0]).toMatchObject({
+      slug: 'acme',
+      used: 1,
+      operators: ['operator@acme.com'],
+    });
   });
 
   test('invitations take seats and the limit holds', async () => {
-    const { site, owner, ownerM } = await acme(2);
-    await m.invite(app.ctx, site, owner, ownerM, 'dev@acme.com', 'member');
-    await expect(m.invite(app.ctx, site, owner, ownerM, 'more@acme.com', 'member')).rejects.toThrow(
-      'All 2 seats are taken',
-    );
-    await expect(m.invite(app.ctx, site, owner, ownerM, 'dev@acme.com', 'member')).rejects.toThrow(
-      'already a member',
-    );
-    await expect(m.invite(app.ctx, site, owner, ownerM, 'not an email', 'member')).rejects.toThrow(
-      "isn't an email",
-    );
+    const { site, operator, operatorM } = await acme(2);
+    await m.invite(app.ctx, site, operator, operatorM, 'dev@acme.com', 'member');
+    await expect(
+      m.invite(app.ctx, site, operator, operatorM, 'more@acme.com', 'member'),
+    ).rejects.toThrow('All 2 seats are taken');
+    await expect(
+      m.invite(app.ctx, site, operator, operatorM, 'dev@acme.com', 'member'),
+    ).rejects.toThrow('already a member');
+    await expect(
+      m.invite(app.ctx, site, operator, operatorM, 'not an email', 'member'),
+    ).rejects.toThrow("isn't an email");
   });
 
-  test('members can’t manage; admins can’t touch owners; a site keeps an owner', async () => {
-    const { site, owner, ownerM } = await acme(5);
-    const dev = await member(site, owner, 'dev@acme.com');
-    const lead = await member(site, owner, 'lead@acme.com', 'admin');
+  test('only Harness managers assign or remove operators; a site keeps one', async () => {
+    const { site, operator, operatorM } = await acme(5);
+    const dev = await member(site, operator, 'dev@acme.com');
+    const lead = await member(site, operator, 'lead@acme.com', 'admin');
     await expect(m.invite(app.ctx, site, dev.user, dev.m, 'x@acme.com', 'member')).rejects.toThrow(
-      'Only owners and admins',
+      'Only operators and admins',
     );
-    await expect(m.invite(app.ctx, site, lead.user, lead.m, 'x@acme.com', 'owner')).rejects.toThrow(
-      'Only owners can add owners',
+    // Not even an operator can make or unmake operators.
+    for (const [who, wm] of [
+      [lead.user, lead.m],
+      [operator, operatorM],
+    ] as const) {
+      await expect(m.invite(app.ctx, site, who, wm, 'x@acme.com', 'operator')).rejects.toThrow(
+        'Only a Harness manager',
+      );
+      await expect(m.changeRole(app.ctx, site, who, wm, dev.user, 'operator')).rejects.toThrow(
+        'Only a Harness manager',
+      );
+    }
+    await expect(m.removeMember(app.ctx, site, lead.user, lead.m, operator)).rejects.toThrow(
+      'Only a Harness manager',
     );
-    await expect(m.changeRole(app.ctx, site, lead.user, lead.m, dev.user, 'owner')).rejects.toThrow(
-      'Only owners',
+    await expect(
+      m.changeRole(app.ctx, site, operator, operatorM, operator, 'admin'),
+    ).rejects.toThrow('Only a Harness manager');
+    // Operators still run everything else.
+    await m.changeRole(app.ctx, site, operator, operatorM, dev.user, 'admin');
+    await m.changeRole(app.ctx, site, operator, operatorM, dev.user, 'member');
+
+    await expect(m.changeRole(app.ctx, site, ops, undefined, operator, 'admin')).rejects.toThrow(
+      'at least one operator',
     );
-    await expect(m.removeMember(app.ctx, site, lead.user, lead.m, owner)).rejects.toThrow(
-      'Only owners',
+    await expect(m.removeMember(app.ctx, site, ops, undefined, operator)).rejects.toThrow(
+      'at least one operator',
     );
-    await expect(m.changeRole(app.ctx, site, owner, ownerM, owner, 'admin')).rejects.toThrow(
-      'at least one owner',
+    // A manager promotes a member in place, or invites someone new into a seat.
+    await m.assignOperator(app.ctx, site, ops, 'lead@acme.com');
+    await m.assignOperator(app.ctx, site, ops, 'new@acme.com');
+    await m.changeRole(app.ctx, site, ops, undefined, operator, 'admin');
+    await expect(m.assignOperator(app.ctx, site, operator, 'dev@acme.com')).rejects.toThrow(
+      'Only Harness managers',
     );
-    await m.changeRole(app.ctx, site, owner, ownerM, lead.user, 'owner');
-    await m.changeRole(app.ctx, site, owner, ownerM, owner, 'admin');
     const rows = await m.listMembers(app.ctx, site);
-    expect(rows.map((r) => [r.user.email, r.role])).toEqual([
-      ['dev@acme.com', 'member'],
-      ['lead@acme.com', 'owner'],
-      ['owner@acme.com', 'admin'],
+    expect(rows.map((r) => [r.user.email, r.role, r.status])).toEqual([
+      ['dev@acme.com', 'member', 'active'],
+      ['lead@acme.com', 'operator', 'active'],
+      ['new@acme.com', 'operator', 'invited'],
+      ['operator@acme.com', 'admin', 'active'],
     ]);
     expect((await m.auditLog(app.ctx, site)).map((a) => a.action)).toContain('member.role');
+  });
+
+  test('Harness managers see every site without taking a seat', async () => {
+    const { site } = await acme(1);
+    const viewer = await signIn('ops@harville.ai');
+    expect(viewer.harnessManager).toBe(true);
+    expect(await m.membership(app.ctx, site, viewer)).toBeUndefined();
+    expect(m.canManage(undefined, viewer)).toBe(true);
+    expect(await m.seatsUsed(app.ctx, site)).toBe(1);
+  });
+
+  test('Harness managers add and remove each other, but not themselves', async () => {
+    const { operator } = await acme();
+    await expect(m.setHarnessManager(app.ctx, operator, 'operator@acme.com', true)).rejects.toThrow(
+      'Only Harness managers',
+    );
+    await m.setHarnessManager(app.ctx, ops, 'second@harville.ai', true);
+    expect((await m.listHarnessManagers(app.ctx)).map((u) => u.email)).toEqual([
+      'ops@harville.ai',
+      'second@harville.ai',
+    ]);
+    await expect(m.setHarnessManager(app.ctx, ops, 'ops@harville.ai', false)).rejects.toThrow(
+      'your own',
+    );
+    const second = (await m.userByEmail(app.ctx, 'second@harville.ai')) as m.User;
+    clock += 1000;
+    await m.setHarnessManager(app.ctx, second, 'ops@harville.ai', false);
+    expect((await m.listHarnessManagers(app.ctx)).map((u) => u.email)).toEqual([
+      'second@harville.ai',
+    ]);
+    expect((await m.platformAuditLog(app.ctx)).map((a) => a.action)).toEqual([
+      'manager.removed',
+      'manager.added',
+    ]);
   });
 });
 
 describe('policy', () => {
   test('validated versions; the client view adds the org and telemetry setting', async () => {
-    const { site, owner, ownerM } = await acme();
-    const bad = await m.savePolicy(app.ctx, site, owner, ownerM, {
+    const { site, operator, operatorM } = await acme();
+    const bad = await m.savePolicy(app.ctx, site, operator, operatorM, {
       restrictions: { maxDailyUsd: -1 },
     });
     expect(bad).toMatchObject({ problems: [expect.stringContaining('restrictions.maxDailyUsd')] });
     expect(
-      await m.savePolicy(app.ctx, site, owner, ownerM, { restrictions: { maxDailyUsd: 5 } }, 'cap'),
+      await m.savePolicy(
+        app.ctx,
+        site,
+        operator,
+        operatorM,
+        { restrictions: { maxDailyUsd: 5 } },
+        'cap',
+      ),
     ).toEqual({ version: 1 });
     expect(await m.clientPolicy(app.ctx, site)).toEqual({
       restrictions: { maxDailyUsd: 5 },
@@ -189,13 +269,13 @@ describe('policy', () => {
       version: '1.on',
       org: { id: 'acme', name: 'Acme Corp' },
     });
-    await m.setTelemetry(app.ctx, site, owner, ownerM, 'user');
+    await m.setTelemetry(app.ctx, site, operator, operatorM, 'user');
     const fresh = (await m.siteBySlug(app.ctx, 'acme')) as m.Site;
     expect((await m.clientPolicy(app.ctx, fresh)).enforced).toEqual({});
     expect((await m.policyHistory(app.ctx, site))[0]).toMatchObject({
       version: 1,
       note: 'cap',
-      by: 'owner@acme.com',
+      by: 'operator@acme.com',
     });
   });
 });
@@ -218,9 +298,9 @@ describe('the Harness client protocol, end to end', () => {
   }
 
   test('sign-in, policy with ETag, usage that accumulates, telemetry per site', async () => {
-    const { site, owner, ownerM } = await acme();
-    await m.savePolicy(app.ctx, site, owner, ownerM, { restrictions: { maxDailyUsd: 5 } });
-    await member(site, owner, 'dev@acme.com');
+    const { site, operator, operatorM } = await acme();
+    await m.savePolicy(app.ctx, site, operator, operatorM, { restrictions: { maxDailyUsd: 5 } });
+    await member(site, operator, 'dev@acme.com');
     const { client, token } = await login('dev@acme.com');
     expect(token.org).toEqual({ id: 'acme', name: 'Acme Corp' });
     expect(token.user.email).toBe('dev@acme.com');
@@ -286,8 +366,8 @@ describe('the Harness client protocol, end to end', () => {
   });
 
   test('a denied code is refused; an approved one is exchanged only once', async () => {
-    const { site, owner } = await acme();
-    await member(site, owner, 'dev@acme.com');
+    const { site, operator } = await acme();
+    await member(site, operator, 'dev@acme.com');
     const client = new OrgClient(`${BASE}/s/acme`, clientFetch);
     const denied = await client.startDeviceLogin();
     const dev = (await m.userByEmail(app.ctx, 'dev@acme.com')) as m.User;
@@ -298,8 +378,8 @@ describe('the Harness client protocol, end to end', () => {
   });
 
   test('refresh rotates tokens; removing a member signs out their devices', async () => {
-    const { site, owner, ownerM } = await acme();
-    await member(site, owner, 'dev@acme.com');
+    const { site, operator, operatorM } = await acme();
+    await member(site, operator, 'dev@acme.com');
     const { client, token, user } = await login('dev@acme.com');
     const next = await client.refresh(token.refresh_token as string);
     await expect(client.refresh(token.refresh_token as string)).rejects.toBeInstanceOf(
@@ -307,23 +387,23 @@ describe('the Harness client protocol, end to end', () => {
     );
     await expect(client.fetchPolicy(token.access_token)).rejects.toBeInstanceOf(OrgAuthError);
     expect((await client.fetchPolicy(next.access_token)).status).toBe('updated');
-    await m.removeMember(app.ctx, site, owner, ownerM, user);
+    await m.removeMember(app.ctx, site, operator, operatorM, user);
     await expect(client.fetchPolicy(next.access_token)).rejects.toBeInstanceOf(OrgAuthError);
     await expect(client.refresh(next.refresh_token as string)).rejects.toBeInstanceOf(OrgAuthError);
   });
 
   test('access tokens last an hour', async () => {
-    const { site, owner } = await acme();
-    await member(site, owner, 'dev@acme.com');
+    const { site, operator } = await acme();
+    await member(site, operator, 'dev@acme.com');
     const { client, token } = await login('dev@acme.com');
     clock += m.ACCESS_TTL_MS + 1;
     await expect(client.fetchPolicy(token.access_token)).rejects.toBeInstanceOf(OrgAuthError);
   });
 
   test('members sign out only their own devices', async () => {
-    const { site, owner, ownerM } = await acme();
-    const a = await member(site, owner, 'a@acme.com');
-    await member(site, owner, 'b@acme.com');
+    const { site, operator, operatorM } = await acme();
+    const a = await member(site, operator, 'a@acme.com');
+    await member(site, operator, 'b@acme.com');
     await login('a@acme.com');
     await login('b@acme.com');
     const all = await m.listDevices(app.ctx, site);
@@ -334,7 +414,7 @@ describe('the Harness client protocol, end to end', () => {
     expect((await m.listDevices(app.ctx, site, a.user)).map((d) => d.email)).toEqual([
       'a@acme.com',
     ]);
-    await m.revokeDevice(app.ctx, site, owner, ownerM, bDevice?.id as string);
+    await m.revokeDevice(app.ctx, site, operator, operatorM, bDevice?.id as string);
     expect(await m.listDevices(app.ctx, site)).toHaveLength(1);
   });
 

@@ -21,8 +21,8 @@ export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   name: text('name'),
-  /** Harville Labs staff. */
-  operator: boolean('operator').notNull().default(false),
+  /** A Harness manager: Harville Labs staff who oversee every site and assign its operators. */
+  harnessManager: boolean('harness_manager').notNull().default(false),
   createdAt: ts('created_at').notNull(),
 });
 
@@ -47,7 +47,7 @@ export const memberships = pgTable(
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['owner', 'admin', 'member'] }).notNull(),
+    role: text('role', { enum: ['operator', 'admin', 'member'] }).notNull(),
     status: text('status', { enum: ['active', 'invited'] }).notNull(),
     invitedBy: text('invited_by'),
     createdAt: ts('created_at').notNull(),

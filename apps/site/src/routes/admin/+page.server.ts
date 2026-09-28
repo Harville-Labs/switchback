@@ -1,59 +1,73 @@
-import { error } from '@sveltejs/kit';
 import { siteApp } from '$lib/server/context';
-import { attempt, requireUser } from '$lib/server/guards';
+import { attempt, requireHarnessManager } from '$lib/server/guards';
 import {
   createSite,
-  Email,
+  listHarnessManagers,
   listSites,
-  SiteError,
-  setSeats,
-  siteBySlug,
+  platformAuditLog,
+  setHarnessManager,
   telemetrySummary,
 } from '$lib/server/model';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async (event) => {
   const { ctx } = await siteApp();
-  return { sites: await listSites(ctx), telemetry: await telemetrySummary(ctx) };
+  const managers = await listHarnessManagers(ctx);
+  const log = await platformAuditLog(ctx);
+  return {
+    me: event.locals.user?.email,
+    sites: await listSites(ctx),
+    telemetry: await telemetrySummary(ctx),
+    managers: managers.map((m) => m.email),
+    log: log.map((e) => ({ ...e, at: e.at.toISOString() })),
+  };
 };
 
-/** Actions don't run the layout load, so they check for an operator themselves. */
-async function operator(event: Parameters<Actions[string]>[0]) {
-  const user = requireUser(event);
-  if (!user.operator) error(403, 'Harville Labs operators only.');
-  return { user, app: await siteApp() };
+/** Actions don't run the layout load, so each checks for a Harness manager itself. */
+async function manager(event: Parameters<Actions[string]>[0]) {
+  return { user: requireHarnessManager(event), app: await siteApp() };
 }
 
 export const actions: Actions = {
   create: async (event) => {
-    const { user, app } = await operator(event);
+    const { user, app } = await manager(event);
     const form = await event.request.formData();
     return attempt(async () => {
-      const owner = Email.safeParse(String(form.get('owner') ?? ''));
-      if (!owner.success) throw new SiteError('The owner needs a valid email address.');
+      const operatorEmail = String(form.get('operator') ?? '');
       const site = await createSite(app.ctx, user, {
         slug: String(form.get('slug') ?? '').trim(),
         name: String(form.get('name') ?? ''),
         seats: Number(form.get('seats')),
-        ownerEmail: owner.data,
+        operatorEmail,
       });
+      const to = operatorEmail.trim().toLowerCase();
       await app.mailer.send({
-        to: owner.data,
+        to,
         subject: `Your Harness site for ${site.name} is ready`,
-        text: `Harville Labs set up ${site.name} on Harness with ${site.seats} seats, and you're its owner.\n\nSign in at ${app.publicUrl}/login?next=/s/${site.slug} to invite your team and set your policy.\n`,
+        text: `Harville Labs set up ${site.name} on Harness with ${site.seats} seats, and you're its operator.\n\nSign in at ${app.publicUrl}/login?next=/s/${site.slug} to invite your team and set your policy.\n`,
       });
-      return { notice: `Created ${site.name} (${site.slug}) and emailed ${owner.data}.` };
+      return { notice: `Created ${site.name} (${site.slug}) and emailed ${to}.` };
     });
   },
-  seats: async (event) => {
-    const { user, app } = await operator(event);
-    const form = await event.request.formData();
+  addManager: async (event) => {
+    const { user, app } = await manager(event);
+    const email = String((await event.request.formData()).get('email') ?? '');
     return attempt(async () => {
-      const site = await siteBySlug(app.ctx, String(form.get('site')));
-      if (!site) throw new SiteError('No such site.', 404);
-      const seats = Number(form.get('seats'));
-      await setSeats(app.ctx, user, site, seats);
-      return { notice: `${site.name} now has ${seats} seats.` };
+      const added = await setHarnessManager(app.ctx, user, email, true);
+      await app.mailer.send({
+        to: added.email,
+        subject: "You're a Harness manager",
+        text: `${user.email} made you a Harness manager: you can see every Harness site, create them, and assign their operators.\n\nSign in at ${app.publicUrl}/login?next=/admin\n`,
+      });
+      return { notice: `${added.email} is now a Harness manager.` };
+    });
+  },
+  removeManager: async (event) => {
+    const { user, app } = await manager(event);
+    const email = String((await event.request.formData()).get('email') ?? '');
+    return attempt(async () => {
+      const removed = await setHarnessManager(app.ctx, user, email, false);
+      return { notice: `${removed.email} is no longer a Harness manager.` };
     });
   },
 };

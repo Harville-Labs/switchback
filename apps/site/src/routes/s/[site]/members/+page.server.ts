@@ -13,7 +13,7 @@ import {
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-  const { app, site, membership, user } = await siteContext(event);
+  const { app, site, user } = await siteContext(event);
   const members = await listMembers(app.ctx, site);
   return {
     members: members.map((m) => ({
@@ -25,7 +25,7 @@ export const load: PageServerLoad = async (event) => {
       lastSeen: m.lastSeen?.toISOString() ?? null,
     })),
     used: await seatsUsed(app.ctx, site),
-    isOwner: user.operator || membership?.role === 'owner',
+    harnessManager: user.harnessManager,
   };
 };
 
