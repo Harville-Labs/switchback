@@ -33,6 +33,21 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return out.trim();
 }
 
+/**
+ * Operations on a repository's shared state (worktree list, branches, config)
+ * take git's locks; parallel subagents would collide on them (seen on
+ * Windows), so they run one at a time per repository.
+ */
+const queues = new Map<string, Promise<unknown>>();
+function serialized<T>(repo: string, work: () => Promise<T>): Promise<T> {
+  const run = (queues.get(repo) ?? Promise.resolve()).then(work, work);
+  queues.set(
+    repo,
+    run.catch(() => undefined),
+  );
+  return run;
+}
+
 export async function gitToplevel(dir: string): Promise<string | undefined> {
   return git(dir, ['rev-parse', '--show-toplevel']).catch(() => undefined);
 }
@@ -52,7 +67,7 @@ export async function createWorktree(
   mkdirSync(baseDir, { recursive: true });
   const path = join(baseDir, id);
   const branch = `harness/${id}`;
-  await git(repo, ['worktree', 'add', '-b', branch, path, base]);
+  await serialized(repo, () => git(repo, ['worktree', 'add', '-b', branch, path, base]));
   return { repo, path, root: join(path, relative(repo, workspaceRoot)), branch, base };
 }
 
@@ -84,7 +99,9 @@ export async function finishWorktree(wt: Worktree, message: string): Promise<Wor
   }
   const stat = staged ? await git(wt.path, ['diff', '--stat', wt.base, 'HEAD']) : '';
   const diff = staged ? await git(wt.path, ['diff', wt.base, 'HEAD']) : '';
-  await git(wt.repo, ['worktree', 'remove', '--force', wt.path]);
-  if (!staged) await git(wt.repo, ['branch', '-D', wt.branch]).catch(() => undefined);
+  await serialized(wt.repo, async () => {
+    await git(wt.repo, ['worktree', 'remove', '--force', wt.path]);
+    if (!staged) await git(wt.repo, ['branch', '-D', wt.branch]).catch(() => undefined);
+  });
   return { changed: !!staged, stat, diff };
 }

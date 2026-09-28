@@ -122,5 +122,6 @@ test('agents new writes a valid file that a running engine picks up without a re
   expect(bad.exitCode).toBe(2);
   expect(bad.stderr.toString()).toContain('lowercase');
   client.close();
-  rmSync(ws, { recursive: true, force: true });
+  // Windows keeps the directory busy until the engine process has exited.
+  rmSync(ws, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }, 30_000);

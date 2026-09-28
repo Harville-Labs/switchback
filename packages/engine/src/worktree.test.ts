@@ -34,8 +34,8 @@ beforeEach(() => {
   git('commit', '-q', '-m', 'init');
 });
 afterEach(() => {
-  rmSync(repo, { recursive: true, force: true });
-  rmSync(data, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  rmSync(data, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 });
 
 /** The parent starts two isolated editors in parallel; each writes shared.txt and its own file. */
