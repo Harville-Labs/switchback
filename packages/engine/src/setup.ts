@@ -32,6 +32,7 @@ export const REMOTE_KINDS = [
   'anthropic',
   'openai',
   'deepseek',
+  'gemini',
   'bedrock',
   'vertex',
   'anthropic-aws',
@@ -57,7 +58,7 @@ export interface LocalAnswer {
 }
 
 export type RemoteAnswer =
-  | { kind: 'anthropic' | 'openai' | 'deepseek'; model: string }
+  | { kind: 'anthropic' | 'openai' | 'deepseek' | 'gemini'; model: string }
   | { kind: 'bedrock'; model: string; region: string; profile?: string }
   | { kind: 'vertex'; model: string; projectId: string; region: string }
   | { kind: 'anthropic-aws'; model: string; region: string; workspaceId: string; profile?: string }

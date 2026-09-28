@@ -43,7 +43,7 @@ init options (all optional; prompts cover anything not given)
                            fallbacks and bigger-context models, in order
   --context-window <n>     Tokens the server loads, per --local-model in order
   --no-local               Remote only
-  --remote <r>             anthropic | openai | deepseek | bedrock | vertex |
+  --remote <r>             anthropic | openai | deepseek | gemini | bedrock | vertex |
                            anthropic-aws | foundry | openai-compatible | none.
                            Repeat for fallbacks
   --remote-model <m>       Model ID per --remote, in order (see \`harness init\`)

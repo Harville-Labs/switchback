@@ -1,5 +1,6 @@
 export * from './anthropic.ts';
 export * from './catalog.ts';
+export * from './gemini.ts';
 export * from './local-detect.ts';
 export * from './openai-compatible.ts';
 export * from './openai-responses.ts';

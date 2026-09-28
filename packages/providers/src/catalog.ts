@@ -8,7 +8,9 @@
  * `sonnet`, `small` -> `haiku` (the names come from Claude Code agent files,
  * but they mean "tier" for every provider).
  *
- * Prices are USD per million tokens, list price, checked 2026-09-26.
+ * Prices are USD per million tokens, list price, checked 2026-09-26 (Gemini:
+ * 2026-09-27, ai.google.dev/gemini-api/docs/pricing; Pro prices are for prompts
+ * up to 200k tokens).
  */
 import type { Price } from './pricing.ts';
 
@@ -24,7 +26,7 @@ export interface CatalogModel {
   note?: string;
 }
 
-export type HostedProviderKind = 'anthropic' | 'openai' | 'deepseek';
+export type HostedProviderKind = 'anthropic' | 'openai' | 'deepseek' | 'gemini';
 
 export const CATALOG: Record<HostedProviderKind, { label: string; models: CatalogModel[] }> = {
   anthropic: {
@@ -106,6 +108,37 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         maxOutputTokens: 32_000,
         price: { input: 0.3, output: 1.2, cacheRead: 0.006 },
         note: 'peak-hour price',
+      },
+    ],
+  },
+  gemini: {
+    label: 'Google Gemini',
+    models: [
+      {
+        id: 'gemini-3.1-pro-preview',
+        label: 'Gemini 3.1 Pro (preview)',
+        size: 'large',
+        contextWindow: 1_048_576,
+        maxOutputTokens: 65_536,
+        price: { input: 2, output: 12, cacheRead: 0.2 },
+        note: 'doubles above 200k-token prompts',
+      },
+      {
+        id: 'gemini-3.8-flash',
+        label: 'Gemini 3.8 Flash',
+        size: 'medium',
+        contextWindow: 1_048_576,
+        maxOutputTokens: 65_536,
+        price: { input: 0.75, output: 3.75, cacheRead: 0.075 },
+        note: 'introductory price through 2026; $1.50 / $7.50 from 2027',
+      },
+      {
+        id: 'gemini-2.5-flash',
+        label: 'Gemini 2.5 Flash',
+        size: 'small',
+        contextWindow: 1_048_576,
+        maxOutputTokens: 65_536,
+        price: { input: 0.3, output: 2.5, cacheRead: 0.03 },
       },
     ],
   },

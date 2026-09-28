@@ -348,6 +348,7 @@ const REMOTE_LABELS: Record<RemoteKind, string> = {
   anthropic: 'Anthropic API (Claude)',
   openai: 'OpenAI API (GPT)',
   deepseek: 'DeepSeek API',
+  gemini: 'Google Gemini API',
   bedrock: 'Amazon Bedrock (Claude)',
   vertex: 'Google Vertex AI (Claude)',
   'anthropic-aws': 'Claude Platform on AWS (Anthropic-operated, AWS billing)',
@@ -362,7 +363,8 @@ function credentialHint(kind: RemoteKind): string {
         ? 'credentials found'
         : 'needs ANTHROPIC_API_KEY or `ant auth login`';
     case 'openai':
-    case 'deepseek': {
+    case 'deepseek':
+    case 'gemini': {
       const env = CREDENTIAL_ENV[kind] as string;
       return process.env[env] ? 'credentials found' : `needs ${env}`;
     }
@@ -472,6 +474,7 @@ async function chooseRemote(
     case 'anthropic':
     case 'openai':
     case 'deepseek':
+    case 'gemini':
       return { kind, model };
     case 'bedrock': {
       const region =

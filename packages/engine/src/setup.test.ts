@@ -115,6 +115,7 @@ describe('buildSetupConfig', () => {
       ['anthropic', 'claude-sonnet-5'],
       ['openai', 'gpt-6-sol'],
       ['deepseek', 'deepseek-flash'],
+      ['gemini', 'gemini-3.8-flash'],
     ] as const) {
       const parsed = HarnessConfig.parse(
         buildSetupConfig({ locals: [local], remotes: [{ kind, model }], escalationPolicy: 'auto' }),

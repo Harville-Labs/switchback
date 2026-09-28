@@ -3,7 +3,7 @@
 Harness sends every model call to one of two tiers:
 
 - **local**: a model on the user's machine or network, reached through an OpenAI-compatible server. It costs nothing per token.
-- **remote**: a hosted model you choose: OpenAI, Anthropic, DeepSeek, Amazon Bedrock, Vertex AI, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It's billed per token.
+- **remote**: a hosted model you choose: OpenAI, Anthropic, DeepSeek, Google Gemini, Amazon Bedrock, Vertex AI, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It's billed per token.
 
 Each tier can hold several models, from any mix of providers, in order of preference:
 

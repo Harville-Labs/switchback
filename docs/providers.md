@@ -97,6 +97,15 @@ Uses the official Anthropic SDK. Credentials resolve through its chain: `ANTHROP
 
 Bedrock uses the Mantle client from `@anthropic-ai/bedrock-sdk` with standard AWS credentials; model IDs take the `anthropic.` prefix, and `eagerToolInputStreaming` is off by default because older deployments reject it. Vertex uses Application Default Credentials. Both bill differently from the first-party API, so set `price` for accurate savings.
 
+### Google Gemini
+
+```jsonc
+"providers": { "gemini": { "type": "gemini" } },
+"models": { "remote": { "provider": "gemini", "model": "gemini-3.8-flash", "contextWindow": 1048576 } }
+```
+
+Uses Google's `@google/genai` SDK. The key defaults to `$GEMINI_API_KEY` (or `$GOOGLE_API_KEY`); set `project` (and optionally `location`, default `global`) to use Gemini on Vertex AI with Application Default Credentials instead. `effort` maps to a thinking level on Gemini 3 models (`low`, `medium`, `high`) and to a thinking budget on 2.x models, where `none` turns thinking off. Gemini attaches thought signatures to each model turn; Harness keeps the raw turn and sends it back verbatim, and only to the same model, as the API requires. Safety stops (`SAFETY`, `PROHIBITED_CONTENT`, ...) are refusals and go to the next model in `routing.remote`. The catalog lists Gemini 3.1 Pro (preview), 3.8 Flash, and 2.5 Flash; 3.8 Flash's introductory price doubles in 2027, and Pro prices double for prompts over 200k tokens, so set `price` if that applies.
+
 ### Claude Platform on AWS and Microsoft Foundry
 
 ```jsonc

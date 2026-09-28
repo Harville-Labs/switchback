@@ -4,7 +4,7 @@ Guide for AI coding agents (Claude Code, Harness itself, Codex, Cursor, and othe
 
 ## What this repo is
 
-Harness is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
+Harness is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
 
 Design docs live in [docs/](docs/README.md). Start with [docs/architecture.md](docs/architecture.md).
 

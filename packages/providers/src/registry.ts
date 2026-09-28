@@ -1,6 +1,7 @@
 import type { Tier } from '@harness/protocol';
 import { z } from 'zod';
 import { AnthropicProvider } from './anthropic.ts';
+import { GeminiProvider } from './gemini.ts';
 import { OpenAICompatibleProvider } from './openai-compatible.ts';
 import { OpenAIResponsesProvider } from './openai-responses.ts';
 import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
@@ -74,6 +75,14 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     baseUrl: z.url().optional(),
   }),
   z.object({
+    /** Google Gemini: the Gemini API with a key, or Vertex AI with `project` and `location`. */
+    type: z.literal('gemini'),
+    /** Defaults to $GEMINI_API_KEY (or $GOOGLE_API_KEY). */
+    apiKey: Secret.optional(),
+    project: z.string().optional(),
+    location: z.string().default('global'),
+  }),
+  z.object({
     type: z.literal('mock'),
     tier: z.enum(['local', 'remote']).default('local'),
   }),
@@ -89,6 +98,7 @@ export const CREDENTIAL_ENV: Partial<Record<ProviderConfig['type'], string>> = {
   openai: 'OPENAI_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
+  gemini: 'GEMINI_API_KEY',
 };
 
 const NO_THINKING = ['claude-haiku-4-5', 'anthropic.claude-haiku-4-5'];
@@ -186,6 +196,17 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         },
         noThinkingModels: NO_THINKING,
       });
+    case 'gemini': {
+      const apiKey = config.apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      return new GeminiProvider({
+        id,
+        ...(config.project
+          ? { vertex: { project: config.project, location: config.location } }
+          : apiKey
+            ? { apiKey }
+            : {}),
+      });
+    }
     case 'vertex':
       return new AnthropicProvider({
         id,
