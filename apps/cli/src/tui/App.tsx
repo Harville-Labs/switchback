@@ -5,6 +5,7 @@ import {
   describeSession,
   estimateLabel,
   formatMcpServers,
+  formatReceipt,
   formatUsage,
   fromTranscript,
   type HarnessClient,
@@ -49,6 +50,7 @@ const HELP = `Commands
   /subagents               list this session's subagents as a tree
   /subagent <n>            show what a subagent did: routes, tools, report
   /usage [rule|agent|model] this week's spend, savings, and why
+  /receipt                 this session's cost vs. running it all-remote
   /mcp                     MCP servers and their tools
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
@@ -242,6 +244,11 @@ export function App({
           setView((v) => addInfo(v, `MCP servers\n${formatMcpServers(servers)}`));
           return;
         }
+        case 'receipt': {
+          const u = await client.request('usage.get', { sessionId: session.id });
+          setView((v) => addInfo(v, formatReceipt(u, 'This session, including subagents')));
+          return;
+        }
         case 'compact': {
           const { compacted } = await client
             .request('session.compact', { sessionId: session.id })
@@ -397,6 +404,7 @@ function StatusBar({
       </Text>
       <Text dimColor>
         session ${view.costUsd.toFixed(4)}
+        {view.savingsUsd > 0.005 ? ` (saved ~$${view.savingsUsd.toFixed(2)})` : ''}
         {usage
           ? ` · today $${usage.budget.spentTodayUsd.toFixed(2)}${usage.budget.dailyUsd ? `/$${usage.budget.dailyUsd.toFixed(2)}` : ''} · saved ~$${usage.estimatedSavingsUsd.toFixed(2)}`
           : ''}

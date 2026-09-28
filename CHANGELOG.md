@@ -6,6 +6,10 @@ All notable changes to Harness. The format follows [Keep a Changelog](https://ke
 
 ### Added
 - Privacy: `privacy.localOnlyPaths` pins a session to local models for good once content from a matching file enters it (reads, grep hits, edits, mentions, attachments, bash commands naming the path, subagent reports). A new router guard, `privacy`, overrides every other rule, including explicit remote requests. The mark lives in the transcript, is inherited by subagents, and blocks external runtimes and remote compaction. `privacy.secrets` (default `redact`) scans every remote request with secretlint and replaces credentials with placeholders in the outbound copy only (`block` keeps the turn local instead). A `secrets.redacted` event and `🔒` markers in both clients show what happened (#45)
+- Savings receipt: `/receipt` (TUI), **Show Session Receipt** (VS Code), and the last line of `harness run` show what a session and its subagents cost against running it all on the reference remote model. `usage.get` takes a `sessionId` and reports `referenceModel`; `usage.updated` and session summaries carry `savingsUsd`, shown in both status lines (part of #35)
+
+### Changed
+- Savings are estimated conservatively: the part of a local call's prompt that the session's previous call already sent (within five minutes) is priced as a remote cache read, not at the full input price (part of #35)
 
 ## [0.5.0] - 2026-09-28
 

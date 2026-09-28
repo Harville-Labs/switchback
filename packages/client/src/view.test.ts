@@ -3,6 +3,7 @@ import type { EngineEvent, Message, SessionSummary, UsageReport } from '@harness
 import {
   childView,
   estimateLabel,
+  formatReceipt,
   formatUsage,
   fromTranscript,
   initialView,
@@ -99,6 +100,39 @@ describe('usage and estimate formatting', () => {
     expect(text).toMatch(/By rule\n {2}escalation\s+3 calls\s+4,000 in\s+\$0\.42/);
     expect(formatUsage(report)).not.toContain('By ');
     expect(formatUsage({ ...report, byAgent: [] }, 'agent')).toContain('no model calls');
+  });
+
+  test('the receipt compares cost with all-remote on the reference model', () => {
+    const text = formatReceipt({ ...report, referenceModel: 'claude-opus-5' });
+    expect(text).toContain('remote     $0.42   4k tokens in, 100 out');
+    expect(text).toContain('all-remote on claude-opus-5 would have cost ~$1.92');
+    expect(text).toContain('saved    ~$1.50 (78%)');
+    expect(formatReceipt({ ...report, estimatedSavingsUsd: 0 })).not.toContain('saved ');
+    expect(formatReceipt(report)).toContain('configure a remote model');
+  });
+
+  test('privacy and redaction notices', () => {
+    let v = reduce(initialView('s'), {
+      type: 'tool.completed',
+      sessionId: 's',
+      turnId: 't',
+      callId: 'c',
+      name: 'read',
+      output: 'x',
+      isError: false,
+      private: 'read secrets/a.env',
+    });
+    expect(v.private).toBe('read secrets/a.env');
+    expect(v.items.at(-1)).toMatchObject({ kind: 'info', text: expect.stringContaining('🔒') });
+    v = reduce(v, {
+      type: 'secrets.redacted',
+      sessionId: 's',
+      kinds: ['GITHUB_TOKEN', 'GITHUB_TOKEN', 'SLACK_TOKEN'],
+      model: { provider: 'p', model: 'm' },
+    });
+    expect(v.items.at(-1)).toMatchObject({
+      text: 'Redacted 3 secrets (GITHUB_TOKEN ×2, SLACK_TOKEN) before sending to m; the model sees placeholders.',
+    });
   });
 
   test('estimate labels', () => {

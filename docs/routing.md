@@ -91,7 +91,19 @@ The estimate covers the escalated call plus the `stickyTurns` calls that follow 
 
 ## Budgets and savings
 
-Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`, which is what the same tokens would have cost on the configured remote model (`routing.remote`). `harness usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
+Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`: what the same call would have cost on the reference model, the first model in `routing.remote`. `harness usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
+
+The savings figure is deliberately conservative. Run all-remote, most of each prompt would have been a cache read (the previous call in the session already sent it), so a local call that follows another within five minutes prices the repeated part of its prompt at the cache-read rate and only the new part at the input price. Output is priced at the output rate, with no cache-write premium. It's still an estimate: a remote model might have taken fewer or more steps, and local and remote tokenizers count differently.
+
+**The receipt.** `/receipt` in the TUI, **Show Session Receipt** in VS Code, and the last line of `harness run` show what one session cost (with its subagents) against what running it all on the reference model would have cost:
+
+```
+This session, including subagents
+  local      $0.00   812k tokens in, 9k out
+  remote     $0.42   64k tokens in, 3k out
+  all-remote on claude-opus-5 would have cost ~$3.10
+  saved    ~$2.68 (86%)
+```
 
 Each entry also records the routing `rule` and the `agent`, so you can see why money was spent:
 

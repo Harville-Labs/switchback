@@ -96,6 +96,41 @@ describe('usage breakdowns', () => {
   });
 });
 
+describe('savings', () => {
+  const prices = { big: { input: 5, output: 25, cacheRead: 0.5 } };
+  const usage = { inputTokens: 10_000, outputTokens: 1_000 };
+
+  test('a follow-up local call prices what the last call sent as a cache read', () => {
+    let t = new Date('2026-09-27T12:00:00Z').getTime();
+    const ledger = new UsageLedger(undefined, prices, 'big', () => new Date(t));
+    const local = { provider: 'ollama', model: 'q' };
+    const first = ledger.record('s', 'local', local, usage);
+    expect(first.savingsUsd).toBeCloseTo((10_000 * 5 + 1_000 * 25) / 1e6);
+    t += 60_000;
+    const second = ledger.record('s', 'local', local, { ...usage, inputTokens: 12_000 });
+    // 10k cached at 0.5, 2k new at 5, 1k out at 25.
+    expect(second.savingsUsd).toBeCloseTo((10_000 * 0.5 + 2_000 * 5 + 1_000 * 25) / 1e6);
+    // Past the cache lifetime, the whole prompt is new again.
+    t += 10 * 60_000;
+    const third = ledger.record('s', 'local', local, usage);
+    expect(third.savingsUsd).toBeCloseTo(first.savingsUsd);
+    // Another session has its own cache.
+    expect(ledger.record('other', 'local', local, usage).savingsUsd).toBeCloseTo(first.savingsUsd);
+  });
+
+  test('a session report covers only those sessions, over their whole life', () => {
+    const ledger = new UsageLedger(undefined, prices, 'big', now);
+    const local = { provider: 'ollama', model: 'q' };
+    ledger.record('a', 'local', local, usage);
+    ledger.record('child', 'remote', { provider: 'x', model: 'big' }, usage);
+    ledger.record('b', 'local', local, usage);
+    const r = ledger.report({}, 'today', new Set(['a', 'child']));
+    expect(r.byTier.remote.costUsd).toBeCloseTo((10_000 * 5 + 1_000 * 25) / 1e6);
+    expect(r.byTier.local.usage.inputTokens).toBe(10_000);
+    expect(r.referenceModel).toBe('big');
+  });
+});
+
 describe('escalation estimate', () => {
   const price = { input: 2, output: 10, cacheRead: 0.2 };
 

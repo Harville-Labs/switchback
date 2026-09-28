@@ -92,6 +92,8 @@ export interface ViewState {
   permissions: PendingPermission[];
   escalations: PendingEscalation[];
   costUsd: number;
+  /** Saved versus running this session all-remote (this session only, not its subagents). */
+  savingsUsd: number;
   lastTier?: Tier;
   /** Why the session is pinned local for privacy; set once and never cleared. */
   private?: string;
@@ -107,6 +109,7 @@ export function initialView(sessionId: string): ViewState {
     permissions: [],
     escalations: [],
     costUsd: 0,
+    savingsUsd: 0,
     children: {},
   };
 }
@@ -214,6 +217,7 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
     // Joining a session mid-turn: the live events that follow will finish it.
     running: !!session.running,
     costUsd: session.costUsd,
+    savingsUsd: session.savingsUsd ?? 0,
     ...(lastRoute?.kind === 'route' ? { lastTier: lastRoute.tier } : {}),
   };
 }
@@ -452,7 +456,7 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       });
       return { ...state, items };
     case 'usage.updated':
-      return { ...state, costUsd: event.costUsd };
+      return { ...state, costUsd: event.costUsd, savingsUsd: event.savingsUsd ?? state.savingsUsd };
     case 'error':
       items.push({ kind: 'error', id: `e${items.length}`, message: event.message });
       return { ...state, items };
@@ -507,6 +511,50 @@ export function formatUsage(u: UsageReport, by?: UsageBreakdown): string {
     if (rows.length === 0) lines.push('  no model calls in this period');
   }
   return lines.join('\n');
+}
+
+/**
+ * The savings receipt: what a session (with its subagents) cost, against what
+ * the same work would have cost on the reference remote model.
+ */
+export function formatReceipt(u: UsageReport, title = 'This session'): string {
+  const $ = (n: number) => (n > 0 && n < 0.01 ? '<$0.01' : `$${n.toFixed(2)}`);
+  const tok = (n: number) =>
+    n >= 1_000_000
+      ? `${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1000
+        ? `${Math.round(n / 1000)}k`
+        : String(n);
+  const { local, remote } = u.byTier;
+  const localTokens = local.usage.inputTokens + (local.usage.cacheReadTokens ?? 0);
+  const remoteTokens = remote.usage.inputTokens + (remote.usage.cacheReadTokens ?? 0);
+  const allRemote = remote.costUsd + u.estimatedSavingsUsd;
+  const lines = [
+    title,
+    `  local    ${$(0).padStart(7)}   ${tok(localTokens)} tokens in, ${tok(local.usage.outputTokens)} out`,
+    `  remote   ${$(remote.costUsd).padStart(7)}   ${tok(remoteTokens)} tokens in, ${tok(remote.usage.outputTokens)} out`,
+  ];
+  if (u.referenceModel && u.estimatedSavingsUsd > 0) {
+    const pct = allRemote > 0 ? Math.round((u.estimatedSavingsUsd / allRemote) * 100) : 0;
+    lines.push(
+      `  all-remote on ${u.referenceModel} would have cost ~${$(allRemote)}`,
+      `  saved    ~${$(u.estimatedSavingsUsd)} (${pct}%)`,
+    );
+  } else if (!u.referenceModel && localTokens > 0) {
+    lines.push('  (configure a remote model to see what running locally saved)');
+  }
+  return lines.join('\n');
+}
+
+/** One line for the end of a headless run: `cost $0.04 · saved ~$0.61 (94%) vs. claude-opus-5`. */
+export function receiptLine(u: UsageReport): string {
+  const cost = u.byTier.remote.costUsd;
+  const allRemote = cost + u.estimatedSavingsUsd;
+  const saved =
+    u.referenceModel && u.estimatedSavingsUsd > 0
+      ? ` · saved ~$${u.estimatedSavingsUsd.toFixed(2)} (${Math.round((u.estimatedSavingsUsd / allRemote) * 100)}%) vs. all-remote on ${u.referenceModel}`
+      : '';
+  return `cost $${cost.toFixed(4)}${saved}`;
 }
 
 /** Every subagent in the tree, depth-first, for numbered listings. */

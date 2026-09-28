@@ -574,8 +574,30 @@ export class Engine {
     return this.ledger.entriesSince(sinceIso);
   }
 
-  usage(period?: UsagePeriod): UsageReport {
-    return this.ledger.report(this.options.config.routing.budget, period);
+  usage(period?: UsagePeriod, sessionId?: string): UsageReport {
+    return this.ledger.report(
+      this.options.config.routing.budget,
+      period,
+      sessionId ? this.sessionTree(sessionId) : undefined,
+    );
+  }
+
+  /** A session and every subagent session under it, live or stored. */
+  private sessionTree(sessionId: string): Set<string> {
+    const children = new Map<string, string[]>();
+    const link = (id: string, parent: string | undefined) => {
+      if (parent) children.set(parent, [...(children.get(parent) ?? []), id]);
+    };
+    for (const { header } of this.store.list()) link(header.id, header.parentId);
+    for (const s of this.sessions.values()) link(s.header.id, s.header.parentId);
+    const tree = new Set<string>();
+    const walk = (id: string) => {
+      if (tree.has(id)) return;
+      tree.add(id);
+      for (const c of children.get(id) ?? []) walk(c);
+    };
+    walk(sessionId);
+    return tree;
   }
 
   async shutdown(): Promise<void> {
@@ -1736,6 +1758,7 @@ export class Engine {
       ...this.scope(s),
       usage: total.usage,
       costUsd: total.costUsd,
+      savingsUsd: total.savingsUsd,
       tier,
     });
   }
@@ -1778,6 +1801,7 @@ export class Engine {
       updatedAt,
       usage: cost.usage,
       costUsd: cost.costUsd,
+      savingsUsd: cost.savingsUsd,
       ...(this.sessions.get(header.id)?.controller ? { running: true } : {}),
     };
   }

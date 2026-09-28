@@ -65,6 +65,11 @@
         "category": "Harness"
       },
       {
+        "command": "harness.showReceipt",
+        "title": "Show Session Receipt (Cost vs. All-Remote)",
+        "category": "Harness"
+      },
+      {
         "command": "harness.compact",
         "title": "Compact Conversation",
         "category": "Harness"

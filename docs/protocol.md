@@ -44,7 +44,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, and error |
-| `usage.get` | `period?`: `today` \| `week` \| `month` (default) | Spend, savings, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
+| `usage.get` | `period?`: `today` \| `week` \| `month` (default); or `sessionId?` for one session and its subagents over their whole life (the receipt) | Spend, savings, the `referenceModel` savings are measured against, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
 
 ## Events
@@ -62,7 +62,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait |
-| `usage.updated` | Cumulative session usage and cost |
+| `usage.updated` | Cumulative session usage, cost, and `savingsUsd` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (e.g. an organization policy update); carries `org` and human-readable `notes` |

@@ -220,6 +220,29 @@ describe('Engine', () => {
     expect(exploreReq?.tools.map((t) => t.name).sort()).toEqual(['glob', 'grep', 'read']);
   });
 
+  test('the session receipt includes subagents and the reference model', async () => {
+    const { engine } = setup((req) => {
+      if (req.system.includes('read-only search agent')) return { text: 'found' };
+      return req.messages.at(-1)?.parts[0]?.type === 'tool_result'
+        ? { text: 'done' }
+        : {
+            toolCalls: [
+              { name: 'task', input: { agent: 'explore', description: 'd', prompt: 'p' } },
+            ],
+          };
+    }, []);
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'go');
+    const other = engine.createSession({});
+    await engine.runTurn(other.id, 'unrelated');
+    const receipt = engine.usage(undefined, s.id);
+    // Parent: two calls; explore subagent: one.
+    expect(receipt.byModel?.[0]?.calls).toBe(3);
+    expect(receipt.referenceModel).toBe('claude-opus-5');
+    expect(receipt.estimatedSavingsUsd).toBeGreaterThan(0);
+    expect(engine.getSession(s.id).session.savingsUsd).toBeGreaterThan(0);
+  });
+
   test('asks for permission and honors the answer', async () => {
     const { engine, events } = setup(
       [

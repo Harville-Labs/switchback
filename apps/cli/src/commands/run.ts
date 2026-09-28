@@ -1,5 +1,5 @@
 /** `harness run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
-import { privateLabel, redactedLabel } from '@harness/client';
+import { privateLabel, receiptLine, redactedLabel } from '@harness/client';
 import type { RoutePreference } from '@harness/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 
@@ -55,8 +55,8 @@ export async function run(flags: RunFlags): Promise<number> {
   });
   const code = await finished;
   if (!flags.json) {
-    const s = await client.request('session.get', { sessionId: session.id });
-    process.stderr.write(dim(`cost $${s.session.costUsd.toFixed(4)}\n`));
+    const u = await client.request('usage.get', { sessionId: session.id });
+    process.stderr.write(dim(`${receiptLine(u)}\n`));
   }
   await client.request('shutdown', {});
   return code;

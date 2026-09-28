@@ -56,6 +56,8 @@ export interface SessionSummary {
   updatedAt: string;
   usage: Usage;
   costUsd: number;
+  /** Saved versus running this session all-remote. */
+  savingsUsd?: number;
   /** A turn is in progress (possibly driven by another client). */
   running?: boolean;
 }
@@ -132,6 +134,8 @@ export type UsagePeriod = z.infer<typeof UsagePeriod>;
 export const UsageGetParams = z.object({
   /** `week` is the last 7 days including today. Defaults to the calendar month. */
   period: UsagePeriod.optional(),
+  /** A session and its subagents over their whole life, instead of a period (the receipt). */
+  sessionId: z.string().optional(),
 });
 export type UsageGetParams = z.infer<typeof UsageGetParams>;
 
@@ -158,8 +162,13 @@ export interface McpListResult {
 export interface UsageReport {
   period: { from: string; to: string };
   byTier: Record<Tier, { usage: Usage; costUsd: number }>;
-  /** What the local tokens would have cost on the configured reference remote model. */
+  /**
+   * What the local calls would have cost on the reference remote model, with
+   * prompt-cache pricing for what the previous call already sent.
+   */
   estimatedSavingsUsd: number;
+  /** The model savings are measured against: the first configured remote model. */
+  referenceModel?: string;
   budget: { dailyUsd?: number; monthlyUsd?: number; spentTodayUsd: number; spentMonthUsd: number };
   /** Why calls were routed where they were, most expensive first. */
   byRule?: UsageRow[];
@@ -287,7 +296,14 @@ export type EngineEvent =
       kinds: string[];
       model: ModelRef;
     } & SessionScoped)
-  | ({ type: 'usage.updated'; usage: Usage; costUsd: number; tier: Tier } & SessionScoped)
+  | ({
+      type: 'usage.updated';
+      usage: Usage;
+      costUsd: number;
+      /** Saved so far in this session versus running it all on the reference remote model. */
+      savingsUsd?: number;
+      tier: Tier;
+    } & SessionScoped)
   | ({ type: 'turn.completed'; turnId: string; stopReason: StopReason } & SessionScoped)
   | ({ type: 'error'; turnId?: string; message: string } & SessionScoped)
   | { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string }

@@ -272,6 +272,19 @@ class EngineConnection implements vscode.Disposable {
     );
   }
 
+  async receipt() {
+    if (!this.client || !this.session) return;
+    const u = await this.client.request('usage.get', { sessionId: this.session.id });
+    const total = u.byTier.remote.costUsd + u.estimatedSavingsUsd;
+    const saved =
+      u.referenceModel && u.estimatedSavingsUsd > 0
+        ? ` Running it all on ${u.referenceModel} would have cost ~$${total.toFixed(2)}: saved ~$${u.estimatedSavingsUsd.toFixed(2)} (${Math.round((u.estimatedSavingsUsd / total) * 100)}%).`
+        : '';
+    vscode.window.showInformationMessage(
+      `Harness, this session (with subagents): $${u.byTier.remote.costUsd.toFixed(2)} on remote models.${saved}`,
+    );
+  }
+
   async compact() {
     if (!this.client || !this.session) return;
     const { compacted } = await this.client.request('session.compact', {
@@ -430,6 +443,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
     vscode.commands.registerCommand('harness.rejectEdit', answerEdit('deny')),
     vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
+    vscode.commands.registerCommand('harness.showReceipt', () =>
+      engine?.receipt().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
+    ),
     vscode.commands.registerCommand('harness.compact', () =>
       engine?.compact().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),

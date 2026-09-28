@@ -1,7 +1,9 @@
 /**
  * Append-only usage ledger. Every model call is recorded with its cost and,
  * for local calls, what the same tokens would have cost on the reference
- * remote model. That "saved" number is the product's headline metric.
+ * remote model. That "saved" number is the product's headline metric, so it
+ * is estimated conservatively: an all-remote session would have read most of
+ * each prompt from the provider's cache, so it's priced that way.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -52,8 +54,36 @@ export function cacheHitRate(usage: Usage): number | undefined {
   return total > 0 ? read / total : undefined;
 }
 
+/** Prompt caches last at least this long between calls (Anthropic's default TTL). */
+const CACHE_TTL_MS = 5 * 60_000;
+
+/**
+ * What a local call would have cost on the reference model. The part of the
+ * prompt already sent by the session's previous call (within the cache
+ * lifetime) is priced as a cache read, the rest at the input price.
+ */
+export function counterfactualCost(
+  usage: Usage,
+  price: Price | undefined,
+  previousPromptTokens: number,
+): number {
+  const prompt = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+  const cached = Math.min(previousPromptTokens, prompt);
+  return costUsd(
+    {
+      inputTokens: prompt - cached,
+      outputTokens: usage.outputTokens,
+      cacheReadTokens: cached,
+      cacheWriteTokens: 0,
+    },
+    price,
+  );
+}
+
 export class UsageLedger {
   private entries: LedgerEntry[] = [];
+  /** Each session's last prompt size and time, for counterfactual cache pricing. */
+  private lastPrompt = new Map<string, { tokens: number; at: number }>();
 
   constructor(
     private readonly file: string | undefined,
@@ -85,7 +115,14 @@ export class UsageLedger {
     const cost =
       tier === 'local' ? 0 : (meta.costUsd ?? costUsd(usage, priceFor(model.model, this.prices)));
     const reference = this.referenceModel ? priceFor(this.referenceModel, this.prices) : undefined;
-    const savings = tier === 'local' ? costUsd(usage, reference) : 0;
+    const at = this.now().getTime();
+    const prev = this.lastPrompt.get(sessionId);
+    const warm = prev && at - prev.at <= CACHE_TTL_MS ? prev.tokens : 0;
+    const savings = tier === 'local' ? counterfactualCost(usage, reference, warm) : 0;
+    this.lastPrompt.set(sessionId, {
+      tokens: usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0),
+      at,
+    });
     const entry: LedgerEntry = {
       ts: this.now().toISOString(),
       sessionId,
@@ -131,15 +168,17 @@ export class UsageLedger {
     return { todayUsd, monthUsd };
   }
 
-  sessionCost(sessionId: string): { usage: Usage; costUsd: number } {
+  sessionCost(sessionId: string): { usage: Usage; costUsd: number; savingsUsd: number } {
     let usage = emptyUsage();
     let cost = 0;
+    let savings = 0;
     for (const e of this.entries) {
       if (e.sessionId !== sessionId) continue;
       usage = addUsage(usage, e.usage);
       cost += e.costUsd;
+      savings += e.savingsUsd;
     }
-    return { usage, costUsd: cost };
+    return { usage, costUsd: cost, savingsUsd: savings };
   }
 
   /** Mean output tokens per call in a session, for cost estimates. */
@@ -154,19 +193,27 @@ export class UsageLedger {
     return calls ? out / calls : undefined;
   }
 
+  /**
+   * Usage for a period, or for a set of sessions (a session and its
+   * subagents) over their whole life.
+   */
   report(
     budget: { dailyUsd?: number; monthlyUsd?: number },
     period: UsagePeriod = 'month',
+    sessions?: Set<string>,
   ): UsageReport {
     const now = this.now();
     const today = now.toISOString().slice(0, 10);
-    const from =
+    let from =
       period === 'today'
         ? today
         : period === 'week'
           ? new Date(now.getTime() - 6 * 86_400_000).toISOString().slice(0, 10)
           : `${today.slice(0, 7)}-01`;
-    const entries = this.entries.filter((e) => e.ts >= from);
+    const entries = sessions
+      ? this.entries.filter((e) => sessions.has(e.sessionId))
+      : this.entries.filter((e) => e.ts >= from);
+    if (sessions) from = entries[0]?.ts.slice(0, 10) ?? today;
     const byTier: UsageReport['byTier'] = {
       local: { usage: emptyUsage(), costUsd: 0 },
       remote: { usage: emptyUsage(), costUsd: 0 },
@@ -183,6 +230,7 @@ export class UsageLedger {
       period: { from, to: today },
       byTier,
       estimatedSavingsUsd: savings,
+      ...(this.referenceModel ? { referenceModel: this.referenceModel } : {}),
       budget: {
         ...(budget.dailyUsd !== undefined ? { dailyUsd: budget.dailyUsd } : {}),
         ...(budget.monthlyUsd !== undefined ? { monthlyUsd: budget.monthlyUsd } : {}),

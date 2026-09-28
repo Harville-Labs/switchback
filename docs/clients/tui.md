@@ -43,6 +43,7 @@ Retries live in src/http/client.ts:88 ...
 | `/mcp` | MCP servers: connected, failed, or waiting for `harness mcp trust`, with tool counts |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
+| `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |

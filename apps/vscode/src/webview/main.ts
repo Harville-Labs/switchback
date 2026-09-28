@@ -112,7 +112,7 @@ function render() {
   cancelBtn.hidden = !view.running;
   routeSelect.value = route;
   statusEl.textContent = connected
-    ? `${view.private ? '🔒 local only · ' : ''}${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}`
+    ? `${view.private ? '🔒 local only · ' : ''}${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
     : 'disconnected';
 }
 
