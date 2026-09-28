@@ -608,6 +608,21 @@
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
+    "telemetry": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "endpoint": {
+          "default": "https://harness.harville.ai/api/telemetry/v1",
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
     "privacy": {
       "default": {},
       "type": "object",

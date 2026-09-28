@@ -15,6 +15,7 @@ import { isTrusted } from './mcp/trust.ts';
 import { applyRestrictions, leafPaths, type OrgPolicy, type OrgStatus } from './org/policy.ts';
 import { readCachedPolicy } from './org/store.ts';
 import { harnessPaths, projectPaths } from './paths.ts';
+import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
 
 export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
 export type PermissionLevel = z.infer<typeof PermissionLevel>;
@@ -83,6 +84,16 @@ export const HarnessConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
+  /**
+   * Anonymous usage statistics (docs/telemetry.md). Off unless turned on;
+   * `DO_NOT_TRACK=1` or `HARNESS_TELEMETRY=0` force it off.
+   */
+  telemetry: z
+    .object({
+      enabled: z.boolean().default(false),
+      endpoint: z.url().default(DEFAULT_TELEMETRY_ENDPOINT),
+    })
+    .prefault({}),
   /** Content that must never reach a remote model (docs/privacy.md). */
   privacy: z
     .object({
@@ -186,6 +197,12 @@ export function loadConfig(
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
     if (only) parsed = { [only]: parsed[only] ?? {} };
+    // A repository may turn telemetry off for its contributors, never on.
+    const t = parsed.telemetry as { enabled?: unknown } | undefined;
+    if (project && t?.enabled === true) {
+      const { enabled: _ignored, ...rest } = t;
+      parsed = { ...parsed, telemetry: rest };
+    }
     noteMcp(parsed, project, file);
     merged = deepMerge(merged, parsed);
     sources.push(file);
@@ -219,6 +236,9 @@ export function loadConfig(
     throw new ConfigError(`invalid configuration:\n${issues}`, sources.at(-1));
   }
   let config = result.data;
+  // The environment's opt-out beats every config file, including an org's.
+  if (telemetryOptedOut(env))
+    config = { ...config, telemetry: { ...config.telemetry, enabled: false } };
   const problem = referenceProblem(config);
   if (problem) throw new ConfigError(problem, sources.at(-1));
   let orgStatus: OrgStatus | undefined;
@@ -237,6 +257,12 @@ export function loadConfig(
   const prices: Record<string, Price> = {};
   for (const m of Object.values(config.models)) if (m.price) prices[m.model] = m.price;
   return { config, sources, prices, untrustedMcp, ...(orgStatus ? { org: orgStatus } : {}) };
+}
+
+/** `DO_NOT_TRACK` (consoledonottrack.com) or `HARNESS_TELEMETRY=0`. */
+export function telemetryOptedOut(env: Record<string, string | undefined>): boolean {
+  const off = (v: string | undefined) => !!v && !['0', 'false', ''].includes(v.toLowerCase());
+  return off(env.DO_NOT_TRACK) || ['0', 'false', 'off'].includes(env.HARNESS_TELEMETRY ?? '');
 }
 
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */

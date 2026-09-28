@@ -4,10 +4,15 @@ import {
   Engine,
   type EngineOptions,
   type HarnessConfig,
+  harnessPaths,
   loadConfig,
   OrgSync,
+  optIn,
   readAuth,
+  readTelemetryState,
+  recordEngineEvent,
   refreshPolicy,
+  sendTelemetry,
   serve,
 } from '@harness/engine';
 import { createTransportPair, type InitializeResult } from '@harness/protocol';
@@ -57,7 +62,7 @@ function load(flags: CommonFlags) {
 export function createEngine(
   flags: CommonFlags,
   interaction: EngineOptions['interaction'],
-  options: { syncOrg?: boolean } = {},
+  options: { syncOrg?: boolean; telemetry?: boolean } = {},
 ) {
   try {
     const loaded = load(flags);
@@ -67,6 +72,7 @@ export function createEngine(
       ...(interaction ? { interaction } : {}),
       ...(loaded.org ? { org: loaded.org } : {}),
     });
+    if (options.telemetry && !flags.mock) startTelemetry(engine, loaded);
     if (options.syncOrg && readAuth()) {
       // Long-running engines follow policy updates live.
       new OrgSync({
@@ -92,6 +98,33 @@ export function createEngine(
 }
 
 /**
+ * When telemetry is on (docs/telemetry.md): count this engine's turns and
+ * send any complete days that are due, in the background. Never blocks and
+ * never reports failures to the user.
+ */
+function startTelemetry(engine: Engine, loaded: ReturnType<typeof load>): void {
+  if (!loaded.config.telemetry.enabled) return;
+  const { dataDir } = harnessPaths();
+  // Turned on by an organization policy or a config edit rather than `harness telemetry on`.
+  if (!readTelemetryState(dataDir)) optIn(dataDir, new Date());
+  engine.subscribe((e) => {
+    try {
+      recordEngineEvent(dataDir, e, new Date());
+    } catch {
+      // A full disk shouldn't break a session over statistics.
+    }
+  });
+  void sendTelemetry({
+    dataDir,
+    config: loaded.config,
+    organization: !!loaded.org,
+    version: CLI_VERSION,
+    ledger: engine.usageEntriesSince(''),
+    now: new Date(),
+  }).catch(() => {});
+}
+
+/**
  * Run the engine in-process but talk to it through the protocol, exactly as
  * an out-of-process client would. There is no private fast path.
  */
@@ -102,7 +135,7 @@ export async function connectInProcess(
   options: { syncOrg?: boolean } = {},
 ) {
   await refreshOrgPolicyQuickly();
-  const { engine, agentErrors } = createEngine(flags, interaction, options);
+  const { engine, agentErrors } = createEngine(flags, interaction, { ...options, telemetry: true });
   const [serverSide, clientSide] = createTransportPair();
   serve(engine, serverSide);
   const client = new HarnessClient(clientSide);

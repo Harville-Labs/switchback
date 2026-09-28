@@ -19,6 +19,7 @@ Usage
   harness agents [new]            List agents, or create one (interview, optional drafted prompt)
   harness usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
+  harness telemetry [action]      status | on | off | preview (anonymous, off by default)
   harness login [--server <url>]  Sign in to your organization (applies its policy)
   harness logout | whoami         Sign out / show organization and policy
   harness serve --stdio           Serve the engine protocol to one client over stdin/stdout
@@ -57,6 +58,7 @@ init options (all optional; prompts cover anything not given)
   --workspace-id <id>      Claude workspace (Claude Platform on AWS)
   --resource <name>        Foundry resource (Microsoft Foundry)
   --policy <p>             Escalation: auto | ask | off
+  --telemetry <on|off>     Anonymous usage statistics (default: off; always your user config)
   --daily-budget <usd>     --monthly-budget <usd>
 
 agents new options (prompts cover anything not given; --yes for none)
@@ -148,6 +150,7 @@ async function main(argv: string[]): Promise<number> {
       budget: { type: 'string' },
       isolation: { type: 'string' },
       period: { type: 'string' },
+      telemetry: { type: 'string' },
       version: { type: 'boolean', short: 'v', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -223,6 +226,9 @@ async function main(argv: string[]): Promise<number> {
         ...(policy ? { policy } : {}),
         ...(dailyBudget ? { dailyBudget } : {}),
         ...(monthlyBudget ? { monthlyBudget } : {}),
+        ...(values.telemetry
+          ? { telemetry: oneOf('telemetry', values.telemetry, ['on', 'off'] as const) === 'on' }
+          : {}),
       });
     }
     case 'config': {
@@ -293,6 +299,10 @@ async function main(argv: string[]): Promise<number> {
       const { whoami } = await import('./commands/org.ts');
       return whoami(common.cwd);
     }
+    case 'telemetry': {
+      const { telemetry } = await import('./commands/telemetry.ts');
+      return telemetry(rest[0], common);
+    }
     case 'usage': {
       const { usage } = await import('./commands/usage.ts');
       return usage({
@@ -308,9 +318,20 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
+/** With telemetry on, keep a scrubbed record of the crash for the next report. */
+async function recordCrashIfEnabled(err: unknown): Promise<void> {
+  try {
+    const { loadConfig, harnessPaths, recordCrash } = await import('@harness/engine');
+    if (loadConfig(process.cwd(), process.env).config.telemetry.enabled)
+      recordCrash(harnessPaths().dataDir, err, new Date());
+  } catch {
+    // Reporting a crash must never cause another one.
+  }
+}
+
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
-  (err) => {
+  async (err) => {
     if (
       err instanceof UsageError ||
       (err as { code?: string })?.code?.startsWith('ERR_PARSE_ARGS')
@@ -319,6 +340,7 @@ main(process.argv.slice(2)).then(
       process.exit(2);
     }
     process.stderr.write(`harness: ${(err as Error).stack ?? err}\n`);
+    await recordCrashIfEnabled(err);
     process.exit(1);
   },
 );

@@ -3,7 +3,7 @@
  * which local and remote models to use, and writes a config file. Every
  * question has a flag so setup can also run unattended (`--yes`).
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   buildSetupConfig,
   catalogFor,
@@ -11,6 +11,7 @@ import {
   detectLocalServers,
   harnessPaths,
   type LocalAnswer,
+  parseJsonc,
   projectPaths,
   REMOTE_KINDS,
   type RemoteAnswer,
@@ -26,6 +27,7 @@ import {
 } from '@harness/providers';
 import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 import { doctor } from './doctor.ts';
+import { setTelemetry, TELEMETRY_PROMPT } from './telemetry.ts';
 
 export interface InitFlags {
   cwd: string;
@@ -54,6 +56,8 @@ export interface InitFlags {
   policy?: 'auto' | 'ask' | 'off';
   dailyBudget?: number;
   monthlyBudget?: number;
+  /** Anonymous usage statistics; always written to the user config. */
+  telemetry?: boolean;
 }
 
 class SetupError extends Error {}
@@ -168,8 +172,32 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   console.log(
     `${green('✓')} Wrote ${result.file}${result.backup ? dim(` (previous version: ${result.backup})`) : ''}\n`,
   );
+  const share =
+    flags.telemetry ??
+    (p && !telemetryChosen()
+      ? await p.confirm(
+          `${TELEMETRY_PROMPT}\n${dim('  Details: docs/telemetry.md. Change it any time with `harness telemetry on|off`.')}\n `,
+          false,
+        )
+      : undefined);
+  if (share !== undefined) {
+    setTelemetry(share);
+    console.log(`${green('✓')} Telemetry ${share ? 'on. Thank you' : 'off'}.\n`);
+  }
   await doctor({ cwd: flags.cwd, mock: false });
   return 0;
+}
+
+/** Whether the user has answered before (either way): their config says. */
+function telemetryChosen(): boolean {
+  const file = harnessPaths().configFile;
+  if (!existsSync(file)) return false;
+  try {
+    const cfg = parseJsonc(readFileSync(file, 'utf8')) as { telemetry?: { enabled?: unknown } };
+    return typeof cfg.telemetry?.enabled === 'boolean';
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------

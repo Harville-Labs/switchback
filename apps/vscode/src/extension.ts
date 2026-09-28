@@ -74,6 +74,8 @@ class EngineConnection implements vscode.Disposable {
   async start(): Promise<void> {
     const cfg = vscode.workspace.getConfiguration('harness');
     const { command, args: baseArgs } = harnessCommand(this.root);
+    // VS Code's own telemetry switch is an opt-out for Harness too.
+    const env = vscode.env.isTelemetryEnabled ? {} : { HARNESS_TELEMETRY: '0' };
     let client: HarnessClient | undefined;
     let init: InitializeResult | undefined;
     // Share the engine with the TUI (and other windows) unless disabled; mock
@@ -84,6 +86,7 @@ class EngineConnection implements vscode.Disposable {
         version: VERSION,
         client: { name: 'vscode', version: VERSION },
         spawn: { command, args: baseArgs },
+        env: { ...process.env, ...env },
         log: (m) => this.log.appendLine(m),
       });
       if (shared) {
@@ -96,7 +99,7 @@ class EngineConnection implements vscode.Disposable {
       const args = [...baseArgs, 'serve', '--stdio'];
       this.log.appendLine(`starting: ${command} ${args.join(' ')} (cwd ${this.root})`);
       client = new HarnessClient(
-        spawnEngine({ command, args, cwd: this.root, onStderr: (t) => this.log.append(t) }),
+        spawnEngine({ command, args, cwd: this.root, env, onStderr: (t) => this.log.append(t) }),
       );
     }
     const connected = client;

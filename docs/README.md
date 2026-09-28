@@ -8,6 +8,7 @@
 - [Agents and subagents](subagents.md): built-in agents, writing your own, Claude Code compatibility
 - [Permissions and safety](permissions.md)
 - [Privacy](privacy.md): files that never leave your machine, and secret redaction
+- [Telemetry](telemetry.md): opt-in anonymous usage statistics, field by field
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
 - [Terminal UI](clients/tui.md) · [VS Code extension](clients/vscode.md)
 

@@ -146,6 +146,13 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 
 See [privacy.md](privacy.md) for what's detected and the limits.
 
+### `telemetry`
+
+| Key | Default | |
+|---|---|---|
+| `enabled` | `false` | Anonymous daily usage statistics. Set with `harness telemetry on\|off`; a project config can turn it off but not on. See [telemetry.md](telemetry.md) |
+| `endpoint` | `https://harness.harville.ai/api/telemetry/v1` | Where reports are sent |
+
 ### Other keys
 
 | Key | Default | |
@@ -167,6 +174,7 @@ See [privacy.md](privacy.md) for what's detected and the limits.
 | `HARNESS_HOME` | Relocate all config and data |
 | `HARNESS_ORG_SERVER`, `HARNESS_ORG_TOKEN` | Organization sign-in without `harness login` (CI, managed installs) |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME` | Standard base directories |
+| `DO_NOT_TRACK=1`, `HARNESS_TELEMETRY=0` | Telemetry off, whatever the config says |
 | `OPENAI_API_KEY` | OpenAI credentials |
 | `DEEPSEEK_API_KEY` | DeepSeek credentials |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_PROFILE` | Anthropic credentials (SDK chain) |

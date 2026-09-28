@@ -20,7 +20,7 @@ import {
 export async function serve(flags: CommonFlags & { socket?: boolean }): Promise<number> {
   await refreshOrgPolicyQuickly();
   if (flags.socket) return serveSocket(flags);
-  const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true });
+  const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true, telemetry: true });
   for (const e of agentErrors) process.stderr.write(`harness: agent definition skipped: ${e}\n`);
   const transport = stdioTransport();
   return new Promise((resolve) => {
@@ -56,7 +56,7 @@ async function serveSocket(flags: CommonFlags): Promise<number> {
   }
   if (process.platform !== 'win32') rmSync(paths.socket, { force: true }); // stale socket from a crash
 
-  const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true });
+  const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true, telemetry: true });
   for (const e of agentErrors) process.stderr.write(`harness: agent definition skipped: ${e}\n`);
 
   const token = randomBytes(24).toString('hex');
