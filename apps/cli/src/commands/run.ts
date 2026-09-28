@@ -1,4 +1,5 @@
 /** `harness run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
+import { privateLabel, redactedLabel } from '@harness/client';
 import type { RoutePreference } from '@harness/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 
@@ -16,6 +17,7 @@ export async function run(flags: RunFlags): Promise<number> {
   const { client } = await connectInProcess(flags, flags.yes ? 'approve' : 'deny', 'harness-run');
   const session = await client.request('session.create', flags.agent ? { agent: flags.agent } : {});
 
+  let pinned = false;
   const finished = new Promise<number>((resolve) => {
     client.on((e) => {
       if (flags.json) {
@@ -31,6 +33,11 @@ export async function run(flags: RunFlags): Promise<number> {
         else if (e.type === 'tool.started') process.stderr.write(dim(`\n▸ ${e.name}\n`));
         else if (e.type === 'tool.completed' && e.isError)
           process.stderr.write(dim(`  ✗ ${e.output.split('\n')[0]}\n`));
+        if (e.type === 'tool.completed' && e.private && !pinned) {
+          pinned = true;
+          process.stderr.write(dim(`${privateLabel(e.private)}\n`));
+        } else if (e.type === 'secrets.redacted')
+          process.stderr.write(dim(`${redactedLabel(e.kinds, e.model)}\n`));
         else if (e.type === 'subagent.started')
           process.stderr.write(dim(`↳ ${e.agent}: ${e.task}\n`));
         else if (e.type === 'error') process.stderr.write(`error: ${e.message}\n`);

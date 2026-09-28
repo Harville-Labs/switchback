@@ -189,7 +189,7 @@ describe('private paths', () => {
   });
 
   test('subagents inherit the pin, and a private subagent report pins the parent', async () => {
-    const { engine, lp, rp } = setup(
+    const { engine, rp } = setup(
       (req) => {
         const last = JSON.stringify(req.messages.at(-1));
         const parent = req.tools.some((t) => t.name === 'task');
