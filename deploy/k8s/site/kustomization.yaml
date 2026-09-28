@@ -7,4 +7,4 @@ resources:
   - service.yaml
 images:
   - name: ghcr.io/harville-labs/harness-site
-    newTag: sha-741ed2e93bf642a55585fe1af91159d99f695f67
+    newTag: sha-e937a30f3c830ca5c888a14f8325ab242e8d2c1a
