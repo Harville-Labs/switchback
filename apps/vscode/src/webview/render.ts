@@ -61,6 +61,22 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
         .join('');
       return `<details class="subagent" data-sub="${esc(item.id)}"${expanded.has(item.id) ? ' open' : ''}><summary>${summary}</summary><div class="children">${body || '<div class="detail">starting…</div>'}</div></details>`;
     }
+    case 'review': {
+      const who = esc(item.model?.model ?? 'reviewer');
+      const head =
+        item.verdict === 'approve'
+          ? `<span class="ok">✓</span> Reviewed by ${who}: approved${item.summary ? `. ${esc(item.summary)}` : ''}`
+          : item.verdict === 'revise'
+            ? `<span class="running">↻</span> ${who} asked for changes${item.summary ? `: ${esc(item.summary)}` : ''}`
+            : `Review skipped: ${esc(item.summary)}`;
+      const issues = item.issues
+        .map(
+          (i) =>
+            `<li class="${esc(i.severity)}"><code>${esc(i.file)}${i.line ? `:${i.line}` : ''}</code> ${esc(i.comment)}</li>`,
+        )
+        .join('');
+      return `<div class="review ${item.verdict}">${head}${issues ? `<ul>${issues}</ul>` : ''}</div>`;
+    }
     case 'error':
       return `<div class="error">error: ${esc(item.message)}</div>`;
   }

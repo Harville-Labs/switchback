@@ -8,6 +8,7 @@ import {
   fromTranscript,
   initialView,
   reduce,
+  reviewLines,
 } from './view.ts';
 
 const session: SessionSummary = {
@@ -133,6 +134,33 @@ describe('usage and estimate formatting', () => {
     expect(v.items.at(-1)).toMatchObject({
       text: 'Redacted 3 secrets (GITHUB_TOKEN ×2, SLACK_TOKEN) before sending to m; the model sees placeholders.',
     });
+  });
+
+  test('review rows', () => {
+    const v = reduce(initialView('s'), {
+      type: 'review.completed',
+      sessionId: 's',
+      turnId: 't',
+      verdict: 'revise',
+      summary: 'add still subtracts',
+      issues: [{ file: 'math.ts', line: 1, severity: 'bug', comment: 'use a + b' }],
+      model: { provider: 'p', model: 'claude-opus-5' },
+      round: 1,
+    });
+    const item = v.items.at(-1);
+    if (item?.kind !== 'review') throw new Error('expected a review row');
+    expect(reviewLines(item)).toEqual([
+      '↻ claude-opus-5 asked for changes: add still subtracts',
+      '  ✗ math.ts:1 use a + b',
+    ]);
+    expect(
+      reviewLines({
+        ...item,
+        verdict: 'skipped',
+        summary: 'routing mode is local-only',
+        issues: [],
+      }),
+    ).toEqual(['Review skipped: routing mode is local-only']);
   });
 
   test('estimate labels', () => {

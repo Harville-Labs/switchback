@@ -226,6 +226,7 @@ class EngineConnection implements vscode.Disposable {
           sessionId: this.session.id,
           text: m.text,
           route: this.route,
+          ...(this.remoteReview !== undefined ? { review: this.remoteReview } : {}),
           ...(m.attach && this.context ? { attachments: this.context.attachments(m.attach) } : {}),
         });
         return;
@@ -273,6 +274,30 @@ class EngineConnection implements vscode.Disposable {
     vscode.window.showInformationMessage(
       `Harness, last 7 days: remote ${$(u.byTier.remote.costUsd)}, saved ~${$(u.estimatedSavingsUsd)} vs. all-remote. Today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}.`,
     );
+  }
+
+  /** Remote review of local edits for this window; undefined follows `review.mode`. */
+  remoteReview: boolean | undefined = undefined;
+
+  async chooseReview() {
+    const pick = await vscode.window.showQuickPick(
+      [
+        {
+          label: 'On',
+          value: true,
+          detail:
+            'After a local model edits files, a remote model reviews the diff; the local model fixes what it finds.',
+        },
+        { label: 'Off', value: false, detail: 'No reviews in this window.' },
+        {
+          label: 'Follow config',
+          value: undefined,
+          detail: 'Use review.mode from your Harness config.',
+        },
+      ],
+      { title: 'Harness: Remote Review of Local Edits' },
+    );
+    if (pick) this.remoteReview = pick.value;
   }
 
   async receipt() {
@@ -446,6 +471,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
     vscode.commands.registerCommand('harness.rejectEdit', answerEdit('deny')),
     vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
+    vscode.commands.registerCommand('harness.setReview', () => engine?.chooseReview()),
     vscode.commands.registerCommand('harness.showReceipt', () =>
       engine?.receipt().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),

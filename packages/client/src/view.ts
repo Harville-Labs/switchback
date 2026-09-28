@@ -9,6 +9,7 @@ import type {
   Message,
   ModelRef,
   PermissionDecision,
+  ReviewIssue,
   SessionSummary,
   Tier,
   UsageReport,
@@ -39,6 +40,15 @@ export type ViewItem =
       toolCalls: number;
       /** The parent didn't wait; the report arrives later as a message. */
       background?: boolean;
+    }
+  | {
+      kind: 'review';
+      id: string;
+      verdict: 'approve' | 'revise' | 'skipped';
+      summary: string;
+      issues: ReviewIssue[];
+      model?: ModelRef;
+      round: number;
     }
   | { kind: 'error'; id: string; message: string }
   /** Client-local notices (slash command output); never produced by the engine. */
@@ -71,6 +81,27 @@ export function redactedLabel(kinds: string[], model: ModelRef): string {
   for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
   const list = [...counts].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(', ');
   return `Redacted ${kinds.length} secret${kinds.length === 1 ? '' : 's'} (${list}) before sending to ${model.model}; the model sees placeholders.`;
+}
+
+/**
+ * A review row as text, shared by the TUI and `harness run`: a headline, then
+ * one line per finding.
+ */
+export function reviewLines(r: Extract<ViewItem, { kind: 'review' }>): string[] {
+  const who = r.model?.model ?? 'reviewer';
+  const head =
+    r.verdict === 'approve'
+      ? `✓ Reviewed by ${who}: approved${r.summary ? `. ${r.summary}` : ''}`
+      : r.verdict === 'revise'
+        ? `↻ ${who} asked for changes${r.summary ? `: ${r.summary}` : ''}`
+        : `Review skipped: ${r.summary}`;
+  return [
+    head,
+    ...r.issues.map(
+      (i) =>
+        `  ${i.severity === 'bug' ? '✗' : i.severity === 'risk' ? '!' : '·'} ${i.file}${i.line ? `:${i.line}` : ''} ${i.comment}`,
+    ),
+  ];
 }
 
 /** Shown when a session becomes pinned local. */
@@ -155,6 +186,12 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
             kind: 'info',
             id: `h${mi}b${p.backgroundTask.sessionId}`,
             text: `↳ background ${p.backgroundTask.agent} ${p.backgroundTask.ok ? 'finished' : 'failed'}; its report went to the agent`,
+          });
+        else if (p.type === 'text' && p.review)
+          items.push({
+            kind: 'info',
+            id: `h${mi}v`,
+            text: `↻ ${p.review.model.model}'s review findings went back to the model (round ${p.review.round})`,
           });
         else if (p.type === 'text' && p.attachment)
           items.push({
@@ -441,6 +478,17 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
           },
         ],
       };
+    case 'review.completed':
+      items.push({
+        kind: 'review',
+        id: `v${items.length}`,
+        verdict: event.verdict,
+        summary: event.summary,
+        issues: event.issues,
+        round: event.round,
+        ...(event.model ? { model: event.model } : {}),
+      });
+      return { ...state, items };
     case 'secrets.redacted':
       items.push({
         kind: 'info',

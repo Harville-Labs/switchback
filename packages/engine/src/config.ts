@@ -84,6 +84,17 @@ export const HarnessConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
+  /** Draft locally, review remotely (docs/review.md). */
+  review: z
+    .object({
+      /** `auto`: after a turn in which a local model edited files, a remote model reviews the diff. */
+      mode: z.enum(['off', 'auto']).default('off'),
+      /** Reviewer model alias; defaults to the first available model in `routing.remote`. */
+      model: z.string().optional(),
+      /** Reviews per prompt: a `revise` sends findings back to the local model, then reviews again. */
+      maxRounds: z.number().int().min(1).max(5).default(2),
+    })
+    .prefault({}),
   /**
    * Anonymous usage statistics (docs/telemetry.md). Off unless turned on;
    * `DO_NOT_TRACK=1` or `HARNESS_TELEMETRY=0` force it off.

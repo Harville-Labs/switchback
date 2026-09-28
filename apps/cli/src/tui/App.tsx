@@ -13,6 +13,7 @@ import {
   reduce,
   resolveEscalation,
   resolvePermission,
+  reviewLines,
   subagentList,
   toolLabel,
   type ViewItem,
@@ -51,6 +52,7 @@ const HELP = `Commands
   /subagent <n>            show what a subagent did: routes, tools, report
   /usage [rule|agent|model] this week's spend, savings, and why
   /receipt                 this session's cost vs. running it all-remote
+  /review on|off|default   remote review of local edits (default: review.mode)
   /mcp                     MCP servers and their tools
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
@@ -81,6 +83,8 @@ export function App({
   // Items before this index are final and rendered once via <Static>.
   const [committed, setCommitted] = useState(0);
   const [route, setRoute] = useState<RoutePreference>(initialRoute);
+  /** Remote review of local edits; undefined follows `review.mode` in config. */
+  const [review, setReview] = useState<boolean | undefined>(undefined);
   const [history] = useState(() => new PromptHistory(init.workspaceRoot));
   const [usage, setUsage] = useState<UsageReport | undefined>();
 
@@ -173,6 +177,25 @@ export function App({
           setRoute(cmd);
           setView((v) => addInfo(v, `routing: ${cmd}`));
           return;
+        case 'review': {
+          const next = args[0] === 'on' ? true : args[0] === 'off' ? false : undefined;
+          if (args[0] && args[0] !== 'default' && next === undefined) {
+            setView((v) => addInfo(v, 'usage: /review on|off|default'));
+            return;
+          }
+          setReview(next);
+          setView((v) =>
+            addInfo(
+              v,
+              next === undefined
+                ? 'review: following review.mode in config'
+                : next
+                  ? 'review: on. After a local model edits files, a remote model reviews the diff and the local model fixes what it finds.'
+                  : 'review: off',
+            ),
+          );
+          return;
+        }
         case 'agent':
           return newSession(args[0]);
         case 'agents': {
@@ -273,7 +296,13 @@ export function App({
     }
     if (view.running) return;
     setView((v) => addUserPrompt(v, text));
-    client.request('session.prompt', { sessionId: session.id, text, route }).catch((err) => {
+    const params = {
+      sessionId: session.id,
+      text,
+      route,
+      ...(review !== undefined ? { review } : {}),
+    };
+    client.request('session.prompt', params).catch((err) => {
       setView((v) => addInfo({ ...v, running: false }, `error: ${(err as Error).message}`));
     });
   };
@@ -377,7 +406,7 @@ export function App({
           }
         />
       </Box>
-      <StatusBar session={session} route={route} view={view} usage={usage} />
+      <StatusBar session={session} route={route} review={review} view={view} usage={usage} />
     </Box>
   );
 }
@@ -385,11 +414,13 @@ export function App({
 function StatusBar({
   session,
   route,
+  review,
   view,
   usage,
 }: {
   session: SessionSummary;
   route: RoutePreference;
+  review: boolean | undefined;
   view: ViewState;
   usage?: UsageReport;
 }) {
@@ -398,6 +429,7 @@ function StatusBar({
     <Box justifyContent="space-between" paddingX={1}>
       <Text dimColor>
         {session.agent} · route {route}
+        {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
         {tier ? ' · last ' : ''}
         {tier ? <Text color={tier === 'local' ? 'green' : 'yellow'}>{tier}</Text> : null}
         {view.private ? <Text color="cyan"> · 🔒 local only</Text> : null}
@@ -556,6 +588,23 @@ function Item({
             {item.status === 'running' && item.activity ? ` · ${item.activity}` : ''}
           </Text>
         </Text>
+      );
+    }
+    case 'review': {
+      const [head, ...issues] = reviewLines(item);
+      const color =
+        item.verdict === 'approve' ? 'green' : item.verdict === 'revise' ? 'yellow' : undefined;
+      return (
+        <Box flexDirection="column">
+          <Text color={color} dimColor={item.verdict === 'skipped'}>
+            {head}
+          </Text>
+          {issues.map((line) => (
+            <Text key={line} dimColor>
+              {line}
+            </Text>
+          ))}
+        </Box>
       );
     }
     case 'error':

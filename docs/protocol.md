@@ -37,7 +37,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.create` | `agent?`, `title?` | `SessionSummary` |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
-| `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`) | `{ turnId }`, returned immediately; progress arrives as events. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
+| `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`), `review?` (boolean; overrides `review.mode`) | `{ turnId }`, returned immediately; progress arrives as events. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`) | `{ ok }` |
@@ -57,6 +57,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local |
+| `review.completed` | A review of the turn's local edits: `verdict` (`approve`, `revise`, or `skipped` with the reason in `summary`), `issues` (`file`, `line`, `severity`, `comment`), the reviewer `model`, and `round` |
 | `secrets.redacted` | Secrets were replaced with placeholders in a request to a remote model; `kinds` names each one (repeats included) and `model` the recipient. Sent only when a request contains more than the previous one |
 | `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file |
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |

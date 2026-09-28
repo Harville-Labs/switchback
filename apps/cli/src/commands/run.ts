@@ -1,5 +1,5 @@
 /** `harness run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
-import { privateLabel, receiptLine, redactedLabel } from '@harness/client';
+import { privateLabel, receiptLine, redactedLabel, reviewLines } from '@harness/client';
 import type { RoutePreference } from '@harness/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 
@@ -9,6 +9,8 @@ export interface RunFlags extends CommonFlags {
   agent?: string;
   yes: boolean;
   json: boolean;
+  /** Remote review of local edits; undefined follows `review.mode`. */
+  review?: boolean;
 }
 
 const dim = (s: string) => (process.stderr.isTTY ? `\x1b[2m${s}\x1b[0m` : s);
@@ -36,7 +38,11 @@ export async function run(flags: RunFlags): Promise<number> {
         if (e.type === 'tool.completed' && e.private && !pinned) {
           pinned = true;
           process.stderr.write(dim(`${privateLabel(e.private)}\n`));
-        } else if (e.type === 'secrets.redacted')
+        } else if (e.type === 'review.completed')
+          process.stderr.write(
+            dim(`${reviewLines({ ...e, kind: 'review', id: e.turnId }).join('\n')}\n`),
+          );
+        else if (e.type === 'secrets.redacted')
           process.stderr.write(dim(`${redactedLabel(e.kinds, e.model)}\n`));
         else if (e.type === 'subagent.started')
           process.stderr.write(dim(`↳ ${e.agent}: ${e.task}\n`));
@@ -52,6 +58,7 @@ export async function run(flags: RunFlags): Promise<number> {
     sessionId: session.id,
     text: flags.prompt,
     route: flags.route,
+    ...(flags.review !== undefined ? { review: flags.review } : {}),
   });
   const code = await finished;
   if (!flags.json) {

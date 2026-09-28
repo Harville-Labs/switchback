@@ -65,6 +65,11 @@
         "category": "Harness"
       },
       {
+        "command": "harness.setReview",
+        "title": "Set Remote Review of Local Edits",
+        "category": "Harness"
+      },
+      {
         "command": "harness.showReceipt",
         "title": "Show Session Receipt (Cost vs. All-Remote)",
         "category": "Harness"

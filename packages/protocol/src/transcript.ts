@@ -23,6 +23,8 @@ export interface TextPart {
   backgroundTask?: { sessionId: string; agent: string; ok: boolean };
   /** Why this part must never be sent to a remote model (see `privacy` in docs/configuration.md). */
   private?: string;
+  /** Set on a reviewer's findings handed back to the model (docs/review.md). */
+  review?: { round: number; model: ModelRef };
 }
 
 /**

@@ -146,6 +146,16 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 
 See [privacy.md](privacy.md) for what's detected and the limits.
 
+### `review`
+
+| Key | Default | |
+|---|---|---|
+| `mode` | `off` | `auto`: after a turn in which a local model edited files, another model reviews the diff and the local model fixes what it finds. A prompt's `review` flag overrides it |
+| `model` | first available in `routing.remote` | Reviewer model alias; may be a local model |
+| `maxRounds` | 2 | Reviews per prompt (1 to 5) |
+
+See [review.md](review.md).
+
 ### `telemetry`
 
 | Key | Default | |

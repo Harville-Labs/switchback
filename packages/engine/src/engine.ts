@@ -5,7 +5,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import {
   type AgentSummary,
   type Attachment,
@@ -65,6 +65,14 @@ import {
   redactOutbound,
   redactSecrets,
 } from './privacy.ts';
+import {
+  feedbackText,
+  parseReview,
+  REVIEWER_PROMPT,
+  type ReviewAnswer,
+  reviewRequest,
+  turnDiff,
+} from './review.ts';
 import { ClaudeAgentSdkRuntime } from './runtimes/claude-agent-sdk.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
 import { Semaphore } from './semaphore.ts';
@@ -82,6 +90,7 @@ import {
   promptTokens,
 } from './tokens.ts';
 import {
+  resolveInWorkspace,
   type SubagentResult,
   type Tool,
   type ToolContext,
@@ -146,6 +155,12 @@ interface LiveSession {
   /** The previous remote call, to check that the next one hits the prompt cache. */
   lastRemote?: { key: string; at: number };
   cacheWarned?: boolean;
+  /**
+   * Files edited during the current top-level turn (by this session or its
+   * subagents in the same checkout), keyed by absolute path: content before
+   * the first edit, and whether a local model edited it. For review.
+   */
+  turnEdits?: Map<string, { path: string; before: string | undefined; local: boolean }>;
   /** Why the session holds private content and must stay local; never cleared. */
   private?: string;
   /** Secrets redacted from the last remote request, to report only new ones. */
@@ -403,6 +418,7 @@ export class Engine {
     text: string;
     route?: RoutePreference;
     attachments?: Attachment[];
+    review?: boolean;
   }): { turnId: string } {
     const s = this.live(params.sessionId);
     if (s.controller)
@@ -417,7 +433,10 @@ export class Engine {
       params.attachments ?? [],
       // Interactive sessions stay usable while background tasks run; their
       // reports start a follow-up turn when they arrive.
-      { waitForBackground: false },
+      {
+        waitForBackground: false,
+        ...(params.review !== undefined ? { review: params.review } : {}),
+      },
     ).catch((err) => {
       this.emit({ type: 'error', ...this.scope(s), turnId, message: (err as Error).message });
     });
@@ -432,7 +451,7 @@ export class Engine {
     turnId = `turn_${crypto.randomUUID().slice(0, 8)}`,
     parentSignal?: AbortSignal,
     extra: Attachment[] = [],
-    options: { waitForBackground?: boolean; private?: string } = {},
+    options: { waitForBackground?: boolean; private?: string; review?: boolean } = {},
   ): Promise<TurnResult> {
     const session = typeof s === 'string' ? this.live(s) : s;
     if (session.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is busy');
@@ -463,6 +482,7 @@ export class Engine {
       });
     }
     session.signals.startUserTurn();
+    if (session.depth === 0) session.turnEdits = new Map();
 
     let stopReason: StopReason = 'end_turn';
     try {
@@ -479,6 +499,9 @@ export class Engine {
         if (session.inbox.length)
           stopReason = await this.loop(session, route, turnId, controller.signal);
       }
+      const review = options.review ?? this.options.config.review.mode === 'auto';
+      if (review && session.depth === 0 && stopReason === 'end_turn' && text)
+        stopReason = await this.reviewTurn(session, text, route, turnId, controller.signal);
     } catch (err) {
       stopReason = controller.signal.aborted ? 'cancelled' : 'error';
       if (stopReason === 'error')
@@ -808,7 +831,7 @@ export class Engine {
       if (toolCalls.length === 0)
         return done.stopReason === 'tool_use' ? 'end_turn' : done.stopReason;
 
-      const results = await this.runTools(s, tools, catalog, toolCalls, turnId, signal);
+      const results = await this.runTools(s, tools, catalog, toolCalls, turnId, signal, model.tier);
       this.append(s, { role: 'user', parts: results });
       if (signal.aborted) return 'cancelled';
     }
@@ -885,6 +908,196 @@ export class Engine {
       .map((a) => ({ name: a.name, description: a.description }));
     const specs = tools.map((t) => toolSpec(t, { agentCatalog: catalog }));
     return { agent, tools, catalog, specs, specsJson: JSON.stringify(specs) };
+  }
+
+  // -------------------------------------------------------------------------
+  // Draft locally, review remotely (docs/review.md)
+  // -------------------------------------------------------------------------
+
+  /** Remember a file's content before its first edit this turn, on the top-level session. */
+  private noteEdit(s: LiveSession, path: string, tier: Tier): void {
+    let top = s;
+    while (top.header.parentId) {
+      const parent = this.sessions.get(top.header.parentId);
+      if (!parent) break;
+      top = parent;
+    }
+    // An isolated subagent's edits are on its own branch, reported with their own diff.
+    if (!top.turnEdits || this.rootOf(s) !== this.rootOf(top)) return;
+    let file: string;
+    try {
+      file = resolveInWorkspace(this.rootOf(s), path);
+    } catch {
+      return; // the tool will report the bad path
+    }
+    const entry = top.turnEdits.get(file) ?? {
+      path: relative(this.rootOf(top), file).split(sep).join('/'),
+      before: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
+      local: false,
+    };
+    if (tier === 'local') entry.local = true;
+    top.turnEdits.set(file, entry);
+  }
+
+  /**
+   * Review what local models changed this turn; on `revise`, hand the
+   * findings back and let the model fix them, up to `review.maxRounds` reviews.
+   */
+  private async reviewTurn(
+    s: LiveSession,
+    request: string,
+    route: RoutePreference,
+    turnId: string,
+    signal: AbortSignal,
+  ): Promise<StopReason> {
+    const rounds = this.options.config.review.maxRounds;
+    let stopReason: StopReason = 'end_turn';
+    for (let round = 1; round <= rounds && !signal.aborted; round++) {
+      const edits = [...(s.turnEdits?.entries() ?? [])];
+      // Only what a local model wrote: a remote model's own work isn't sent for review.
+      if (!edits.some(([, e]) => e.local)) return stopReason;
+      const diff = turnDiff(
+        edits.map(([file, e]) => ({
+          path: e.path,
+          before: e.before,
+          after: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
+        })),
+      );
+      if (!diff) return stopReason;
+      const result = await this.review(s, request, diff, edits.length, round, turnId, signal);
+      if (result?.answer.verdict !== 'revise' || round === rounds) return stopReason;
+      this.append(s, {
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            text: feedbackText(result.answer, result.model.ref.model),
+            review: { round, model: result.model.ref },
+          },
+        ],
+      });
+      stopReason = await this.loop(s, route, turnId, signal);
+      if (stopReason !== 'end_turn') return stopReason;
+    }
+    return stopReason;
+  }
+
+  /** The reviewer: `review.model`, else the first available remote model. */
+  private reviewerModel(): ModelInfo | undefined {
+    const { review, routing } = this.options.config;
+    if (review.model) return this.modelInfo(review.model);
+    return routing.remote.flatMap((a) => this.modelInfo(a) ?? []).find((m) => m.available);
+  }
+
+  /** One review call. Never fails the turn: problems are reported as `skipped`. */
+  private async review(
+    s: LiveSession,
+    request: string,
+    diff: string,
+    files: number,
+    round: number,
+    turnId: string,
+    signal: AbortSignal,
+  ): Promise<{ answer: ReviewAnswer; model: ModelInfo } | undefined> {
+    const model = this.reviewerModel();
+    const skip = (summary: string) => {
+      this.emit({
+        type: 'review.completed',
+        ...this.scope(s),
+        turnId,
+        verdict: 'skipped',
+        summary,
+        issues: [],
+        round,
+        ...(model ? { model: model.ref } : {}),
+      });
+      return undefined;
+    };
+    const { routing, privacy } = this.options.config;
+    if (!model) return skip('no reviewer model is available');
+    const provider = this.providers.get(model.ref.provider);
+    if (!provider) return skip(`provider "${model.ref.provider}" is not configured`);
+    const summary = textOf(
+      s.messages.findLast((m) => m.role === 'assistant') ?? { role: 'assistant', parts: [] },
+    );
+    let text = reviewRequest(request, summary, diff);
+    if (model.tier === 'remote') {
+      // Review is remote spend: every rule that keeps other calls local applies.
+      if (this.options.org?.remoteDisabled)
+        return skip(`remote models are disabled by ${this.options.org.name} policy`);
+      if (routing.mode === 'local-only') return skip('routing mode is local-only');
+      if (s.private)
+        return skip(
+          `this session holds private content (${s.private}), which never leaves this machine`,
+        );
+      const spend = this.ledger.spend();
+      const b = routing.budget;
+      if (
+        (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd) ||
+        (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd)
+      )
+        return skip('the remote budget is spent');
+      if (privacy.secrets !== 'off') {
+        const scan = await redactSecrets(text);
+        if (scan.found.length && privacy.secrets === 'block')
+          return skip(`the changes contain a secret (${scan.found[0]})`);
+        if (scan.found.length)
+          this.emit({
+            type: 'secrets.redacted',
+            ...this.scope(s),
+            kinds: scan.found,
+            model: model.ref,
+          });
+        text = scan.text;
+      }
+    }
+    this.emit({
+      type: 'route.decided',
+      ...this.scope(s),
+      turnId,
+      tier: model.tier,
+      model: model.ref,
+      rule: 'review',
+      reason: `reviewing ${files} changed file${files === 1 ? '' : 's'} from the local model${round > 1 ? ' (after revisions)' : ''}`,
+    });
+    const modelConfig = this.options.config.models[model.alias];
+    let done: Extract<ChatEvent, { type: 'done' }> | undefined;
+    try {
+      for await (const ev of provider.stream({
+        model: model.ref.model,
+        system: REVIEWER_PROMPT,
+        messages: [{ role: 'user', parts: [{ type: 'text', text }] }],
+        tools: [],
+        maxTokens: 4_000,
+        ...(modelConfig?.effort ? { effort: modelConfig.effort } : {}),
+        signal,
+      })) {
+        if (ev.type === 'done') done = ev;
+      }
+    } catch (err) {
+      if (signal.aborted) return undefined;
+      return skip(`${model.alias} failed: ${(err as Error).message}`);
+    }
+    if (!done) return skip(`${model.alias} returned no review`);
+    this.recordUsage(s, model.tier, model.ref, done.usage, {
+      rule: 'review',
+      agent: s.header.agent,
+    });
+    const answer = parseReview(
+      done.parts.flatMap((p) => (p.type === 'text' ? [p.text] : [])).join(''),
+    );
+    if (!answer) return skip(`${model.alias}'s review couldn't be read`);
+    this.emit({
+      type: 'review.completed',
+      ...this.scope(s),
+      turnId,
+      verdict: answer.verdict,
+      summary: answer.summary,
+      issues: answer.issues,
+      model: model.ref,
+      round,
+    });
+    return { answer, model };
   }
 
   // -------------------------------------------------------------------------
@@ -1140,6 +1353,7 @@ export class Engine {
     calls: { id: string; name: string; input: unknown }[],
     turnId: string,
     signal: AbortSignal,
+    tier: Tier,
   ): Promise<ToolResultPart[]> {
     const ctx: ToolContext = {
       workspaceRoot: this.rootOf(s),
@@ -1200,6 +1414,8 @@ export class Engine {
         isError = true;
       } else {
         ran = true;
+        if (tool.name === 'edit' || tool.name === 'write')
+          this.noteEdit(s, (parsed.data as { path: string }).path, tier);
         try {
           output = await tool.run(parsed.data, callCtx);
         } catch (err) {

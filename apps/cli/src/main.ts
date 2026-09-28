@@ -34,6 +34,7 @@ Options
   --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
   --json             run/usage: machine-readable output
+  --review, --no-review  run: remote review of local edits (default: review.mode)
   --mock             Use scripted mock providers (no models needed)
   -v, --version      Print version
   -h, --help         Print this help
@@ -151,6 +152,8 @@ async function main(argv: string[]): Promise<number> {
       isolation: { type: 'string' },
       period: { type: 'string' },
       telemetry: { type: 'string' },
+      review: { type: 'boolean' },
+      'no-review': { type: 'boolean' },
       version: { type: 'boolean', short: 'v', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -245,6 +248,7 @@ async function main(argv: string[]): Promise<number> {
         route: route.data,
         yes: values.yes,
         json: values.json,
+        ...(values.review ? { review: true } : values['no-review'] ? { review: false } : {}),
         ...(values.agent ? { agent: values.agent } : {}),
       });
     }

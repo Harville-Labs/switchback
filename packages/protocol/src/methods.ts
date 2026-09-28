@@ -90,6 +90,8 @@ export const SessionPromptParams = z.object({
   attachments: z.array(Attachment).max(20).optional(),
   /** Per-turn routing override. `auto` defers to the configured policy. */
   route: RoutePreference.default('auto'),
+  /** Remote review of local edits for this prompt; overrides `review.mode` (docs/review.md). */
+  review: z.boolean().optional(),
 });
 export type SessionPromptParams = z.input<typeof SessionPromptParams>;
 
@@ -146,6 +148,14 @@ export interface UsageRow {
   usage: Usage;
   costUsd: number;
   savingsUsd: number;
+}
+
+/** One finding from a remote review of local edits. */
+export interface ReviewIssue {
+  file: string;
+  line?: number | null;
+  severity: 'bug' | 'risk' | 'nit';
+  comment: string;
 }
 
 export interface McpServerInfo {
@@ -289,6 +299,18 @@ export type EngineEvent =
       agent: string;
       ok: boolean;
       background?: boolean;
+    } & SessionScoped)
+  | ({
+      type: 'review.completed';
+      turnId: string;
+      /** `skipped`: review was on but couldn't run; `summary` says why. */
+      verdict: 'approve' | 'revise' | 'skipped';
+      summary: string;
+      issues: ReviewIssue[];
+      /** The reviewer; absent when skipped before one was chosen. */
+      model?: ModelRef;
+      /** 1 for the first review of a turn; a revise leads to another round, up to `review.maxRounds`. */
+      round: number;
     } & SessionScoped)
   | ({
       type: 'secrets.redacted';

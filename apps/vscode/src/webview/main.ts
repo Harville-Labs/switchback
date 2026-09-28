@@ -60,6 +60,11 @@ app.innerHTML = `
   .prompt button { margin: 6px 6px 0 0; }
   .prompt .estimate { color: var(--vscode-charts-yellow); }
   .tool .private { color: var(--vscode-charts-blue); font-size: 0.9em; }
+  .review { margin: 4px 0; }
+  .review.skipped { opacity: .7; }
+  .review ul { margin: 2px 0 2px 1.4em; padding: 0; }
+  .review li.bug { color: var(--vscode-errorForeground); }
+  .review li.nit { opacity: .7; }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
   .chip { font-size: .8em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--vscode-panel-border); background: transparent; color: var(--vscode-foreground); opacity: .7; }
   .chip.on { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: transparent; opacity: 1; }
