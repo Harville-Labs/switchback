@@ -27,6 +27,7 @@ import type {
 } from '@harness/protocol';
 import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
+import { copyText, pickCopy } from './clipboard.ts';
 import { PromptHistory } from './history.ts';
 import { renderMarkdown } from './markdown.ts';
 import { PromptInput } from './PromptInput.tsx';
@@ -52,11 +53,13 @@ const HELP = `Commands
   /subagent <n>            show what a subagent did: routes, tools, report
   /usage [rule|agent|model] this week's spend, savings, and why
   /receipt                 this session's cost vs. running it all-remote
+  /copy [n]                copy the last reply, or its nth code block, to the clipboard
   /review on|off|default   remote review of local edits (default: review.mode)
   /mcp                     MCP servers and their tools
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
-Input: @ mentions a file (its contents are attached); ↑/↓ browse history;
+Input: @ mentions a file (its contents are attached); paste freely: big pastes
+       become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
 Keys: esc cancels the running turn; y/a/n answer permission prompts.`;
 
@@ -265,6 +268,27 @@ export function App({
         case 'mcp': {
           const { servers } = await client.request('mcp.list', {});
           setView((v) => addInfo(v, `MCP servers\n${formatMcpServers(servers)}`));
+          return;
+        }
+        case 'copy': {
+          const reply = view.items.findLast((it) => it.kind === 'assistant' && it.text);
+          if (reply?.kind !== 'assistant') {
+            setView((v) => addInfo(v, 'Nothing to copy yet.'));
+            return;
+          }
+          const pick = pickCopy(reply.text, args[0]);
+          if ('error' in pick) {
+            setView((v) => addInfo(v, `copy: ${pick.error}`));
+            return;
+          }
+          const native = await copyText(pick.text, (s) => stdout.write(s));
+          const lines = pick.text.split('\n').length;
+          setView((v) =>
+            addInfo(
+              v,
+              `Copied ${pick.what} (${lines} line${lines === 1 ? '' : 's'})${native ? '' : ' through the terminal (OSC 52); if nothing arrived, your terminal needs clipboard access enabled'}.`,
+            ),
+          );
           return;
         }
         case 'receipt': {

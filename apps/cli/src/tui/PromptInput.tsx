@@ -1,9 +1,11 @@
 /**
  * Prompt editor: multi-line input, per-workspace history, and @file
  * completion. Newline: Option/Alt+Enter, Shift+Enter (terminals that report
- * it), Ctrl+J, or a trailing backslash before Enter.
+ * it), Ctrl+J, or a trailing backslash before Enter. Pastes arrive whole
+ * through bracketed paste, so their newlines never submit (see paste.ts).
  */
-import { Box, Text, useInput } from 'ink';
+import { statSync } from 'node:fs';
+import { Box, Text, useInput, usePaste } from 'ink';
 import { useEffect, useState } from 'react';
 import {
   at,
@@ -24,6 +26,24 @@ import {
   rankFiles,
 } from './editor.ts';
 import { workspaceFiles } from './files.ts';
+import {
+  chipBefore,
+  cleanPaste,
+  expandPastes,
+  noPastes,
+  type Pastes,
+  pastedPath,
+  pasteInsertion,
+  pathInsertion,
+} from './paste.ts';
+
+const isFile = (p: string) => {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
 
 interface Props {
   focus: boolean;
@@ -42,6 +62,7 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
   const [files, setFiles] = useState<string[]>([]);
   const [selected, setSelected] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);
+  const [pastes, setPastes] = useState<Pastes>(noPastes);
 
   const mention = mentionAt(state);
   const suggestions = mention && !menuClosed ? rankFiles(files, mention.query) : [];
@@ -78,6 +99,20 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
     return true;
   };
 
+  usePaste(
+    (raw) => {
+      const text = cleanPaste(raw);
+      if (!text) return;
+      const path = pastedPath(text);
+      const mention = path ? pathInsertion(path, root, isFile) : undefined;
+      if (mention) return edit(insert(state, mention));
+      const r = pasteInsertion(text, pastes);
+      setPastes(r.pastes);
+      edit(insert(state, r.insert));
+    },
+    { isActive: focus },
+  );
+
   useInput(
     (input, key) => {
       if (menuOpen) {
@@ -99,8 +134,9 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
           return edit(insert(backspace(state), '\n'));
         }
         if (busy || !state.value.trim()) return;
-        onSubmit(state.value);
+        onSubmit(expandPastes(state.value, pastes));
         setState(empty);
+        setPastes(noPastes);
         setHistIndex(null);
         setDraft('');
         return;
@@ -124,7 +160,16 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
       if (key.ctrl && input === 'u') return edit(deleteToLineStart(state));
       if (key.ctrl && input === 'w') return edit(deleteWord(state));
       // Most terminals send DEL (0x7f) for Backspace, which Ink reports either way.
-      if (key.backspace) return edit(key.meta ? deleteWord(state) : backspace(state));
+      if (key.backspace) {
+        // A paste chip goes in one keystroke, like the paste that made it.
+        const chip = key.meta ? undefined : chipBefore(state.value, state.cursor, pastes);
+        if (chip !== undefined)
+          return edit({
+            value: state.value.slice(0, chip) + state.value.slice(state.cursor),
+            cursor: chip,
+          });
+        return edit(key.meta ? deleteWord(state) : backspace(state));
+      }
       if (key.delete)
         return edit(state.cursor < state.value.length ? deleteForward(state) : backspace(state));
       if (key.ctrl || key.meta || key.escape || key.tab) return;
@@ -143,21 +188,25 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
           <Text dimColor>{placeholder}</Text>
         </Text>
       ) : (
-        lines.map((text, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: lines of the current buffer
-          <Text key={i}>
-            <Text color="cyan">{i === 0 ? (busy ? '… ' : '❯ ') : '  '}</Text>
-            {focus && i === curLine ? (
-              <>
-                {text.slice(0, curCol)}
-                <Text inverse>{text[curCol] ?? ' '}</Text>
-                {text.slice(curCol + 1)}
-              </>
-            ) : (
-              text
-            )}
-          </Text>
-        ))
+        lines.map((raw, i) => {
+          // One cell per character keeps the cursor where the text says it is.
+          const text = raw.replaceAll('\t', ' ');
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: lines of the current buffer
+            <Text key={i}>
+              <Text color="cyan">{i === 0 ? (busy ? '… ' : '❯ ') : '  '}</Text>
+              {focus && i === curLine ? (
+                <>
+                  {text.slice(0, curCol)}
+                  <Text inverse>{text[curCol] ?? ' '}</Text>
+                  {text.slice(curCol + 1)}
+                </>
+              ) : (
+                text
+              )}
+            </Text>
+          );
+        })
       )}
       {menuOpen ? (
         <Box flexDirection="column" marginTop={1}>

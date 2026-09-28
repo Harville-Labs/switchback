@@ -44,11 +44,13 @@ Retries live in src/http/client.ts:88 ...
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Remote review of local edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
+| `/copy [n]` | Copy the last reply, or its `n`th code block, to the clipboard as raw text (no wrapping or indentation from the terminal rendering). Works over SSH in terminals that support OSC 52 |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
 | Option/Alt+Enter, Ctrl+J, or `\` then Enter | Newline |
+| Paste | Arrives whole (bracketed paste), so newlines in it never send the prompt. Terminal colors and control characters are removed. A paste of 12 lines or 1,500 characters or more shows as a chip, `[Pasted text #1 · 240 lines]`, that Backspace deletes in one go and that expands to the full text when you send. A file dragged into the terminal becomes an `@` mention when it's in the workspace |
 | Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word |
 | `esc` | Cancel the running turn (or close the mention menu) |
 | `y` / `a` / `n` | Answer a permission prompt: once, always, deny |
