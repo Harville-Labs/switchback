@@ -4,8 +4,8 @@
  * WebAssembly, so development needs no server. Migrations in ./drizzle are
  * applied at startup.
  */
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
@@ -44,7 +44,10 @@ export async function openDatabase(url: string, migrations = migrationsDir()): P
     import('drizzle-orm/pglite'),
     import('drizzle-orm/pglite/migrator'),
   ]);
-  const client = new PGlite(url === 'memory://' ? undefined : url);
+  const memory = url === 'memory://';
+  // PGlite creates its own directory but not the ones above it (a fresh checkout has no .data/).
+  if (!memory) mkdirSync(dirname(resolve(url)), { recursive: true });
+  const client = new PGlite(memory ? undefined : url);
   const db = drizzlePglite(client, { schema });
   await migratePglite(db, { migrationsFolder: migrations });
   return { db: db as unknown as Db, close: () => client.close() };
