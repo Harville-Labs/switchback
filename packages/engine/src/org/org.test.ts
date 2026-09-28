@@ -142,9 +142,8 @@ describe('with an organization server', () => {
       // Sign in with the device flow.
       const client = new OrgClient(server.url);
       const code = await client.startDeviceLogin();
-      const token = await client.pollDeviceToken(code.device_code);
-      if (typeof token === 'string') throw new Error('expected a token');
-      writeAuth(toAuth(server.url, token), env);
+      const token = await client.waitForDeviceToken(code);
+      writeAuth(toAuth(server.url, token, { id: 'unused', name: 'unused' }), env);
       expect(readAuth(env)?.org.name).toBe('Dev Org');
 
       expect((await refreshPolicy(env)).changed).toBe(true);

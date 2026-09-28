@@ -16,7 +16,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'â€
 
 <Flash error={form?.error} notice={form?.notice} />
 <p class="muted mb-3">
-  {data.used} of {data.site.seats} seats used. Invited people take a seat until they're removed.
+  {data.used} of {data.site.seats} seats used. An invitation holds a seat until it's accepted or canceled.
 </p>
 
 {#if data.manager}
@@ -47,7 +47,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'â€
         <tr>
           <td>{m.email}</td>
           <td>
-            {#if editable}
+            {#if editable && m.status === 'active'}
               <form method="POST" action="?/role" use:enhance class="flex gap-2">
                 <input type="hidden" name="user" value={m.id} />
                 <select class="field py-1" name="role" aria-label="Role for {m.email}">
@@ -62,7 +62,12 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'â€
           <td class="muted">{when(m.lastSeen)}</td>
           {#if data.manager}
             <td class="text-right">
-              {#if editable}
+              {#if editable && m.status === 'invited'}
+                <form method="POST" action="?/uninvite" use:enhance>
+                  <input type="hidden" name="invitation" value={m.id} />
+                  <button class="btn danger py-1">Cancel invitation</button>
+                </form>
+              {:else if editable}
                 <form method="POST" action="?/remove" use:enhance>
                   <input type="hidden" name="user" value={m.id} />
                   <button class="btn danger py-1">Remove</button>

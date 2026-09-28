@@ -66,6 +66,10 @@ spec:
             - configMapRef:
                 name: harness-site-config
                 optional: true
+            # BETTER_AUTH_SECRET, and STAFF_SSO_* once Harville Labs' identity
+            # provider is set up: SOPS-encrypted in the homelab repo.
+            - secretRef:
+                name: harness-site-secrets
           readinessProbe:
             httpGet:
               path: /healthz

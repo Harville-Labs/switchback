@@ -18,7 +18,7 @@ let { data, form } = $props();
       <p>Check that this code matches the one in your terminal or editor:</p>
       <p class="font-mono text-3xl font-semibold tracking-widest">{data.code}</p>
       <p class="muted">
-        {data.client ?? 'Harness'} will receive {data.site.name}'s policy and report usage as {data.email}.
+        Harness will receive {data.site.name}'s policy and report usage as {data.email}.
       </p>
       <input type="hidden" name="code" value={data.code} />
       <div class="flex gap-2">
@@ -29,7 +29,7 @@ let { data, form } = $props();
   {:else if !data.problem || !data.code}
     <form method="GET" class="card flex gap-2">
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="field flex-1 font-mono uppercase" name="code" placeholder="XXXX-XXXX" aria-label="Code" required autofocus />
+      <input class="field flex-1 font-mono uppercase" name="user_code" placeholder="XXXXXXXX" aria-label="Code" required autofocus />
       <button class="btn">Continue</button>
     </form>
   {/if}

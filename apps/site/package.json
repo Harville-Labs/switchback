@@ -12,18 +12,22 @@
     "db:generate": "drizzle-kit generate",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
-    "test": "TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgres://harness:harness@localhost:5433/harness_site_test} bun test src"
+    "test": "TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgres://harness:harness@localhost:5433/harness_site_test} bun test src",
+    "auth:schema": "bunx auth@1.7.6 generate --config scripts/auth-schema.config.ts --output src/lib/server/auth-schema.ts --yes && biome format --write src/lib/server/auth-schema.ts"
   },
   "devDependencies": {
+    "@better-auth/sso": "1.7.6",
     "@harness/engine": "workspace:*",
     "@sveltejs/adapter-node": "^5.5.7",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/nodemailer": "^8.0.2",
+    "better-auth": "1.7.6",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
     "nodemailer": "^10.0.12",
+    "oauth2-mock-server": "^9.2.0",
     "postgres": "^3.4.9",
     "svelte": "^5.57.1",
     "svelte-check": "^4.7.6",

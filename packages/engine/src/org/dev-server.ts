@@ -2,7 +2,8 @@
  * Reference organization server for development and tests. Implements the
  * contract in docs/organizations.md with in-memory state:
  *
- * - device sign-in: visiting the verification URL approves the code
+ * - device sign-in (RFC 8628): visiting the verification URL approves the code
+ * - one token endpoint (RFC 6749) for the device code and refresh grants
  * - policy from a JSON file (re-read per request, so edits push immediately)
  *   or a function, served with an ETag
  * - usage reports kept in memory
@@ -26,7 +27,7 @@ export interface DevOrgServerOptions {
 
 export function startDevOrgServer(options: DevOrgServerOptions) {
   const org = options.org ?? { id: 'dev-org', name: 'Dev Org' };
-  const devices = new Map<string, { userCode: string; approved: boolean; polls: number }>();
+  const devices = new Map<string, { userCode: string; approved: boolean }>();
   const tokens = new Set<string>();
   const usage: UsageAggregate[] = [];
 
@@ -47,6 +48,7 @@ export function startDevOrgServer(options: DevOrgServerOptions) {
     tokens.add(token);
     return {
       access_token: token,
+      token_type: 'Bearer',
       refresh_token: `refresh_${token}`,
       expires_in: 3600,
       org,
@@ -62,42 +64,51 @@ export function startDevOrgServer(options: DevOrgServerOptions) {
       const url = new URL(req.url);
       switch (`${req.method} ${url.pathname}`) {
         case 'POST /v1/device/code': {
+          const form = new URLSearchParams(await req.text());
+          if (form.get('client_id') !== 'harness')
+            return Response.json({ error: 'invalid_client' }, { status: 400 });
           const deviceCode = randomUUID();
           const userCode =
             Math.random().toString(36).slice(2, 6).toUpperCase() +
             '-' +
             Math.random().toString(36).slice(2, 6).toUpperCase();
-          devices.set(deviceCode, { userCode, approved: !!options.autoApprove, polls: 0 });
+          devices.set(deviceCode, { userCode, approved: !!options.autoApprove });
           return Response.json({
             device_code: deviceCode,
             user_code: userCode,
             verification_uri: `${url.origin}/device`,
-            verification_uri_complete: `${url.origin}/device?code=${userCode}`,
+            verification_uri_complete: `${url.origin}/device?user_code=${userCode}`,
             expires_in: 600,
-            interval: 1,
+            // Seconds; tests barely wait. A real server says 5.
+            interval: options.autoApprove ? 0.01 : 1,
           });
         }
         case 'GET /device': {
-          const code = url.searchParams.get('code');
+          const code = url.searchParams.get('user_code');
           for (const d of devices.values()) if (d.userCode === code) d.approved = true;
           return new Response(
             `Approved ${code ?? '(no code)'} for ${org.name}. You can close this tab.`,
           );
         }
-        case 'POST /v1/device/token': {
-          const { device_code } = (await req.json()) as { device_code: string };
-          const d = devices.get(device_code);
-          if (!d) return Response.json({ error: 'expired_token' }, { status: 400 });
-          if (!d.approved)
-            return Response.json({ error: 'authorization_pending' }, { status: 400 });
-          devices.delete(device_code);
-          return Response.json(issueToken());
-        }
-        case 'POST /v1/token/refresh': {
-          const { refresh_token } = (await req.json()) as { refresh_token: string };
-          if (!tokens.has(refresh_token.replace(/^refresh_/, '')))
-            return Response.json({ error: 'invalid_grant' }, { status: 401 });
-          return Response.json(issueToken());
+        case 'POST /v1/token': {
+          const form = new URLSearchParams(await req.text());
+          const grant = form.get('grant_type');
+          if (grant === 'urn:ietf:params:oauth:grant-type:device_code') {
+            const deviceCode = form.get('device_code') ?? '';
+            const d = devices.get(deviceCode);
+            if (!d) return Response.json({ error: 'expired_token' }, { status: 400 });
+            if (!d.approved)
+              return Response.json({ error: 'authorization_pending' }, { status: 400 });
+            devices.delete(deviceCode);
+            return Response.json(issueToken());
+          }
+          if (grant === 'refresh_token') {
+            const refresh = form.get('refresh_token') ?? '';
+            if (!tokens.has(refresh.replace(/^refresh_/, '')))
+              return Response.json({ error: 'invalid_grant' }, { status: 400 });
+            return Response.json(issueToken());
+          }
+          return Response.json({ error: 'unsupported_grant_type' }, { status: 400 });
         }
         case 'GET /v1/policy': {
           if (!authorized(req)) return new Response('unauthorized', { status: 401 });

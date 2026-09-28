@@ -4,15 +4,21 @@
  */
 import { error, fail, type RequestEvent, redirect } from '@sveltejs/kit';
 import { siteApp } from './context.ts';
-import { canManage, membership, SiteError, siteBySlug, type User } from './model.ts';
+import {
+  type Actor,
+  canManage,
+  managerSessionProblem,
+  membership,
+  SiteError,
+  sessionProblem,
+  siteBySlug,
+} from './model.ts';
 
-export const SESSION_COOKIE = 'harness_session';
-
-export function requireUser(event: Pick<RequestEvent, 'locals' | 'url'>): User {
-  const user = event.locals.user;
-  if (!user)
+export function requireActor(event: Pick<RequestEvent, 'locals' | 'url'>): Actor {
+  const actor = event.locals.actor;
+  if (!actor)
     redirect(303, `/login?next=${encodeURIComponent(event.url.pathname + event.url.search)}`);
-  return user;
+  return actor;
 }
 
 /** The site in the URL and the signed-in person's standing in it. */
@@ -21,13 +27,16 @@ export async function siteContext(
   options: { allowOutsiders?: boolean } = {},
 ) {
   const app = await siteApp();
-  const user = requireUser(event);
+  const actor = requireActor(event);
+  const user = actor.user;
   const site = await siteBySlug(app.ctx, event.params.site ?? '');
   if (!site) error(404, "There's no site with that ID.");
+  const problem = sessionProblem(site, actor);
+  if (problem) error(403, problem);
   const m = await membership(app.ctx, site, user);
-  if (!options.allowOutsiders && m?.status !== 'active' && !user.harnessManager)
+  if (!options.allowOutsiders && !m && !user.harnessManager)
     error(403, `You aren't a member of ${site.name}.`);
-  return { app, user, site, membership: m, manager: canManage(m, user) };
+  return { app, actor, user, site, membership: m, manager: canManage(m, user) };
 }
 
 export function requireManager(manager: boolean): void {
@@ -35,10 +44,13 @@ export function requireManager(manager: boolean): void {
 }
 
 /** Harville Labs staff only: the /admin console and its actions. */
-export function requireHarnessManager(event: Pick<RequestEvent, 'locals' | 'url'>): User {
-  const user = requireUser(event);
-  if (!user.harnessManager) error(403, 'Only Harness managers can see this.');
-  return user;
+export async function requireHarnessManager(
+  event: Pick<RequestEvent, 'locals' | 'url'>,
+): Promise<Actor> {
+  const actor = requireActor(event);
+  const problem = managerSessionProblem((await siteApp()).ctx, actor);
+  if (problem) error(403, problem);
+  return actor;
 }
 
 /** Run a change; a broken rule becomes a form error instead of a crash. */

@@ -72,18 +72,17 @@ Then `restrictions` run on the result and *remove* anything not allowed: disallo
 
 ## Server API
 
-Any server implementing these endpoints works. `packages/engine/src/org/dev-server.ts` is a runnable reference implementation (`bun packages/engine/src/org/dev-server.ts policy.json`). All bodies are JSON; authenticated calls send `Authorization: Bearer <access_token>`.
+Any server implementing these endpoints works. `packages/engine/src/org/dev-server.ts` is a runnable reference implementation (`bun packages/engine/src/org/dev-server.ts policy.json`). Sign-in is standard OAuth: the device authorization grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)) with client ID `harness`, which Harness runs with [openid-client](https://github.com/panva/openid-client). Its two endpoints take form posts, as the RFCs require; the others take JSON. Authenticated calls send `Authorization: Bearer <access_token>`.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /v1/device/code` | Start sign-in. Returns `device_code`, `user_code`, `verification_uri`, optional `verification_uri_complete`, `expires_in`, `interval` (RFC 8628 shape). |
-| `POST /v1/device/token` `{device_code}` | Poll. `400 {"error":"authorization_pending"\|"slow_down"\|"access_denied"\|"expired_token"}` until approved, then `200` token response. |
-| `POST /v1/token/refresh` `{refresh_token}` | New token response; `401` when the session is over. |
+| `POST /v1/device/code` | Device authorization endpoint (RFC 8628 section 3.1). Returns `device_code`, `user_code`, `verification_uri`, optional `verification_uri_complete`, `expires_in`, `interval`. |
+| `POST /v1/token` | Token endpoint (RFC 6749). `grant_type=urn:ietf:params:oauth:grant-type:device_code` polls: `400 {"error":"authorization_pending"\|"slow_down"\|"access_denied"\|"expired_token"}` until approved, then a token response. Servers that issue refresh tokens also accept `grant_type=refresh_token`. |
 | `GET /v1/policy` | The policy. Send an `ETag`; clients send `If-None-Match` and accept `304`. `401`/`403` for revoked access. |
 | `POST /v1/usage` `{entries}` | Optional. Daily aggregates per model: `date`, `tier`, `provider`, `model`, `calls`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `costUsd`. Reports are increments: add them to what the day already has. Return `404` if unsupported. |
 | `POST /v1/telemetry` `{reports}` | Optional. When the member has telemetry on, the [daily reports](telemetry.md) go here instead of to Harville Labs' public endpoint. |
 
-Token response: `{ access_token, refresh_token?, expires_in?, org: { id, name }, user: { email?, name? } }`. Clients refresh the token when it's within a minute of expiry.
+Token response: the RFC 6749 fields (`access_token`, `token_type`, optional `refresh_token` and `expires_in`), plus optional `org: { id, name }` and `user: { email?, name? }` so `harness login` can say where you signed in (without `org`, it takes the policy's). Clients refresh a token within a minute of its expiry when they have a refresh token. OAuth requests carry an `Origin` header naming the server's own origin, so frameworks that check it on form posts accept them.
 
 Usage reports contain only token counts and costs per model per day, never prompts, file names, or code. Only usage after sign-in is reported.
 

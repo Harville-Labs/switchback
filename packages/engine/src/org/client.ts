@@ -1,17 +1,23 @@
 /**
  * Client for an organization config server. The contract (docs/organizations.md):
  *
- *   POST /v1/device/code          start device sign-in (RFC 8628 style)
- *   POST /v1/device/token         poll for the token
- *   POST /v1/token/refresh        exchange a refresh token
- *   GET  /v1/policy               the org policy (ETag / If-None-Match)
- *   POST /v1/usage                daily usage aggregates (optional endpoint)
+ *   POST /v1/device/code   device authorization endpoint (RFC 8628)
+ *   POST /v1/token         token endpoint (RFC 6749): device code and refresh grants
+ *   GET  /v1/policy        the org policy (ETag / If-None-Match)
+ *   POST /v1/usage         daily usage aggregates (optional endpoint)
+ *
+ * Sign-in and refresh use openid-client, which implements the OAuth grants,
+ * polling, and `slow_down` handling; this file only maps its errors.
  */
+import * as oidc from 'openid-client';
 import { z } from 'zod';
 import { OrgPolicy } from './policy.ts';
 import type { OrgAuth } from './store.ts';
 
 type Fetch = typeof fetch;
+
+/** The OAuth client ID Harness presents to every organization server. */
+export const CLIENT_ID = 'harness';
 
 export class OrgAuthError extends Error {
   constructor(message: string) {
@@ -27,21 +33,21 @@ export class OrgServerError extends Error {
   }
 }
 
-const DeviceCode = z.object({
-  device_code: z.string(),
-  user_code: z.string(),
-  verification_uri: z.string(),
-  verification_uri_complete: z.string().optional(),
-  expires_in: z.number().default(600),
-  interval: z.number().default(5),
-});
-export type DeviceCode = z.infer<typeof DeviceCode>;
+/** A started device sign-in: what to show, and what openid-client polls with. */
+export interface DeviceLogin {
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete?: string;
+  expiresIn: number;
+  response: oidc.DeviceAuthorizationResponse;
+}
 
+/** RFC 6749 token response, plus the org and account the server may name (ADR 0007). */
 const TokenResponse = z.object({
   access_token: z.string().min(1),
   refresh_token: z.string().optional(),
   expires_in: z.number().optional(),
-  org: z.object({ id: z.string(), name: z.string() }),
+  org: z.object({ id: z.string(), name: z.string() }).optional(),
   user: z.object({ email: z.string().optional(), name: z.string().optional() }).prefault({}),
 });
 export type TokenResponse = z.infer<typeof TokenResponse>;
@@ -58,25 +64,81 @@ export interface UsageAggregate {
   costUsd: number;
 }
 
-export function toAuth(server: string, t: TokenResponse, now = Date.now()): OrgAuth {
+/** Stored credentials. `org` comes from the token response, or the policy when it's absent. */
+export function toAuth(
+  server: string,
+  t: TokenResponse,
+  org: { id: string; name: string },
+  now = Date.now(),
+): OrgAuth {
   return {
     server,
     accessToken: t.access_token,
     ...(t.refresh_token ? { refreshToken: t.refresh_token } : {}),
     ...(t.expires_in ? { expiresAt: now + t.expires_in * 1000 } : {}),
-    org: t.org,
+    org: t.org ?? org,
     user: t.user,
   };
 }
 
+/** openid-client's errors, as the two kinds callers act on. */
+function mapError(err: unknown, base: string): never {
+  if (err instanceof oidc.ResponseBodyError) {
+    if (err.error === 'access_denied') throw new OrgAuthError('sign-in was denied');
+    if (err.error === 'expired_token')
+      throw new OrgAuthError('the sign-in code expired; run `harness login` again');
+    if (err.error === 'invalid_grant' || err.status === 401)
+      throw new OrgAuthError(
+        err.error_description
+          ? `${err.error_description}; run \`harness login\``
+          : 'session expired; run `harness login`',
+      );
+    throw new OrgServerError(
+      `sign-in failed (HTTP ${err.status}: ${err.error}${err.error_description ? `, ${err.error_description}` : ''})`,
+    );
+  }
+  if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError'))
+    throw new OrgAuthError('the sign-in code expired; run `harness login` again');
+  // openid-client rejects responses that break the OAuth specs with a ClientError;
+  // a failed request surfaces as the fetch's own TypeError.
+  if (err instanceof oidc.ClientError) {
+    const detail = err.cause instanceof Error ? `: ${err.cause.message}` : '';
+    throw new OrgServerError(`${base} sent an invalid sign-in response (${err.message}${detail})`);
+  }
+  throw new OrgServerError(`cannot reach ${base}: ${(err as Error).message}`);
+}
+
 export class OrgClient {
   private readonly base: string;
+  private readonly oauth: oidc.Configuration;
 
   constructor(
     server: string,
     private readonly fetchImpl: Fetch = fetch,
   ) {
     this.base = server.replace(/\/+$/, '');
+    this.oauth = new oidc.Configuration(
+      {
+        issuer: this.base,
+        device_authorization_endpoint: `${this.base}/v1/device/code`,
+        token_endpoint: `${this.base}/v1/token`,
+      },
+      CLIENT_ID,
+      undefined,
+      oidc.None(),
+    );
+    // openid-client sets its own request timeout; its body types are a subset of fetch's.
+    // OAuth requests are form posts (RFC 6749), which web frameworks' CSRF checks
+    // (SvelteKit's among them) refuse without a same-origin Origin header. Browsers
+    // are what that check guards against; a CLI saying where it's posting is harmless.
+    const origin = new URL(this.base).origin;
+    this.oauth[oidc.customFetch] = (url, options) => {
+      const headers = new Headers(options.headers);
+      headers.set('origin', origin);
+      return this.fetchImpl(url, { ...(options as RequestInit), headers });
+    };
+    // Local development servers (`harness login --server http://localhost:…`).
+    if (this.base.startsWith('http://')) oidc.allowInsecureRequests(this.oauth);
   }
 
   private async post(path: string, body: unknown, token?: string): Promise<Response> {
@@ -95,33 +157,44 @@ export class OrgClient {
     }
   }
 
-  async startDeviceLogin(): Promise<DeviceCode> {
-    const res = await this.post('/v1/device/code', { client: 'harness' });
-    if (!res.ok) throw new OrgServerError(`sign-in is not available (HTTP ${res.status})`);
-    return DeviceCode.parse(await res.json());
+  async startDeviceLogin(): Promise<DeviceLogin> {
+    try {
+      const response = await oidc.initiateDeviceAuthorization(this.oauth, {});
+      return {
+        userCode: response.user_code,
+        verificationUri: response.verification_uri,
+        ...(response.verification_uri_complete
+          ? { verificationUriComplete: response.verification_uri_complete }
+          : {}),
+        expiresIn: response.expires_in,
+        response,
+      };
+    } catch (err) {
+      mapError(err, this.base);
+    }
   }
 
-  /** One poll. Returns the token, or 'pending' / 'slow_down' to keep waiting. */
-  async pollDeviceToken(deviceCode: string): Promise<TokenResponse | 'pending' | 'slow_down'> {
-    const res = await this.post('/v1/device/token', { device_code: deviceCode });
-    if (res.ok) return TokenResponse.parse(await res.json());
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (body.error === 'authorization_pending') return 'pending';
-    if (body.error === 'slow_down') return 'slow_down';
-    if (body.error === 'access_denied') throw new OrgAuthError('sign-in was denied');
-    if (body.error === 'expired_token')
-      throw new OrgAuthError('the sign-in code expired; run `harness login` again');
-    throw new OrgServerError(
-      `sign-in failed (HTTP ${res.status}${body.error ? `: ${body.error}` : ''})`,
-    );
+  /** Poll until the person approves or denies, or the code expires. */
+  async waitForDeviceToken(login: DeviceLogin, signal?: AbortSignal): Promise<TokenResponse> {
+    try {
+      const tokens = await oidc.pollDeviceAuthorizationGrant(
+        this.oauth,
+        login.response,
+        undefined,
+        signal ? { signal } : undefined,
+      );
+      return TokenResponse.parse(tokens);
+    } catch (err) {
+      mapError(err, this.base);
+    }
   }
 
   async refresh(refreshToken: string): Promise<TokenResponse> {
-    const res = await this.post('/v1/token/refresh', { refresh_token: refreshToken });
-    if (res.status === 400 || res.status === 401)
-      throw new OrgAuthError('session expired; run `harness login`');
-    if (!res.ok) throw new OrgServerError(`token refresh failed (HTTP ${res.status})`);
-    return TokenResponse.parse(await res.json());
+    try {
+      return TokenResponse.parse(await oidc.refreshTokenGrant(this.oauth, refreshToken));
+    } catch (err) {
+      mapError(err, this.base);
+    }
   }
 
   /** Fetch the policy, or learn that the cached one (by ETag) is current. */

@@ -10,6 +10,11 @@ let { data } = $props();
     As a Harness manager you can see <a href="/admin">every site</a> and assign its operators.
   </p>
 {/if}
+{#each data.invitations as i (i.id)}
+  <p class="card mb-3">
+    You're invited to <b>{i.site}</b>. <a href="/invite/{i.id}">Accept the invitation</a>
+  </p>
+{/each}
 {#if data.sites.length}
   <div class="card overflow-x-auto p-0">
     <table class="table">

@@ -18,7 +18,7 @@ let { data, form } = $props();
       {#each data.devices as d (d.id)}
         <tr>
           <td>{d.email}</td>
-          <td>{d.client ?? 'harness'}</td>
+          <td class="max-w-64 truncate" title={d.client ?? ''}>{d.client ?? 'harness'}</td>
           <td class="muted">{new Date(d.createdAt).toLocaleDateString()}</td>
           <td class="muted">{d.lastSeen ? new Date(d.lastSeen).toLocaleString() : '—'}</td>
           <td class="text-right">

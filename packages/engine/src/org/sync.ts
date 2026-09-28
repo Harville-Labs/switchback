@@ -34,7 +34,7 @@ async function freshAuth(
   now: number,
 ): Promise<OrgAuth> {
   if (!auth.expiresAt || auth.expiresAt - now > 60_000 || !auth.refreshToken) return auth;
-  const next = toAuth(auth.server, await client.refresh(auth.refreshToken), now);
+  const next = toAuth(auth.server, await client.refresh(auth.refreshToken), auth.org, now);
   if (!env.HARNESS_ORG_TOKEN) writeAuth(next, env);
   return next;
 }

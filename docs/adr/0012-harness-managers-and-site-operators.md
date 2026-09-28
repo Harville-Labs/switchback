@@ -1,6 +1,6 @@
 # 0012: Harness managers and site operators
 
-**Status:** Accepted · 2026-09-28 · Amends [0010](0010-hosted-sites.md)
+**Status:** Accepted · 2026-09-28 · Amends [0010](0010-hosted-sites.md) · Storage of roles amended by [0013](0013-site-auth-with-better-auth.md)
 
 ## Context
 

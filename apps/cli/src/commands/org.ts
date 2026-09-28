@@ -93,25 +93,16 @@ export async function login(flags: LoginFlags): Promise<number> {
       });
     } else {
       const code = await client.startDeviceLogin();
-      const url = code.verification_uri_complete ?? code.verification_uri;
+      const url = code.verificationUriComplete ?? code.verificationUri;
       console.log(
-        `${bold('Sign in to your organization')}\n  Open ${url}\n  and confirm the code ${bold(code.user_code)}\n`,
+        `${bold('Sign in to your organization')}\n  Open ${url}\n  and confirm the code ${bold(code.userCode)}\n`,
       );
       openBrowser(url);
-      let interval = code.interval;
-      const deadline = Date.now() + code.expires_in * 1000;
-      let token: Awaited<ReturnType<OrgClient['pollDeviceToken']>> = 'pending';
-      while (token === 'pending' || token === 'slow_down') {
-        if (Date.now() > deadline)
-          throw new OrgAuthError('the sign-in code expired; run `harness login` again');
-        await Bun.sleep(interval * 1000);
-        token = await client.pollDeviceToken(code.device_code);
-        if (token === 'slow_down') interval += 5;
-      }
-      auth = toAuth(server, token);
-      const res = await client.fetchPolicy(auth.accessToken);
+      const token = await client.waitForDeviceToken(code);
+      const res = await client.fetchPolicy(token.access_token);
       if (res.status !== 'updated') throw new OrgServerError('server returned no policy');
       policy = res.policy;
+      auth = toAuth(server, token, policy.org);
       writeCachedPolicy({
         server,
         fetchedAt: new Date().toISOString(),

@@ -1,16 +1,29 @@
-import { afterEach, beforeEach, describe as bunDescribe, expect, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe as bunDescribe,
+  expect,
+  test,
+} from 'bun:test';
 import { OrgAuthError, OrgClient } from '@harness/engine';
+import { eq } from 'drizzle-orm';
+import { OAuth2Server } from 'oauth2-mock-server';
 import postgres from 'postgres';
 import * as api from './api.ts';
+import { createAuth, siteProviderId } from './auth.ts';
 import type { SiteApp } from './context.ts';
 import { type Database, openDatabase } from './db.ts';
 import { MemoryMailer } from './email.ts';
 import * as m from './model.ts';
+import * as t from './schema.ts';
 
 /**
  * These run against a real Postgres: `bun run db:up`, then `bun run test` in
  * apps/site (CI provides one). Without TEST_DATABASE_URL they're skipped.
  * The database is wiped before every test, so never point this at real data.
+ * Single sign-on runs against a real OIDC provider (oauth2-mock-server).
  */
 const TEST_DB = process.env.TEST_DATABASE_URL;
 if (!TEST_DB)
@@ -28,116 +41,122 @@ async function resetDatabase(url: string) {
 const BASE = 'https://harness.test';
 let database: Database;
 let app: SiteApp;
-let clock: number;
-let ops: m.User;
+let mailer: MemoryMailer;
+let ops: m.Actor;
+let idp: OAuth2Server;
+/** Who the test identity provider vouches for, in its ID tokens and userinfo. */
+let idpClaims: Record<string, unknown> = {};
+
+beforeAll(async () => {
+  if (!TEST_DB) return;
+  idp = new OAuth2Server();
+  await idp.issuer.keys.generate('RS256');
+  await idp.start(0, 'localhost');
+  idp.service.on('beforeTokenSigning', (token) => Object.assign(token.payload, idpClaims));
+  idp.service.on('beforeUserinfo', (res) => {
+    res.body = idpClaims;
+  });
+});
+afterAll(() => idp?.stop());
 
 beforeEach(async () => {
   if (!TEST_DB) return;
   await resetDatabase(TEST_DB);
   database = await openDatabase(TEST_DB);
-  clock = Date.parse('2026-09-28T12:00:00Z');
-  app = {
-    ctx: { db: database.db, now: () => new Date(clock) },
-    mailer: new MemoryMailer(),
+  mailer = new MemoryMailer();
+  const auth = createAuth({
+    db: database.db,
     publicUrl: BASE,
+    secret: 'test-secret-that-is-long-enough-000000',
+    mailer,
+    // The test identity provider runs on localhost, which Better Auth only fetches when trusted.
+    trustedOrigins: [idp.issuer.url as string],
+    staffSso: {
+      issuer: idp.issuer.url as string,
+      clientId: 'harville-labs',
+      clientSecret: 'staff-secret',
+      domain: 'harville.ai',
+    },
+    devicePollSeconds: 1,
+  });
+  app = {
+    ctx: { db: database.db, auth, now: () => new Date() },
+    mailer,
+    publicUrl: BASE,
+    staffSso: true,
   };
-  ops = await m.ensureUser(app.ctx, 'ops@harville.ai', true);
+  await m.ensureUser(app.ctx, 'ops@harville.ai', true);
+  ops = await signIn('ops@harville.ai');
 });
 afterEach(() => database?.close());
 
-/** The client protocol routes, as `fetch` sees them. */
-const clientFetch = (async (input: string | URL | Request, init?: RequestInit) => {
-  const req = new Request(input, init);
-  const path = new URL(req.url).pathname;
-  if (path === '/api/telemetry/v1') return api.anonymousTelemetry(app, req);
-  const match = /^\/s\/([^/]+)\/v1\/(.+)$/.exec(path);
-  const routes: Record<string, ReturnType<typeof api.forSite>> = {
-    'device/code': api.deviceCode,
-    'device/token': api.deviceToken,
-    'token/refresh': api.tokenRefresh,
-    policy: api.policy,
-    usage: api.usage,
-    telemetry: api.siteTelemetry,
-  };
-  const handler = match && routes[match[2] as string];
-  return handler
-    ? handler(app, match?.[1] as string, req)
-    : new Response('not found', { status: 404 });
-}) as typeof fetch;
+/** Sign in with an emailed link, as the person who received it. */
+async function signIn(email: string): Promise<m.Actor> {
+  const r = await m.startSignIn(app.ctx, new Headers(), { email, next: '/', link: true });
+  expect(r).toEqual({ sent: email });
+  const link = new URL(/https:\S+/.exec(mailer.sent.at(-1)?.text ?? '')?.[0] ?? '');
+  const verified = (await app.ctx.auth.api.magicLinkVerify({
+    query: { token: link.searchParams.get('token') ?? '' },
+    headers: new Headers(),
+  })) as { token: string };
+  return (await m.actorFor(
+    app.ctx,
+    new Headers({ authorization: `Bearer ${verified.token}` }),
+  )) as m.Actor;
+}
 
 async function acme(seats = 3) {
-  const site = await m.createSite(app.ctx, ops, {
+  const site = await m.createSite(app.ctx, ops.user, {
     slug: 'acme',
     name: 'Acme Corp',
     seats,
     operatorEmail: 'operator@acme.com',
   });
-  const operator = await signIn('operator@acme.com');
-  return { site, operator, operatorM: await m.membership(app.ctx, site, operator) };
+  return { site, operator: await signIn('operator@acme.com') };
 }
 
-async function signIn(email: string) {
-  const token = await m.createLoginLink(app.ctx, email);
-  return (await m.redeemLoginLink(app.ctx, token)).user;
+/** Invite someone, and have them sign in and accept. */
+async function member(site: m.Site, by: m.Actor, email: string, role: m.Role = 'member') {
+  await m.invite(app.ctx, site, by, email, role);
+  const actor = await signIn(email);
+  const [inv] = await m.invitationsFor(app.ctx, actor.user);
+  await m.acceptInvitation(app.ctx, actor, inv?.id as string);
+  return actor;
 }
 
-async function member(site: m.Site, operator: m.User, email: string, role: m.Role = 'member') {
-  await m.invite(app.ctx, site, operator, await m.membership(app.ctx, site, operator), email, role);
-  const user = await signIn(email);
-  return { user, m: await m.membership(app.ctx, site, user) };
-}
+const members = async (site: m.Site) =>
+  (await m.listMembers(app.ctx, site)).map((r) => [r.email, r.role, r.status]);
 
-describe('sign-in links and sessions', () => {
-  test('a link works once, then gives a session; invitations become active', async () => {
+describe('sign-in', () => {
+  test('a link works once and signs in only people who have an account', async () => {
+    await m.startSignIn(app.ctx, new Headers(), { email: 'nobody@else.com', next: '/' });
+    expect(mailer.sent).toHaveLength(1); // only ops@'s from setup
     const { site } = await acme();
-    const token = await m.createLoginLink(app.ctx, 'operator@acme.com', '/s/acme/');
-    const r = await m.redeemLoginLink(app.ctx, token);
-    expect(r.next).toBe('/s/acme/');
-    expect((await m.sessionUser(app.ctx, r.session))?.email).toBe('operator@acme.com');
-    await expect(m.redeemLoginLink(app.ctx, token)).rejects.toThrow('already used');
-    expect((await m.membership(app.ctx, site, r.user))?.status).toBe('active');
-    await m.endSession(app.ctx, r.session);
-    expect(await m.sessionUser(app.ctx, r.session)).toBeUndefined();
-  });
-
-  test('links expire after 15 minutes; sessions after two weeks', async () => {
-    const token = await m.createLoginLink(app.ctx, 'ops@harville.ai');
-    clock += m.LINK_TTL_MS + 1;
-    await expect(m.redeemLoginLink(app.ctx, token)).rejects.toThrow('expired');
-    const { session } = await m.redeemLoginLink(
-      app.ctx,
-      await m.createLoginLink(app.ctx, 'ops@harville.ai'),
-    );
-    clock += m.SESSION_TTL_MS + 1;
-    expect(await m.sessionUser(app.ctx, session)).toBeUndefined();
+    await m.startSignIn(app.ctx, new Headers(), { email: 'operator@acme.com', next: '/s/acme' });
+    const link = new URL(/https:\S+/.exec(mailer.sent.at(-1)?.text ?? '')?.[0] ?? '');
+    expect(link.pathname).toBe('/api/auth/magic-link/verify');
+    const token = link.searchParams.get('token') ?? '';
+    await app.ctx.auth.api.magicLinkVerify({ query: { token }, headers: new Headers() });
+    await expect(
+      app.ctx.auth.api.magicLinkVerify({ query: { token }, headers: new Headers() }),
+    ).rejects.toThrow();
+    const actor = await signIn('operator@acme.com');
+    expect(actor.session).toMatchObject({ siteId: null, via: 'magic-link' });
+    expect(m.sessionProblem(site, actor)).toBeUndefined();
+    await m.signOut(app.ctx, actor.headers);
+    expect(await m.actorFor(app.ctx, actor.headers)).toBeUndefined();
   });
 });
 
 describe('sites, seats, and roles', () => {
   test('only Harness managers create sites; IDs are validated and unique', async () => {
     const { operator } = await acme();
-    await expect(
-      m.createSite(app.ctx, operator, {
-        slug: 'x-co',
-        name: 'X',
-        seats: 1,
-        operatorEmail: 'a@x.co',
-      }),
-    ).rejects.toThrow('Only Harness managers');
-    await expect(
-      m.createSite(app.ctx, ops, {
-        slug: 'Bad Slug',
-        name: 'X',
-        seats: 1,
-        operatorEmail: 'a@x.co',
-      }),
-    ).rejects.toThrow('site ID');
-    await expect(
-      m.createSite(app.ctx, ops, { slug: 'acme', name: 'X', seats: 1, operatorEmail: 'a@x.co' }),
-    ).rejects.toThrow('already exists');
-    await expect(
-      m.createSite(app.ctx, ops, { slug: 'y-co', name: 'Y', seats: 1, operatorEmail: 'nope' }),
-    ).rejects.toThrow('valid email');
+    const create = (by: m.User, slug: string, operatorEmail = 'a@x.co') =>
+      m.createSite(app.ctx, by, { slug, name: 'X', seats: 1, operatorEmail });
+    await expect(create(operator.user, 'x-co')).rejects.toThrow('Only Harness managers');
+    await expect(create(ops.user, 'Bad Slug')).rejects.toThrow('site ID');
+    await expect(create(ops.user, 'acme')).rejects.toThrow('already exists');
+    await expect(create(ops.user, 'y-co', 'nope')).rejects.toThrow('valid email');
     expect((await m.listSites(app.ctx))[0]).toMatchObject({
       slug: 'acme',
       used: 1,
@@ -145,67 +164,80 @@ describe('sites, seats, and roles', () => {
     });
   });
 
-  test('invitations take seats and the limit holds', async () => {
-    const { site, operator, operatorM } = await acme(2);
-    await m.invite(app.ctx, site, operator, operatorM, 'dev@acme.com', 'member');
-    await expect(
-      m.invite(app.ctx, site, operator, operatorM, 'more@acme.com', 'member'),
-    ).rejects.toThrow('All 2 seats are taken');
-    await expect(
-      m.invite(app.ctx, site, operator, operatorM, 'dev@acme.com', 'member'),
-    ).rejects.toThrow('already a member');
-    await expect(
-      m.invite(app.ctx, site, operator, operatorM, 'not an email', 'member'),
-    ).rejects.toThrow("isn't an email");
+  test('invitations hold seats until accepted or canceled', async () => {
+    const { site, operator } = await acme(3);
+    await m.invite(app.ctx, site, operator, 'dev@acme.com', 'member');
+    await m.invite(app.ctx, site, operator, 'qa@acme.com', 'member');
+    await expect(m.invite(app.ctx, site, operator, 'more@acme.com', 'member')).rejects.toThrow(
+      'All 3 seats are taken',
+    );
+    await expect(m.invite(app.ctx, site, operator, 'not an email', 'member')).rejects.toThrow(
+      "isn't an email",
+    );
+    expect(mailer.sent.at(-1)).toMatchObject({ to: 'qa@acme.com' });
+    expect(mailer.sent.at(-1)?.text).toContain(`${BASE}/invite/`);
+
+    const qa = (await m.listMembers(app.ctx, site)).find((r) => r.email === 'qa@acme.com');
+    await m.cancelInvitation(app.ctx, site, operator, qa?.id as string);
+    await m.invite(app.ctx, site, operator, 'more@acme.com', 'member');
+
+    // Accepting takes the invited address; anyone else is refused.
+    const stranger = await signIn('more@acme.com');
+    const devInvite = (await m.listMembers(app.ctx, site)).find((r) => r.email === 'dev@acme.com');
+    await expect(m.acceptInvitation(app.ctx, stranger, devInvite?.id as string)).rejects.toThrow();
+    const dev = await signIn('dev@acme.com');
+    expect((await m.acceptInvitation(app.ctx, dev, devInvite?.id as string)).slug).toBe('acme');
+    expect(await members(site)).toEqual([
+      ['dev@acme.com', 'member', 'active'],
+      ['more@acme.com', 'member', 'invited'],
+      ['operator@acme.com', 'operator', 'active'],
+    ]);
   });
 
   test('only Harness managers assign or remove operators; a site keeps one', async () => {
-    const { site, operator, operatorM } = await acme(5);
+    const { site, operator } = await acme(5);
     const dev = await member(site, operator, 'dev@acme.com');
     const lead = await member(site, operator, 'lead@acme.com', 'admin');
-    await expect(m.invite(app.ctx, site, dev.user, dev.m, 'x@acme.com', 'member')).rejects.toThrow(
+    const devUser = dev.user;
+    await expect(m.invite(app.ctx, site, dev, 'x@acme.com', 'member')).rejects.toThrow(
       'Only operators and admins',
     );
     // Not even an operator can make or unmake operators.
-    for (const [who, wm] of [
-      [lead.user, lead.m],
-      [operator, operatorM],
-    ] as const) {
-      await expect(m.invite(app.ctx, site, who, wm, 'x@acme.com', 'operator')).rejects.toThrow(
+    for (const who of [lead, operator]) {
+      await expect(m.invite(app.ctx, site, who, 'x@acme.com', 'operator')).rejects.toThrow(
         'Only a Harness manager',
       );
-      await expect(m.changeRole(app.ctx, site, who, wm, dev.user, 'operator')).rejects.toThrow(
+      await expect(m.changeRole(app.ctx, site, who, devUser, 'operator')).rejects.toThrow(
         'Only a Harness manager',
       );
     }
-    await expect(m.removeMember(app.ctx, site, lead.user, lead.m, operator)).rejects.toThrow(
+    await expect(m.removeMember(app.ctx, site, lead, operator.user)).rejects.toThrow(
       'Only a Harness manager',
     );
-    await expect(
-      m.changeRole(app.ctx, site, operator, operatorM, operator, 'admin'),
-    ).rejects.toThrow('Only a Harness manager');
-    // Operators still run everything else.
-    await m.changeRole(app.ctx, site, operator, operatorM, dev.user, 'admin');
-    await m.changeRole(app.ctx, site, operator, operatorM, dev.user, 'member');
+    await expect(m.changeRole(app.ctx, site, operator, operator.user, 'admin')).rejects.toThrow(
+      'Only a Harness manager',
+    );
+    // Operators and admins run everything else, through Better Auth's own checks.
+    await m.changeRole(app.ctx, site, operator, devUser, 'admin');
+    await m.changeRole(app.ctx, site, lead, devUser, 'member');
 
-    await expect(m.changeRole(app.ctx, site, ops, undefined, operator, 'admin')).rejects.toThrow(
+    await expect(m.changeRole(app.ctx, site, ops, operator.user, 'admin')).rejects.toThrow(
       'at least one operator',
     );
-    await expect(m.removeMember(app.ctx, site, ops, undefined, operator)).rejects.toThrow(
+    await expect(m.removeMember(app.ctx, site, ops, operator.user)).rejects.toThrow(
       'at least one operator',
     );
-    // A manager promotes a member in place, or invites someone new into a seat.
+    // A manager promotes a member in place, or adds someone new into a seat.
     await m.assignOperator(app.ctx, site, ops, 'lead@acme.com');
     await m.assignOperator(app.ctx, site, ops, 'new@acme.com');
-    await m.changeRole(app.ctx, site, ops, undefined, operator, 'admin');
+    await m.changeRole(app.ctx, site, ops, operator.user, 'admin');
     await expect(m.assignOperator(app.ctx, site, operator, 'dev@acme.com')).rejects.toThrow(
       'Only Harness managers',
     );
-    const rows = await m.listMembers(app.ctx, site);
-    expect(rows.map((r) => [r.user.email, r.role, r.status])).toEqual([
+    expect(await members(site)).toEqual([
       ['dev@acme.com', 'member', 'active'],
       ['lead@acme.com', 'operator', 'active'],
-      ['new@acme.com', 'operator', 'invited'],
+      ['new@acme.com', 'operator', 'active'],
       ['operator@acme.com', 'admin', 'active'],
     ]);
     expect((await m.auditLog(app.ctx, site)).map((a) => a.action)).toContain('member.role');
@@ -213,10 +245,10 @@ describe('sites, seats, and roles', () => {
 
   test('Harness managers see every site without taking a seat', async () => {
     const { site } = await acme(1);
-    const viewer = await signIn('ops@harville.ai');
-    expect(viewer.harnessManager).toBe(true);
-    expect(await m.membership(app.ctx, site, viewer)).toBeUndefined();
-    expect(m.canManage(undefined, viewer)).toBe(true);
+    expect(await m.membership(app.ctx, site, ops.user)).toBeUndefined();
+    expect(m.canManage(undefined, ops.user)).toBe(true);
+    expect(m.sessionProblem(site, ops)).toBeUndefined();
+    expect(m.managerSessionProblem(app.ctx, ops)).toBeUndefined();
     expect(await m.seatsUsed(app.ctx, site)).toBe(1);
   });
 
@@ -225,6 +257,7 @@ describe('sites, seats, and roles', () => {
     await expect(m.setHarnessManager(app.ctx, operator, 'operator@acme.com', true)).rejects.toThrow(
       'Only Harness managers',
     );
+    expect(m.managerSessionProblem(app.ctx, operator)).toContain('Only Harness managers');
     await m.setHarnessManager(app.ctx, ops, 'second@harville.ai', true);
     expect((await m.listHarnessManagers(app.ctx)).map((u) => u.email)).toEqual([
       'ops@harville.ai',
@@ -233,23 +266,25 @@ describe('sites, seats, and roles', () => {
     await expect(m.setHarnessManager(app.ctx, ops, 'ops@harville.ai', false)).rejects.toThrow(
       'your own',
     );
-    const second = (await m.userByEmail(app.ctx, 'second@harville.ai')) as m.User;
-    clock += 1000;
+    const second = await signIn('second@harville.ai');
     await m.setHarnessManager(app.ctx, second, 'ops@harville.ai', false);
     expect((await m.listHarnessManagers(app.ctx)).map((u) => u.email)).toEqual([
       'second@harville.ai',
     ]);
-    expect((await m.platformAuditLog(app.ctx)).map((a) => a.action)).toEqual([
-      'manager.removed',
+    // Revoking manager access ends the sessions that carried it.
+    expect(await m.actorFor(app.ctx, ops.headers)).toBeUndefined();
+    expect((await m.platformAuditLog(app.ctx)).map((a) => a.action).sort()).toEqual([
       'manager.added',
+      'manager.removed',
     ]);
   });
 });
 
 describe('policy', () => {
   test('validated versions; the client view adds the org and telemetry setting', async () => {
-    const { site, operator, operatorM } = await acme();
-    const bad = await m.savePolicy(app.ctx, site, operator, operatorM, {
+    const { site, operator } = await acme();
+    const opM = await m.membership(app.ctx, site, operator.user);
+    const bad = await m.savePolicy(app.ctx, site, operator.user, opM, {
       restrictions: { maxDailyUsd: -1 },
     });
     expect(bad).toMatchObject({ problems: [expect.stringContaining('restrictions.maxDailyUsd')] });
@@ -257,8 +292,8 @@ describe('policy', () => {
       await m.savePolicy(
         app.ctx,
         site,
-        operator,
-        operatorM,
+        operator.user,
+        opM,
         { restrictions: { maxDailyUsd: 5 } },
         'cap',
       ),
@@ -269,7 +304,7 @@ describe('policy', () => {
       version: '1.on',
       org: { id: 'acme', name: 'Acme Corp' },
     });
-    await m.setTelemetry(app.ctx, site, operator, operatorM, 'user');
+    await m.setTelemetry(app.ctx, site, operator.user, opM, 'user');
     const fresh = (await m.siteBySlug(app.ctx, 'acme')) as m.Site;
     expect((await m.clientPolicy(app.ctx, fresh)).enforced).toEqual({});
     expect((await m.policyHistory(app.ctx, site))[0]).toMatchObject({
@@ -280,28 +315,45 @@ describe('policy', () => {
   });
 });
 
+/** The client protocol routes, as `fetch` sees them. */
+const clientFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const req = new Request(input, init);
+  const path = new URL(req.url).pathname;
+  if (path === '/api/telemetry/v1') return api.anonymousTelemetry(app, req);
+  const match = /^\/s\/([^/]+)\/v1\/(.+)$/.exec(path);
+  const routes: Record<string, ReturnType<typeof api.forSite>> = {
+    'device/code': api.deviceCode,
+    token: api.deviceToken,
+    policy: api.policy,
+    usage: api.usage,
+    telemetry: api.siteTelemetry,
+  };
+  const handler = match && routes[match[2] as string];
+  return handler
+    ? handler(app, match?.[1] as string, req)
+    : new Response('not found', { status: 404 });
+}) as typeof fetch;
+
 describe('the Harness client protocol, end to end', () => {
-  /** `harness login --site acme` as `email`, approved in the browser. */
-  async function login(email: string) {
-    const site = (await m.siteBySlug(app.ctx, 'acme')) as m.Site;
-    const client = new OrgClient(`${BASE}/s/acme`, clientFetch);
+  /** `harness login --site <slug>`, approved in the browser by `who`. */
+  async function login(who: m.Actor, slug = 'acme') {
+    const site = (await m.siteBySlug(app.ctx, slug)) as m.Site;
+    const client = new OrgClient(`${BASE}/s/${slug}`, clientFetch);
     const code = await client.startDeviceLogin();
-    expect(code.verification_uri_complete).toBe(`${BASE}/s/acme/device?code=${code.user_code}`);
-    expect(await client.pollDeviceToken(code.device_code)).toBe('pending');
-    const user = (await m.userByEmail(app.ctx, email)) as m.User;
-    // People type codes however they like.
-    await m.decideDevice(app.ctx, site, user, code.user_code.toLowerCase().replace('-', ' '), true);
-    clock += 10_000;
-    const token = await client.pollDeviceToken(code.device_code);
-    if (typeof token === 'string') throw new Error(`still ${token}`);
-    return { client, token, site, user };
+    expect(code.verificationUriComplete).toBe(
+      `${BASE}/s/${slug}/device?user_code=${code.userCode}`,
+    );
+    await m.decideDevice(app.ctx, site, who, code.userCode, true);
+    const token = await client.waitForDeviceToken(code);
+    return { client, token, site };
   }
 
   test('sign-in, policy with ETag, usage that accumulates, telemetry per site', async () => {
-    const { site, operator, operatorM } = await acme();
-    await m.savePolicy(app.ctx, site, operator, operatorM, { restrictions: { maxDailyUsd: 5 } });
-    await member(site, operator, 'dev@acme.com');
-    const { client, token } = await login('dev@acme.com');
+    const { site, operator } = await acme();
+    const opM = await m.membership(app.ctx, site, operator.user);
+    await m.savePolicy(app.ctx, site, operator.user, opM, { restrictions: { maxDailyUsd: 5 } });
+    const dev = await member(site, operator, 'dev@acme.com');
+    const { client, token } = await login(dev);
     expect(token.org).toEqual({ id: 'acme', name: 'Acme Corp' });
     expect(token.user.email).toBe('dev@acme.com');
 
@@ -327,11 +379,10 @@ describe('the Harness client protocol, end to end', () => {
     expect(usage.totals).toEqual({ local: 0, remote: 4, costUsd: 1 });
     expect(usage.byMember[0]).toMatchObject({ email: 'dev@acme.com', calls: 4 });
 
-    const report = telemetryReport('install-1');
     const tel = await clientFetch(`${BASE}/s/acme/v1/telemetry`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token.access_token}` },
-      body: JSON.stringify({ reports: [report] }),
+      body: JSON.stringify({ reports: [telemetryReport('install-1')] }),
     });
     expect(tel.status).toBe(204);
     const anon = await clientFetch(`${BASE}/api/telemetry/v1`, {
@@ -350,82 +401,219 @@ describe('the Harness client protocol, end to end', () => {
     expect(summary.bySite.map((s) => s.site).sort()).toEqual(['(no site)', 'acme']);
   });
 
-  test('non-members can’t approve; fast polling slows down; codes expire', async () => {
-    await acme();
-    const site = (await m.siteBySlug(app.ctx, 'acme')) as m.Site;
-    const stranger = await m.ensureUser(app.ctx, 'stranger@evil.com');
+  test('a device token works only for its site, and never in the console', async () => {
+    const { site, operator } = await acme();
+    const dev = await member(site, operator, 'dev@acme.com');
+    await m.createSite(app.ctx, ops.user, {
+      slug: 'globex',
+      name: 'Globex',
+      seats: 2,
+      operatorEmail: 'operator@globex.com',
+    });
+    const globexOp = await signIn('operator@globex.com');
+    const globex = (await m.siteBySlug(app.ctx, 'globex')) as m.Site;
+    await m.invite(app.ctx, globex, globexOp, 'dev@acme.com', 'member');
+    const [inv] = await m.invitationsFor(app.ctx, dev.user);
+    await m.acceptInvitation(app.ctx, dev, inv?.id as string);
+
+    const { token } = await login(dev);
+    const policyAt = (slug: string) =>
+      clientFetch(`${BASE}/s/${slug}/v1/policy`, {
+        headers: { authorization: `Bearer ${token.access_token}` },
+      });
+    expect((await policyAt('acme')).status).toBe(200);
+    expect((await policyAt('globex')).status).toBe(401);
+    const device = (await m.actorFor(
+      app.ctx,
+      new Headers({ authorization: `Bearer ${token.access_token}` }),
+    )) as m.Actor;
+    expect(device.session).toMatchObject({ via: 'device', siteId: site.id });
+    expect(m.sessionProblem(site, device)).toContain('only work with the Harness client');
+
+    // A code shown on Acme's page can't be redeemed at Globex's token endpoint.
+    const acmeClient = new OrgClient(`${BASE}/s/acme`, clientFetch);
+    const code = await acmeClient.startDeviceLogin();
+    await m.decideDevice(app.ctx, site, dev, code.userCode, true);
+    const globexClient = new OrgClient(`${BASE}/s/globex`, clientFetch);
+    await expect(globexClient.waitForDeviceToken(code)).rejects.toThrow('different site');
+  });
+
+  test('non-members can’t approve; denied codes are refused', async () => {
+    const { site, operator } = await acme();
+    const dev = await member(site, operator, 'dev@acme.com');
+    await m.ensureUser(app.ctx, 'stranger@evil.com');
+    const stranger = await signIn('stranger@evil.com');
     const client = new OrgClient(`${BASE}/s/acme`, clientFetch);
     const code = await client.startDeviceLogin();
-    await expect(m.decideDevice(app.ctx, site, stranger, code.user_code, true)).rejects.toThrow(
-      "isn't a member",
+    await expect(m.decideDevice(app.ctx, site, stranger, code.userCode, true)).rejects.toThrow(
+      "aren't a member",
     );
-    expect(await client.pollDeviceToken(code.device_code)).toBe('pending');
-    expect(await client.pollDeviceToken(code.device_code)).toBe('slow_down');
-    clock += 11 * 60_000;
-    await expect(client.pollDeviceToken(code.device_code)).rejects.toBeInstanceOf(OrgAuthError);
+    await m.decideDevice(app.ctx, site, dev, code.userCode, false);
+    await expect(client.waitForDeviceToken(code)).rejects.toThrow('denied');
   });
 
-  test('a denied code is refused; an approved one is exchanged only once', async () => {
+  test('removing a member signs out their devices; members sign out only their own', async () => {
     const { site, operator } = await acme();
-    await member(site, operator, 'dev@acme.com');
-    const client = new OrgClient(`${BASE}/s/acme`, clientFetch);
-    const denied = await client.startDeviceLogin();
-    const dev = (await m.userByEmail(app.ctx, 'dev@acme.com')) as m.User;
-    await m.decideDevice(app.ctx, site, dev, denied.user_code, false);
-    await expect(client.pollDeviceToken(denied.device_code)).rejects.toThrow('denied');
-    const { token } = await login('dev@acme.com');
-    expect(token.access_token).toMatch(/^hsa_/);
-  });
-
-  test('refresh rotates tokens; removing a member signs out their devices', async () => {
-    const { site, operator, operatorM } = await acme();
-    await member(site, operator, 'dev@acme.com');
-    const { client, token, user } = await login('dev@acme.com');
-    const next = await client.refresh(token.refresh_token as string);
-    await expect(client.refresh(token.refresh_token as string)).rejects.toBeInstanceOf(
-      OrgAuthError,
-    );
-    await expect(client.fetchPolicy(token.access_token)).rejects.toBeInstanceOf(OrgAuthError);
-    expect((await client.fetchPolicy(next.access_token)).status).toBe('updated');
-    await m.removeMember(app.ctx, site, operator, operatorM, user);
-    await expect(client.fetchPolicy(next.access_token)).rejects.toBeInstanceOf(OrgAuthError);
-    await expect(client.refresh(next.refresh_token as string)).rejects.toBeInstanceOf(OrgAuthError);
-  });
-
-  test('access tokens last an hour', async () => {
-    const { site, operator } = await acme();
-    await member(site, operator, 'dev@acme.com');
-    const { client, token } = await login('dev@acme.com');
-    clock += m.ACCESS_TTL_MS + 1;
-    await expect(client.fetchPolicy(token.access_token)).rejects.toBeInstanceOf(OrgAuthError);
-  });
-
-  test('members sign out only their own devices', async () => {
-    const { site, operator, operatorM } = await acme();
     const a = await member(site, operator, 'a@acme.com');
-    await member(site, operator, 'b@acme.com');
-    await login('a@acme.com');
-    await login('b@acme.com');
-    const all = await m.listDevices(app.ctx, site);
-    const bDevice = all.find((d) => d.email === 'b@acme.com');
-    await expect(m.revokeDevice(app.ctx, site, a.user, a.m, bDevice?.id as string)).rejects.toThrow(
-      'only sign out your own',
+    const b = await member(site, operator, 'b@acme.com');
+    const { client, token } = await login(a);
+    await login(b);
+    const aM = await m.membership(app.ctx, site, a.user);
+    const bDevice = (await m.listDevices(app.ctx, site)).find((d) => d.email === 'b@acme.com');
+    await expect(m.revokeDevice(app.ctx, site, a.user, aM, bDevice?.id as string)).rejects.toThrow(
+      'Only operators and admins',
     );
     expect((await m.listDevices(app.ctx, site, a.user)).map((d) => d.email)).toEqual([
       'a@acme.com',
     ]);
-    await m.revokeDevice(app.ctx, site, operator, operatorM, bDevice?.id as string);
+    const opM = await m.membership(app.ctx, site, operator.user);
+    await m.revokeDevice(app.ctx, site, operator.user, opM, bDevice?.id as string);
     expect(await m.listDevices(app.ctx, site)).toHaveLength(1);
+
+    await m.removeMember(app.ctx, site, operator, a.user);
+    await expect(client.fetchPolicy(token.access_token)).rejects.toBeInstanceOf(OrgAuthError);
+  });
+});
+
+describe('single sign-on', () => {
+  /** What the test identity provider says about the next person who signs in. */
+  function idpSays(email: string) {
+    idpClaims = { sub: `sub-${email}`, email, email_verified: true, name: email };
+  }
+
+  /** The browser's trip: Better Auth → identity provider → Better Auth's callback. */
+  async function ssoSignIn(body: Record<string, string>, email: string) {
+    idpSays(email);
+    const start = await app.ctx.auth.handler(
+      new Request(`${BASE}/api/auth/sign-in/sso`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: BASE },
+        body: JSON.stringify({ callbackURL: '/done', errorCallbackURL: '/failed', ...body }),
+      }),
+    );
+    const { url } = (await start.json()) as { url: string };
+    const cookie = start.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const atIdp = await fetch(url, { redirect: 'manual' });
+    const callback = atIdp.headers.get('location') as string;
+    const done = await app.ctx.auth.handler(new Request(callback, { headers: { cookie } }));
+    const session = done.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const actor = await m.actorFor(app.ctx, new Headers({ cookie: session }));
+    return { location: done.headers.get('location') ?? '', actor };
+  }
+
+  /** Acme's operator sets up SSO for acme.com; `verify` stands in for the DNS check. */
+  async function acmeSso(verify = true) {
+    const { site, operator } = await acme(5);
+    const sso = await m.configureSso(app.ctx, site, operator, {
+      issuer: idp.issuer.url as string,
+      clientId: 'acme-client',
+      clientSecret: 'acme-secret',
+      domain: 'acme.com',
+    });
+    if (verify)
+      await database.db
+        .update(t.ssoProvider)
+        .set({ domainVerified: true })
+        .where(eq(t.ssoProvider.providerId, siteProviderId('acme')));
+    return { site, operator, sso };
+  }
+
+  test('a site’s provider signs its members in to that site only', async () => {
+    const { site, operator, sso } = await acmeSso(false);
+    expect(sso.verified).toBe(false);
+    expect(sso.record?.name).toBe('_harness-sso-site-acme.acme.com');
+    // Unverified: the DNS record isn't there, and sign-in stays on emailed links.
+    await expect(m.verifySsoDomain(app.ctx, site, operator)).rejects.toThrow();
+    expect(
+      await m.startSignIn(app.ctx, new Headers(), { email: 'operator@acme.com', next: '/' }),
+    ).toEqual({ sent: 'operator@acme.com' });
+    await database.db
+      .update(t.ssoProvider)
+      .set({ domainVerified: true })
+      .where(eq(t.ssoProvider.providerId, siteProviderId('acme')));
+    const start = await m.startSignIn(app.ctx, new Headers(), {
+      email: 'operator@acme.com',
+      next: '/',
+    });
+    expect('redirect' in start && start.redirect.startsWith(idp.issuer.url as string)).toBe(true);
+
+    await member(site, operator, 'dev@acme.com');
+    const { location, actor } = await ssoSignIn({ email: 'dev@acme.com' }, 'dev@acme.com');
+    expect(location).toBe('/done');
+    expect(actor?.user.email).toBe('dev@acme.com');
+    expect(actor?.session).toMatchObject({ via: 'sso:site-acme', siteId: site.id });
+    expect(m.sessionProblem(site, actor as m.Actor)).toBeUndefined();
+
+    // The same person on another site, or a manager through Acme's provider, gets nowhere else.
+    await m.createSite(app.ctx, ops.user, {
+      slug: 'globex',
+      name: 'Globex',
+      seats: 2,
+      operatorEmail: 'operator@globex.com',
+    });
+    const globex = (await m.siteBySlug(app.ctx, 'globex')) as m.Site;
+    expect(m.sessionProblem(globex, actor as m.Actor)).toContain("another site's single sign-on");
+    await m.assignOperator(app.ctx, site, ops, 'boss@acme.com');
+    await m.setHarnessManager(app.ctx, ops, 'boss@acme.com', true);
+    const boss = await ssoSignIn({ email: 'boss@acme.com' }, 'boss@acme.com');
+    expect(boss.actor?.user.harnessManager).toBe(true);
+    expect(m.managerSessionProblem(app.ctx, boss.actor as m.Actor)).toContain(
+      'only works for one site',
+    );
   });
 
-  test('unknown sites and forged tokens', async () => {
-    await expect(new OrgClient(`${BASE}/s/nope`, clientFetch).startDeviceLogin()).rejects.toThrow(
-      'HTTP 404',
+  test('it refuses people who aren’t members, and addresses outside the domain', async () => {
+    await acmeSso();
+    const outsider = await ssoSignIn({ email: 'eve@acme.com' }, 'eve@acme.com');
+    expect(outsider.actor).toBeUndefined();
+    expect(outsider.location).toStartWith('/failed');
+    // The provider claims someone from another domain.
+    const spoof = await ssoSignIn({ providerId: siteProviderId('acme') }, 'ops@harville.ai');
+    expect(spoof.actor).toBeUndefined();
+    expect(spoof.location).toStartWith('/failed');
+  });
+
+  test('a site can require it, once the operator has used it', async () => {
+    const { site, operator } = await acmeSso();
+    await expect(m.setSsoRequired(app.ctx, site, operator, true)).rejects.toThrow(
+      'Sign in with your single sign-on first',
     );
-    await acme();
+    const viaSso = (await ssoSignIn({ email: 'operator@acme.com' }, 'operator@acme.com'))
+      .actor as m.Actor;
+    await m.setSsoRequired(app.ctx, site, viaSso, true);
+    const fresh = (await m.siteBySlug(app.ctx, 'acme')) as m.Site;
+    expect(m.sessionProblem(fresh, operator)).toContain('requires its single sign-on');
+    expect(m.sessionProblem(fresh, viaSso)).toBeUndefined();
+    expect(m.sessionProblem(fresh, ops)).toBeUndefined(); // managers reach it through /admin
+    // Only the site's own operators and admins set it up.
     await expect(
-      new OrgClient(`${BASE}/s/acme`, clientFetch).fetchPolicy('hsa_forged'),
-    ).rejects.toBeInstanceOf(OrgAuthError);
+      m.configureSso(app.ctx, fresh, ops, {
+        issuer: idp.issuer.url as string,
+        clientId: 'x',
+        clientSecret: 'y',
+        domain: 'acme.com',
+      }),
+    ).rejects.toThrow("site's operators and admins");
+  });
+
+  test('Harville Labs’ provider signs in Harness managers only', async () => {
+    const staff = await ssoSignIn({ providerId: 'harville-labs' }, 'ops@harville.ai');
+    expect(staff.actor?.session).toMatchObject({ via: 'sso:harville-labs', siteId: null });
+    expect(
+      m.managerSessionProblem({ ...app.ctx, managerSsoRequired: true }, staff.actor as m.Actor),
+    ).toBeUndefined();
+    expect(m.managerSessionProblem({ ...app.ctx, managerSsoRequired: true }, ops)).toContain(
+      'Harville Labs single sign-on',
+    );
+    await m.ensureUser(app.ctx, 'intern@harville.ai');
+    const intern = await ssoSignIn({ providerId: 'harville-labs' }, 'intern@harville.ai');
+    expect(intern.actor).toBeUndefined();
   });
 });
 

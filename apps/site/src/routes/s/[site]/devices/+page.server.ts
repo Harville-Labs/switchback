@@ -9,7 +9,7 @@ export const load: PageServerLoad = async (event) => {
     devices: devices.map((d) => ({
       ...d,
       createdAt: d.createdAt.toISOString(),
-      lastSeen: d.lastSeen?.toISOString() ?? null,
+      lastSeen: d.lastSeenAt.toISOString(),
     })),
   };
 };

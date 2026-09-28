@@ -82,7 +82,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
 </form>
 <div class="card overflow-x-auto p-0">
   <table class="table">
-    <thead><tr><th>Site</th><th>ID</th><th>Operators</th><th>Seats</th><th></th></tr></thead>
+    <thead><tr><th>Site</th><th>ID</th><th>Operators</th><th>Seats</th><th>SSO</th><th></th></tr></thead>
     <tbody>
       {#each data.sites as s (s.id)}
         <tr>
@@ -92,10 +92,11 @@ const calls = $derived(t.calls.local + t.calls.remote);
             {#if s.operators.length}{s.operators.join(', ')}{:else}<span class="muted">None</span>{/if}
           </td>
           <td>{s.used} / {s.seats}</td>
+          <td>{s.sso ? (s.ssoRequired ? 'required' : 'on') : '—'}</td>
           <td class="text-right"><a class="btn quiet py-1 no-underline" href="/admin/{s.slug}">Manage</a></td>
         </tr>
       {:else}
-        <tr><td colspan="5" class="muted">No sites yet.</td></tr>
+        <tr><td colspan="6" class="muted">No sites yet.</td></tr>
       {/each}
     </tbody>
   </table>

@@ -25,7 +25,8 @@ export const load: PageServerLoad = async (event) => {
 
 /** Actions don't run the layout load, so each checks for a Harness manager itself. */
 async function manager(event: Parameters<Actions[string]>[0]) {
-  return { user: requireHarnessManager(event), app: await siteApp() };
+  const actor = await requireHarnessManager(event);
+  return { actor, user: actor.user, app: await siteApp() };
 }
 
 export const actions: Actions = {
@@ -50,10 +51,10 @@ export const actions: Actions = {
     });
   },
   addManager: async (event) => {
-    const { user, app } = await manager(event);
+    const { actor, user, app } = await manager(event);
     const email = String((await event.request.formData()).get('email') ?? '');
     return attempt(async () => {
-      const added = await setHarnessManager(app.ctx, user, email, true);
+      const added = await setHarnessManager(app.ctx, actor, email, true);
       await app.mailer.send({
         to: added.email,
         subject: "You're a Harness manager",
@@ -63,10 +64,10 @@ export const actions: Actions = {
     });
   },
   removeManager: async (event) => {
-    const { user, app } = await manager(event);
+    const { actor, app } = await manager(event);
     const email = String((await event.request.formData()).get('email') ?? '');
     return attempt(async () => {
-      const removed = await setHarnessManager(app.ctx, user, email, false);
+      const removed = await setHarnessManager(app.ctx, actor, email, false);
       return { notice: `${removed.email} is no longer a Harness manager.` };
     });
   },
