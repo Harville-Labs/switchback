@@ -1,0 +1,21 @@
+# Postgres for local development and tests (`bun run db:up`). Production uses
+# the cluster's CloudNativePG database; the site never stores data itself.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_PASSWORD: harness
+      POSTGRES_DB: harness_site
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - harness-site-postgres:/var/lib/postgresql
+      # A second database for tests, so running them never touches dev data.
+      - ./scripts/create-test-db.sql:/docker-entrypoint-initdb.d/create-test-db.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "harness", "-d", "harness_site"]
+      interval: 2s
+      retries: 30
+volumes:
+  harness-site-postgres:

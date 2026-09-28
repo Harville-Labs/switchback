@@ -13,4 +13,3 @@ apps/vscode/bin/
 apps/vscode/out/
 apps/site/.svelte-kit/
 apps/site/build/
-apps/site/.data/

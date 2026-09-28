@@ -13,4 +13,5 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0007](0007-organization-policy.md) | Organization policy from a config server | Accepted |
 | [0008](0008-append-only-compaction.md) | Append-only context compaction | Accepted |
 | [0009](0009-external-agent-runtimes.md) | External agent runtimes as subagents | Accepted |
-| [0010](0010-hosted-sites.md) | Hosted, site-based control plane | Accepted |
+| [0010](0010-hosted-sites.md) | Hosted, site-based control plane | Accepted (storage amended by 0011) |
+| [0011](0011-site-data-in-postgres-only.md) | Site data lives only in external Postgres | Accepted |

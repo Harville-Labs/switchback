@@ -1,10 +1,29 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe as bunDescribe, expect, test } from 'bun:test';
 import { OrgAuthError, OrgClient } from '@harness/engine';
+import postgres from 'postgres';
 import * as api from './api.ts';
 import type { SiteApp } from './context.ts';
 import { type Database, openDatabase } from './db.ts';
 import { MemoryMailer } from './email.ts';
 import * as m from './model.ts';
+
+/**
+ * These run against a real Postgres: `bun run db:up`, then `bun run test` in
+ * apps/site (CI provides one). Without TEST_DATABASE_URL they're skipped.
+ * The database is wiped before every test, so never point this at real data.
+ */
+const TEST_DB = process.env.TEST_DATABASE_URL;
+if (!TEST_DB)
+  console.warn('site tests skipped: set TEST_DATABASE_URL (see apps/site/package.json `test`)');
+const describe = TEST_DB ? bunDescribe : bunDescribe.skip;
+
+async function resetDatabase(url: string) {
+  const sql = postgres(url, { max: 1, onnotice: () => {} });
+  await sql.unsafe(
+    'drop schema if exists drizzle cascade; drop schema public cascade; create schema public;',
+  );
+  await sql.end();
+}
 
 const BASE = 'https://harness.test';
 let database: Database;
@@ -13,7 +32,9 @@ let clock: number;
 let ops: m.User;
 
 beforeEach(async () => {
-  database = await openDatabase('memory://');
+  if (!TEST_DB) return;
+  await resetDatabase(TEST_DB);
+  database = await openDatabase(TEST_DB);
   clock = Date.parse('2026-09-28T12:00:00Z');
   app = {
     ctx: { db: database.db, now: () => new Date(clock) },
@@ -22,7 +43,7 @@ beforeEach(async () => {
   };
   ops = await m.ensureUser(app.ctx, 'ops@harville.ai', true);
 });
-afterEach(() => database.close());
+afterEach(() => database?.close());
 
 /** The client protocol routes, as `fetch` sees them. */
 const clientFetch = (async (input: string | URL | Request, init?: RequestInit) => {

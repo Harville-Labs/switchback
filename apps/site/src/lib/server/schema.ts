@@ -1,7 +1,6 @@
 /**
- * The site's tables. Postgres in production (CloudNativePG); PGlite, which is
- * Postgres compiled to WebAssembly, in development and tests, so there's one
- * dialect everywhere. After changing this file, `bun run db:generate` writes
+ * The site's tables, in Postgres: CloudNativePG in production, a container
+ * locally (ADR 0011). After changing this file, `bun run db:generate` writes
  * the migration.
  */
 import {

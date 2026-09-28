@@ -43,18 +43,22 @@ The app is `apps/site`: SvelteKit (Svelte 5), Drizzle ORM on Postgres, and Tailw
 
 ```sh
 cd apps/site
+bun run db:up                                    # Postgres 18 in Docker, on localhost:5433
 OPERATOR_EMAILS=you@harville.ai bun run dev      # http://localhost:8788; sign-in links print to the console
+bun run test                                     # tests, against a separate test database
 ```
+
+The site keeps every piece of data in Postgres, never in local storage ([ADR 0011](adr/0011-site-data-in-postgres-only.md)). `bun run db:down` stops the container and keeps its data; `docker compose down -v` deletes it.
 
 | Variable | Default | |
 |---|---|---|
 | `ORIGIN` (or `PUBLIC_URL`) | `http://localhost:8788` | The URL people and clients use. Links, device URLs, and SvelteKit's cross-site form check depend on it |
-| `DATABASE_URL` | `./.data/pglite` | `postgres://…` in production |
+| `DATABASE_URL` | the `db:up` container | A `postgres://` URL. Required in production; the app won't start without it |
 | `OPERATOR_EMAILS` | none | Comma-separated; made operators at startup |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | none, 465, `api_token`, none | Outgoing mail. Production uses Cloudflare's SMTP service (`smtp.mx.cloudflare.net`); without a host and password, emails print to the log |
 | `EMAIL_FROM` | `Harness <harness@harville.ai>` | |
 
-Development uses PGlite, an embedded Postgres, in `apps/site/.data`, so no database server is needed. After changing `src/lib/server/schema.ts`, run `bun run db:generate` to write the migration; migrations apply at startup.
+After changing `src/lib/server/schema.ts`, run `bun run db:generate` to write the migration; migrations apply at startup.
 
 Point a Harness at a local site with `HARNESS_SITES_URL=http://localhost:8788 harness login --site acme`.
 

@@ -9,10 +9,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "db:generate": "drizzle-kit generate"
-  },
-  "dependencies": {
-    "@electric-sql/pglite": "^0.5.8"
+    "db:generate": "drizzle-kit generate",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:down": "docker compose down",
+    "test": "TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgres://harness:harness@localhost:5433/harness_site_test} bun test src"
   },
   "devDependencies": {
     "@harness/engine": "workspace:*",
