@@ -20,6 +20,7 @@ Usage
   switchback usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
   switchback telemetry [action]      status | on | off | preview (anonymous, off by default)
+  switchback self-update [version]   Update to the newest release (or the given one); --check only reports
   switchback login --site <id>       Sign in to your company's Switchback site (applies its policy)
   switchback logout | whoami         Sign out / show organization and policy
   switchback serve --stdio           Serve the engine protocol to one client over stdin/stdout
@@ -157,6 +158,7 @@ async function main(argv: string[]): Promise<number> {
       review: { type: 'boolean' },
       'no-review': { type: 'boolean' },
       version: { type: 'boolean', short: 'v', default: false },
+      check: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -305,6 +307,12 @@ async function main(argv: string[]): Promise<number> {
     case 'whoami': {
       const { whoami } = await import('./commands/org.ts');
       return whoami(common.cwd);
+    }
+    case 'self-update':
+    case 'selfupdate': {
+      if (rest.length > 1) throw new UsageError('self-update takes at most one version');
+      const { selfUpdate } = await import('./commands/self-update.ts');
+      return selfUpdate({ ...(rest[0] ? { version: rest[0] } : {}), check: values.check });
     }
     case 'telemetry': {
       const { telemetry } = await import('./commands/telemetry.ts');
