@@ -28,7 +28,7 @@ export interface LoginFlags {
 /** Where Harville Labs hosts sites; `HARNESS_SITES_URL` points elsewhere (staging, tests). */
 export function siteServer(site: string, env = process.env): string {
   const base = (env.HARNESS_SITES_URL ?? 'https://harness.harville.ai').replace(/\/+$/, '');
-  return `${base}/s/${encodeURIComponent(site)}`;
+  return `${base}/sites/${encodeURIComponent(site)}`;
 }
 
 function openBrowser(url: string) {

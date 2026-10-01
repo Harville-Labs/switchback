@@ -7,7 +7,7 @@ let { data, form } = $props();
 <svelte:head><title>Sign in Harness · {data.site.name}</title></svelte:head>
 
 <section class="mx-auto mt-6 max-w-lg">
-  <h1 class="mb-4 text-2xl font-semibold">Sign in Harness to {data.site.name}</h1>
+  <h1 class="mb-4 page-title">Sign in Harness to {data.site.name}</h1>
   <Flash error={form?.error ?? data.problem} />
   {#if form?.done === 'approved'}
     <p class="card">Done. Harness is signed in as {data.email}. You can close this tab.</p>

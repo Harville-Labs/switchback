@@ -14,7 +14,7 @@ const options = [
 <svelte:head><title>Settings · {data.site.name}</title></svelte:head>
 
 <Flash error={form?.error} notice={form?.notice} />
-<h2 class="mb-2 text-lg font-semibold">Usage statistics</h2>
+<h2 class="mb-2 section-title">Usage statistics</h2>
 <form method="POST" action="?/telemetry" use:enhance class="card flex flex-col gap-3">
   <p>
     Members' Harness can send anonymous daily statistics (counts, token totals, costs, and routing
@@ -33,7 +33,7 @@ const options = [
   <button class="btn self-start">Save</button>
 </form>
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">Single sign-on</h2>
+<h2 class="mt-8 mb-2 section-title">Single sign-on</h2>
 <div class="card flex flex-col gap-3">
   <p>
     Let members sign in through your company's identity provider (OIDC: Okta, Microsoft Entra ID,
@@ -95,5 +95,5 @@ const options = [
   {/if}
 </div>
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">Seats</h2>
+<h2 class="mt-8 mb-2 section-title">Seats</h2>
 <p class="card">{data.site.seats} seats. Contact Harville Labs to change your plan.</p>

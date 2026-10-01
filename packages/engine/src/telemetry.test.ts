@@ -234,11 +234,14 @@ describe('sending', () => {
       return new Response(null, { status: 204 });
     }) as unknown as typeof fetch;
     const r = await sendTelemetry(
-      { ...ctx(true), site: { server: 'https://harness.test/s/acme/', accessToken: 'hsa_x' } },
+      { ...ctx(true), site: { server: 'https://harness.test/sites/acme/', accessToken: 'hsa_x' } },
       spy,
     );
     expect(r.sent).toBe(2);
-    expect(seen).toEqual({ url: 'https://harness.test/s/acme/v1/telemetry', auth: 'Bearer hsa_x' });
+    expect(seen).toEqual({
+      url: 'https://harness.test/sites/acme/v1/telemetry',
+      auth: 'Bearer hsa_x',
+    });
   });
 
   test('a failure changes nothing, and off sends nothing', async () => {

@@ -21,7 +21,7 @@ export const actions: Actions = {
     const actor = requireActor(event);
     const app = await siteApp();
     const result = await attempt(() => acceptInvitation(app.ctx, actor, event.params.id));
-    if ('slug' in result) redirect(303, `/s/${result.slug}`);
+    if ('slug' in result) redirect(303, `/sites/${result.slug}`);
     return result;
   },
 };

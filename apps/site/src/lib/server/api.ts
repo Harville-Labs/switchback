@@ -1,6 +1,6 @@
 /**
  * The Harness client protocol (docs/organizations.md), served per site under
- * `/s/<site>/v1`, and anonymous telemetry at `/api/telemetry/v1`. Plain
+ * `/sites/<site>/v1`, and anonymous telemetry at `/api/telemetry/v1`. Plain
  * Request → Response functions: the `+server.ts` routes call them, and tests
  * call them directly. Sign-in is Better Auth's device authorization grant
  * (RFC 8628); clients then send the token it issues as a bearer token.

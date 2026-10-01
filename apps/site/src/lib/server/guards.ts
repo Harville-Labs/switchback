@@ -65,4 +65,4 @@ export async function attempt<T>(change: () => Promise<T>) {
 
 /** Only same-site paths, so a sign-in link can't send anyone elsewhere. */
 export const safeNext = (next: string | null | undefined) =>
-  next?.startsWith('/') && !next.startsWith('//') ? next : '/';
+  next?.startsWith('/') && !next.startsWith('//') ? next : '/sites';

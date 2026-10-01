@@ -9,7 +9,7 @@
 ## Decision
 
 - **One hosted, multi-tenant app** (`apps/site`), run by Harville Labs at `https://harness.harville.ai`. Customers don't self-host it.
-- **Sites.** Each customer company has a *site*, identified by a slug. A site's server URL is `https://harness.harville.ai/s/<slug>`, and it implements the ADR 0007 contract unchanged under that prefix, so existing clients work: `harness login --server https://harness.harville.ai/s/acme`, or the shorthand `harness login --site acme`.
+- **Sites.** Each customer company has a *site*, identified by a slug. A site's server URL is `https://harness.harville.ai/sites/<slug>`, and it implements the ADR 0007 contract unchanged under that prefix, so existing clients work: `harness login --server https://harness.harville.ai/sites/acme`, or the shorthand `harness login --site acme`.
 - **People.** A user is a global identity (an email address). A **membership** links a user to a site with a **role**:
   - `owner`: everything, including managing admins and other owners;
   - `admin`: members, policy, devices, and usage;

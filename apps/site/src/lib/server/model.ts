@@ -925,7 +925,7 @@ export async function startDeviceSignIn(
     ctx.auth.api.deviceCode({ body: { client_id: clientId ?? '', scope: siteScope(site) } }),
   );
   // People approve on the site's own page, which checks they're a member.
-  const uri = `${publicUrl}/s/${site.slug}/device`;
+  const uri = `${publicUrl}/sites/${site.slug}/device`;
   return {
     ...r,
     verification_uri: uri,

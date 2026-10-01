@@ -8,18 +8,18 @@ const calls = $derived(data.usage.totals.local + data.usage.totals.remote);
 <svelte:head><title>{data.site.name} · Harness</title></svelte:head>
 
 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-  <div class="card"><div class="label">Remote spend, 30 days</div><div class="text-2xl">{usd(data.usage.totals.costUsd)}</div></div>
+  <div class="card"><div class="label">Remote spend, 30 days</div><div class="stat">{usd(data.usage.totals.costUsd)}</div></div>
   <div class="card">
     <div class="label">Calls on local models</div>
-    <div class="text-2xl">{calls ? `${Math.round((data.usage.totals.local / calls) * 100)}%` : '—'}</div>
+    <div class="stat">{calls ? `${Math.round((data.usage.totals.local / calls) * 100)}%` : '—'}</div>
   </div>
-  <div class="card"><div class="label">Model calls</div><div class="text-2xl">{calls.toLocaleString('en-US')}</div></div>
+  <div class="card"><div class="label">Model calls</div><div class="stat">{calls.toLocaleString('en-US')}</div></div>
   {#if !data.own}
-    <div class="card"><div class="label">Seats</div><div class="text-2xl">{data.seats.used} / {data.seats.total}</div></div>
+    <div class="card"><div class="label">Seats</div><div class="stat">{data.seats.used} / {data.seats.total}</div></div>
   {/if}
 </div>
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">{data.own ? 'Your usage by model' : 'By model'}</h2>
+<h2 class="mt-8 mb-2 section-title">{data.own ? 'Your usage by model' : 'By model'}</h2>
 <div class="card overflow-x-auto p-0">
   <table class="table">
     <thead><tr><th>Model</th><th>Tier</th><th>Calls</th><th>Cost</th></tr></thead>
@@ -34,7 +34,7 @@ const calls = $derived(data.usage.totals.local + data.usage.totals.remote);
 </div>
 
 {#if !data.own}
-  <h2 class="mt-8 mb-2 text-lg font-semibold">By member</h2>
+  <h2 class="mt-8 mb-2 section-title">By member</h2>
   <div class="card overflow-x-auto p-0">
     <table class="table">
       <thead><tr><th>Member</th><th>Calls</th><th>Local</th><th>Cost</th></tr></thead>

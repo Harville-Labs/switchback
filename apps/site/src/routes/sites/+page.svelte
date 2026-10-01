@@ -1,10 +1,12 @@
 <script lang="ts">
+import CopyCommand from '$lib/components/CopyCommand.svelte';
+
 let { data } = $props();
 </script>
 
 <svelte:head><title>Your sites · Harness</title></svelte:head>
 
-<h1 class="mb-4 text-2xl font-semibold">Your sites</h1>
+<h1 class="mb-4 page-title">Your sites</h1>
 {#if data.user?.harnessManager}
   <p class="muted mb-4">
     As a Harness manager you can see <a href="/admin">every site</a> and assign its operators.
@@ -22,9 +24,9 @@ let { data } = $props();
       <tbody>
         {#each data.sites as s (s.slug)}
           <tr>
-            <td><a href="/s/{s.slug}" class="font-medium">{s.name}</a></td>
+            <td><a href="/sites/{s.slug}" class="font-medium">{s.name}</a></td>
             <td>{s.role}</td>
-            <td><code>harness login --site {s.slug}</code></td>
+            <td><CopyCommand command="harness login --site {s.slug}" quiet /></td>
           </tr>
         {/each}
       </tbody>

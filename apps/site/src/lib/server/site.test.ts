@@ -132,7 +132,10 @@ describe('sign-in', () => {
     await m.startSignIn(app.ctx, new Headers(), { email: 'nobody@else.com', next: '/' });
     expect(mailer.sent).toHaveLength(1); // only ops@'s from setup
     const { site } = await acme();
-    await m.startSignIn(app.ctx, new Headers(), { email: 'operator@acme.com', next: '/s/acme' });
+    await m.startSignIn(app.ctx, new Headers(), {
+      email: 'operator@acme.com',
+      next: '/sites/acme',
+    });
     const link = new URL(/https:\S+/.exec(mailer.sent.at(-1)?.text ?? '')?.[0] ?? '');
     expect(link.pathname).toBe('/api/auth/magic-link/verify');
     const token = link.searchParams.get('token') ?? '';
@@ -320,7 +323,7 @@ const clientFetch = (async (input: string | URL | Request, init?: RequestInit) =
   const req = new Request(input, init);
   const path = new URL(req.url).pathname;
   if (path === '/api/telemetry/v1') return api.anonymousTelemetry(app, req);
-  const match = /^\/s\/([^/]+)\/v1\/(.+)$/.exec(path);
+  const match = /^\/sites\/([^/]+)\/v1\/(.+)$/.exec(path);
   const routes: Record<string, ReturnType<typeof api.forSite>> = {
     'device/code': api.deviceCode,
     token: api.deviceToken,
@@ -338,10 +341,10 @@ describe('the Harness client protocol, end to end', () => {
   /** `harness login --site <slug>`, approved in the browser by `who`. */
   async function login(who: m.Actor, slug = 'acme') {
     const site = (await m.siteBySlug(app.ctx, slug)) as m.Site;
-    const client = new OrgClient(`${BASE}/s/${slug}`, clientFetch);
+    const client = new OrgClient(`${BASE}/sites/${slug}`, clientFetch);
     const code = await client.startDeviceLogin();
     expect(code.verificationUriComplete).toBe(
-      `${BASE}/s/${slug}/device?user_code=${code.userCode}`,
+      `${BASE}/sites/${slug}/device?user_code=${code.userCode}`,
     );
     await m.decideDevice(app.ctx, site, who, code.userCode, true);
     const token = await client.waitForDeviceToken(code);
@@ -379,7 +382,7 @@ describe('the Harness client protocol, end to end', () => {
     expect(usage.totals).toEqual({ local: 0, remote: 4, costUsd: 1 });
     expect(usage.byMember[0]).toMatchObject({ email: 'dev@acme.com', calls: 4 });
 
-    const tel = await clientFetch(`${BASE}/s/acme/v1/telemetry`, {
+    const tel = await clientFetch(`${BASE}/sites/acme/v1/telemetry`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token.access_token}` },
       body: JSON.stringify({ reports: [telemetryReport('install-1')] }),
@@ -418,7 +421,7 @@ describe('the Harness client protocol, end to end', () => {
 
     const { token } = await login(dev);
     const policyAt = (slug: string) =>
-      clientFetch(`${BASE}/s/${slug}/v1/policy`, {
+      clientFetch(`${BASE}/sites/${slug}/v1/policy`, {
         headers: { authorization: `Bearer ${token.access_token}` },
       });
     expect((await policyAt('acme')).status).toBe(200);
@@ -431,10 +434,10 @@ describe('the Harness client protocol, end to end', () => {
     expect(m.sessionProblem(site, device)).toContain('only work with the Harness client');
 
     // A code shown on Acme's page can't be redeemed at Globex's token endpoint.
-    const acmeClient = new OrgClient(`${BASE}/s/acme`, clientFetch);
+    const acmeClient = new OrgClient(`${BASE}/sites/acme`, clientFetch);
     const code = await acmeClient.startDeviceLogin();
     await m.decideDevice(app.ctx, site, dev, code.userCode, true);
-    const globexClient = new OrgClient(`${BASE}/s/globex`, clientFetch);
+    const globexClient = new OrgClient(`${BASE}/sites/globex`, clientFetch);
     await expect(globexClient.waitForDeviceToken(code)).rejects.toThrow('different site');
   });
 
@@ -443,7 +446,7 @@ describe('the Harness client protocol, end to end', () => {
     const dev = await member(site, operator, 'dev@acme.com');
     await m.ensureUser(app.ctx, 'stranger@evil.com');
     const stranger = await signIn('stranger@evil.com');
-    const client = new OrgClient(`${BASE}/s/acme`, clientFetch);
+    const client = new OrgClient(`${BASE}/sites/acme`, clientFetch);
     const code = await client.startDeviceLogin();
     await expect(m.decideDevice(app.ctx, site, stranger, code.userCode, true)).rejects.toThrow(
       "aren't a member",

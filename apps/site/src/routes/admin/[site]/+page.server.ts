@@ -60,7 +60,7 @@ export const actions: Actions = {
       await app.mailer.send({
         to: operator.email,
         subject: `You're an operator of ${site.name} on Harness`,
-        text: `Harville Labs made you an operator of ${site.name} on Harness: you manage its members, policy, and devices.\n\nSign in at ${app.publicUrl}/login?next=/s/${site.slug}\n`,
+        text: `Harville Labs made you an operator of ${site.name} on Harness: you manage its members, policy, and devices.\n\nSign in at ${app.publicUrl}/login?next=/sites/${site.slug}\n`,
       });
       return { notice: `${operator.email} is now an operator of ${site.name}.` };
     });

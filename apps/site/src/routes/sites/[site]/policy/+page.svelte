@@ -39,7 +39,7 @@ const problems = $derived(form && 'problems' in form ? form.problems : undefined
   </div>
 </form>
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">History</h2>
+<h2 class="mt-8 mb-2 section-title">History</h2>
 <div class="card overflow-x-auto p-0">
   <table class="table">
     <thead><tr><th>Version</th><th>When</th><th>By</th><th>Note</th><th></th></tr></thead>

@@ -45,7 +45,7 @@ export const actions: Actions = {
       await app.mailer.send({
         to,
         subject: `Your Harness site for ${site.name} is ready`,
-        text: `Harville Labs set up ${site.name} on Harness with ${site.seats} seats, and you're its operator.\n\nSign in at ${app.publicUrl}/login?next=/s/${site.slug} to invite your team and set your policy.\n`,
+        text: `Harville Labs set up ${site.name} on Harness with ${site.seats} seats, and you're its operator.\n\nSign in at ${app.publicUrl}/login?next=/sites/${site.slug} to invite your team and set your policy.\n`,
       });
       return { notice: `Created ${site.name} (${site.slug}) and emailed ${to}.` };
     });
