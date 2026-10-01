@@ -6,7 +6,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
-import { harnessPaths } from '../paths.ts';
+import { switchbackPaths } from '../paths.ts';
 import { OrgPolicy } from './policy.ts';
 
 type Env = Record<string, string | undefined>;
@@ -31,7 +31,7 @@ export const CachedPolicy = z.object({
 export type CachedPolicy = z.infer<typeof CachedPolicy>;
 
 export function orgPaths(env: Env = process.env) {
-  const hp = harnessPaths(env);
+  const hp = switchbackPaths(env);
   return { auth: join(hp.configDir, 'auth.json'), policy: join(hp.dataDir, 'org-policy.json') };
 }
 
@@ -55,15 +55,15 @@ function readJson(file: string): unknown {
 }
 
 /**
- * Credentials: HARNESS_ORG_SERVER + HARNESS_ORG_TOKEN (CI, managed installs)
- * win over the file written by `harness login`.
+ * Credentials: SWITCHBACK_ORG_SERVER + SWITCHBACK_ORG_TOKEN (CI, managed installs)
+ * win over the file written by `switchback login`.
  */
 export function readAuth(env: Env = process.env): OrgAuth | undefined {
-  if (env.HARNESS_ORG_SERVER && env.HARNESS_ORG_TOKEN) {
+  if (env.SWITCHBACK_ORG_SERVER && env.SWITCHBACK_ORG_TOKEN) {
     return {
-      server: env.HARNESS_ORG_SERVER,
-      accessToken: env.HARNESS_ORG_TOKEN,
-      org: { id: env.HARNESS_ORG_ID ?? 'env', name: env.HARNESS_ORG_ID ?? 'organization' },
+      server: env.SWITCHBACK_ORG_SERVER,
+      accessToken: env.SWITCHBACK_ORG_TOKEN,
+      org: { id: env.SWITCHBACK_ORG_ID ?? 'env', name: env.SWITCHBACK_ORG_ID ?? 'organization' },
       user: {},
     };
   }

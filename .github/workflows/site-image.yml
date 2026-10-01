@@ -36,8 +36,8 @@ jobs:
           file: apps/site/Dockerfile
           push: true
           tags: |
-            ghcr.io/harville-labs/harness-site:main
-            ghcr.io/harville-labs/harness-site:sha-${{ github.sha }}
+            ghcr.io/harville-labs/switchback-site:main
+            ghcr.io/harville-labs/switchback-site:sha-${{ github.sha }}
       # Flux deploys whatever tag the kustomization names; pin it to this build.
       - name: Update the GitOps image tag
         env:

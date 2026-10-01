@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent } from '@harness/protocol';
-import { ScriptedProvider } from '@harness/providers';
-import { HarnessConfig, loadConfig } from '../config.ts';
+import type { EngineEvent } from '@switchback/protocol';
+import { ScriptedProvider } from '@switchback/providers';
+import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
 import { OrgClient, toAuth } from './client.ts';
 import { startDevOrgServer } from './dev-server.ts';
@@ -15,12 +15,12 @@ import { OrgSync, refreshPolicy } from './sync.ts';
 let home: string;
 let env: Record<string, string>;
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), 'harness-org-'));
-  env = { HARNESS_HOME: home };
+  home = mkdtempSync(join(tmpdir(), 'switchback-org-'));
+  env = { SWITCHBACK_HOME: home };
 });
 afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-const base = HarnessConfig.parse({
+const base = SwitchbackConfig.parse({
   providers: {
     gpu: { type: 'openai-compatible', baseUrl: 'http://gpu:8000/v1', tier: 'local' },
     openai: { type: 'openai' },
@@ -62,7 +62,7 @@ describe('restrictions', () => {
   });
 
   test('org-only MCP servers', () => {
-    const withMcp = HarnessConfig.parse({
+    const withMcp = SwitchbackConfig.parse({
       ...base,
       mcpServers: { jira: { url: 'https://mcp.acme.internal/jira' }, mine: { command: 'x' } },
     });

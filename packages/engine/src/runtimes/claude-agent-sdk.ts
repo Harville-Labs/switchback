@@ -1,10 +1,10 @@
 /**
  * Claude Code as a subagent, through the Claude Agent SDK. Claude Code brings
- * its own tools; each call is put to the harness permission policy through
+ * its own tools; each call is put to the switchback permission policy through
  * `canUseTool`, and its cost is taken from the SDK's result.
  *
  * The SDK runs Claude Code's native executable, which isn't bundled with
- * Harness: the `claude` on PATH is used unless `executable` says otherwise.
+ * Switchback: the `claude` on PATH is used unless `executable` says otherwise.
  */
 import type { Options, Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentRuntime, RuntimeResult, RuntimeTask } from './runtime.ts';

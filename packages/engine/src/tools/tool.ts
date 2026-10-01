@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import type { ToolSpec } from '@harness/providers';
+import type { ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
 

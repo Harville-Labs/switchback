@@ -66,7 +66,7 @@ export async function createWorktree(
   });
   mkdirSync(baseDir, { recursive: true });
   const path = join(baseDir, id);
-  const branch = `harness/${id}`;
+  const branch = `switchback/${id}`;
   await serialized(repo, () => git(repo, ['worktree', 'add', '-b', branch, path, base]));
   // git prints `C:/Users/...` while the workspace may be spelled `C:\Users\RUNNER~1\...`;
   // compare canonical paths, and never let the root escape the worktree.
@@ -94,7 +94,7 @@ export async function finishWorktree(wt: Worktree, message: string): Promise<Wor
     // Use the user's identity when set; otherwise a neutral one, so the commit never fails.
     const named = await git(wt.path, ['config', 'user.email']).catch(() => '');
     await git(wt.path, [
-      ...(named ? [] : ['-c', 'user.name=Harness', '-c', 'user.email=harness@localhost']),
+      ...(named ? [] : ['-c', 'user.name=Switchback', '-c', 'user.email=switchback@localhost']),
       'commit',
       '--no-verify',
       '-m',

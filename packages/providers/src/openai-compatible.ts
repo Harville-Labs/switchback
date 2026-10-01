@@ -9,7 +9,7 @@
  * plus any other hosted OpenAI-compatible API (OpenRouter, Together, Groq,
  * Fireworks, ...) as `generic` with `tier: remote`.
  */
-import type { ModelRef, Part, StopReason, Tier, Usage } from '@harness/protocol';
+import type { ModelRef, Part, StopReason, Tier, Usage } from '@switchback/protocol';
 import OpenAI from 'openai';
 import { probeContextWindow } from './local-detect.ts';
 import {

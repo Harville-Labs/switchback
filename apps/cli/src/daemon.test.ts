@@ -1,5 +1,5 @@
 /**
- * End-to-end: two clients share one `harness serve --socket` daemon, backed by
+ * End-to-end: two clients share one `switchback serve --socket` daemon, backed by
  * a fake OpenAI-compatible local server (daemons never run in --mock mode).
  */
 import { afterAll, expect, test } from 'bun:test';
@@ -9,14 +9,14 @@ import { join } from 'node:path';
 import {
   connectDaemon,
   daemonPaths,
-  HarnessClient,
   readDaemonInfo,
+  SwitchbackClient,
   socketTransport,
-} from '@harness/client';
-import type { EngineEvent } from '@harness/protocol';
+} from '@switchback/client';
+import type { EngineEvent } from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
-const base = realpathSync(mkdtempSync(join(tmpdir(), 'harness-daemon-')));
+const base = realpathSync(mkdtempSync(join(tmpdir(), 'switchback-daemon-')));
 const home = join(base, 'home');
 const workspace = join(base, 'ws');
 mkdirSync(home, { recursive: true });
@@ -60,7 +60,7 @@ writeFileSync(
   }),
 );
 
-const env = { HARNESS_HOME: home, HARNESS_DAEMON_IDLE_MS: '1500' };
+const env = { SWITCHBACK_HOME: home, SWITCHBACK_DAEMON_IDLE_MS: '1500' };
 const main = join(import.meta.dir, 'main.ts');
 const options = (name: string) => ({
   workspaceRoot: workspace,
@@ -106,7 +106,7 @@ test('two clients share one daemon and see each other’s live turns', async () 
   expect(text.length).toBeGreaterThan(0);
 
   // A wrong token is refused.
-  const intruder = new HarnessClient(await socketTransport(info?.socket ?? ''));
+  const intruder = new SwitchbackClient(await socketTransport(info?.socket ?? ''));
   await expect(intruder.initialize({ name: 'x', version: '0' }, workspace, 'nope')).rejects.toThrow(
     'invalid daemon token',
   );

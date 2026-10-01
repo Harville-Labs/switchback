@@ -39,7 +39,7 @@ function fixture(): LedgerEntry[] {
 }
 
 function ledgerWith(entries: LedgerEntry[]) {
-  const dir = mkdtempSync(join(tmpdir(), 'harness-ledger-'));
+  const dir = mkdtempSync(join(tmpdir(), 'switchback-ledger-'));
   const file = join(dir, 'usage.jsonl');
   writeFileSync(file, entries.map((e) => JSON.stringify(e)).join('\n'));
   const ledger = new UsageLedger(file, {}, undefined, now);

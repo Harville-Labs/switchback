@@ -21,7 +21,8 @@ export const actions: Actions = {
     return attempt(async () => {
       await revokeDevice(app.ctx, site, user, membership, id);
       return {
-        notice: 'Signed out. That Harness keeps its last policy until someone signs it in again.',
+        notice:
+          'Signed out. That Switchback keeps its last policy until someone signs it in again.',
       };
     });
   },

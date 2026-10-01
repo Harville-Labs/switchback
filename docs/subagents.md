@@ -37,21 +37,21 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 |---|---|---|
 | `name` | string | Defaults to the file name |
 | `description` | string, required | Shown to the parent agent to decide when to delegate. Write it as "what + when". |
-| `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and harness names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
+| `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and switchback names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`haiku`, `sonnet`, `opus`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
-| `route` | `auto`, `local`, `remote` | Harness extension; same effect as `model: local`/`remote` |
-| `runtime` | name under `runtimes` | Harness extension. Run on an external agent runtime such as Claude Code (see below) |
-| `isolation` | `worktree` | Harness extension. Always run this agent in its own git worktree (see below) |
-| `budgetUsd` | dollars | Harness extension. Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
+| `route` | `auto`, `local`, `remote` | Switchback extension; same effect as `model: local`/`remote` |
+| `runtime` | name under `runtimes` | Switchback extension. Run on an external agent runtime such as Claude Code (see below) |
+| `isolation` | `worktree` | Switchback extension. Always run this agent in its own git worktree (see below) |
+| `budgetUsd` | dollars | Switchback extension. Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
 
-The body is the system prompt. Harness appends an environment section and the project's `AGENTS.md` (or `CLAUDE.md`) to it.
+The body is the system prompt. Switchback appends an environment section and the project's `AGENTS.md` (or `CLAUDE.md`) to it.
 
 ### Creating one
 
-`harness agents new` interviews you for the name, a description (what the agent does and when the parent should use it), tools, where it runs, an optional budget, and worktree isolation. It can draft the system prompt with your model (the local one when available), then validates the file and writes it to `.harness/agents/` or `~/.config/harness/agents/`. New and edited agent files are picked up without restarting: `/agents`, `harness agents`, and new sessions see them right away. Every question has a flag for scripted use:
+`switchback agents new` interviews you for the name, a description (what the agent does and when the parent should use it), tools, where it runs, an optional budget, and worktree isolation. It can draft the system prompt with your model (the local one when available), then validates the file and writes it to `.switchback/agents/` or `~/.config/switchback/agents/`. New and edited agent files are picked up without restarting: `/agents`, `switchback agents`, and new sessions see them right away. Every question has a flag for scripted use:
 
 ```sh
-harness agents new --yes --name reviewer --tools read,grep,glob --model local \
+switchback agents new --yes --name reviewer --tools read,grep,glob --model local \
   --description "Reviews a diff for correctness bugs. Use after making changes." \
   --prompt "You review diffs for bugs; report each with file:line."
 ```
@@ -61,15 +61,15 @@ harness agents new --yes --name reviewer --tools read,grep,glob --model local \
 Later locations override earlier ones by name:
 
 1. Built-ins
-2. `~/.config/harness/agents/*.md` (user)
+2. `~/.config/switchback/agents/*.md` (user)
 3. `.claude/agents/*.md` (Claude Code compatibility)
-4. `.harness/agents/*.md` (project)
+4. `.switchback/agents/*.md` (project)
 
-Files that fail to parse are skipped and reported by `harness doctor` and at startup. They never prevent the engine from starting.
+Files that fail to parse are skipped and reported by `switchback doctor` and at startup. They never prevent the engine from starting.
 
 ### Model aliases
 
-Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the large, medium, and small model of the remote provider you chose in `harness init`, whether that's Anthropic, OpenAI, DeepSeek, or another. So a `.claude/agents` file with `model: haiku` runs on `gpt-6-luna` or `deepseek-flash` just as well as on Claude Haiku. See [providers.md](providers.md#model-aliases-are-tiers) for the mapping, and point any alias at any model in config. An alias that isn't configured is ignored and normal routing applies.
+Claude Code agents use `model: opus|sonnet|haiku`. In Switchback these mean the large, medium, and small model of the remote provider you chose in `switchback init`, whether that's Anthropic, OpenAI, DeepSeek, or another. So a `.claude/agents` file with `model: haiku` runs on `gpt-6-luna` or `deepseek-flash` just as well as on Claude Haiku. See [providers.md](providers.md#model-aliases-are-tiers) for the mapping, and point any alias at any model in config. An alias that isn't configured is ignored and normal routing applies.
 
 ## The `task` tool
 
@@ -84,7 +84,7 @@ Claude Code agents use `model: opus|sonnet|haiku`. In Harness these mean the lar
 
 ### External runtimes
 
-An agent can run on a complete external agent instead of the Harness loop ([ADR 0009](adr/0009-external-agent-runtimes.md)). The first supported runtime is **Claude Code, through the Claude Agent SDK**:
+An agent can run on a complete external agent instead of the Switchback loop ([ADR 0009](adr/0009-external-agent-runtimes.md)). The first supported runtime is **Claude Code, through the Claude Agent SDK**:
 
 ```jsonc
 // config
@@ -102,19 +102,19 @@ isolation: worktree
 ```
 
 - The parent delegates with the ordinary `task` tool. The subagent row shows Claude Code's text and tool calls as they happen.
-- Every tool Claude Code wants to use goes through the Harness permission policy (`Read`/`Grep`/`Glob` as `read`, `Edit`/`Write` as `edit`, MCP tools as `mcp`, everything else as `bash`), including org-enforced denials.
-- It's remote spend: it doesn't start in `local-only` mode, when an organization disables remote models, or when the budget is spent. The agent's `budgetUsd` becomes Claude Code's own spending limit. Its cost, as reported by the SDK, is recorded per model under rule `runtime`, so `harness usage --by rule` shows it.
-- It uses Claude Code's credentials (`ANTHROPIC_API_KEY` or a Claude login). Claude Code itself isn't bundled with Harness: install it so `claude` is on `PATH`, or set `runtimes.<name>.executable`.
+- Every tool Claude Code wants to use goes through the Switchback permission policy (`Read`/`Grep`/`Glob` as `read`, `Edit`/`Write` as `edit`, MCP tools as `mcp`, everything else as `bash`), including org-enforced denials.
+- It's remote spend: it doesn't start in `local-only` mode, when an organization disables remote models, or when the budget is spent. The agent's `budgetUsd` becomes Claude Code's own spending limit. Its cost, as reported by the SDK, is recorded per model under rule `runtime`, so `switchback usage --by rule` shows it.
+- It uses Claude Code's credentials (`ANTHROPIC_API_KEY` or a Claude login). Claude Code itself isn't bundled with Switchback: install it so `claude` is on `PATH`, or set `runtimes.<name>.executable`.
 - Only the final report returns to the parent, like any subagent. `isolation: worktree` works as usual.
 
 ### Worktree isolation
 
-With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the agent file), the subagent works in its own git worktree on a new branch, `harness/<id>`, created from `HEAD`. Its file tools, shell, and `@` mentions operate there, so parallel editing subagents never touch each other or your working tree.
+With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the agent file), the subagent works in its own git worktree on a new branch, `switchback/<id>`, created from `HEAD`. Its file tools, shell, and `@` mentions operate there, so parallel editing subagents never touch each other or your working tree.
 
-- **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. The parent (or you) decides whether to merge, e.g. `git merge harness/<id>`. A subagent that changed nothing leaves no branch behind.
+- **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. The parent (or you) decides whether to merge, e.g. `git merge switchback/<id>`. A subagent that changed nothing leaves no branch behind.
 - **On failure**, the worktree is kept for inspection and its path is in the report.
 - It needs a git repository with at least one commit. Uncommitted changes in your working tree aren't in the worktree, since it starts from `HEAD`.
-- Worktrees live in the Harness data directory (`~/.local/share/harness/worktrees/`), outside your repository. Commits use your git identity, or `Harness <harness@localhost>` when none is set.
+- Worktrees live in the Switchback data directory (`~/.local/share/switchback/worktrees/`), outside your repository. Commits use your git identity, or `Switchback <switchback@localhost>` when none is set.
 
 ### Background tasks
 
@@ -122,7 +122,7 @@ With `"background": true` the call returns at once with the task's ID and the pa
 
 - If the parent is in the middle of a turn, the report is picked up at its next step.
 - If an interactive session is idle, the report starts a follow-up turn so the agent can act on it. You can keep chatting while background tasks run.
-- Headless `harness run` and subagents wait for their own background tasks before they finish, so nothing is left running unattended.
+- Headless `switchback run` and subagents wait for their own background tasks before they finish, so nothing is left running unattended.
 - Cancelling the session (esc in the TUI, Cancel in VS Code) cancels its background tasks and drops their reports.
 
 ## Limits

@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent } from '@harness/protocol';
-import { type Provider, type Script, ScriptedProvider } from '@harness/providers';
+import type { EngineEvent } from '@switchback/protocol';
+import { type Provider, type Script, ScriptedProvider } from '@switchback/providers';
 import { parseAgentFile } from '../agents.ts';
-import { HarnessConfig, loadConfig } from '../config.ts';
+import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine, type EngineOptions } from '../engine.ts';
 import { allowsMcpTool, McpHub, mcpToolName, resultText } from './hub.ts';
 import { trustServers } from './trust.ts';
@@ -14,7 +14,7 @@ const FIXTURE = join(import.meta.dir, 'fixtures', 'test-server.ts');
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'harness-mcp-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-mcp-'));
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -29,7 +29,7 @@ function engine(script: Script, config: object, opts: Partial<EngineOptions> = {
   const lp = new ScriptedProvider('lp', 'local', script);
   const e = new Engine({
     workspaceRoot: root,
-    config: HarnessConfig.parse({
+    config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
       routing: { mode: 'local-only' },
@@ -66,7 +66,7 @@ describe('helpers', () => {
 describe('stdio server', () => {
   test('lists tools with stable names and statuses', async () => {
     const hub = new McpHub(
-      { test: HarnessConfig.parse({ mcpServers: { test: server() } }).mcpServers.test as never },
+      { test: SwitchbackConfig.parse({ mcpServers: { test: server() } }).mcpServers.test as never },
       root,
     );
     await hub.ready;
@@ -173,8 +173,8 @@ describe('stdio server', () => {
 describe('project servers need trust', () => {
   test('.mcp.json and project config servers are held back until trusted', () => {
     const home = join(root, 'home');
-    const env = { HARNESS_HOME: home };
-    mkdirSync(join(root, '.harness'), { recursive: true });
+    const env = { SWITCHBACK_HOME: home };
+    mkdirSync(join(root, '.switchback'), { recursive: true });
     writeFileSync(
       join(root, '.mcp.json'),
       JSON.stringify({ mcpServers: { repo: { command: 'evil' } } }),
@@ -206,7 +206,7 @@ describe('project servers need trust', () => {
 
     // A project can't silently replace a user server's command either.
     writeFileSync(
-      join(root, '.harness', 'config.json'),
+      join(root, '.switchback', 'config.json'),
       JSON.stringify({ mcpServers: { mine: { command: 'swap' } } }),
     );
     expect(

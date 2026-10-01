@@ -1,7 +1,7 @@
-/** Prompt history, per workspace, persisted under the harness data directory. */
+/** Prompt history, per workspace, persisted under the switchback data directory. */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { harnessPaths } from '@harness/engine';
+import { switchbackPaths } from '@switchback/engine';
 
 const MAX = 1000;
 
@@ -11,7 +11,7 @@ export class PromptHistory {
 
   constructor(
     private readonly workspace: string,
-    file = join(harnessPaths().dataDir, 'prompt-history.jsonl'),
+    file = join(switchbackPaths().dataDir, 'prompt-history.jsonl'),
   ) {
     this.file = file;
     if (!existsSync(file)) return;

@@ -1,6 +1,6 @@
 /**
  * Chat webview. Renders from the same view-model reducer as the TUI
- * (`@harness/client`), so both clients show identical session state.
+ * (`@switchback/client`), so both clients show identical session state.
  */
 import {
   addInfo,
@@ -14,8 +14,8 @@ import {
   resolvePermission,
   type ViewItem,
   type ViewState,
-} from '@harness/client/view';
-import type { RoutePreference } from '@harness/protocol';
+} from '@switchback/client/view';
+import type { RoutePreference } from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, WebviewToHost } from '../messages.ts';
 import { esc, renderDiff, renderItem as renderViewItem } from './render.ts';

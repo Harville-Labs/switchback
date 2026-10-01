@@ -1,1 +1,1 @@
-CREATE DATABASE harness_site_test OWNER harness;
+CREATE DATABASE switchback_site_test OWNER switchback;

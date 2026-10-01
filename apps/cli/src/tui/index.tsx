@@ -1,5 +1,5 @@
-import { fromTranscript, type ViewState } from '@harness/client';
-import type { RoutePreference, SessionSummary } from '@harness/protocol';
+import { fromTranscript, type ViewState } from '@switchback/client';
+import type { RoutePreference, SessionSummary } from '@switchback/protocol';
 import { render } from 'ink';
 import { type CommonFlags, connectShared } from '../bootstrap.ts';
 import { App } from './App.tsx';
@@ -15,10 +15,12 @@ export async function tui(
   },
 ): Promise<number> {
   if (!process.stdin.isTTY) {
-    process.stderr.write('harness: the terminal UI needs a TTY; use `harness run` for scripts\n');
+    process.stderr.write(
+      'switchback: the terminal UI needs a TTY; use `switchback run` for scripts\n',
+    );
     return 2;
   }
-  const { client, init, warnings } = await connectShared(opts, 'harness-tui');
+  const { client, init, warnings } = await connectShared(opts, 'switchback-tui');
   let session: SessionSummary | undefined;
   let history: ViewState | undefined;
   if (opts.resume) {
@@ -29,7 +31,7 @@ export async function tui(
       session = got.session;
       history = fromTranscript(got.session, got.messages);
     } else {
-      process.stderr.write('harness: no saved session in this workspace; starting a new one\n');
+      process.stderr.write('switchback: no saved session in this workspace; starting a new one\n');
     }
   }
   session ??= await client.request('session.create', opts.agent ? { agent: opts.agent } : {});

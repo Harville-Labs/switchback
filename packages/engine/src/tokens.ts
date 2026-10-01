@@ -6,7 +6,7 @@
  * Near the local context threshold, where the answer decides local vs. remote,
  * the engine asks the local server for an exact count instead.
  */
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 import { countTokens as bpeCount } from 'gpt-tokenizer';
 
 /**

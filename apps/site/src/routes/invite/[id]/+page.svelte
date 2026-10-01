@@ -4,7 +4,7 @@ import Flash from '$lib/components/Flash.svelte';
 let { data, form } = $props();
 </script>
 
-<svelte:head><title>Invitation · Harness</title></svelte:head>
+<svelte:head><title>Invitation · Switchback</title></svelte:head>
 
 <section class="mx-auto mt-10 max-w-md">
   <h1 class="mb-4 page-title">Join {data.invitation.site}</h1>
@@ -19,7 +19,7 @@ let { data, form } = $props();
   {:else}
     <form method="POST" class="card flex flex-col gap-3">
       <p>
-        You're invited to {data.invitation.site} on Harness as
+        You're invited to {data.invitation.site} on Switchback as
         {data.invitation.role === 'member' ? 'a member' : `an ${data.invitation.role}`}.
       </p>
       <button class="btn self-start">Accept</button>

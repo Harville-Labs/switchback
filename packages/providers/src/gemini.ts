@@ -14,7 +14,7 @@ import {
   GoogleGenAI,
   ThinkingLevel,
 } from '@google/genai';
-import type { Message, ModelRef, Part, StopReason, Usage } from '@harness/protocol';
+import type { Message, ModelRef, Part, StopReason, Usage } from '@switchback/protocol';
 import {
   type ChatEvent,
   type ChatRequest,

@@ -48,9 +48,9 @@ jobs:
           curl -sf http://localhost:11434/api/pull -d "{\"model\":\"$MODEL\",\"stream\":false}"
       - name: Live tests
         env:
-          HARNESS_LIVE_LOCAL_URL: http://localhost:11434/v1
-          HARNESS_LIVE_LOCAL_MODEL: ${{ env.MODEL }}
-          HARNESS_LIVE_LOCAL_DELEGATION: ${{ inputs.delegation && '1' || '' }}
+          SWITCHBACK_LIVE_LOCAL_URL: http://localhost:11434/v1
+          SWITCHBACK_LIVE_LOCAL_MODEL: ${{ env.MODEL }}
+          SWITCHBACK_LIVE_LOCAL_DELEGATION: ${{ inputs.delegation && '1' || '' }}
         run: bun run test:live
       - name: Classifier eval
         # A measurement, not a gate: precision/recall and latency go to the job summary.

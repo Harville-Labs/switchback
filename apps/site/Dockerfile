@@ -1,5 +1,5 @@
-# Harness sites (docs/sites.md). Build from the repository root:
-#   docker build -f apps/site/Dockerfile -t harness-site .
+# Switchback sites (docs/sites.md). Build from the repository root:
+#   docker build -f apps/site/Dockerfile -t switchback-site .
 FROM oven/bun:1.4 AS build
 WORKDIR /repo
 COPY package.json bun.lock ./

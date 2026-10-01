@@ -1,4 +1,4 @@
-import type { Tier } from '@harness/protocol';
+import type { Tier } from '@switchback/protocol';
 import { z } from 'zod';
 import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
@@ -43,7 +43,7 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     /**
      * `server`: when a safety classifier declines, the API retries on the model
      * Anthropic recommends for that category (`fallbacks: "default"`), in the
-     * same request. `off`: refusals come back to Harness, which tries the next
+     * same request. `off`: refusals come back to Switchback, which tries the next
      * remote model in `routing.remote` like it does for every provider.
      */
     refusalFallback: z.enum(['server', 'off']).default('server'),

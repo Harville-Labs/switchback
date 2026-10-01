@@ -1,29 +1,29 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import type { RemoteKind } from '@harness/engine';
-import { RoutePreference } from '@harness/protocol';
+import type { RemoteKind } from '@switchback/engine';
+import { RoutePreference } from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
 const MIN_BUN = [1, 4, 0];
 
-const HELP = `harness ${CLI_VERSION}: local-first coding agent with remote escalation
+const HELP = `switchback ${CLI_VERSION}: local-first coding agent with remote escalation
 
 Usage
-  harness [options]               Open the terminal UI in the current directory
-  harness init                    Set up local and remote models (writes a config file)
-  harness run "<prompt>"          Run one prompt headlessly and print the answer
-  harness config [action]         path | show | schema | edit
-  harness doctor                  Check configuration, providers, and agents
-  harness mcp [trust [name...]]   Show MCP servers; trust a project's servers
-  harness agents [new]            List agents, or create one (interview, optional drafted prompt)
-  harness usage                   Show spend, savings, cache hits, and budget
+  switchback [options]               Open the terminal UI in the current directory
+  switchback init                    Set up local and remote models (writes a config file)
+  switchback run "<prompt>"          Run one prompt headlessly and print the answer
+  switchback config [action]         path | show | schema | edit
+  switchback doctor                  Check configuration, providers, and agents
+  switchback mcp [trust [name...]]   Show MCP servers; trust a project's servers
+  switchback agents [new]            List agents, or create one (interview, optional drafted prompt)
+  switchback usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
-  harness telemetry [action]      status | on | off | preview (anonymous, off by default)
-  harness login --site <id>       Sign in to your company's Harness site (applies its policy)
-  harness logout | whoami         Sign out / show organization and policy
-  harness serve --stdio           Serve the engine protocol to one client over stdin/stdout
-  harness serve --socket          Run this workspace's shared engine (TUI and VS Code attach to it)
+  switchback telemetry [action]      status | on | off | preview (anonymous, off by default)
+  switchback login --site <id>       Sign in to your company's Switchback site (applies its policy)
+  switchback logout | whoami         Sign out / show organization and policy
+  switchback serve --stdio           Serve the engine protocol to one client over stdin/stdout
+  switchback serve --socket          Run this workspace's shared engine (TUI and VS Code attach to it)
 
 Options
   --cwd <dir>        Workspace root (default: current directory)
@@ -49,7 +49,7 @@ init options (all optional; prompts cover anything not given)
   --remote <r>             anthropic | openai | deepseek | gemini | bedrock | vertex |
                            anthropic-aws | foundry | openai-compatible | none.
                            Repeat for fallbacks
-  --remote-model <m>       Model ID per --remote, in order (see \`harness init\`)
+  --remote-model <m>       Model ID per --remote, in order (see \`switchback init\`)
   --remote-url <url>       openai-compatible: API base URL
   --remote-key-env <var>   openai-compatible: env var holding the API key
   --remote-context-window <n>  openai-compatible: context window
@@ -67,8 +67,8 @@ agents new options (prompts cover anything not given; --yes for none)
   --model <local|remote|alias> --prompt <text> --budget <usd> --isolation worktree
 
 login options
-  --site <id>              Your company's site on harness.harville.ai
-  --server <url>           Any organization server (default: previous or $HARNESS_ORG_SERVER)
+  --site <id>              Your company's site on switchback.harville.ai
+  --server <url>           Any organization server (default: previous or $SWITCHBACK_ORG_SERVER)
   --token <token>          Sign in with an access token instead of the browser (CI)
 `;
 
@@ -104,7 +104,7 @@ class UsageError extends Error {}
 async function main(argv: string[]): Promise<number> {
   if (bunTooOld()) {
     process.stderr.write(
-      `harness: requires Bun ${MIN_BUN.join('.')} or newer (found ${Bun.version}); run \`bun upgrade\`\n`,
+      `switchback: requires Bun ${MIN_BUN.join('.')} or newer (found ${Bun.version}); run \`bun upgrade\`\n`,
     );
     return 2;
   }
@@ -184,7 +184,7 @@ async function main(argv: string[]): Promise<number> {
       const { tui } = await import('./tui/index.tsx');
       return tui({
         ...common,
-        daemon: !values['no-daemon'] && !process.env.HARNESS_NO_DAEMON,
+        daemon: !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON,
         route: route.data,
         ...(values.agent ? { agent: values.agent } : {}),
         ...(values.session
@@ -196,7 +196,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'init': {
       const { init } = await import('./commands/init.ts');
-      const { REMOTE_KINDS } = await import('@harness/engine');
+      const { REMOTE_KINDS } = await import('@switchback/engine');
       const contextWindows = (values['context-window'] ?? []).map(
         (v) => positive('context-window', v) as number,
       );
@@ -320,7 +320,7 @@ async function main(argv: string[]): Promise<number> {
       });
     }
     default:
-      process.stderr.write(`harness: unknown command "${command}"\n\n${HELP}`);
+      process.stderr.write(`switchback: unknown command "${command}"\n\n${HELP}`);
       return 2;
   }
 }
@@ -328,9 +328,9 @@ async function main(argv: string[]): Promise<number> {
 /** With telemetry on, keep a scrubbed record of the crash for the next report. */
 async function recordCrashIfEnabled(err: unknown): Promise<void> {
   try {
-    const { loadConfig, harnessPaths, recordCrash } = await import('@harness/engine');
+    const { loadConfig, switchbackPaths, recordCrash } = await import('@switchback/engine');
     if (loadConfig(process.cwd(), process.env).config.telemetry.enabled)
-      recordCrash(harnessPaths().dataDir, err, new Date());
+      recordCrash(switchbackPaths().dataDir, err, new Date());
   } catch {
     // Reporting a crash must never cause another one.
   }
@@ -343,10 +343,10 @@ main(process.argv.slice(2)).then(
       err instanceof UsageError ||
       (err as { code?: string })?.code?.startsWith('ERR_PARSE_ARGS')
     ) {
-      process.stderr.write(`harness: ${(err as Error).message}\n`);
+      process.stderr.write(`switchback: ${(err as Error).message}\n`);
       process.exit(2);
     }
-    process.stderr.write(`harness: ${(err as Error).stack ?? err}\n`);
+    process.stderr.write(`switchback: ${(err as Error).stack ?? err}\n`);
     await recordCrashIfEnabled(err);
     process.exit(1);
   },

@@ -1,4 +1,4 @@
-import type { Message, Part, StopReason, Tier, Usage } from '@harness/protocol';
+import type { Message, Part, StopReason, Tier, Usage } from '@switchback/protocol';
 
 /** JSON Schema object describing a tool's input. */
 export type JsonSchema = Record<string, unknown>;

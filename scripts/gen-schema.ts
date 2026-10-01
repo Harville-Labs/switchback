@@ -1,6 +1,6 @@
 /** Regenerate the config JSON Schema shipped with the VS Code extension. `bun run schema` */
 import { fileURLToPath } from 'node:url';
-import { configJsonSchema } from '@harness/engine';
+import { configJsonSchema } from '@switchback/engine';
 
 export const SCHEMA_PATH = fileURLToPath(
   new URL('../apps/vscode/schemas/config.schema.json', import.meta.url),

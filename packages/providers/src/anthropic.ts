@@ -16,7 +16,7 @@ import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
 import AnthropicFoundry from '@anthropic-ai/foundry-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk';
-import type { Message, Part, StopReason, Tier } from '@harness/protocol';
+import type { Message, Part, StopReason, Tier } from '@switchback/protocol';
 import {
   type ChatEvent,
   type ChatRequest,

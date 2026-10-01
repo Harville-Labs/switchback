@@ -7,13 +7,13 @@ import { ConfigError, loadConfig, parseJsonc } from './config.ts';
 
 let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'harness-cfg-'));
+  dir = mkdtempSync(join(tmpdir(), 'switchback-cfg-'));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('config', () => {
   test('defaults choose no vendor: no providers, no models', () => {
-    const { config, sources } = loadConfig(dir, { HARNESS_HOME: join(dir, 'home') });
+    const { config, sources } = loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') });
     expect(sources).toEqual([]);
     expect(config.providers).toEqual({});
     expect(config.models).toEqual({});
@@ -21,9 +21,9 @@ describe('config', () => {
   });
 
   test('project config deep-merges over defaults and resolves env references', () => {
-    mkdirSync(join(dir, '.harness'));
+    mkdirSync(join(dir, '.switchback'));
     writeFileSync(
-      join(dir, '.harness', 'config.json'),
+      join(dir, '.switchback', 'config.json'),
       `{
         // comments are allowed
         "providers": {
@@ -38,7 +38,7 @@ describe('config', () => {
       }`,
     );
     const { config, sources } = loadConfig(dir, {
-      HARNESS_HOME: join(dir, 'home'),
+      SWITCHBACK_HOME: join(dir, 'home'),
       MY_KEY: 'sk-test',
     });
     expect(sources).toHaveLength(1);
@@ -49,12 +49,12 @@ describe('config', () => {
   });
 
   test('reports unknown providers clearly', () => {
-    mkdirSync(join(dir, '.harness'));
+    mkdirSync(join(dir, '.switchback'));
     writeFileSync(
-      join(dir, '.harness', 'config.json'),
+      join(dir, '.switchback', 'config.json'),
       '{"models":{"x":{"provider":"nope","model":"m"}}}',
     );
-    expect(() => loadConfig(dir, { HARNESS_HOME: join(dir, 'home') })).toThrow(ConfigError);
+    expect(() => loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') })).toThrow(ConfigError);
   });
 
   test('JSONC: comments and trailing commas, strings untouched, errors located', () => {
@@ -109,7 +109,7 @@ You review code.`,
 });
 
 describe('agent files', () => {
-  test('renderAgentFile round-trips through the parser, harness extensions included', () => {
+  test('renderAgentFile round-trips through the parser, switchback extensions included', () => {
     const text = renderAgentFile({
       name: 'db-migrator',
       description: 'Writes schema migrations: "safe" ones only. Use for any DB change.',

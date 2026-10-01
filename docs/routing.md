@@ -1,6 +1,6 @@
 # Routing and escalation
 
-Harness sends every model call to one of two tiers:
+Switchback sends every model call to one of two tiers:
 
 - **local**: a model on the user's machine or network, reached through an OpenAI-compatible server. It costs nothing per token.
 - **remote**: a hosted model you choose: OpenAI, Anthropic, DeepSeek, Google Gemini, Amazon Bedrock, Vertex AI, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It's billed per token.
@@ -35,7 +35,7 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | 7 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
 | 8 | `default` | Nothing else matched | local (remote if no local model is configured) |
 
-A tier pin in an agent definition (`route: local`) is a preference: if that tier has no model configured, the router skips the pin. A user override (`--route local`) or `mode: local-only` with no local model is blocked with a pointer to `harness init`.
+A tier pin in an agent definition (`route: local`) is a preference: if that tier has no model configured, the router skips the pin. A user override (`--route local`) or `mode: local-only` with no local model is blocked with a pointer to `switchback init`.
 
 Whichever rule picks a tier, the model within it comes from that tier's list: the first that's reachable and fits. When that isn't the first model listed, the decision says so with `rule: context-fit` (an earlier model's window is too small) or `rule: fallback` (an earlier model's server is down), and the reason names both models.
 
@@ -62,7 +62,7 @@ Escalation is normally reactive: the local model has to struggle first. The opti
 - It runs only when its answer could change anything: automatic routing, no agent pin, not already sticky, and a remote model to escalate to.
 - A classifier that doesn't answer within `timeoutMs`, errors, or gives an unreadable answer is ignored for that turn.
 - It follows `escalation.policy`: `ask` prompts first, and `off` ignores the rating.
-- The rating call is recorded in the usage ledger as `classify` (local, free), and the escalated call as `classifier`, so `harness usage --by rule` shows what it costs.
+- The rating call is recorded in the usage ledger as `classify` (local, free), and the escalated call as `classifier`, so `switchback usage --by rule` shows what it costs.
 
 `bun scripts/eval-classifier.ts --model <name>` measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The nightly live workflow runs it and posts the numbers in the job summary.
 
@@ -91,11 +91,11 @@ The estimate covers the escalated call plus the `stickyTurns` calls that follow 
 
 ## Budgets and savings
 
-Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`: what the same call would have cost on the reference model, the first model in `routing.remote`. `harness usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
+Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`: what the same call would have cost on the reference model, the first model in `routing.remote`. `switchback usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
 
 The savings figure is deliberately conservative. Run all-remote, most of each prompt would have been a cache read (the previous call in the session already sent it), so a local call that follows another within five minutes prices the repeated part of its prompt at the cache-read rate and only the new part at the input price. Output is priced at the output rate, with no cache-write premium. It's still an estimate: a remote model might have taken fewer or more steps, and local and remote tokenizers count differently.
 
-**The receipt.** `/receipt` in the TUI, **Show Session Receipt** in VS Code, and the last line of `harness run` show what one session cost (with its subagents) against what running it all on the reference model would have cost:
+**The receipt.** `/receipt` in the TUI, **Show Session Receipt** in VS Code, and the last line of `switchback run` show what one session cost (with its subagents) against what running it all on the reference model would have cost:
 
 ```
 This session, including subagents
@@ -108,9 +108,9 @@ This session, including subagents
 Each entry also records the routing `rule` and the `agent`, so you can see why money was spent:
 
 ```sh
-harness usage --period week --by rule    # escalation vs. context-overflow vs. sticky ...
-harness usage --by agent                 # which agents cost the most
-harness usage --by model --json
+switchback usage --period week --by rule    # escalation vs. context-overflow vs. sticky ...
+switchback usage --by agent                 # which agents cost the most
+switchback usage --by model --json
 ```
 
 The remote cache hit rate (cached input tokens over all remote input tokens) is shown alongside. A low rate on long remote runs usually means something is changing the prompt prefix.
@@ -164,17 +164,17 @@ No single tokenizer matches every model, so when the estimate is within 20% of t
 
 ## Refusals
 
-A hosted model can decline a request (`stop_reason: refusal`, often from a safety classifier on benign security or biology work). Harness handles that the same way for every provider: the refused output is discarded, not added to the transcript, and the call is retried on the next model in `routing.remote` (`rule: refusal-fallback`). A model that refused is skipped for the rest of that user turn. Both calls are billed and appear in the usage ledger. With no other remote model configured, the turn ends as a refusal.
+A hosted model can decline a request (`stop_reason: refusal`, often from a safety classifier on benign security or biology work). Switchback handles that the same way for every provider: the refused output is discarded, not added to the transcript, and the call is retried on the next model in `routing.remote` (`rule: refusal-fallback`). A model that refused is skipped for the rest of that user turn. Both calls are billed and appear in the usage ledger. With no other remote model configured, the turn ends as a refusal.
 
-Where a provider offers its own fallback, Harness uses it too. On the first-party Anthropic API, requests carry `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), so a classifier decline is retried server-side on the model Anthropic recommends for that category, in the same request. The adapter keeps the text streamed before the switch, drops the declining model's thinking and tool calls, records the model that actually answered for billing, and logs the switch. A model that rejects the parameter is sent it once and never again. Set `providers.<id>.refusalFallback: "off"` to rely on the router alone. Bedrock and Vertex don't offer server-side fallback, so they use the router's chain.
+Where a provider offers its own fallback, Switchback uses it too. On the first-party Anthropic API, requests carry `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`), so a classifier decline is retried server-side on the model Anthropic recommends for that category, in the same request. The adapter keeps the text streamed before the switch, drops the declining model's thinking and tool calls, records the model that actually answered for billing, and logs the switch. A model that rejects the parameter is sent it once and never again. Set `providers.<id>.refusalFallback: "off"` to rely on the router alone. Bedrock and Vertex don't offer server-side fallback, so they use the router's chain.
 
 A refusal from a local model is a quality signal instead: it counts as a failed local turn and escalates per `escalation.policy`.
 
 ## Prompt caching and stickiness
 
-Remote calls are cheapest when they reuse the provider's prompt cache, which only works if each request starts with exactly the bytes of the previous one. Harness keeps that prefix stable: the system prompt is frozen when a session starts, tools are always sent in the same order, and the transcript is append-only. A test (`prompt caching` in `engine.test.ts`) checks that consecutive requests share a byte-identical prefix.
+Remote calls are cheapest when they reuse the provider's prompt cache, which only works if each request starts with exactly the bytes of the previous one. Switchback keeps that prefix stable: the system prompt is frozen when a session starts, tools are always sent in the same order, and the transcript is append-only. A test (`prompt caching` in `engine.test.ts`) checks that consecutive requests share a byte-identical prefix.
 
-The engine also checks it at runtime. When a follow-up call to the same remote model, within five minutes and with at least 4,096 input tokens, reads nothing from the cache, it logs one warning per session: either the provider doesn't cache that model or something is changing the prefix. `harness usage` reports the remote cache hit rate.
+The engine also checks it at runtime. When a follow-up call to the same remote model, within five minutes and with at least 4,096 input tokens, reads nothing from the cache, it logs one warning per session: either the provider doesn't cache that model or something is changing the prefix. `switchback usage` reports the remote cache hit rate.
 
-Stickiness (`escalation.stickyTurns`) is a fixed number of model calls, not tied to cache state. We considered extending it while the remote cache is warm and decided against it: a warm cache makes a remote call cheaper, but a local call is still free, and stickiness exists to give a struggling task a few steps on the stronger model, not to save money. When routing returns to local and later escalates again, the first remote call may rewrite the cache; that cost is visible per rule in `harness usage --by rule`.
+Stickiness (`escalation.stickyTurns`) is a fixed number of model calls, not tied to cache state. We considered extending it while the remote cache is warm and decided against it: a warm cache makes a remote call cheaper, but a local call is still free, and stickiness exists to give a struggling task a few steps on the stronger model, not to save money. When routing returns to local and later escalates again, the first remote call may rewrite the cache; that cost is visible per rule in `switchback usage --by rule`.
 

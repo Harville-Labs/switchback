@@ -14,11 +14,11 @@ import {
   PROTOCOL_VERSION,
   RpcError,
   type Transport,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void };
 
-export class HarnessClient {
+export class SwitchbackClient {
   private nextId = 1;
   private pending = new Map<number | string, Pending>();
   private listeners = new Set<(event: EngineEvent) => void>();

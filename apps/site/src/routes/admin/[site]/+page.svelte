@@ -7,9 +7,9 @@ let { data, form } = $props();
 const full = $derived(data.used >= data.site.seats);
 </script>
 
-<svelte:head><title>{data.site.name} · Harness managers</title></svelte:head>
+<svelte:head><title>{data.site.name} · Switchback managers</title></svelte:head>
 
-<p class="muted mb-1 text-sm"><a href="/admin">Harness managers</a> / {data.site.slug}</p>
+<p class="muted mb-1 text-sm"><a href="/admin">Switchback managers</a> / {data.site.slug}</p>
 <h1 class="page-title">{data.site.name}</h1>
 <p class="muted mb-4">
   {data.used} of {data.site.seats} seats used · usage statistics {data.site.telemetry} ·
@@ -20,7 +20,7 @@ const full = $derived(data.used >= data.site.seats);
 <h2 class="mt-6 mb-2 section-title">Operators</h2>
 <p class="muted mb-2 text-sm">
   Operators run the site for their company: they manage its members, admins, policy, and devices.
-  Only Harness managers assign them, and a site always keeps at least one.
+  Only Switchback managers assign them, and a site always keeps at least one.
 </p>
 <form method="POST" action="?/assign" use:enhance class="card mb-3 flex flex-wrap items-end gap-2">
   <label class="flex min-w-60 flex-1 flex-col gap-1">

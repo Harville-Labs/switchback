@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LedgerEntry } from '../ledger.ts';
-import { harnessPaths } from '../paths.ts';
+import { switchbackPaths } from '../paths.ts';
 import { OrgAuthError, OrgClient, toAuth, type UsageAggregate } from './client.ts';
 import {
   type CachedPolicy,
@@ -35,7 +35,7 @@ async function freshAuth(
 ): Promise<OrgAuth> {
   if (!auth.expiresAt || auth.expiresAt - now > 60_000 || !auth.refreshToken) return auth;
   const next = toAuth(auth.server, await client.refresh(auth.refreshToken), auth.org, now);
-  if (!env.HARNESS_ORG_TOKEN) writeAuth(next, env);
+  if (!env.SWITCHBACK_ORG_TOKEN) writeAuth(next, env);
   return next;
 }
 
@@ -149,7 +149,7 @@ export class OrgSync {
   private async reportUsage(env: Env): Promise<void> {
     const auth = readAuth(env);
     if (!auth || !this.options.usageSince) return;
-    const stateFile = join(harnessPaths(env).dataDir, 'org-usage-state.json');
+    const stateFile = join(switchbackPaths(env).dataDir, 'org-usage-state.json');
     const since = existsSync(stateFile)
       ? ((JSON.parse(readFileSync(stateFile, 'utf8')) as { reportedThrough?: string })
           .reportedThrough ?? '')

@@ -25,6 +25,6 @@ test('the real bundles: every shipped package is listed with a license', async (
   const names = notices.map((n) => n.name);
   expect(names).toContain('ink');
   expect(names).toContain('zod');
-  expect(names.some((n) => n.startsWith('@harness/'))).toBe(false);
+  expect(names.some((n) => n.startsWith('@switchback/'))).toBe(false);
   for (const n of notices) expect(n.license || n.text).toBeTruthy();
 }, 60_000);

@@ -7,7 +7,7 @@ import type {
   RoutePreference,
   SessionSummary,
   UsageReport,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 import type { AttachChoice, EditorContextState } from './context.ts';
 
 export type HostToWebview =

@@ -5,12 +5,12 @@
  *
  * Definitions are Markdown with YAML frontmatter, in the same format Claude
  * Code uses, so `.claude/agents/*.md` files load unchanged. Lookup order
- * (later wins): built-in, user (~/.config/harness/agents), Claude compat
- * (.claude/agents), project (.harness/agents).
+ * (later wins): built-in, user (~/.config/switchback/agents), Claude compat
+ * (.claude/agents), project (.switchback/agents).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { AgentSummary, RoutePreference } from '@harness/protocol';
+import type { AgentSummary, RoutePreference } from '@switchback/protocol';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 export interface AgentDefinition {
@@ -26,13 +26,13 @@ export interface AgentDefinition {
   budgetUsd?: number;
   /** Run as a subagent in its own git worktree. */
   isolation?: 'worktree';
-  /** Run on an external agent runtime (`runtimes.<name>`) instead of the harness loop. */
+  /** Run on an external agent runtime (`runtimes.<name>`) instead of the switchback loop. */
   runtime?: string;
   source: AgentSummary['source'];
   file?: string;
 }
 
-/** Claude Code tool names mapped to harness tool names. */
+/** Claude Code tool names mapped to switchback tool names. */
 const TOOL_ALIASES: Record<string, string> = {
   Read: 'read',
   Write: 'write',
@@ -111,7 +111,7 @@ export function parseAgentFile(
     ];
   }
 
-  // `model` accepts Claude Code values (sonnet/opus/haiku/inherit), harness tiers
+  // `model` accepts Claude Code values (sonnet/opus/haiku/inherit), switchback tiers
   // (local/remote), or any configured model alias.
   let route: RoutePreference = 'auto';
   let model: string | undefined;
@@ -184,7 +184,7 @@ export const AGENT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
 /**
  * Render an agent definition as a Markdown file in Claude Code's format (plus
- * harness extensions only when set). The result always parses back to the
+ * switchback extensions only when set). The result always parses back to the
  * same definition; `renderAgentFile` throws if it wouldn't.
  */
 export function renderAgentFile(agent: {

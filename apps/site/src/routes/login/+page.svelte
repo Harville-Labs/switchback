@@ -4,18 +4,18 @@ import Flash from '$lib/components/Flash.svelte';
 let { data, form } = $props();
 </script>
 
-<svelte:head><title>Sign in · Harness</title></svelte:head>
+<svelte:head><title>Sign in · Switchback</title></svelte:head>
 
 <section class="mx-auto mt-10 max-w-md">
   <h1 class="mb-1 page-title">Sign in</h1>
   <p class="muted mb-4">
-    Your company's Harness site: members, policy, and usage. Using Harness on your own? You don't
-    need a site; <a href="https://harville.ai/harness">install Harness</a> and go.
+    Your company's Switchback site: members, policy, and usage. Using Switchback on your own? You don't
+    need a site; <a href="https://harville.ai/switchback">install Switchback</a> and go.
   </p>
   <Flash error={form?.error ?? data.error} />
   {#if form?.sent}
     <div class="card">
-      If <b>{form.sent}</b> belongs to a Harness site, a sign-in link is on its way. It works once
+      If <b>{form.sent}</b> belongs to a Switchback site, a sign-in link is on its way. It works once
       and expires in 15 minutes.
     </div>
   {:else}
@@ -27,7 +27,7 @@ let { data, form } = $props();
       </label>
       <input type="hidden" name="next" value={data.next} />
       <p class="muted text-sm">
-        If your company uses single sign-on with Harness, you'll go to its sign-in page.
+        If your company uses single sign-on with Switchback, you'll go to its sign-in page.
       </p>
       <div class="flex flex-wrap gap-2">
         <button class="btn">Continue</button>

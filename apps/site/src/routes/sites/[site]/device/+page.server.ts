@@ -16,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
     return {
       email,
       code: null,
-      problem: 'That code has expired or was already used. Run `harness login` again.',
+      problem: 'That code has expired or was already used. Run `switchback login` again.',
     };
   return { email, code: pending.userCode, problem: outsider };
 };

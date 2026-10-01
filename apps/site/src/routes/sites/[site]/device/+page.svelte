@@ -4,21 +4,21 @@ import Flash from '$lib/components/Flash.svelte';
 let { data, form } = $props();
 </script>
 
-<svelte:head><title>Sign in Harness · {data.site.name}</title></svelte:head>
+<svelte:head><title>Sign in Switchback · {data.site.name}</title></svelte:head>
 
 <section class="mx-auto mt-6 max-w-lg">
-  <h1 class="mb-4 page-title">Sign in Harness to {data.site.name}</h1>
+  <h1 class="mb-4 page-title">Sign in Switchback to {data.site.name}</h1>
   <Flash error={form?.error ?? data.problem} />
   {#if form?.done === 'approved'}
-    <p class="card">Done. Harness is signed in as {data.email}. You can close this tab.</p>
+    <p class="card">Done. Switchback is signed in as {data.email}. You can close this tab.</p>
   {:else if form?.done === 'denied'}
-    <p class="card">Denied. That Harness wasn't signed in.</p>
+    <p class="card">Denied. That Switchback wasn't signed in.</p>
   {:else if data.code && !data.problem}
     <form method="POST" class="card flex flex-col gap-3">
       <p>Check that this code matches the one in your terminal or editor:</p>
       <p class="font-mono text-3xl font-semibold tracking-widest">{data.code}</p>
       <p class="muted">
-        Harness will receive {data.site.name}'s policy and report usage as {data.email}.
+        Switchback will receive {data.site.name}'s policy and report usage as {data.email}.
       </p>
       <input type="hidden" name="code" value={data.code} />
       <div class="flex gap-2">

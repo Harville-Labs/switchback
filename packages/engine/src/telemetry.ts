@@ -5,24 +5,24 @@
  * counters file is written only when enabled, and daily reports cover only
  * days after the user opted in. A report is built from the usage ledger and a
  * few counters, and holds counts, token totals, and dollar amounts, plus names
- * Harness itself defines (routing rules, provider types, catalog model IDs).
+ * Switchback itself defines (routing rules, provider types, catalog model IDs).
  * It never holds prompts, code, file names, paths, agent or model aliases,
- * provider IDs, or server URLs. `harness telemetry preview` prints exactly
+ * provider IDs, or server URLs. `switchback telemetry preview` prints exactly
  * what would be sent.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { EngineEvent, StopReason } from '@harness/protocol';
-import { CATALOG } from '@harness/providers';
-import type { HarnessConfig } from './config.ts';
+import type { EngineEvent, StopReason } from '@switchback/protocol';
+import { CATALOG } from '@switchback/providers';
+import type { SwitchbackConfig } from './config.ts';
 import type { LedgerEntry } from './ledger.ts';
 import { type DailyReport, TELEMETRY_SCHEMA } from './telemetry-schema.ts';
 
 export { TELEMETRY_SCHEMA } from './telemetry-schema.ts';
-export const DEFAULT_TELEMETRY_ENDPOINT = 'https://harness.harville.ai/api/telemetry/v1';
+export const DEFAULT_TELEMETRY_ENDPOINT = 'https://switchback.harville.ai/api/telemetry/v1';
 
-/** Routing rules Harness defines; anything else is reported as `other`. */
+/** Routing rules Switchback defines; anything else is reported as `other`. */
 const KNOWN_RULES = new Set([
   'refusal-fallback',
   'user-override',
@@ -146,7 +146,7 @@ export function recordEngineEvent(dataDir: string, event: EngineEvent, now: Date
 /**
  * Remove anything that could identify a user or their code from an error:
  * paths, quoted strings, URLs, long numbers, and anything after 200
- * characters. Stack frames keep only function names and Harness's own file
+ * characters. Stack frames keep only function names and Switchback's own file
  * names.
  */
 export function scrubError(err: unknown): { name: string; message: string; stack: string } {
@@ -181,7 +181,7 @@ export function recordCrash(dataDir: string, err: unknown, now: Date): void {
 // Reports
 // ---------------------------------------------------------------------------
 
-function features(config: HarnessConfig, organization: boolean): DailyReport['features'] {
+function features(config: SwitchbackConfig, organization: boolean): DailyReport['features'] {
   const tierCount = (tier: 'local' | 'remote') =>
     config.routing[tier].filter((a) => config.models[a]).length;
   return {
@@ -216,7 +216,7 @@ export function dueDays(state: TelemetryState, today: string, max = 30): string[
 
 export interface ReportInput {
   state: TelemetryState;
-  config: HarnessConfig;
+  config: SwitchbackConfig;
   organization: boolean;
   version: string;
   ledger: LedgerEntry[];
@@ -287,7 +287,7 @@ export function buildReport(input: ReportInput): DailyReport {
 
 export interface TelemetryContext {
   dataDir: string;
-  config: HarnessConfig;
+  config: SwitchbackConfig;
   organization: boolean;
   version: string;
   ledger: LedgerEntry[];
@@ -316,7 +316,7 @@ export function pendingReports(ctx: TelemetryContext): DailyReport[] {
   );
 }
 
-/** Today's report so far (sent once the day is over), for `harness telemetry preview`. */
+/** Today's report so far (sent once the day is over), for `switchback telemetry preview`. */
 export function todaysReport(ctx: TelemetryContext): DailyReport | undefined {
   const state = readTelemetryState(ctx.dataDir);
   if (!state) return undefined;

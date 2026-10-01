@@ -9,7 +9,7 @@ let { data, form } = $props();
 
 <Flash error={form?.error} notice={form?.notice} />
 <p class="muted mb-3">
-  {data.manager ? 'Every Harness signed in to this site.' : 'Where you have Harness signed in to this site.'}
+  {data.manager ? 'Every Switchback signed in to this site.' : 'Where you have Switchback signed in to this site.'}
 </p>
 <div class="card overflow-x-auto p-0">
   <table class="table">
@@ -18,7 +18,7 @@ let { data, form } = $props();
       {#each data.devices as d (d.id)}
         <tr>
           <td>{d.email}</td>
-          <td class="max-w-64 truncate" title={d.client ?? ''}>{d.client ?? 'harness'}</td>
+          <td class="max-w-64 truncate" title={d.client ?? ''}>{d.client ?? 'switchback'}</td>
           <td class="muted">{new Date(d.createdAt).toLocaleDateString()}</td>
           <td class="muted">{d.lastSeen ? new Date(d.lastSeen).toLocaleString() : '—'}</td>
           <td class="text-right">

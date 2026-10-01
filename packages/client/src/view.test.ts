@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { EngineEvent, Message, SessionSummary, UsageReport } from '@harness/protocol';
+import type { EngineEvent, Message, SessionSummary, UsageReport } from '@switchback/protocol';
 import {
   childView,
   estimateLabel,

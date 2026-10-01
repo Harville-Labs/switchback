@@ -6,7 +6,7 @@
  *   DATABASE_URL             postgres://…; required in production. Locally it defaults to
  *                            the `bun run db:up` container
  *   BETTER_AUTH_SECRET       signs sessions and cookies; required in production
- *   MANAGER_EMAILS           Harville Labs staff, made Harness managers at startup
+ *   MANAGER_EMAILS           Harville Labs staff, made Switchback managers at startup
  *   STAFF_SSO_ISSUER, STAFF_SSO_CLIENT_ID, STAFF_SSO_CLIENT_SECRET, STAFF_SSO_DOMAIN
  *                            Harville Labs' OIDC provider for managers (optional)
  *   MANAGER_SSO_REQUIRED     `true`: managers must sign in through it
@@ -24,7 +24,7 @@ import { type Ctx, ensureUser } from './model.ts';
 export interface SiteApp {
   ctx: Ctx;
   mailer: Mailer;
-  /** e.g. https://harness.harville.ai, without a trailing slash. */
+  /** e.g. https://switchback.harville.ai, without a trailing slash. */
   publicUrl: string;
   /** Harville Labs' identity provider is configured. */
   staffSso: boolean;
@@ -47,7 +47,7 @@ const Env = z
     SMTP_PORT: z.coerce.number().int().default(465),
     SMTP_USER: z.string().default('api_token'),
     SMTP_PASSWORD: z.string().optional(),
-    EMAIL_FROM: z.string().default('Harness <harness@harville.ai>'),
+    EMAIL_FROM: z.string().default('Switchback <switchback@harville.ai>'),
   })
   .superRefine((e, ctx) => {
     if (e.NODE_ENV !== 'production') return;
@@ -64,9 +64,9 @@ const Env = z
   });
 
 /** The container from `bun run db:up` (compose.yaml). */
-export const LOCAL_DATABASE_URL = 'postgres://harness:harness@localhost:5433/harness_site';
+export const LOCAL_DATABASE_URL = 'postgres://switchback:switchback@localhost:5433/switchback_site';
 /** Development only; production refuses to start without BETTER_AUTH_SECRET. */
-const DEV_SECRET = 'harness-site-development-secret-not-for-production';
+const DEV_SECRET = 'switchback-site-development-secret-not-for-production';
 
 let current: Promise<SiteApp> | undefined;
 let database: Database | undefined;

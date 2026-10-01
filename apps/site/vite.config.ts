@@ -5,5 +5,5 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   // The engine's schemas are TypeScript source in the workspace; bundle them.
-  ssr: { noExternal: ['@harness/engine'] },
+  ssr: { noExternal: ['@switchback/engine'] },
 });

@@ -19,15 +19,15 @@ body:
     id: client
     attributes:
       label: Client
-      options: [TUI, VS Code, harness run, other]
+      options: [TUI, VS Code, switchback run, other]
     validations:
       required: true
   - type: textarea
     id: doctor
     attributes:
-      label: harness doctor output
+      label: switchback doctor output
       render: text
   - type: input
     id: version
     attributes:
-      label: Version (harness --version)
+      label: Version (switchback --version)

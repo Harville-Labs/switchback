@@ -3,7 +3,7 @@
  * so it can be tested. All model text is escaped or goes through the
  * sanitizing Markdown renderer.
  */
-import { toolLabel, type ViewItem, type ViewState } from '@harness/client/view';
+import { toolLabel, type ViewItem, type ViewState } from '@switchback/client/view';
 import { renderMarkdown } from './markdown.ts';
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);

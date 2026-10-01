@@ -5,11 +5,11 @@ Every client, including our own, talks to the engine over this protocol. It's JS
 ## Connecting
 
 ```sh
-harness serve --stdio     # one client over stdin/stdout
-harness serve --socket    # the shared workspace daemon; many clients (see architecture.md)
+switchback serve --stdio     # one client over stdin/stdout
+switchback serve --socket    # the shared workspace daemon; many clients (see architecture.md)
 ```
 
-Daemon clients read the socket and token from the daemon info file (`connectDaemon` in `@harness/client` does all of this) and pass `token` in `initialize`.
+Daemon clients read the socket and token from the daemon info file (`connectDaemon` in `@switchback/client` does all of this) and pass `token` in `initialize`.
 
 Write requests to stdin and read responses and notifications from stdout. stderr carries human-readable logs. The first request must be `initialize`:
 
@@ -17,12 +17,12 @@ Write requests to stdin and read responses and notifications from stdout. stderr
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"client":{"name":"my-client","version":"1.0"},"workspaceRoot":"/path/to/repo"}}
 ```
 
-From TypeScript, use `@harness/client`:
+From TypeScript, use `@switchback/client`:
 
 ```ts
-import { HarnessClient, spawnEngine } from '@harness/client';
+import { SwitchbackClient, spawnEngine } from '@switchback/client';
 
-const client = new HarnessClient(spawnEngine({ command: 'harness', cwd: root }));
+const client = new SwitchbackClient(spawnEngine({ command: 'switchback', cwd: root }));
 await client.initialize({ name: 'my-client', version: '1.0' }, root);
 const session = await client.request('session.create', {});
 client.on((event) => { /* ... */ });
@@ -69,7 +69,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `config.updated` | Configuration changed while running (e.g. an organization policy update); carries `org` and human-readable `notes` |
 | `log` | Engine diagnostics |
 
-Clients should fold events with `reduce()` from `@harness/client/view` rather than writing their own interpretation.
+Clients should fold events with `reduce()` from `@switchback/client/view` rather than writing their own interpretation.
 
 ## Errors
 

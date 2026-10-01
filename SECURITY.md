@@ -6,7 +6,7 @@ Email **security@harville.ai** with a description, reproduction steps, and impac
 
 ## Scope
 
-Harness executes model-generated tool calls on the user's machine. We treat these as security bugs:
+Switchback executes model-generated tool calls on the user's machine. We treat these as security bugs:
 
 - A path that escapes the workspace through file tools
 - A mutating tool running without the configured permission check

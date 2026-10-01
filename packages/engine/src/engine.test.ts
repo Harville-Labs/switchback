@@ -2,17 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HarnessClient } from '@harness/client';
-import { createTransportPair, type EngineEvent } from '@harness/protocol';
-import { type Provider, ProviderError, type Script, ScriptedProvider } from '@harness/providers';
+import { SwitchbackClient } from '@switchback/client';
+import { createTransportPair, type EngineEvent } from '@switchback/protocol';
+import { type Provider, ProviderError, type Script, ScriptedProvider } from '@switchback/providers';
 import { loadAgents, parseAgentFile } from './agents.ts';
-import { HarnessConfig } from './config.ts';
+import { SwitchbackConfig } from './config.ts';
 import { Engine, type EngineOptions } from './engine.ts';
 import { serve } from './server.ts';
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'harness-test-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-test-'));
   writeFileSync(join(root, 'hello.txt'), 'hello world\n');
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -22,7 +22,7 @@ function setup(
   remote: Script,
   { config: overrides, ...opts }: Partial<Omit<EngineOptions, 'config'>> & { config?: object } = {},
 ) {
-  const config = HarnessConfig.parse({
+  const config = SwitchbackConfig.parse({
     providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
     models: {
       local: { provider: 'lp', model: 'small', contextWindow: 8_000 },
@@ -63,7 +63,7 @@ describe('Engine', () => {
   });
 
   test('uses the context window the server reports when config leaves it out', async () => {
-    const config = HarnessConfig.parse({
+    const config = SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
       models: {
         local: { provider: 'lp', model: 'small' },
@@ -316,7 +316,10 @@ describe('Engine', () => {
 
   test('the bash tool runs a real command in the workspace', async () => {
     const { engine, lp } = setup(
-      [{ toolCalls: [{ name: 'bash', input: { command: 'echo harness-ok' } }] }, { text: 'ran' }],
+      [
+        { toolCalls: [{ name: 'bash', input: { command: 'echo switchback-ok' } }] },
+        { text: 'ran' },
+      ],
       [],
       { config: { permissions: { bash: 'allow' } } },
     );
@@ -327,7 +330,7 @@ describe('Engine', () => {
       isError?: boolean;
     };
     expect(result.isError).toBeUndefined();
-    expect(result.content).toContain('harness-ok');
+    expect(result.content).toContain('switchback-ok');
     expect(result.content).toContain('exit code: 0');
   });
 
@@ -430,7 +433,7 @@ describe('several providers at once', () => {
     const deepseek = new ScriptedProvider('deepseek', 'remote', []);
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: {
           laptop: { type: 'mock', tier: 'local' },
           gpu: { type: 'mock', tier: 'local' },
@@ -473,7 +476,7 @@ describe('refusal fallback', () => {
     const openai = new ScriptedProvider('openai', 'remote', [{ text: 'here you go' }]);
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: {
           anthropic: { type: 'mock', tier: 'remote' },
           openai: { type: 'mock', tier: 'remote' },
@@ -610,7 +613,7 @@ describe('per-agent budgets', () => {
     const rp = new ScriptedProvider('rp', 'remote', script('remote'));
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
         models: {
           local: { provider: 'lp', model: 'small', contextWindow: 100_000 },
@@ -688,7 +691,7 @@ describe('background subagents', () => {
     };
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' } },
         models: { local: { provider: 'lp', model: 'small', contextWindow: 100_000 } },
         routing: { mode: 'local-only' },
@@ -765,7 +768,7 @@ describe('token counting', () => {
     const rp = new ScriptedProvider('rp', 'remote', [{ text: 'remote' }]);
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
         models: {
           local: { provider: 'lp', model: 'small', contextWindow },
@@ -814,7 +817,7 @@ describe('protocol round-trip', () => {
     const { engine } = setup([{ text: 'over the wire' }], []);
     const [serverSide, clientSide] = createTransportPair();
     serve(engine, serverSide);
-    const client = new HarnessClient(clientSide);
+    const client = new SwitchbackClient(clientSide);
     const init = await client.initialize({ name: 'test', version: '0' }, root);
     expect(init.agents.map((a) => a.name)).toContain('explore');
 
@@ -839,7 +842,7 @@ describe('protocol round-trip', () => {
     const { engine } = setup([], []);
     const [serverSide, clientSide] = createTransportPair();
     serve(engine, serverSide);
-    const client = new HarnessClient(clientSide);
+    const client = new SwitchbackClient(clientSide);
     await expect(client.request('session.list', {})).rejects.toThrow('initialize');
   });
 });

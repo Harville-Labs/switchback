@@ -1,20 +1,20 @@
 {
-  "name": "@harness/cli",
+  "name": "@switchback/cli",
   "version": "0.5.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
-    "harness": "./src/main.ts"
+    "switchback": "./src/main.ts"
   },
   "scripts": {
-    "build": "bun scripts/build.ts --outfile dist/harness"
+    "build": "bun scripts/build.ts --outfile dist/switchback"
   },
   "dependencies": {
-    "@harness/client": "workspace:*",
-    "@harness/engine": "workspace:*",
-    "@harness/protocol": "workspace:*",
-    "@harness/providers": "workspace:*",
+    "@switchback/client": "workspace:*",
+    "@switchback/engine": "workspace:*",
+    "@switchback/protocol": "workspace:*",
+    "@switchback/providers": "workspace:*",
     "fzf": "^0.5.2",
     "ink": "^7.1.1",
     "marked": "15",

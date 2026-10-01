@@ -1,10 +1,10 @@
 /**
- * `harness mcp`: show MCP servers and their tools' status.
- * `harness mcp trust [name...]`: allow project-defined servers (from the
+ * `switchback mcp`: show MCP servers and their tools' status.
+ * `switchback mcp trust [name...]`: allow project-defined servers (from the
  * project's config or Claude Code's .mcp.json) to start in this workspace.
  */
-import { formatMcpServers } from '@harness/client';
-import { loadConfig, trustServers } from '@harness/engine';
+import { formatMcpServers } from '@switchback/client';
+import { loadConfig, trustServers } from '@switchback/engine';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
 export async function mcp(
@@ -14,7 +14,7 @@ export async function mcp(
 ): Promise<number> {
   if (sub === 'trust') return trust(names, flags);
   if (sub && sub !== 'list') {
-    process.stderr.write(`harness mcp: unknown subcommand "${sub}" (list, trust)\n`);
+    process.stderr.write(`switchback mcp: unknown subcommand "${sub}" (list, trust)\n`);
     return 2;
   }
   const { engine } = createEngine(flags, 'deny');
@@ -30,7 +30,7 @@ function trust(names: string[], flags: CommonFlags): number {
   const unknown = names.filter((n) => !untrustedMcp.some((u) => u.name === n));
   if (unknown.length) {
     process.stderr.write(
-      `harness mcp trust: no untrusted project server named ${unknown.join(', ')}\n`,
+      `switchback mcp trust: no untrusted project server named ${unknown.join(', ')}\n`,
     );
     return 2;
   }

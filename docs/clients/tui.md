@@ -1,14 +1,14 @@
 # Terminal UI
 
-`harness` with no arguments opens the TUI in the current directory. It's built with [Ink](https://github.com/vadimdemedes/ink) and attaches to the workspace's shared engine daemon (starting it if needed), the same one VS Code uses, so sessions are shared live between them. `--no-daemon` runs a private in-process engine instead; `--mock` always does.
+`switchback` with no arguments opens the TUI in the current directory. It's built with [Ink](https://github.com/vadimdemedes/ink) and attaches to the workspace's shared engine daemon (starting it if needed), the same one VS Code uses, so sessions are shared live between them. `--no-daemon` runs a private in-process engine instead; `--mock` always does.
 
 ## First run
 
-With no config file anywhere, `harness` offers to run `harness init` before opening the UI. Declining opens the UI anyway; turns run remotely until a local model is configured.
+With no config file anywhere, `switchback` offers to run `switchback init` before opening the UI. Declining opens the UI anyway; turns run remotely until a local model is configured.
 
 ## Resuming
 
-Sessions are saved as you go. `harness --continue` (`-c`) reopens the most recent session in this workspace, and `harness --session <id>` opens a specific one. Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).
+Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most recent session in this workspace, and `switchback --session <id>` opens a specific one. Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).
 
 ## Screen
 
@@ -40,7 +40,7 @@ Retries live in src/http/client.ts:88 ...
 | `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
 | `/subagents` | This session's subagents as a numbered tree |
 | `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
-| `/mcp` | MCP servers: connected, failed, or waiting for `harness mcp trust`, with tool counts |
+| `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Remote review of local edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
@@ -60,4 +60,4 @@ Retries live in src/http/client.ts:88 ...
 ## Implementation notes
 
 - Finished items render through Ink's `<Static>`, so long sessions don't re-render history. Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
-- All display state comes from `reduce()` in `@harness/client/view`. If something looks wrong in both clients, fix it there.
+- All display state comes from `reduce()` in `@switchback/client/view`. If something looks wrong in both clients, fix it there.

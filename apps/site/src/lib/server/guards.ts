@@ -34,7 +34,7 @@ export async function siteContext(
   const problem = sessionProblem(site, actor);
   if (problem) error(403, problem);
   const m = await membership(app.ctx, site, user);
-  if (!options.allowOutsiders && !m && !user.harnessManager)
+  if (!options.allowOutsiders && !m && !user.switchbackManager)
     error(403, `You aren't a member of ${site.name}.`);
   return { app, actor, user, site, membership: m, manager: canManage(m, user) };
 }
@@ -44,7 +44,7 @@ export function requireManager(manager: boolean): void {
 }
 
 /** Harville Labs staff only: the /admin console and its actions. */
-export async function requireHarnessManager(
+export async function requireSwitchbackManager(
   event: Pick<RequestEvent, 'locals' | 'url'>,
 ): Promise<Actor> {
   const actor = requireActor(event);

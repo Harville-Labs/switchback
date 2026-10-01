@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { siteApp } from '$lib/server/context';
-import { attempt, requireHarnessManager } from '$lib/server/guards';
+import { attempt, requireSwitchbackManager } from '$lib/server/guards';
 import {
   assignOperator,
   changeRole,
@@ -15,7 +15,7 @@ import {
 import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 async function managed(event: RequestEvent) {
-  const actor = await requireHarnessManager(event);
+  const actor = await requireSwitchbackManager(event);
   const user = actor.user;
   const app = await siteApp();
   const site = await siteBySlug(app.ctx, event.params.site);
@@ -59,8 +59,8 @@ export const actions: Actions = {
       const operator = await assignOperator(app.ctx, site, actor, email);
       await app.mailer.send({
         to: operator.email,
-        subject: `You're an operator of ${site.name} on Harness`,
-        text: `Harville Labs made you an operator of ${site.name} on Harness: you manage its members, policy, and devices.\n\nSign in at ${app.publicUrl}/login?next=/sites/${site.slug}\n`,
+        subject: `You're an operator of ${site.name} on Switchback`,
+        text: `Harville Labs made you an operator of ${site.name} on Switchback: you manage its members, policy, and devices.\n\nSign in at ${app.publicUrl}/login?next=/sites/${site.slug}\n`,
       });
       return { notice: `${operator.email} is now an operator of ${site.name}.` };
     });

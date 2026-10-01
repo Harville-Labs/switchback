@@ -1,5 +1,5 @@
 /**
- * MCP servers defined by a project (its `.harness/config.json` or Claude
+ * MCP servers defined by a project (its `.switchback/config.json` or Claude
  * Code's `.mcp.json`) run commands from a checked-out repository, so they only
  * start after the user trusts them for that workspace. Trust is keyed by the
  * exact definition: editing a server means approving it again.
@@ -7,13 +7,13 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { harnessPaths } from '../paths.ts';
+import { switchbackPaths } from '../paths.ts';
 
 type Env = Record<string, string | undefined>;
 type TrustFile = Record<string, Record<string, string>>;
 
 function trustFile(env: Env): string {
-  return join(harnessPaths(env).dataDir, 'mcp-trust.json');
+  return join(switchbackPaths(env).dataDir, 'mcp-trust.json');
 }
 
 export function definitionHash(definition: unknown): string {

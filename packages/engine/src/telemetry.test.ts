@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ScriptedProvider } from '@harness/providers';
+import { ScriptedProvider } from '@switchback/providers';
 import { loadAgents, parseAgentFile } from './agents.ts';
-import { HarnessConfig, loadConfig } from './config.ts';
+import { loadConfig, SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import {
   DailyReport,
@@ -23,7 +23,7 @@ import {
 
 let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'harness-telemetry-'));
+  dir = mkdtempSync(join(tmpdir(), 'switchback-telemetry-'));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -48,11 +48,11 @@ describe('reports contain no user content', () => {
     'Top secret answer', // model output
   ];
 
-  test('a real session’s report holds counts and Harness-defined names only', async () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'harness-telemetry-ws-'));
+  test('a real session’s report holds counts and Switchback-defined names only', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'switchback-telemetry-ws-'));
     try {
       writeFileSync(join(workspace, 'project-falcon.md'), 'the plan');
-      const config = HarnessConfig.parse({
+      const config = SwitchbackConfig.parse({
         providers: {
           'acme-gpu-box': {
             type: 'openai-compatible',
@@ -130,11 +130,11 @@ describe('reports contain no user content', () => {
     }
   });
 
-  test('crash stacks keep function names and Harness file names only', () => {
+  test('crash stacks keep function names and Switchback file names only', () => {
     const err = new Error('boom in /home/alice/code/secret-repo/x.ts');
     err.stack = [
       'Error: boom',
-      '    at runTools (/home/alice/harness/packages/engine/src/engine.ts:120:5)',
+      '    at runTools (/home/alice/switchback/packages/engine/src/engine.ts:120:5)',
       '    at customerCode (/home/alice/code/secret-repo/x.ts:1:1)',
     ].join('\n');
     const s = scrubError(err);
@@ -146,7 +146,7 @@ describe('reports contain no user content', () => {
 describe('collection only while on', () => {
   test('nothing from before opting in, even the same day', () => {
     writeTelemetryState(dir, { installId: 'a', enabledAt: '2026-09-26T12:00:00Z' });
-    const config = HarnessConfig.parse({});
+    const config = SwitchbackConfig.parse({});
     const entry = (ts: string) => ({
       ts,
       sessionId: 's',
@@ -191,7 +191,7 @@ describe('collection only while on', () => {
 describe('sending', () => {
   const ctx = (enabled: boolean): TelemetryContext => ({
     dataDir: dir,
-    config: HarnessConfig.parse({ telemetry: { enabled, endpoint: 'https://t.example/v1' } }),
+    config: SwitchbackConfig.parse({ telemetry: { enabled, endpoint: 'https://t.example/v1' } }),
     organization: false,
     version: 'v',
     ledger: [],
@@ -234,12 +234,15 @@ describe('sending', () => {
       return new Response(null, { status: 204 });
     }) as unknown as typeof fetch;
     const r = await sendTelemetry(
-      { ...ctx(true), site: { server: 'https://harness.test/sites/acme/', accessToken: 'hsa_x' } },
+      {
+        ...ctx(true),
+        site: { server: 'https://switchback.test/sites/acme/', accessToken: 'hsa_x' },
+      },
       spy,
     );
     expect(r.sent).toBe(2);
     expect(seen).toEqual({
-      url: 'https://harness.test/sites/acme/v1/telemetry',
+      url: 'https://switchback.test/sites/acme/v1/telemetry',
       auth: 'Bearer hsa_x',
     });
   });
@@ -260,13 +263,13 @@ describe('sending', () => {
 });
 
 describe('config', () => {
-  test('DO_NOT_TRACK and HARNESS_TELEMETRY=0 force it off; a project can’t turn it on', () => {
+  test('DO_NOT_TRACK and SWITCHBACK_TELEMETRY=0 force it off; a project can’t turn it on', () => {
     const home = join(dir, 'home');
     const ws = join(dir, 'ws');
-    mkdirSync(join(ws, '.harness'), { recursive: true });
+    mkdirSync(join(ws, '.switchback'), { recursive: true });
     mkdirSync(home, { recursive: true });
-    const env = { HARNESS_HOME: home };
-    writeFileSync(join(ws, '.harness', 'config.json'), '{"telemetry":{"enabled":true}}');
+    const env = { SWITCHBACK_HOME: home };
+    writeFileSync(join(ws, '.switchback', 'config.json'), '{"telemetry":{"enabled":true}}');
     expect(loadConfig(ws, env, [], null).config.telemetry.enabled).toBe(false);
     writeFileSync(join(home, 'config.json'), '{"telemetry":{"enabled":true}}');
     expect(loadConfig(ws, env, [], null).config.telemetry.enabled).toBe(true);
@@ -274,10 +277,10 @@ describe('config', () => {
       false,
     );
     expect(
-      loadConfig(ws, { ...env, HARNESS_TELEMETRY: '0' }, [], null).config.telemetry.enabled,
+      loadConfig(ws, { ...env, SWITCHBACK_TELEMETRY: '0' }, [], null).config.telemetry.enabled,
     ).toBe(false);
     // A project may still turn it off.
-    writeFileSync(join(ws, '.harness', 'config.json'), '{"telemetry":{"enabled":false}}');
+    writeFileSync(join(ws, '.switchback', 'config.json'), '{"telemetry":{"enabled":false}}');
     expect(loadConfig(ws, env, [], null).config.telemetry.enabled).toBe(false);
   });
 });

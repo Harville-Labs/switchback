@@ -5,9 +5,9 @@
     "": {
       "name": "harness",
       "dependencies": {
-        "@harness/engine": "workspace:*",
-        "@harness/protocol": "workspace:*",
-        "@harness/providers": "workspace:*",
+        "@switchback/engine": "workspace:*",
+        "@switchback/protocol": "workspace:*",
+        "@switchback/providers": "workspace:*",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.14",
@@ -18,16 +18,16 @@
       },
     },
     "apps/cli": {
-      "name": "@harness/cli",
+      "name": "@switchback/cli",
       "version": "0.5.0",
       "bin": {
-        "harness": "./src/main.ts",
+        "switchback": "./src/main.ts",
       },
       "dependencies": {
-        "@harness/client": "workspace:*",
-        "@harness/engine": "workspace:*",
-        "@harness/protocol": "workspace:*",
-        "@harness/providers": "workspace:*",
+        "@switchback/client": "workspace:*",
+        "@switchback/engine": "workspace:*",
+        "@switchback/protocol": "workspace:*",
+        "@switchback/providers": "workspace:*",
         "fzf": "^0.5.2",
         "ink": "^7.1.1",
         "marked": "15",
@@ -40,16 +40,16 @@
       },
     },
     "apps/site": {
-      "name": "@harness/site",
+      "name": "@switchback/site",
       "version": "0.1.0",
       "devDependencies": {
         "@better-auth/sso": "1.7.6",
         "@fontsource-variable/archivo": "5.3.0",
         "@fontsource/b612-mono": "5.3.0",
-        "@harness/engine": "workspace:*",
         "@sveltejs/adapter-node": "^5.5.7",
         "@sveltejs/kit": "^2.70.3",
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
+        "@switchback/engine": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@types/nodemailer": "^8.0.2",
         "better-auth": "1.7.6",
@@ -67,11 +67,11 @@
       },
     },
     "apps/vscode": {
-      "name": "harness-vscode",
+      "name": "switchback-vscode",
       "version": "0.5.0",
       "dependencies": {
-        "@harness/client": "workspace:*",
-        "@harness/protocol": "workspace:*",
+        "@switchback/client": "workspace:*",
+        "@switchback/protocol": "workspace:*",
         "dompurify": "^3.4.16",
         "marked": "15",
       },
@@ -84,23 +84,23 @@
       },
     },
     "packages/client": {
-      "name": "@harness/client",
+      "name": "@switchback/client",
       "version": "0.0.0",
       "dependencies": {
-        "@harness/protocol": "workspace:*",
+        "@switchback/protocol": "workspace:*",
       },
     },
     "packages/engine": {
-      "name": "@harness/engine",
+      "name": "@switchback/engine",
       "version": "0.0.0",
       "dependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.3.283",
-        "@harness/protocol": "workspace:*",
-        "@harness/providers": "workspace:*",
-        "@harness/router": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.30.1",
         "@secretlint/core": "^13.0.6",
         "@secretlint/secretlint-rule-preset-recommend": "^13.0.6",
+        "@switchback/protocol": "workspace:*",
+        "@switchback/providers": "workspace:*",
+        "@switchback/router": "workspace:*",
         "diff": "^9.0.0",
         "gpt-tokenizer": "^4.0.0",
         "jsonc-parser": "^3.3.1",
@@ -109,18 +109,18 @@
         "zod": "^4.6.5",
       },
       "devDependencies": {
-        "@harness/client": "workspace:*",
+        "@switchback/client": "workspace:*",
       },
     },
     "packages/protocol": {
-      "name": "@harness/protocol",
+      "name": "@switchback/protocol",
       "version": "0.0.0",
       "dependencies": {
         "zod": "^4.6.5",
       },
     },
     "packages/providers": {
-      "name": "@harness/providers",
+      "name": "@switchback/providers",
       "version": "0.0.0",
       "dependencies": {
         "@anthropic-ai/aws-sdk": "^0.7.4",
@@ -129,16 +129,16 @@
         "@anthropic-ai/sdk": "^0.128.0",
         "@anthropic-ai/vertex-sdk": "^0.19.11",
         "@google/genai": "^2.24.0",
-        "@harness/protocol": "workspace:*",
+        "@switchback/protocol": "workspace:*",
         "openai": "^7.23.0",
         "zod": "^4.6.5",
       },
     },
     "packages/router": {
-      "name": "@harness/router",
+      "name": "@switchback/router",
       "version": "0.0.0",
       "dependencies": {
-        "@harness/protocol": "workspace:*",
+        "@switchback/protocol": "workspace:*",
         "safe-stable-stringify": "^2.5.0",
         "zod": "^4.6.5",
       },
@@ -334,20 +334,6 @@
     "@fontsource/b612-mono": ["@fontsource/b612-mono@5.3.0", "", {}, "sha512-G0Ihm+ekqqP5PZJ1zrx6GbeS2q4GDmYnM01zrNrPARRg64GoG0D2pTf+FsbDWvbg/9tVWFRmFIz8xYLjgFrUpg=="],
 
     "@google/genai": ["@google/genai@2.24.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-bIu5eoxF1AaPWs9ivmUJGp1RpDHyapoODvWvnkzRDx2CTIW6UJXFhDdjj0BlRve3ZHMMuEkQBVrA/ALqpW4apA=="],
-
-    "@harness/cli": ["@harness/cli@workspace:apps/cli"],
-
-    "@harness/client": ["@harness/client@workspace:packages/client"],
-
-    "@harness/engine": ["@harness/engine@workspace:packages/engine"],
-
-    "@harness/protocol": ["@harness/protocol@workspace:packages/protocol"],
-
-    "@harness/providers": ["@harness/providers@workspace:packages/providers"],
-
-    "@harness/router": ["@harness/router@workspace:packages/router"],
-
-    "@harness/site": ["@harness/site@workspace:apps/site"],
 
     "@hono/node-server": ["@hono/node-server@2.1.1", "", { "peerDependencies": { "hono": "^4" } }, "sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg=="],
 
@@ -576,6 +562,20 @@
     "@sveltejs/load-config": ["@sveltejs/load-config@0.2.3", "", {}, "sha512-VT3qmUb8pRV2QrZjd8iAmtg8lf4W0TIjZbvXtz5MKei/q96teWZgGJyyidJzOjzZzvdq616eSRVeMYIQChUTAQ=="],
 
     "@sveltejs/vite-plugin-svelte": ["@sveltejs/vite-plugin-svelte@7.3.1", "", { "dependencies": { "deepmerge": "^4.3.1", "magic-string": "^1.0.0", "obug": "^2.1.0", "vitefu": "^1.1.2" }, "peerDependencies": { "svelte": "^5.46.4", "vite": "^8.0.0-beta.7 || ^8.0.0" } }, "sha512-ZPsLN8B1e/En+Ak5s4V7srFDT532oS0qieLsQwu63NGKsS+iAjoO2Js1BochlHlglcU+Pt7WAO3C5Ee+4f6gVA=="],
+
+    "@switchback/cli": ["@switchback/cli@workspace:apps/cli"],
+
+    "@switchback/client": ["@switchback/client@workspace:packages/client"],
+
+    "@switchback/engine": ["@switchback/engine@workspace:packages/engine"],
+
+    "@switchback/protocol": ["@switchback/protocol@workspace:packages/protocol"],
+
+    "@switchback/providers": ["@switchback/providers@workspace:packages/providers"],
+
+    "@switchback/router": ["@switchback/router@workspace:packages/router"],
+
+    "@switchback/site": ["@switchback/site@workspace:apps/site"],
 
     "@tailwindcss/node": ["@tailwindcss/node@4.3.3", "", { "dependencies": { "@jridgewell/remapping": "^2.3.5", "enhanced-resolve": "^5.24.1", "jiti": "^2.7.0", "lightningcss": "1.32.0", "magic-string": "^0.30.21", "source-map-js": "^1.2.1", "tailwindcss": "4.3.3" } }, "sha512-/T8IKEsf9VTU6tLjgC7+sv2mOPtQxzE2jMw7u4Tt40Tx+QSZxpzh95/H6cMKoja9XuW7iMdLJYBB0o9G1CaAgg=="],
 
@@ -949,8 +949,6 @@
 
     "happy-dom": ["happy-dom@20.14.5", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ=="],
 
-    "harness-vscode": ["harness-vscode@workspace:apps/vscode"],
-
     "has-flag": ["has-flag@4.0.0", "", {}, "sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ=="],
 
     "has-symbols": ["has-symbols@1.1.0", "", {}, "sha512-1cDNdwJ2Jaohmb3sg4OmKaMBwuC48sYni5HUw2DvsC8LjGTLK9h+eb1X6RyuOHe4hT0ULCW68iomhjUoKUqlPQ=="],
@@ -1323,6 +1321,8 @@
 
     "svelte-check": ["svelte-check@4.7.6", "", { "dependencies": { "@jridgewell/trace-mapping": "^0.3.25", "@sveltejs/load-config": "^0.2.3", "chokidar": "^4.0.1", "fdir": "^6.2.0", "picocolors": "^1.0.0", "sade": "^1.7.4" }, "peerDependencies": { "svelte": "^4.0.0 || ^5.0.0-next.0", "typescript": "^5.0.0 || ^6.0.0" }, "bin": { "svelte-check": "bin/svelte-check" } }, "sha512-t2scM//ZuVbSY/T2w6FSBw1v9s2NEmh/g+sy1lqtosW5ylBV5AF4wFb1Ts9Kf3MbfPDUDJDZ9L436YT0SPTdvw=="],
 
+    "switchback-vscode": ["switchback-vscode@workspace:apps/vscode"],
+
     "tagged-tag": ["tagged-tag@1.0.0", "", {}, "sha512-yEFYrVhod+hdNyx7g5Bnkkb0G6si8HJurOoOEgC8B/O0uXLHlaey/65KRv6cuWBNhBgHKAROVpc7QyYqE5gFng=="],
 
     "tailwindcss": ["tailwindcss@4.3.3", "", {}, "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="],
@@ -1521,8 +1521,6 @@
 
     "@esbuild-kit/core-utils/esbuild": ["esbuild@0.18.20", "", { "optionalDependencies": { "@esbuild/android-arm": "0.18.20", "@esbuild/android-arm64": "0.18.20", "@esbuild/android-x64": "0.18.20", "@esbuild/darwin-arm64": "0.18.20", "@esbuild/darwin-x64": "0.18.20", "@esbuild/freebsd-arm64": "0.18.20", "@esbuild/freebsd-x64": "0.18.20", "@esbuild/linux-arm": "0.18.20", "@esbuild/linux-arm64": "0.18.20", "@esbuild/linux-ia32": "0.18.20", "@esbuild/linux-loong64": "0.18.20", "@esbuild/linux-mips64el": "0.18.20", "@esbuild/linux-ppc64": "0.18.20", "@esbuild/linux-riscv64": "0.18.20", "@esbuild/linux-s390x": "0.18.20", "@esbuild/linux-x64": "0.18.20", "@esbuild/netbsd-x64": "0.18.20", "@esbuild/openbsd-x64": "0.18.20", "@esbuild/sunos-x64": "0.18.20", "@esbuild/win32-arm64": "0.18.20", "@esbuild/win32-ia32": "0.18.20", "@esbuild/win32-x64": "0.18.20" }, "bin": { "esbuild": "bin/esbuild" } }, "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA=="],
 
-    "@harness/site/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
-
     "@isaacs/cliui/string-width": ["string-width@5.1.2", "", { "dependencies": { "eastasianwidth": "^0.2.0", "emoji-regex": "^9.2.2", "strip-ansi": "^7.0.1" } }, "sha512-HnLOCR3vjcY8beoNLtcjZ5/nxn2afmME6lhrDrebokqMap+XbeW8n9TXpPDOqdGK5qcI3oT0GKTW6wC7EMiVqA=="],
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
@@ -1624,6 +1622,8 @@
     "@smithy/util-utf8/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@sveltejs/vite-plugin-svelte/magic-string": ["magic-string@1.4.2", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.6.0" } }, "sha512-vG+rjFRj1PqdIBozIxAGMjPlOhaVe+GXpbttY/iSK7rGcJRMlwNJO7dcUwmUqkymsFLJiNGI06t4D7Fr7yRC9g=="],
+
+    "@switchback/site/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "@tailwindcss/node/lightningcss": ["lightningcss@1.32.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.32.0", "lightningcss-darwin-arm64": "1.32.0", "lightningcss-darwin-x64": "1.32.0", "lightningcss-freebsd-x64": "1.32.0", "lightningcss-linux-arm-gnueabihf": "1.32.0", "lightningcss-linux-arm64-gnu": "1.32.0", "lightningcss-linux-arm64-musl": "1.32.0", "lightningcss-linux-x64-gnu": "1.32.0", "lightningcss-linux-x64-musl": "1.32.0", "lightningcss-win32-arm64-msvc": "1.32.0", "lightningcss-win32-x64-msvc": "1.32.0" } }, "sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ=="],
 

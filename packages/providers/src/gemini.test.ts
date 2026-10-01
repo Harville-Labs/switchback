@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ThinkingLevel } from '@google/genai';
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 import { GeminiProvider, thinkingConfig, toGeminiContents } from './gemini.ts';
 import type { ChatEvent } from './types.ts';
 

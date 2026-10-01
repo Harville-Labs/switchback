@@ -637,7 +637,7 @@
           "type": "boolean"
         },
         "endpoint": {
-          "default": "https://harness.harville.ai/api/telemetry/v1",
+          "default": "https://switchback.harville.ai/api/telemetry/v1",
           "type": "string",
           "format": "uri"
         }
@@ -685,6 +685,6 @@
       }
     }
   },
-  "title": "Harness configuration",
+  "title": "Switchback configuration",
   "description": "See docs/configuration.md. String values may reference environment variables as {env:NAME}."
 }

@@ -1,9 +1,9 @@
 import * as assert from 'node:assert';
-import type { EngineEvent } from '@harness/protocol';
+import type { EngineEvent } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import { api, waitFor } from './helpers.ts';
 
-suite('Harness extension', () => {
+suite('Switchback extension', () => {
   test('activates and connects to the engine over stdio', async () => {
     const a = await api();
     assert.ok(a.init()?.agents.some((x) => x.name === 'explore'));
@@ -24,10 +24,10 @@ suite('Harness extension', () => {
     await api();
     const all = await vscode.commands.getCommands(true);
     for (const c of [
-      'harness.newSession',
-      'harness.setRoute',
-      'harness.askAboutSelection',
-      'harness.runSetup',
+      'switchback.newSession',
+      'switchback.setRoute',
+      'switchback.askAboutSelection',
+      'switchback.runSetup',
     ])
       assert.ok(all.includes(c), c);
   });

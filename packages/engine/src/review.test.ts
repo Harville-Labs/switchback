@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent } from '@harness/protocol';
-import { type Script, ScriptedProvider, type ScriptedTurn } from '@harness/providers';
+import type { EngineEvent } from '@switchback/protocol';
+import { type Script, ScriptedProvider, type ScriptedTurn } from '@switchback/providers';
 import { loadAgents } from './agents.ts';
-import { HarnessConfig } from './config.ts';
+import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import { parseReview, turnDiff } from './review.ts';
 
@@ -53,7 +53,7 @@ describe('turnDiff', () => {
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'harness-review-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-review-'));
   writeFileSync(join(root, 'math.ts'), 'export const add = (a, b) => a - b;\n');
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -71,7 +71,7 @@ function setup(local: Script, remote: Script, config: object = {}) {
   const rp = new ScriptedProvider('rp', 'remote', remote);
   const engine = new Engine({
     workspaceRoot: root,
-    config: HarnessConfig.parse({
+    config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
       models: {
         local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
@@ -187,7 +187,7 @@ describe('draft locally, review remotely', () => {
     const big = new ScriptedProvider('big', 'local', [{ text: APPROVE }]);
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' }, big: { type: 'mock', tier: 'local' } },
         models: {
           local: { provider: 'lp', model: 'small', contextWindow: 32_000 },

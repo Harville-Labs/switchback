@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent } from '@harness/protocol';
-import { type Provider, ScriptedProvider } from '@harness/providers';
+import type { EngineEvent } from '@switchback/protocol';
+import { type Provider, ScriptedProvider } from '@switchback/providers';
 import { CLASSIFIER_PROMPT, parseDifficulty } from './classifier.ts';
-import { HarnessConfig } from './config.ts';
+import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 
 test('parses JSON, JSON wrapped in chatter or think tags, and bare keywords', () => {
@@ -23,7 +23,7 @@ test('parses JSON, JSON wrapped in chatter or think tags, and bare keywords', ()
 describe('engine classifier', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'harness-classify-'));
+    root = mkdtempSync(join(tmpdir(), 'switchback-classify-'));
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -47,7 +47,7 @@ describe('engine classifier', () => {
     const rp = new ScriptedProvider('rp', 'remote', [{ text: 'remote answer' }]);
     const engine = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
         models: {
           local: { provider: 'lp', model: 'small', contextWindow: 32_000 },

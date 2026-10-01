@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import type { HarnessTestApi } from '../../src/extension.ts';
+import type { SwitchbackTestApi } from '../../src/extension.ts';
 
-export async function api(): Promise<HarnessTestApi> {
-  const ext = vscode.extensions.getExtension<HarnessTestApi>('harville-labs.harness-vscode');
+export async function api(): Promise<SwitchbackTestApi> {
+  const ext = vscode.extensions.getExtension<SwitchbackTestApi>('harville-labs.switchback-vscode');
   if (!ext) throw new Error('extension not found');
   const a = await ext.activate();
   await waitFor(() => a.connected(), 30_000, 'engine connection');

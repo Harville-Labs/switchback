@@ -1,6 +1,6 @@
-# Harness documentation
+# Switchback documentation
 
-## Using Harness
+## Using Switchback
 
 - [Configuration](configuration.md): every config key, file locations, environment variables
 - [Providers](providers.md): local servers, OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, any OpenAI-compatible API
@@ -11,10 +11,10 @@
 - [Draft locally, review remotely](review.md): a stronger model reviews what the local model changed
 - [Telemetry](telemetry.md): opt-in anonymous usage statistics, field by field
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
-- [Sites](sites.md): your company's site on harness.harville.ai: seats, members, roles, policy, devices
+- [Sites](sites.md): your company's site on switchback.harville.ai: seats, members, roles, policy, devices
 - [Terminal UI](clients/tui.md) · [VS Code extension](clients/vscode.md)
 
-## Building Harness
+## Building Switchback
 
 - [AGENTS.md](../AGENTS.md): start here; invariants and how to make common changes
 - [Architecture](architecture.md): components, turn lifecycle, persistence

@@ -24,14 +24,14 @@ import * as t from './schema.ts';
 /**
  * A site operator is the site's organization `owner`: the plugins' checks for
  * owners (SSO provider management among them) apply to operators unchanged.
- * Only Harness managers assign it (model.ts).
+ * Only Switchback managers assign it (model.ts).
  */
 export const OPERATOR = 'owner';
 /** Harville Labs staff: the admin plugin's role, with only the permissions below. */
 export const MANAGER = 'manager';
 /** The device flow's only client. */
-export const CLIENT_ID = 'harness';
-/** Harville Labs' own identity provider, for Harness managers. */
+export const CLIENT_ID = 'switchback';
+/** Harville Labs' own identity provider, for Switchback managers. */
 export const STAFF_SSO = 'harville-labs';
 /** Every site's identity provider is registered under this ID. */
 export const siteProviderId = (slug: string) => `site-${slug}`;
@@ -84,7 +84,7 @@ export function createAuth(config: AuthConfig) {
    * Who a verified SSO identity may sign in as. A site's provider signs in
    * only people with that site's email domain who are its members or have an
    * invitation to it, and the session it creates works only on that site.
-   * Harville Labs' provider signs in only existing Harness managers.
+   * Harville Labs' provider signs in only existing Switchback managers.
    */
   const resolveUser: SSOOptions['resolveUser'] = async (input) => {
     const email = input.providerUser.email.toLowerCase();
@@ -94,7 +94,7 @@ export function createAuth(config: AuthConfig) {
         return {
           action: 'reject',
           code: 'not_a_manager',
-          message: `${email} isn't a Harness manager.`,
+          message: `${email} isn't a Switchback manager.`,
         };
       return { action: 'link', userId: user.id, profile: 'preserve' };
     }
@@ -144,8 +144,8 @@ export function createAuth(config: AuthConfig) {
       sendMagicLink: async ({ email, url }) =>
         mailer.send({
           to: email,
-          subject: 'Sign in to Harness',
-          text: `Sign in to Harness:\n\n${url}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
+          subject: 'Sign in to Switchback',
+          text: `Sign in to Switchback:\n\n${url}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, ignore this email.`,
         }),
     }),
     deviceAuthorization({
@@ -191,13 +191,13 @@ export function createAuth(config: AuthConfig) {
       sendInvitationEmail: async ({ email, organization: site, inviter, invitation, role }) =>
         mailer.send({
           to: email,
-          subject: `You're invited to ${site.name} on Harness`,
-          text: `${inviter.user.email} invited you to ${site.name} on Harness as ${role === 'member' ? 'a member' : `an ${role === OPERATOR ? 'operator' : role}`}.\n\nAccept at ${config.publicUrl}/invite/${invitation.id}\n\nThen connect Harness with:\n\n  harness login --site ${site.slug}\n`,
+          subject: `You're invited to ${site.name} on Switchback`,
+          text: `${inviter.user.email} invited you to ${site.name} on Switchback as ${role === 'member' ? 'a member' : `an ${role === OPERATOR ? 'operator' : role}`}.\n\nAccept at ${config.publicUrl}/invite/${invitation.id}\n\nThen connect Switchback with:\n\n  switchback login --site ${site.slug}\n`,
         }),
     }),
     sso({
       resolveUser,
-      domainVerification: { enabled: true, tokenPrefix: 'harness-sso' },
+      domainVerification: { enabled: true, tokenPrefix: 'switchback-sso' },
       // Sites get SSO from an operator, never by joining through it.
       organizationProvisioning: { disabled: true },
       disableImplicitSignUp: false,
@@ -223,7 +223,7 @@ export function createAuth(config: AuthConfig) {
   ];
 
   return betterAuth({
-    appName: 'Harness',
+    appName: 'Switchback',
     baseURL: config.publicUrl,
     basePath: '/api/auth',
     secret: config.secret,
@@ -245,7 +245,7 @@ export function createAuth(config: AuthConfig) {
     user: { changeEmail: { enabled: false }, deleteUser: { enabled: false } },
     rateLimit: { enabled: true, storage: 'database' },
     advanced: {
-      cookiePrefix: 'harness',
+      cookiePrefix: 'switchback',
       // Rate limits key on the client's address, which Traefik sets (it replaces
       // any the client sent, since no proxy in front of it is trusted).
       ipAddress: { ipAddressHeaders: ['x-real-ip', 'x-forwarded-for'] },

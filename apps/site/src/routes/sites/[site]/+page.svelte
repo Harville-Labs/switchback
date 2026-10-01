@@ -5,7 +5,7 @@ const usd = (n: number) => `$${n.toFixed(2)}`;
 const calls = $derived(data.usage.totals.local + data.usage.totals.remote);
 </script>
 
-<svelte:head><title>{data.site.name} · Harness</title></svelte:head>
+<svelte:head><title>{data.site.name} · Switchback</title></svelte:head>
 
 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
   <div class="card"><div class="label">Remote spend, 30 days</div><div class="stat">{usd(data.usage.totals.costUsd)}</div></div>
@@ -27,7 +27,7 @@ const calls = $derived(data.usage.totals.local + data.usage.totals.remote);
       {#each data.usage.byModel as m (`${m.tier}/${m.model}`)}
         <tr><td>{m.model}</td><td>{m.tier}</td><td>{m.calls}</td><td>{usd(m.costUsd)}</td></tr>
       {:else}
-        <tr><td colspan="4" class="muted">No usage reported yet. It appears once members sign in with Harness.</td></tr>
+        <tr><td colspan="4" class="muted">No usage reported yet. It appears once members sign in with Switchback.</td></tr>
       {/each}
     </tbody>
   </table>

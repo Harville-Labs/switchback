@@ -1,20 +1,20 @@
-/** `harness config <path|show|schema|edit>`: inspect and edit configuration. */
+/** `switchback config <path|show|schema|edit>`: inspect and edit configuration. */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
   configJsonSchema,
-  harnessPaths,
   loadConfig,
   projectPaths,
   redactConfig,
-} from '@harness/engine';
+  switchbackPaths,
+} from '@switchback/engine';
 import { dim, green } from '../prompt.ts';
 
 export async function config(
   action: string | undefined,
   flags: { cwd: string; scope?: 'user' | 'project' },
 ): Promise<number> {
-  const hp = harnessPaths();
+  const hp = switchbackPaths();
   const pp = projectPaths(flags.cwd);
   const mark = (f: string) => (existsSync(f) ? green('exists') : dim('not created'));
   switch (action) {
@@ -54,7 +54,7 @@ export async function config(
       return proc.exited;
     }
     default:
-      console.error(`harness config: unknown action "${action}" (path, show, schema, edit)`);
+      console.error(`switchback config: unknown action "${action}" (path, show, schema, edit)`);
       return 2;
   }
 }

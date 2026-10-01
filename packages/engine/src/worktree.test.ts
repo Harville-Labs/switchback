@@ -10,9 +10,9 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent } from '@harness/protocol';
-import { type Provider, ScriptedProvider } from '@harness/providers';
-import { HarnessConfig } from './config.ts';
+import type { EngineEvent } from '@switchback/protocol';
+import { type Provider, ScriptedProvider } from '@switchback/providers';
+import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 
 let repo: string;
@@ -24,8 +24,8 @@ const git = (...args: string[]) => {
 };
 
 beforeEach(() => {
-  repo = realpathSync(mkdtempSync(join(tmpdir(), 'harness-wt-')));
-  data = mkdtempSync(join(tmpdir(), 'harness-wt-data-'));
+  repo = realpathSync(mkdtempSync(join(tmpdir(), 'switchback-wt-')));
+  data = mkdtempSync(join(tmpdir(), 'switchback-wt-data-'));
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'dev@example.com');
   git('config', 'user.name', 'Dev');
@@ -72,7 +72,7 @@ function setup(childFails = false) {
   const engine = new Engine({
     workspaceRoot: repo,
     dataDir: data,
-    config: HarnessConfig.parse({
+    config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
       routing: { mode: 'local-only' },
@@ -109,7 +109,9 @@ describe('worktree isolation', () => {
     expect(git('status', '--porcelain')).toBe('');
 
     // One branch per subagent, with its own version of the shared file.
-    const branches = git('branch', '--list', 'harness/*', '--format=%(refname:short)').split('\n');
+    const branches = git('branch', '--list', 'switchback/*', '--format=%(refname:short)').split(
+      '\n',
+    );
     expect(branches).toHaveLength(2);
     const contents = branches.map((b) => git('show', `${b}:shared.txt`)).sort();
     expect(contents).toEqual(['from one', 'from two']);
@@ -125,7 +127,7 @@ describe('worktree isolation', () => {
       .filter((p) => p.type === 'tool_result');
     for (const res of results) {
       expect(res.type === 'tool_result' && res.content).toMatch(
-        /committed on branch `harness\/\w+`/,
+        /committed on branch `switchback\/\w+`/,
       );
       expect(res.type === 'tool_result' && res.content).toContain('+from ');
     }
@@ -150,7 +152,7 @@ describe('worktree isolation', () => {
   });
 
   test('outside a git repository the task fails clearly', async () => {
-    const plain = mkdtempSync(join(tmpdir(), 'harness-nogit-'));
+    const plain = mkdtempSync(join(tmpdir(), 'switchback-nogit-'));
     const lp = new ScriptedProvider('lp', 'local', (req) =>
       req.messages.at(-1)?.parts.some((p) => p.type === 'tool_result')
         ? { text: 'ok' }
@@ -166,7 +168,7 @@ describe('worktree isolation', () => {
     const engine = new Engine({
       workspaceRoot: plain,
       dataDir: data,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' } },
         models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
       }),

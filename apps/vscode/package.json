@@ -1,6 +1,6 @@
 {
-  "name": "harness-vscode",
-  "displayName": "Harness",
+  "name": "switchback-vscode",
+  "displayName": "Switchback",
   "description": "Local-first coding agent that escalates to a hosted model (OpenAI, Anthropic, DeepSeek, ...) only when it needs to.",
   "version": "0.5.0",
   "private": true,
@@ -27,150 +27,150 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "harness",
-          "title": "Harness",
+          "id": "switchback",
+          "title": "Switchback",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "harness": [
+      "switchback": [
         {
           "type": "webview",
-          "id": "harness.chat",
+          "id": "switchback.chat",
           "name": "Chat"
         }
       ]
     },
     "commands": [
       {
-        "command": "harness.newSession",
+        "command": "switchback.newSession",
         "title": "New Session",
-        "category": "Harness",
+        "category": "Switchback",
         "icon": "$(add)"
       },
       {
-        "command": "harness.cancel",
+        "command": "switchback.cancel",
         "title": "Cancel Running Turn",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.setRoute",
+        "command": "switchback.setRoute",
         "title": "Set Routing (auto / local / remote)",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.showUsage",
+        "command": "switchback.showUsage",
         "title": "Show Usage and Savings",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.setReview",
+        "command": "switchback.setReview",
         "title": "Set Remote Review of Local Edits",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.showReceipt",
+        "command": "switchback.showReceipt",
         "title": "Show Session Receipt (Cost vs. All-Remote)",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.compact",
+        "command": "switchback.compact",
         "title": "Compact Conversation",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.askAboutSelection",
+        "command": "switchback.askAboutSelection",
         "title": "Ask About Selection",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.restartEngine",
+        "command": "switchback.restartEngine",
         "title": "Restart Engine",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.showLogs",
+        "command": "switchback.showLogs",
         "title": "Show Engine Logs",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.runSetup",
+        "command": "switchback.runSetup",
         "title": "Set Up Models",
-        "category": "Harness"
+        "category": "Switchback"
       },
       {
-        "command": "harness.openSession",
+        "command": "switchback.openSession",
         "title": "Open Session\u2026",
-        "category": "Harness",
+        "category": "Switchback",
         "icon": "$(history)"
       },
       {
-        "command": "harness.acceptEdit",
+        "command": "switchback.acceptEdit",
         "title": "Accept Proposed Edit",
-        "category": "Harness",
+        "category": "Switchback",
         "icon": "$(check)"
       },
       {
-        "command": "harness.rejectEdit",
+        "command": "switchback.rejectEdit",
         "title": "Reject Proposed Edit",
-        "category": "Harness",
+        "category": "Switchback",
         "icon": "$(close)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "harness.openSession",
-          "when": "view == harness.chat",
+          "command": "switchback.openSession",
+          "when": "view == switchback.chat",
           "group": "navigation"
         },
         {
-          "command": "harness.newSession",
-          "when": "view == harness.chat",
+          "command": "switchback.newSession",
+          "when": "view == switchback.chat",
           "group": "navigation"
         }
       ],
       "editor/context": [
         {
-          "command": "harness.askAboutSelection",
+          "command": "switchback.askAboutSelection",
           "when": "editorHasSelection",
-          "group": "harness"
+          "group": "switchback"
         }
       ],
       "editor/title": [
         {
-          "command": "harness.acceptEdit",
-          "when": "resourceScheme == harness-proposed",
+          "command": "switchback.acceptEdit",
+          "when": "resourceScheme == switchback-proposed",
           "group": "navigation@1"
         },
         {
-          "command": "harness.rejectEdit",
-          "when": "resourceScheme == harness-proposed",
+          "command": "switchback.rejectEdit",
+          "when": "resourceScheme == switchback-proposed",
           "group": "navigation@2"
         }
       ],
       "commandPalette": [
         {
-          "command": "harness.acceptEdit",
-          "when": "resourceScheme == harness-proposed"
+          "command": "switchback.acceptEdit",
+          "when": "resourceScheme == switchback-proposed"
         },
         {
-          "command": "harness.rejectEdit",
-          "when": "resourceScheme == harness-proposed"
+          "command": "switchback.rejectEdit",
+          "when": "resourceScheme == switchback-proposed"
         }
       ]
     },
     "configuration": {
-      "title": "Harness",
+      "title": "Switchback",
       "properties": {
-        "harness.executablePath": {
+        "switchback.executablePath": {
           "type": "string",
           "default": "",
-          "description": "Path to the harness executable. Empty: use the binary bundled with the extension, or `harness` on PATH. The extension runs `<path> serve --stdio`.",
+          "description": "Path to the switchback executable. Empty: use the binary bundled with the extension, or `switchback` on PATH. The extension runs `<path> serve --stdio`.",
           "scope": "machine-overridable"
         },
-        "harness.executableArgs": {
+        "switchback.executableArgs": {
           "type": "array",
           "items": {
             "type": "string"
@@ -178,7 +178,7 @@
           "default": [],
           "description": "Arguments inserted before `serve --stdio` (e.g. a script path when executablePath is `bun`)."
         },
-        "harness.defaultRoute": {
+        "switchback.defaultRoute": {
           "type": "string",
           "enum": [
             "auto",
@@ -186,25 +186,25 @@
             "remote"
           ],
           "default": "auto",
-          "description": "Routing for new prompts. `auto` follows your harness config."
+          "description": "Routing for new prompts. `auto` follows your switchback config."
         },
-        "harness.reviewEditsInDiffEditor": {
+        "switchback.reviewEditsInDiffEditor": {
           "type": "boolean",
           "default": true,
           "description": "Open proposed edits in the diff editor with Accept / Reject buttons, in addition to the prompt in the chat."
         },
-        "harness.sharedEngine": {
+        "switchback.sharedEngine": {
           "type": "boolean",
           "default": true,
-          "description": "Attach to the workspace's shared Harness engine, so the terminal UI and VS Code see the same live sessions. Off: this window runs its own engine."
+          "description": "Attach to the workspace's shared Switchback engine, so the terminal UI and VS Code see the same live sessions. Off: this window runs its own engine."
         }
       }
     },
     "jsonValidation": [
       {
         "fileMatch": [
-          "**/.harness/config.json",
-          "**/.config/harness/config.json"
+          "**/.switchback/config.json",
+          "**/.config/switchback/config.json"
         ],
         "url": "./schemas/config.schema.json"
       }
@@ -215,11 +215,11 @@
     "package": "bun run build && bunx @vscode/vsce package --no-dependencies",
     "build:test": "bun build test/suite/*.itest.ts --outdir out/test --target node --format cjs --external vscode",
     "test": "bun run build && bun run build:test && vscode-test --label dev",
-    "test:bundled": "bun run build && bun run build:test && bun ../cli/scripts/build.ts --outfile bin/harness && vscode-test --label bundled"
+    "test:bundled": "bun run build && bun run build:test && bun ../cli/scripts/build.ts --outfile bin/switchback && vscode-test --label bundled"
   },
   "dependencies": {
-    "@harness/client": "workspace:*",
-    "@harness/protocol": "workspace:*",
+    "@switchback/client": "workspace:*",
+    "@switchback/protocol": "workspace:*",
     "dompurify": "^3.4.16",
     "marked": "15"
   },

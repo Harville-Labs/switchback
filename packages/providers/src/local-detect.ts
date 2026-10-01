@@ -1,7 +1,7 @@
 /**
  * Discover local model servers and what they report about their models:
  * available models, tool-calling support, and the context window the server
- * will actually load. Used by `harness init` and, at runtime, to fill in a
+ * will actually load. Used by `switchback init` and, at runtime, to fill in a
  * local model's context window when config leaves it out.
  */
 

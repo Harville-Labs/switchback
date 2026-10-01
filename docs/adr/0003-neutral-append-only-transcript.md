@@ -8,7 +8,7 @@ One session may use several models: a local model and a hosted one (OpenAI, Anth
 
 ## Decision
 
-- The engine stores sessions in its own neutral format (`Message` / `Part` in `@harness/protocol`). Adapters translate at the edge.
+- The engine stores sessions in its own neutral format (`Message` / `Part` in `@switchback/protocol`). Adapters translate at the edge.
 - History is append-only, in memory and on disk (JSONL). Nothing edits or deletes earlier messages.
 - `ReasoningPart` records its `origin` model and an opaque provider payload (e.g. a Claude thinking signature). Adapters replay reasoning only to that exact model, and only where the provider wants it back (Claude, DeepSeek); others never see it.
 - The system prompt is frozen at session creation. The tool list has a fixed order.

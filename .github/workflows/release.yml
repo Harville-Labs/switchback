@@ -41,7 +41,7 @@ jobs:
           - { os: macos-latest, target: bun-darwin-x64, platform: darwin-x64, native: false }
     runs-on: ${{ matrix.os }}
     env:
-      OUT: dist/harness-${{ needs.verify.outputs.version }}-${{ matrix.platform }}${{ matrix.ext }}
+      OUT: dist/switchback-${{ needs.verify.outputs.version }}-${{ matrix.platform }}${{ matrix.ext }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -54,7 +54,7 @@ jobs:
         if: matrix.native
         shell: bash
         run: |
-          export HARNESS_HOME="$RUNNER_TEMP/harness-home"
+          export SWITCHBACK_HOME="$RUNNER_TEMP/switchback-home"
           test "$("./$OUT" --version)" = "${{ needs.verify.outputs.version }}"
           "./$OUT" run --mock "ping" | grep -q "You said: ping"
       - name: Check binary format
@@ -74,7 +74,7 @@ jobs:
       matrix:
         include:
           # One .vsix per platform with the engine binary inside, plus a universal
-          # one that uses `harness` from PATH.
+          # one that uses `switchback` from PATH.
           - { target: darwin-arm64, platform: darwin-arm64 }
           - { target: darwin-x64, platform: darwin-x64 }
           - { target: linux-x64, platform: linux-x64 }
@@ -99,8 +99,8 @@ jobs:
         if: matrix.platform != ''
         run: |
           mkdir -p apps/vscode/bin
-          cp "bin-download/harness-$VERSION-${{ matrix.platform }}${{ matrix.ext }}" "apps/vscode/bin/harness${{ matrix.ext }}"
-          chmod +x "apps/vscode/bin/harness${{ matrix.ext }}"
+          cp "bin-download/switchback-$VERSION-${{ matrix.platform }}${{ matrix.ext }}" "apps/vscode/bin/switchback${{ matrix.ext }}"
+          chmod +x "apps/vscode/bin/switchback${{ matrix.ext }}"
       - name: Third-party notices
         run: bun scripts/third-party-notices.ts --out apps/vscode/THIRD-PARTY-NOTICES.txt
       - name: Package
@@ -108,9 +108,9 @@ jobs:
         run: |
           mkdir -p ../../dist
           if [ "${{ matrix.target }}" = universal ]; then
-            bunx @vscode/vsce package --no-dependencies --allow-missing-repository -o "../../dist/harness-vscode-$VERSION.vsix"
+            bunx @vscode/vsce package --no-dependencies --allow-missing-repository -o "../../dist/switchback-vscode-$VERSION.vsix"
           else
-            bunx @vscode/vsce package --no-dependencies --allow-missing-repository --target ${{ matrix.target }} -o "../../dist/harness-vscode-$VERSION-${{ matrix.target }}.vsix"
+            bunx @vscode/vsce package --no-dependencies --allow-missing-repository --target ${{ matrix.target }} -o "../../dist/switchback-vscode-$VERSION-${{ matrix.target }}.vsix"
           fi
       - uses: actions/upload-artifact@v4
         with:
@@ -149,10 +149,10 @@ jobs:
             bun scripts/release.ts notes "${{ needs.verify.outputs.version }}"
             echo
             echo "### Install"
-            echo "On macOS and Linux: \`curl -fsSL https://harness.harville.ai/install.sh | sh\` (add \`-s -- --vscode\` after \`sh\` for the VS Code extension too). Or download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`harness\`. Then run \`harness init\`."
-            echo "Install the VS Code extension for your platform with \`code --install-extension harness-vscode-${{ needs.verify.outputs.version }}-<platform>.vsix\`; it includes the engine, so no separate install is needed. The universal .vsix uses \`harness\` from your PATH."
+            echo "On macOS and Linux: \`curl -fsSL https://switchback.harville.ai/install.sh | sh\` (add \`-s -- --vscode\` after \`sh\` for the VS Code extension too). Or download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`switchback\`. Then run \`switchback init\`."
+            echo "Install the VS Code extension for your platform with \`code --install-extension switchback-vscode-${{ needs.verify.outputs.version }}-<platform>.vsix\`; it includes the engine, so no separate install is needed. The universal .vsix uses \`switchback\` from your PATH."
             echo
-            echo "Binaries are not yet signed or notarized (tracked for 1.0). On macOS, clear the quarantine flag with \`xattr -d com.apple.quarantine harness\`."
+            echo "Binaries are not yet signed or notarized (tracked for 1.0). On macOS, clear the quarantine flag with \`xattr -d com.apple.quarantine switchback\`."
           } > notes.md
       - name: Create release
         env:
@@ -161,10 +161,10 @@ jobs:
           version="${{ needs.verify.outputs.version }}"
           prerelease=""
           case "$version" in 0.*|*-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Harness $version" --notes-file notes.md $prerelease
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Switchback $version" --notes-file notes.md $prerelease
       - name: Publish to the VS Code Marketplace
         if: env.VSCE_PAT != ''
-        run: for f in dist/harness-vscode-*-*.vsix; do bunx @vscode/vsce publish --packagePath "$f" --pre-release; done
+        run: for f in dist/switchback-vscode-*-*.vsix; do bunx @vscode/vsce publish --packagePath "$f" --pre-release; done
       - name: Publish to Open VSX
         if: env.OVSX_PAT != ''
-        run: for f in dist/harness-vscode-*-*.vsix; do bunx ovsx publish "$f" --pre-release; done
+        run: for f in dist/switchback-vscode-*-*.vsix; do bunx ovsx publish "$f" --pre-release; done

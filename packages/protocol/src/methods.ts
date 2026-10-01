@@ -1,6 +1,6 @@
 /**
  * The engine protocol: every request a client can make and every event the
- * engine can emit. TUI, VS Code, and headless `harness run` all speak exactly
+ * engine can emit. TUI, VS Code, and headless `switchback run` all speak exactly
  * this surface. Adding a capability means adding it here first.
  */
 import { z } from 'zod';

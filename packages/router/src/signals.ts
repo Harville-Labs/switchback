@@ -2,7 +2,7 @@
  * Per-session quality signals that feed escalation. The engine reports what
  * happened on each turn; the router reads a snapshot when routing the next one.
  */
-import type { Tier } from '@harness/protocol';
+import type { Tier } from '@switchback/protocol';
 import stableStringify from 'safe-stable-stringify';
 import type { EscalationConfig } from './config.ts';
 

@@ -15,6 +15,6 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0009](0009-external-agent-runtimes.md) | External agent runtimes as subagents | Accepted |
 | [0010](0010-hosted-sites.md) | Hosted, site-based control plane | Accepted (storage amended by 0011, roles by 0012, auth by 0013) |
 | [0011](0011-site-data-in-postgres-only.md) | Site data lives only in external Postgres | Accepted |
-| [0012](0012-harness-managers-and-site-operators.md) | Harness managers and site operators | Accepted (auth amended by 0013) |
+| [0012](0012-switchback-managers-and-site-operators.md) | Switchback managers and site operators | Accepted (auth amended by 0013) |
 | [0013](0013-site-auth-with-better-auth.md) | Site authentication with Better Auth, and single sign-on per site | Accepted |
-| [0014](0014-open-core-licensing.md) | Apache-2.0 for Harness, proprietary hosted sites | Accepted |
+| [0014](0014-open-core-licensing.md) | Apache-2.0 for Switchback, proprietary hosted sites | Accepted |

@@ -4,9 +4,9 @@
  * obviously hard tasks can start on the remote tier instead of failing locally
  * first. The router stays pure: the rating is just another input.
  */
-import type { Usage } from '@harness/protocol';
-import type { Provider } from '@harness/providers';
-import type { Difficulty } from '@harness/router';
+import type { Usage } from '@switchback/protocol';
+import type { Provider } from '@switchback/providers';
+import type { Difficulty } from '@switchback/router';
 
 export const CLASSIFIER_PROMPT = `You triage requests to a coding agent that runs on a small local model and can hand hard work to a stronger hosted model.
 

@@ -1,13 +1,13 @@
 import * as assert from 'node:assert';
 import { join } from 'node:path';
-import type { EngineEvent } from '@harness/protocol';
+import type { EngineEvent } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import { api, waitFor } from './helpers.ts';
 
 suite('Editor context', () => {
   test('the selection is attached to the prompt with its line range', async () => {
     const a = await api();
-    await vscode.commands.executeCommand('harness.newSession');
+    await vscode.commands.executeCommand('switchback.newSession');
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
     const doc = await vscode.workspace.openTextDocument(join(root, 'hello.ts'));
     const editor = await vscode.window.showTextDocument(doc);

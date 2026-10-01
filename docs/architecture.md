@@ -4,14 +4,14 @@
 
 ```
  ┌──────────────┐   ┌──────────────────────┐   ┌───────────────┐
- │  TUI (Ink)   │   │  VS Code extension   │   │ harness run / │
+ │  TUI (Ink)   │   │  VS Code extension   │   │ switchback run / │
  │  apps/cli    │   │  host  +  webview    │   │ 3rd-party     │
  └──────┬───────┘   └──────────┬───────────┘   └───────┬───────┘
         │ in-process pair      │ stdio (child process) │
         └──────────────┬───────┴───────────────────────┘
-                       │  JSON-RPC 2.0, NDJSON  (@harness/protocol)
+                       │  JSON-RPC 2.0, NDJSON  (@switchback/protocol)
                ┌───────▼────────────────────────────────────────┐
-               │ Engine (@harness/engine)                       │
+               │ Engine (@switchback/engine)                       │
                │  sessions · agent loop · tools · permissions   │
                │  subagents · config · usage ledger · store     │
                │        │                     │                 │
@@ -31,11 +31,11 @@ The engine is the product. Clients are views. That split is what lets the termin
 
 | Package | Responsibility |
 |---|---|
-| `@harness/protocol` | The contract. Transcript types (`Message`, `Part`), JSON-RPC framing, every method and event, transports. No dependencies on other workspace packages. |
-| `@harness/providers` | Talks to models. Each adapter translates the neutral transcript to a wire format and streams back `ChatEvent`s. Also holds the model catalog, pricing, and local-server detection. No provider is privileged ([ADR 0006](adr/0006-provider-neutrality.md)). |
-| `@harness/router` | Decides local vs. remote for each model call. Pure functions over a snapshot. |
-| `@harness/engine` | Runs agents. Owns all state and all side effects. Exposes itself via `serve(engine, transport)`. |
-| `@harness/client` | What clients import: `HarnessClient`, `spawnEngine`, and the view-model reducer. |
+| `@switchback/protocol` | The contract. Transcript types (`Message`, `Part`), JSON-RPC framing, every method and event, transports. No dependencies on other workspace packages. |
+| `@switchback/providers` | Talks to models. Each adapter translates the neutral transcript to a wire format and streams back `ChatEvent`s. Also holds the model catalog, pricing, and local-server detection. No provider is privileged ([ADR 0006](adr/0006-provider-neutrality.md)). |
+| `@switchback/router` | Decides local vs. remote for each model call. Pure functions over a snapshot. |
+| `@switchback/engine` | Runs agents. Owns all state and all side effects. Exposes itself via `serve(engine, transport)`. |
+| `@switchback/client` | What clients import: `SwitchbackClient`, `spawnEngine`, and the view-model reducer. |
 
 ## Lifecycle of a turn
 
@@ -61,15 +61,15 @@ The `task` tool creates a child session (`parentId` set) running a named agent w
 
 | What | Where | Format |
 |---|---|---|
-| User config | `~/.config/harness/config.json` | JSONC |
-| Project config | `.harness/config.json` | JSONC |
-| Agent definitions | `~/.config/harness/agents/`, `.claude/agents/`, `.harness/agents/` | Markdown + YAML frontmatter |
-| Sessions | `~/.local/share/harness/sessions/<id>.jsonl` | Header line, then one message per line, append-only. Written on the first message, so the header has the title and unused sessions leave no file. |
-| Usage ledger | `~/.local/share/harness/usage.jsonl` | One entry per model call |
-| Organization sign-in | `~/.config/harness/auth.json` | Credentials, mode 0600 |
-| Organization policy cache | `~/.local/share/harness/org-policy.json` | Last policy received, mode 0600 ([organizations.md](organizations.md)) |
+| User config | `~/.config/switchback/config.json` | JSONC |
+| Project config | `.switchback/config.json` | JSONC |
+| Agent definitions | `~/.config/switchback/agents/`, `.claude/agents/`, `.switchback/agents/` | Markdown + YAML frontmatter |
+| Sessions | `~/.local/share/switchback/sessions/<id>.jsonl` | Header line, then one message per line, append-only. Written on the first message, so the header has the title and unused sessions leave no file. |
+| Usage ledger | `~/.local/share/switchback/usage.jsonl` | One entry per model call |
+| Organization sign-in | `~/.config/switchback/auth.json` | Credentials, mode 0600 |
+| Organization policy cache | `~/.local/share/switchback/org-policy.json` | Last policy received, mode 0600 ([organizations.md](organizations.md)) |
 
-`HARNESS_HOME` relocates everything (tests and development). `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are respected.
+`SWITCHBACK_HOME` relocates everything (tests and development). `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are respected.
 
 Append-only files make crash recovery trivial: a torn final line is ignored and everything before it is intact. More importantly, append-only history is required for provider prompt caching and for Claude's thinking-block validation ([ADR 0003](adr/0003-neutral-append-only-transcript.md)).
 
@@ -77,18 +77,18 @@ Append-only files make crash recovery trivial: a torn final line is ignored and 
 
 | Transport | Used by | Notes |
 |---|---|---|
-| In-process pair (`createTransportPair`) | TUI, `harness run`, tests | Messages are JSON round-tripped, so it behaves exactly like a wire. |
-| stdio (`harness serve --stdio`) | VS Code, any external client | NDJSON on stdin/stdout; logs on stderr. |
-| Unix socket / named pipe (`harness serve --socket`) | The shared workspace daemon: TUI and VS Code attach to it by default | Same framing; token-authenticated; see below. |
+| In-process pair (`createTransportPair`) | TUI, `switchback run`, tests | Messages are JSON round-tripped, so it behaves exactly like a wire. |
+| stdio (`switchback serve --stdio`) | VS Code, any external client | NDJSON on stdin/stdout; logs on stderr. |
+| Unix socket / named pipe (`switchback serve --socket`) | The shared workspace daemon: TUI and VS Code attach to it by default | Same framing; token-authenticated; see below. |
 
 ## The shared daemon
 
 By default the TUI and VS Code don't each run an engine. They attach to one daemon per workspace, so a session started in the terminal can be watched, joined, or approved from VS Code and vice versa.
 
-- The first client runs `harness serve --socket` in the background. It records the socket path, a random token, its version, and its pid in `<data>/daemons/<workspace-hash>.json` (mode 0600, directory 0700).
+- The first client runs `switchback serve --socket` in the background. It records the socket path, a random token, its version, and its pid in `<data>/daemons/<workspace-hash>.json` (mode 0600, directory 0700).
 - Clients connect and present the token in `initialize`. A daemon of another version is never used; that client runs a private engine instead.
-- Clients leaving, including calling `shutdown`, don't affect others. The daemon exits after `HARNESS_DAEMON_IDLE_MS` (default 10 minutes) with no clients and no running turns.
-- If anything fails, the client falls back to a private engine (in-process for the TUI, `serve --stdio` for VS Code). Opt out with `harness --no-daemon` / `HARNESS_NO_DAEMON=1` or the `harness.sharedEngine` setting. Mock engines are never shared.
+- Clients leaving, including calling `shutdown`, don't affect others. The daemon exits after `SWITCHBACK_DAEMON_IDLE_MS` (default 10 minutes) with no clients and no running turns.
+- If anything fails, the client falls back to a private engine (in-process for the TUI, `serve --stdio` for VS Code). Opt out with `switchback --no-daemon` / `SWITCHBACK_NO_DAEMON=1` or the `switchback.sharedEngine` setting. Mock engines are never shared.
 - `session.list` marks running sessions, and opening one mid-turn continues with its live events.
 
 ## Security boundaries

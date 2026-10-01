@@ -8,11 +8,11 @@ We need a first-class terminal experience and a first-class VS Code extension, a
 
 ## Decision
 
-All behavior lives in a headless engine (`@harness/engine`). Clients connect over a versioned JSON-RPC protocol (`@harness/protocol`) and render from a shared reducer (`@harness/client/view`).
+All behavior lives in a headless engine (`@switchback/engine`). Clients connect over a versioned JSON-RPC protocol (`@switchback/protocol`) and render from a shared reducer (`@switchback/client/view`).
 
-- The VS Code extension spawns `harness serve --stdio`.
+- The VS Code extension spawns `switchback serve --stdio`.
 - The TUI runs the engine in-process but still connects through an in-memory transport pair that JSON round-trips every message. There is no private API.
-- Configuration that affects behavior lives only in harness config files, never in client settings.
+- Configuration that affects behavior lives only in switchback config files, never in client settings.
 
 ## Consequences
 

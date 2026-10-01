@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent, Message } from '@harness/protocol';
-import { type Script, ScriptedProvider } from '@harness/providers';
+import type { EngineEvent, Message } from '@switchback/protocol';
+import { type Script, ScriptedProvider } from '@switchback/providers';
 import { loadAgents } from './agents.ts';
-import { HarnessConfig } from './config.ts';
+import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import {
   type PrivatePathMatcher,
@@ -100,7 +100,7 @@ describe('secret redaction', () => {
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'harness-privacy-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-privacy-'));
   mkdirSync(join(root, 'secrets'));
   writeFileSync(join(root, 'secrets', 'prod.env'), 'DB_PASSWORD=swordfish\n');
   writeFileSync(join(root, 'README.md'), 'hello\n');
@@ -114,7 +114,7 @@ function setup(local: Script, remote: Script, config: object = {}) {
   const make = () =>
     new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
         models: {
           local: { provider: 'lp', model: 'small', contextWindow: 8_000 },

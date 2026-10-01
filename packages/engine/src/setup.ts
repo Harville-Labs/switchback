@@ -1,6 +1,6 @@
 /**
  * Config setup: turn setup answers into a config layer. Server detection
- * lives in @harness/providers (it's also used at runtime). Used by `harness init`; kept here (not in the CLI) so any
+ * lives in @switchback/providers (it's also used at runtime). Used by `switchback init`; kept here (not in the CLI) so any
  * client can drive setup through the same logic.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -10,9 +10,15 @@ import {
   CATALOG,
   type CatalogModel,
   type HostedProviderKind,
-} from '@harness/providers';
+} from '@switchback/providers';
 import { applyEdits, type JSONPath, modify } from 'jsonc-parser';
-import { deepMerge, defaultConfig, HarnessConfig, parseJsonc, referenceProblem } from './config.ts';
+import {
+  deepMerge,
+  defaultConfig,
+  parseJsonc,
+  referenceProblem,
+  SwitchbackConfig,
+} from './config.ts';
 
 export {
   type DetectedModel,
@@ -21,7 +27,7 @@ export {
   KNOWN_SERVERS,
   type LocalServerKind,
   OLLAMA_DEFAULT_CONTEXT,
-} from '@harness/providers';
+} from '@switchback/providers';
 
 // ---------------------------------------------------------------------------
 // Answers -> config
@@ -211,7 +217,7 @@ export function writeConfigLayer(file: string, layer: Record<string, unknown>): 
   }
   const existing = parseJsonc(text) as Record<string, unknown>;
   const merged = deepMerge(existing, layer);
-  const check = HarnessConfig.safeParse(deepMerge(defaultConfig(), merged));
+  const check = SwitchbackConfig.safeParse(deepMerge(defaultConfig(), merged));
   const problem = check.success
     ? referenceProblem(check.data)
     : check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');

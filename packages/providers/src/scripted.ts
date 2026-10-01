@@ -1,9 +1,9 @@
 /**
  * Deterministic provider driven by a script of canned turns. Used by the test
- * suite and by `harness --provider mock` for demos and client development
+ * suite and by `switchback --provider mock` for demos and client development
  * without any model running.
  */
-import type { Part, StopReason, Tier, Usage } from '@harness/protocol';
+import type { Part, StopReason, Tier, Usage } from '@switchback/protocol';
 import type { ChatEvent, ChatRequest, HealthStatus, Provider } from './types.ts';
 
 export interface ScriptedTurn {

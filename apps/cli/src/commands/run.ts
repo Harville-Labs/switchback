@@ -1,6 +1,6 @@
-/** `harness run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
-import { privateLabel, receiptLine, redactedLabel, reviewLines } from '@harness/client';
-import type { RoutePreference } from '@harness/protocol';
+/** `switchback run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
+import { privateLabel, receiptLine, redactedLabel, reviewLines } from '@switchback/client';
+import type { RoutePreference } from '@switchback/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 
 export interface RunFlags extends CommonFlags {
@@ -16,7 +16,11 @@ export interface RunFlags extends CommonFlags {
 const dim = (s: string) => (process.stderr.isTTY ? `\x1b[2m${s}\x1b[0m` : s);
 
 export async function run(flags: RunFlags): Promise<number> {
-  const { client } = await connectInProcess(flags, flags.yes ? 'approve' : 'deny', 'harness-run');
+  const { client } = await connectInProcess(
+    flags,
+    flags.yes ? 'approve' : 'deny',
+    'switchback-run',
+  );
   const session = await client.request('session.create', flags.agent ? { agent: flags.agent } : {});
 
   let pinned = false;

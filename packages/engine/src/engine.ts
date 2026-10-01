@@ -29,7 +29,7 @@ import {
   type Usage,
   type UsagePeriod,
   type UsageReport,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 import {
   type ChatEvent,
   createProvider,
@@ -37,8 +37,8 @@ import {
   type Provider,
   ProviderError,
   tierOf,
-} from '@harness/providers';
-import { type Difficulty, type ModelInfo, Router, SignalTracker } from '@harness/router';
+} from '@switchback/providers';
+import { type Difficulty, type ModelInfo, Router, SignalTracker } from '@switchback/router';
 import { z } from 'zod';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import { classifyPrompt } from './classifier.ts';
@@ -50,13 +50,13 @@ import {
   SUMMARIZER_PROMPT,
   summaryRequest,
 } from './compaction.ts';
-import type { HarnessConfig } from './config.ts';
+import type { SwitchbackConfig } from './config.ts';
 import { estimateEscalationCost } from './estimate.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { allowsMcpTool, McpHub } from './mcp/hub.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import type { OrgStatus } from './org/policy.ts';
-import { harnessPaths, projectPaths } from './paths.ts';
+import { projectPaths, switchbackPaths } from './paths.ts';
 import {
   type PrivatePathMatcher,
   privatePathMatcher,
@@ -107,7 +107,7 @@ export const ENGINE_VERSION = '0.5.0';
 
 export interface EngineOptions {
   workspaceRoot: string;
-  config: HarnessConfig;
+  config: SwitchbackConfig;
   prices?: Record<string, Price>;
   /** Override provider construction (tests, embedding). Keyed by provider id. */
   providers?: Map<string, Provider>;
@@ -128,7 +128,7 @@ export interface EngineOptions {
   interaction?: 'prompt' | 'approve' | 'deny';
   /** Organization policy in effect, reported to clients. */
   org?: OrgStatus;
-  /** Where engine-owned files live (worktrees). Defaults to the harness data directory. */
+  /** Where engine-owned files live (worktrees). Defaults to the switchback data directory. */
   dataDir?: string;
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];
@@ -187,7 +187,7 @@ const UNKNOWN_REMOTE_CONTEXT = 200_000;
 const HEALTH_TTL_FAIL_MS = 5_000;
 
 /** The model whose prices define "saved": the first configured remote model. */
-function referenceModel(config: HarnessConfig): string | undefined {
+function referenceModel(config: SwitchbackConfig): string | undefined {
   const alias = config.routing.remote.find((a) => config.models[a]);
   return alias ? config.models[alias]?.model : undefined;
 }
@@ -230,7 +230,7 @@ export class Engine {
     this.mcp = this.startMcp(config);
   }
 
-  private startMcp(config: HarnessConfig): McpHub | undefined {
+  private startMcp(config: SwitchbackConfig): McpHub | undefined {
     if (!Object.keys(config.mcpServers).length) return undefined;
     return new McpHub(config.mcpServers, this.options.workspaceRoot, (level, message) =>
       this.notify(level, message),
@@ -247,7 +247,7 @@ export class Engine {
           name: u.name,
           state: 'untrusted' as const,
           tools: 0,
-          error: `defined in ${u.source}; run \`harness mcp trust\` to allow it`,
+          error: `defined in ${u.source}; run \`switchback mcp trust\` to allow it`,
         })),
       ],
     };
@@ -256,10 +256,10 @@ export class Engine {
   /** Build an engine from disk: agents, instructions, persistent store, and ledger. */
   static fromWorkspace(
     workspaceRoot: string,
-    config: HarnessConfig,
+    config: SwitchbackConfig,
     extra: Partial<EngineOptions> = {},
   ): { engine: Engine; agentErrors: string[] } {
-    const hp = harnessPaths();
+    const hp = switchbackPaths();
     const pp = projectPaths(workspaceRoot);
     const agentDirs: EngineOptions['agentDirs'] = [
       { dir: hp.agentsDir, source: 'user' },
@@ -552,7 +552,7 @@ export class Engine {
    * call; providers whose settings didn't change keep their state.
    */
   applyConfig(next: {
-    config: HarnessConfig;
+    config: SwitchbackConfig;
     prices?: Record<string, Price>;
     org?: OrgStatus;
     untrustedMcp?: { name: string; source: string }[];
@@ -1105,7 +1105,7 @@ export class Engine {
   // -------------------------------------------------------------------------
 
   /**
-   * Draft a system prompt for a new agent (`harness agents new`). A single
+   * Draft a system prompt for a new agent (`switchback agents new`). A single
    * tool-free call on the same model choice as summaries: local when
    * reachable, remote only when routing and budget allow.
    */
@@ -1728,7 +1728,7 @@ export class Engine {
   /** Worktrees live in the data directory, one folder per repository. */
   private worktreeDir(): string {
     const id = createHash('sha256').update(this.options.workspaceRoot).digest('hex').slice(0, 12);
-    return join(this.options.dataDir ?? harnessPaths().dataDir, 'worktrees', id);
+    return join(this.options.dataDir ?? switchbackPaths().dataDir, 'worktrees', id);
   }
 
   /**
@@ -1745,7 +1745,7 @@ export class Engine {
     if (!ok)
       return `${text}\n\nThe worktree is kept for inspection at ${wt.path} (branch ${wt.branch}).`;
     try {
-      const r = await finishWorktree(wt, `harness: ${description}`);
+      const r = await finishWorktree(wt, `switchback: ${description}`);
       if (!r.changed) return `${text}\n\n(Isolated in a worktree; it made no file changes.)`;
       return `${text}\n\nChanges are committed on branch \`${wt.branch}\` (from ${wt.base.slice(0, 8)}); your working tree is unchanged. Review and merge them if you want them, e.g. \`git merge ${wt.branch}\`.\n\n${r.stat}\n\n${truncate(r.diff, 20_000)}`;
     } catch (err) {

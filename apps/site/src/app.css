@@ -222,7 +222,7 @@
     cursor: pointer;
   }
 
-  /* A command to copy, e.g. `harness login --site acme` */
+  /* A command to copy, e.g. `switchback login --site acme` */
   .command {
     display: inline-flex;
     align-items: stretch;

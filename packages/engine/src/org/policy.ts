@@ -9,8 +9,8 @@
  *
  * See docs/organizations.md for the server contract.
  */
-import { tierOf } from '@harness/providers';
-import type { HarnessConfig } from '../config.ts';
+import { tierOf } from '@switchback/providers';
+import type { SwitchbackConfig } from '../config.ts';
 
 export { OrgPolicy } from './schema.ts';
 
@@ -39,9 +39,9 @@ export function leafPaths(layer: Record<string, unknown>, prefix = ''): string[]
 
 /** Apply restrictions to an already-merged config. Returns a new config and notes. */
 export function applyRestrictions(
-  config: HarnessConfig,
+  config: SwitchbackConfig,
   policy: OrgPolicy,
-): { config: HarnessConfig; notes: string[] } {
+): { config: SwitchbackConfig; notes: string[] } {
   const r = policy.restrictions;
   const notes: string[] = [];
   const orgProviderIds = new Set([
@@ -49,7 +49,7 @@ export function applyRestrictions(
     ...Object.keys((policy.enforced.providers as Record<string, unknown>) ?? {}),
   ]);
 
-  const providers: HarnessConfig['providers'] = {};
+  const providers: SwitchbackConfig['providers'] = {};
   for (const [id, pc] of Object.entries(config.providers)) {
     let why: string | undefined;
     if (!r.allowRemote && tierOf(pc) === 'remote') why = 'remote providers are disabled';
@@ -61,7 +61,7 @@ export function applyRestrictions(
     else providers[id] = pc;
   }
 
-  const models: HarnessConfig['models'] = {};
+  const models: SwitchbackConfig['models'] = {};
   for (const [alias, m] of Object.entries(config.models)) {
     if (providers[m.provider]) models[alias] = m;
   }
@@ -70,7 +70,7 @@ export function applyRestrictions(
     ...Object.keys((policy.defaults.mcpServers as Record<string, unknown>) ?? {}),
     ...Object.keys((policy.enforced.mcpServers as Record<string, unknown>) ?? {}),
   ]);
-  const mcpServers: HarnessConfig['mcpServers'] = {};
+  const mcpServers: SwitchbackConfig['mcpServers'] = {};
   for (const [name, server] of Object.entries(config.mcpServers)) {
     if (r.allowUserMcpServers || orgMcp.has(name)) mcpServers[name] = server;
     else

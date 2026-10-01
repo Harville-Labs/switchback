@@ -13,7 +13,7 @@ import type {
   SessionSummary,
   Tier,
   UsageReport,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 
 export type ViewItem =
   | { kind: 'user'; id: string; text: string }
@@ -84,7 +84,7 @@ export function redactedLabel(kinds: string[], model: ModelRef): string {
 }
 
 /**
- * A review row as text, shared by the TUI and `harness run`: a headline, then
+ * A review row as text, shared by the TUI and `switchback run`: a headline, then
  * one line per finding.
  */
 export function reviewLines(r: Extract<ViewItem, { kind: 'review' }>): string[] {
@@ -533,7 +533,7 @@ function updateSubagentRow(state: ViewState, event: SessionEvent): ViewState {
 export type UsageBreakdown = 'rule' | 'agent' | 'model';
 
 /**
- * Plain-text usage summary shared by `harness usage`, the TUI's `/usage`, and
+ * Plain-text usage summary shared by `switchback usage`, the TUI's `/usage`, and
  * VS Code. `by` adds a breakdown table.
  */
 export function formatUsage(u: UsageReport, by?: UsageBreakdown): string {
@@ -665,7 +665,7 @@ export function describeSession(state: ViewState, indent = ''): string {
   return lines.join('\n');
 }
 
-/** `harness mcp`, doctor, and the TUI's `/mcp`. */
+/** `switchback mcp`, doctor, and the TUI's `/mcp`. */
 export function formatMcpServers(servers: McpServerInfo[]): string {
   if (!servers.length)
     return 'No MCP servers configured. Add them under `mcpServers` (see docs/configuration.md).';

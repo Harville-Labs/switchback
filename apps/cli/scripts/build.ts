@@ -1,7 +1,7 @@
 /**
- * Compile the `harness` single-file executable.
+ * Compile the `switchback` single-file executable.
  *
- *   bun apps/cli/scripts/build.ts [--target bun-darwin-arm64] [--outfile dist/harness]
+ *   bun apps/cli/scripts/build.ts [--target bun-darwin-arm64] [--outfile dist/switchback]
  */
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -11,7 +11,7 @@ const { values } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
     target: { type: 'string' },
-    outfile: { type: 'string', default: 'dist/harness' },
+    outfile: { type: 'string', default: 'dist/switchback' },
   },
 });
 

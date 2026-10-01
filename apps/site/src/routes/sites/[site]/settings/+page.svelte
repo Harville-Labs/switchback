@@ -17,9 +17,9 @@ const options = [
 <h2 class="mb-2 section-title">Usage statistics</h2>
 <form method="POST" action="?/telemetry" use:enhance class="card flex flex-col gap-3">
   <p>
-    Members' Harness can send anonymous daily statistics (counts, token totals, costs, and routing
+    Members' Switchback can send anonymous daily statistics (counts, token totals, costs, and routing
     decisions; never prompts, code, or file names) to this site, where Harville Labs uses them to
-    support you and improve Harness. A member's <code>DO_NOT_TRACK</code> setting always wins.
+    support you and improve Switchback. A member's <code>DO_NOT_TRACK</code> setting always wins.
   </p>
   <fieldset class="flex flex-col gap-1">
     <legend class="sr-only">Usage statistics</legend>

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type EngineEvent, type Message, textOf } from '@harness/protocol';
-import { type Provider, ScriptedProvider } from '@harness/providers';
+import { type EngineEvent, type Message, textOf } from '@switchback/protocol';
+import { type Provider, ScriptedProvider } from '@switchback/providers';
 import {
   chooseBoundary,
   contextOf,
@@ -12,7 +12,7 @@ import {
   renderForSummary,
   SUMMARIZER_PROMPT,
 } from './compaction.ts';
-import { HarnessConfig } from './config.ts';
+import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import { FileSessionStore } from './store.ts';
 import { messageTokens, promptTokens } from './tokens.ts';
@@ -124,7 +124,7 @@ test('summarizer input trims long tool output and skips reasoning', () => {
 describe('engine compaction', () => {
   let root: string;
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'harness-compact-'));
+    root = mkdtempSync(join(tmpdir(), 'switchback-compact-'));
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -145,7 +145,7 @@ describe('engine compaction', () => {
     const store = new FileSessionStore(join(root, 'sessions'));
     const e = new Engine({
       workspaceRoot: root,
-      config: HarnessConfig.parse({
+      config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
         models: {
           local: { provider: 'lp', model: 'small', contextWindow: localWindow },

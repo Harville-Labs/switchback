@@ -1,6 +1,6 @@
 # Privacy: what never leaves your machine
 
-Local models see everything; remote models see only what Harness sends them. Two settings control what that is.
+Local models see everything; remote models see only what Switchback sends them. Two settings control what that is.
 
 ```jsonc
 "privacy": {

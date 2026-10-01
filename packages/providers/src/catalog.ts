@@ -1,5 +1,5 @@
 /**
- * Known hosted models, grouped by provider. Used by `harness init` to offer
+ * Known hosted models, grouped by provider. Used by `switchback init` to offer
  * choices and by pricing to cost usage. Every provider is described the same
  * way; none is a default. Anything not listed still works when configured by
  * hand, and prices can be overridden per model in config.

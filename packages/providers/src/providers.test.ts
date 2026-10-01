@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 import { toAnthropicMessages } from './anthropic.ts';
 import { OpenAICompatibleProvider, toWireMessages } from './openai-compatible.ts';
 import { costUsd, priceFor } from './pricing.ts';

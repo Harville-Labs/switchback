@@ -1,6 +1,6 @@
 /**
  * Write THIRD-PARTY-NOTICES.txt: the license of every package bundled into the
- * `harness` binary and the VS Code extension, which releases must ship with.
+ * `switchback` binary and the VS Code extension, which releases must ship with.
  *
  *   bun scripts/third-party-notices.ts [--out dist/THIRD-PARTY-NOTICES.txt]
  *
@@ -82,9 +82,9 @@ export async function collect(builds = BUILDS): Promise<Notice[]> {
 
 export function render(notices: Notice[]): string {
   const head = [
-    'Third-party software in Harness',
+    'Third-party software in Switchback',
     '',
-    'The harness binary and the Harness VS Code extension include the packages',
+    'The switchback binary and the Switchback VS Code extension include the packages',
     'below. Each is used under the license that follows its name.',
     '',
   ];

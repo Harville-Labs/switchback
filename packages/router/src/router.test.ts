@@ -185,7 +185,7 @@ describe('Router', () => {
     test('routes remote by default and says why', () => {
       const d = routed(remoteOnly().decide(input()));
       expect(d.model.alias).toBe('remote');
-      expect(d.reason).toContain('harness init');
+      expect(d.reason).toContain('switchback init');
     });
 
     test('a local-pinned agent (explore) still runs instead of failing', () => {
@@ -196,7 +196,7 @@ describe('Router', () => {
     test('an explicit local request is blocked with setup guidance', () => {
       const d = remoteOnly().decide(input({ preference: 'local' }));
       expect(d.kind).toBe('block');
-      expect(d.kind === 'block' && d.reason).toContain('harness init');
+      expect(d.kind === 'block' && d.reason).toContain('switchback init');
     });
   });
 });

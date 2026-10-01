@@ -249,7 +249,7 @@ export const grepTool = defineTool({
   summarize: (i) => `grep ${i.pattern}`,
   async run(input, ctx) {
     const cwd = resolveInWorkspace(ctx.workspaceRoot, input.path ?? '.');
-    if (ripgrep === undefined) ripgrep = process.env.HARNESS_NO_RIPGREP ? null : Bun.which('rg');
+    if (ripgrep === undefined) ripgrep = process.env.SWITCHBACK_NO_RIPGREP ? null : Bun.which('rg');
     const out =
       (ripgrep ? await grepRipgrep(ripgrep, input, cwd, ctx.workspaceRoot) : undefined) ??
       (await grepJs(input, cwd, ctx.workspaceRoot));

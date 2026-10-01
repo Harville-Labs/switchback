@@ -1,6 +1,6 @@
 /**
  * Connects to the configured MCP servers with the official SDK and exposes
- * their tools as harness tools named `mcp__<server>__<tool>` (Claude Code's
+ * their tools as switchback tools named `mcp__<server>__<tool>` (Claude Code's
  * naming, so agent files that list MCP tools work in both).
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -135,7 +135,7 @@ export class McpHub {
   }
 
   private async connect(name: string, cfg: McpServerConfig): Promise<Connection> {
-    const client = new Client({ name: 'harness', version: '1' });
+    const client = new Client({ name: 'switchback', version: '1' });
     const timeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
     await client.connect(this.transport(cfg), { signal: timeout, timeout: CONNECT_TIMEOUT_MS });
     const listed: Awaited<ReturnType<Client['listTools']>>['tools'] = [];

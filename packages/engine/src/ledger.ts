@@ -16,8 +16,8 @@ import {
   type UsagePeriod,
   type UsageReport,
   type UsageRow,
-} from '@harness/protocol';
-import { costUsd, type Price, priceFor } from '@harness/providers';
+} from '@switchback/protocol';
+import { costUsd, type Price, priceFor } from '@switchback/providers';
 
 export interface LedgerEntry {
   ts: string;

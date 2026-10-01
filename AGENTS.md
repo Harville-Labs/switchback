@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Guide for AI coding agents (Claude Code, Harness itself, Codex, Cursor, and others) and for the humans reviewing their work. Read this before changing anything.
+Guide for AI coding agents (Claude Code, Switchback itself, Codex, Cursor, and others) and for the humans reviewing their work. Read this before changing anything.
 
 ## What this repo is
 
-Harness is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
+Switchback is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
 
 Design docs live in [docs/](docs/README.md). Start with [docs/architecture.md](docs/architecture.md).
 
@@ -21,7 +21,7 @@ bun run dev -- doctor            # show effective config and provider health
 bun run format                   # apply Biome formatting
 ```
 
-Set `HARNESS_HOME=$(mktemp -d)` when running the CLI during development so you never touch the real `~/.config/harness` or usage ledger.
+Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so you never touch the real `~/.config/switchback` or usage ledger.
 
 ## Layout
 
@@ -32,7 +32,7 @@ Set `HARNESS_HOME=$(mktemp -d)` when running the CLI during development so you n
 | `packages/router` | Pure routing decisions and escalation signals | Do I/O. It takes snapshots and returns decisions. |
 | `packages/engine` | Sessions, the agent loop, tools, permissions, subagents, config, ledger, organization policy (`src/org`), JSON-RPC server | Render anything |
 | `packages/client` | Typed protocol client, child-process transport, shared view-model reducer | Import engine code |
-| `apps/cli` | `harness` binary: TUI (Ink), `run`, `serve --stdio`, `doctor`, `usage` | Contain agent behavior |
+| `apps/cli` | `switchback` binary: TUI (Ink), `run`, `serve --stdio`, `doctor`, `usage` | Contain agent behavior |
 | `apps/vscode` | VS Code extension (host + webview) | Contain agent behavior |
 | `apps/site` | Hosted console for company sites (proprietary; see `apps/site/LICENSE`) | Be imported by any Apache-2.0 package |
 
@@ -40,7 +40,7 @@ Set `HARNESS_HOME=$(mktemp -d)` when running the CLI during development so you n
 
 These hold the product together. A change that breaks one needs an ADR in `docs/adr/` first.
 
-1. **Clients are thin.** The TUI and VS Code extension talk to the engine only through `@harness/client` and the protocol. Neither imports `@harness/engine` internals for behavior. The TUI runs the engine in-process, but still through a transport pair, not a private fast path. If a client needs something, add a protocol method or event.
+1. **Clients are thin.** The TUI and VS Code extension talk to the engine only through `@switchback/client` and the protocol. Neither imports `@switchback/engine` internals for behavior. The TUI runs the engine in-process, but still through a transport pair, not a private fast path. If a client needs something, add a protocol method or event.
 2. **One view model.** Both clients render from `reduce()` in `packages/client/src/view.ts`. Fix display logic there, not in one client.
 3. **The router is pure.** `Router.decide()` has no I/O, no clock, and no randomness. The engine gathers health, spend, and signals, then passes them in. Every decision carries a `rule` and a human-readable `reason` that the UI shows.
 4. **Transcripts are append-only.** Never rewrite or delete earlier messages in a session. Provider prompt caches and reasoning replay (Claude thinking signatures, DeepSeek `reasoning_content`) depend on stable prefixes. Compaction appends a marker and changes only what is *sent* ([ADR 0008](docs/adr/0008-append-only-compaction.md)); build request context with `contextOf()`, never from `s.messages` directly.
@@ -63,7 +63,7 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 
 **Change agent definitions.** Built-ins live in `packages/engine/src/agents.ts`. The file format must stay compatible with Claude Code's `.claude/agents/*.md`. See [docs/subagents.md](docs/subagents.md).
 
-**Add a config key.** Add it to the Zod schema in `packages/engine/src/config.ts` with a default, run `bun run schema` (a test fails if the shipped schema is stale), document it in [docs/configuration.md](docs/configuration.md), and, if users choose it during setup, add a prompt and flag to `harness init`. Never add a default local provider or model: local setup is the user's choice.
+**Add a config key.** Add it to the Zod schema in `packages/engine/src/config.ts` with a default, run `bun run schema` (a test fails if the shipped schema is stale), document it in [docs/configuration.md](docs/configuration.md), and, if users choose it during setup, add a prompt and flag to `switchback init`. Never add a default local provider or model: local setup is the user's choice.
 
 **Change what an organization can control.** Extend `OrgPolicy` in `packages/engine/src/org/policy.ts`, apply it in `applyRestrictions` (restrictions remove things; they never add), test it in `org.test.ts` against the dev server, and document it in [docs/organizations.md](docs/organizations.md). Org-enforced settings must win over every user and project setting, including in-session grants.
 

@@ -2,7 +2,7 @@
  * External agent runtimes (ADR 0009): a complete agent that runs one task and
  * reports back, used as a subagent.
  */
-import type { ModelRef, Usage } from '@harness/protocol';
+import type { ModelRef, Usage } from '@switchback/protocol';
 
 export type RuntimeEvent =
   | { type: 'text'; text: string }

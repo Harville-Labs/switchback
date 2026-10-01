@@ -1,9 +1,8 @@
-/** `harness login | logout | whoami`: organization sign-in and policy status. */
+/** `switchback login | logout | whoami`: organization sign-in and policy status. */
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   clearAuth,
-  harnessPaths,
   loadConfig,
   OrgAuthError,
   OrgClient,
@@ -11,10 +10,11 @@ import {
   OrgServerError,
   readAuth,
   readCachedPolicy,
+  switchbackPaths,
   toAuth,
   writeAuth,
   writeCachedPolicy,
-} from '@harness/engine';
+} from '@switchback/engine';
 import { bold, dim, green, yellow } from '../prompt.ts';
 
 export interface LoginFlags {
@@ -25,9 +25,9 @@ export interface LoginFlags {
   token?: string;
 }
 
-/** Where Harville Labs hosts sites; `HARNESS_SITES_URL` points elsewhere (staging, tests). */
+/** Where Harville Labs hosts sites; `SWITCHBACK_SITES_URL` points elsewhere (staging, tests). */
 export function siteServer(site: string, env = process.env): string {
-  const base = (env.HARNESS_SITES_URL ?? 'https://harness.harville.ai').replace(/\/+$/, '');
+  const base = (env.SWITCHBACK_SITES_URL ?? 'https://switchback.harville.ai').replace(/\/+$/, '');
   return `${base}/sites/${encodeURIComponent(site)}`;
 }
 
@@ -61,17 +61,17 @@ export function describeRestrictions(policy: OrgPolicy): string[] {
 
 export async function login(flags: LoginFlags): Promise<number> {
   if (flags.site && flags.server) {
-    console.error('harness login: pass --site or --server, not both');
+    console.error('switchback login: pass --site or --server, not both');
     return 2;
   }
   const server = (
     (flags.site ? siteServer(flags.site) : flags.server) ??
     readAuth()?.server ??
-    process.env.HARNESS_ORG_SERVER
+    process.env.SWITCHBACK_ORG_SERVER
   )?.replace(/\/+$/, '');
   if (!server) {
     console.error(
-      'harness login: pass --site <id> (your company’s Harness site) or --server <url>',
+      'switchback login: pass --site <id> (your company’s Switchback site) or --server <url>',
     );
     return 2;
   }
@@ -113,7 +113,7 @@ export async function login(flags: LoginFlags): Promise<number> {
     writeAuth(auth);
     // Only usage from now on is reported to the organization.
     writeFileSync(
-      join(harnessPaths().dataDir, 'org-usage-state.json'),
+      join(switchbackPaths().dataDir, 'org-usage-state.json'),
       JSON.stringify({ reportedThrough: new Date().toISOString() }),
     );
 
@@ -129,7 +129,7 @@ export async function login(flags: LoginFlags): Promise<number> {
     return 0;
   } catch (err) {
     if (err instanceof OrgAuthError || err instanceof OrgServerError) {
-      console.error(`harness login: ${err.message}`);
+      console.error(`switchback login: ${err.message}`);
       return 1;
     }
     throw err;
@@ -138,8 +138,8 @@ export async function login(flags: LoginFlags): Promise<number> {
 
 export function logout(): number {
   const auth = readAuth();
-  if (process.env.HARNESS_ORG_TOKEN) {
-    console.error('harness logout: signed in through HARNESS_ORG_TOKEN; unset it instead');
+  if (process.env.SWITCHBACK_ORG_TOKEN) {
+    console.error('switchback logout: signed in through SWITCHBACK_ORG_TOKEN; unset it instead');
     return 2;
   }
   clearAuth();
@@ -153,7 +153,7 @@ export function whoami(cwd: string): number {
   const auth = readAuth();
   if (!auth) {
     console.log(
-      'Not signed in to an organization. `harness login --site <id>` (or `--server <url>`) to sign in.',
+      'Not signed in to an organization. `switchback login --site <id>` (or `--server <url>`) to sign in.',
     );
     return 0;
   }

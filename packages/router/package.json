@@ -1,5 +1,5 @@
 {
-  "name": "@harness/router",
+  "name": "@switchback/router",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@harness/protocol": "workspace:*",
+    "@switchback/protocol": "workspace:*",
     "safe-stable-stringify": "^2.5.0",
     "zod": "^4.6.5"
   }

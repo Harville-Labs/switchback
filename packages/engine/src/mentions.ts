@@ -3,7 +3,7 @@
  * message, so every client gets mentions for free.
  */
 import { readFile, stat } from 'node:fs/promises';
-import type { Attachment, TextPart } from '@harness/protocol';
+import type { Attachment, TextPart } from '@switchback/protocol';
 import { resolveInWorkspace } from './tools/tool.ts';
 
 const MAX_FILES = 10;

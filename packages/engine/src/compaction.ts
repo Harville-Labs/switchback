@@ -3,7 +3,7 @@
  * a marker message records a summary and where verbatim history resumes, and
  * every request is built from the latest marker with `contextOf`.
  */
-import type { CompactionPart, Message } from '@harness/protocol';
+import type { CompactionPart, Message } from '@switchback/protocol';
 import { messageTokens } from './tokens.ts';
 
 export function markerOf(m: Message): CompactionPart | undefined {

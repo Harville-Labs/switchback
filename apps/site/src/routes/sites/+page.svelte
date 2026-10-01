@@ -4,12 +4,12 @@ import CopyCommand from '$lib/components/CopyCommand.svelte';
 let { data } = $props();
 </script>
 
-<svelte:head><title>Your sites · Harness</title></svelte:head>
+<svelte:head><title>Your sites · Switchback</title></svelte:head>
 
 <h1 class="mb-4 page-title">Your sites</h1>
-{#if data.user?.harnessManager}
+{#if data.user?.switchbackManager}
   <p class="muted mb-4">
-    As a Harness manager you can see <a href="/admin">every site</a> and assign its operators.
+    As a Switchback manager you can see <a href="/admin">every site</a> and assign its operators.
   </p>
 {/if}
 {#each data.invitations as i (i.id)}
@@ -20,13 +20,13 @@ let { data } = $props();
 {#if data.sites.length}
   <div class="card overflow-x-auto p-0">
     <table class="table">
-      <thead><tr><th>Site</th><th>Role</th><th>Connect Harness</th></tr></thead>
+      <thead><tr><th>Site</th><th>Role</th><th>Connect Switchback</th></tr></thead>
       <tbody>
         {#each data.sites as s (s.slug)}
           <tr>
             <td><a href="/sites/{s.slug}" class="font-medium">{s.name}</a></td>
             <td>{s.role}</td>
-            <td><CopyCommand command="harness login --site {s.slug}" quiet /></td>
+            <td><CopyCommand command="switchback login --site {s.slug}" quiet /></td>
           </tr>
         {/each}
       </tbody>
@@ -34,6 +34,6 @@ let { data } = $props();
   </div>
 {:else}
   <p class="muted">
-    You aren't a member of any site yet. Ask your company's Harness operator to invite {data.user?.email}.
+    You aren't a member of any site yet. Ask your company's Switchback operator to invite {data.user?.email}.
   </p>
 {/if}

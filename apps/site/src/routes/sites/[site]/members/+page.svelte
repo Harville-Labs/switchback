@@ -5,9 +5,11 @@ import Flash from '$lib/components/Flash.svelte';
 let { data, form } = $props();
 
 const full = $derived(data.used >= data.site.seats);
-// Only a Harness manager assigns or removes operators.
+// Only a Switchback manager assigns or removes operators.
 const roles = $derived(
-  (['member', 'admin', 'operator'] as const).filter((r) => data.harnessManager || r !== 'operator'),
+  (['member', 'admin', 'operator'] as const).filter(
+    (r) => data.switchbackManager || r !== 'operator',
+  ),
 );
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'â€”');
 </script>
@@ -43,7 +45,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'â€
     </thead>
     <tbody>
       {#each data.members as m (m.id)}
-        {@const editable = data.manager && (data.harnessManager || m.role !== 'operator')}
+        {@const editable = data.manager && (data.switchbackManager || m.role !== 'operator')}
         <tr>
           <td>{m.email}</td>
           <td>

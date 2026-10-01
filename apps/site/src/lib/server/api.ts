@@ -1,5 +1,5 @@
 /**
- * The Harness client protocol (docs/organizations.md), served per site under
+ * The Switchback client protocol (docs/organizations.md), served per site under
  * `/sites/<site>/v1`, and anonymous telemetry at `/api/telemetry/v1`. Plain
  * Request → Response functions: the `+server.ts` routes call them, and tests
  * call them directly. Sign-in is Better Auth's device authorization grant

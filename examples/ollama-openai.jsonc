@@ -4,7 +4,7 @@
     "openai": { "type": "openai" }
   },
   "models": {
-    // Omit contextWindow for local models and Harness asks the server.
+    // Omit contextWindow for local models and Switchback asks the server.
     "local": { "provider": "ollama", "model": "<your model>" },
     "remote": {
       "provider": "openai",

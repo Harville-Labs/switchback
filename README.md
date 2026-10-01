@@ -1,27 +1,27 @@
 <p align="center"><img src="docs/assets/harville-labs.png" alt="Harville Labs" width="480"></p>
 
-# Harness
+# Switchback
 
-A local-first coding agent from Harville Labs. Most of the work runs on a model on your own machine; Harness escalates the hard parts to the hosted model of your choice (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) and shows you exactly when and why it did.
+A local-first coding agent from Harville Labs. (Formerly Harness.) Most of the work runs on a model on your own machine; Switchback escalates the hard parts to the hosted model of your choice (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) and shows you exactly when and why it did.
 
 - **Local by default, remote when it matters.** A transparent router sends each model call to your local model (Ollama, llama.cpp, LM Studio, vLLM) and escalates to your remote provider (OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API) when the local model is struggling, the context won't fit, or you ask. No vendor is a default, and every provider gets the same features. Budgets cap remote spend.
 - **Subagents that save money.** Delegate searches and side tasks to parallel subagents, each with its own context and routing. The built-in `explore` agent always runs locally. Agent definitions are compatible with Claude Code's `.claude/agents/*.md`, and their `opus`/`sonnet`/`haiku` model names map to your provider's large/medium/small models.
 - **Draft locally, review remotely.** Optionally, a stronger model reviews every change the local model makes, and the local model fixes what it finds. A review costs a few cents; having the remote model write the change would cost many times more. See [docs/review.md](docs/review.md).
 - **Private files stay private.** List paths that must never reach a remote model (`secrets/`, `*.pem`, customer data); once a session touches one, it stays on local models for good, even if you ask for remote. Credentials in anything sent remotely are redacted first. See [docs/privacy.md](docs/privacy.md).
-- **Managed by your organization.** Sign in with `harness login` and your org's server pushes approved models (including company GPU servers), spend caps, provider restrictions, or an outright remote-off switch, live. See [docs/organizations.md](docs/organizations.md).
+- **Managed by your organization.** Sign in with `switchback login` and your org's server pushes approved models (including company GPU servers), spend caps, provider restrictions, or an outright remote-off switch, live. See [docs/organizations.md](docs/organizations.md).
 - **Terminal and VS Code, same engine.** The TUI and the VS Code extension are thin clients of one engine and one protocol, and they render from the same view model, so they can't drift apart.
 
-> Status: pre-release (v0.1). Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/harness/issues) and the [roadmap](docs/roadmap.md).
+> Status: pre-release (v0.1). Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/switchback/issues) and the [roadmap](docs/roadmap.md).
 
 ## Install
 
 On macOS or Linux:
 
 ```sh
-curl -fsSL https://harness.harville.ai/install.sh | sh
+curl -fsSL https://switchback.harville.ai/install.sh | sh
 ```
 
-The script ([scripts/install.sh](scripts/install.sh)) downloads the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/harness/releases), checks it against the release's `SHA256SUMS`, and puts it in `~/.local/bin`. It never uses sudo or edits your shell profile. Add options after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. On Windows, download `harness-<version>-windows-x64.exe` from the release.
+The script ([scripts/install.sh](scripts/install.sh)) downloads the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/switchback/releases), checks it against the release's `SHA256SUMS`, and puts it in `~/.local/bin`. It never uses sudo or edits your shell profile. Add options after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. On Windows, download `switchback-<version>-windows-x64.exe` from the release.
 
 For VS Code alone, install the `.vsix` for your platform from the release (**Extensions: Install from VSIX…**). It includes the engine.
 
@@ -30,15 +30,15 @@ For VS Code alone, install the `.vsix` for your platform from the release (**Ext
 Start a local model server (Ollama, LM Studio, llama.cpp, or vLLM) with a model that supports tool calling, then:
 
 ```sh
-harness init                   # detects your local server, picks models, writes the config
-harness doctor                 # check config, providers, and agents
-harness                        # open the TUI in the current directory
-harness run "explain src/index.ts"   # headless, one prompt
+switchback init                   # detects your local server, picks models, writes the config
+switchback doctor                 # check config, providers, and agents
+switchback                        # open the TUI in the current directory
+switchback run "explain src/index.ts"   # headless, one prompt
 ```
 
 ### From source
 
-Requires [Bun](https://bun.sh) 1.4+. `bun run dev --` stands in for `harness`:
+Requires [Bun](https://bun.sh) 1.4+. `bun run dev --` stands in for `switchback`:
 
 ```sh
 bun install
@@ -46,7 +46,7 @@ bun run dev -- --mock          # try the TUI with scripted models, no setup need
 bun run dev -- init
 ```
 
-Harness ships with no default local model. Which server and model your machine runs is your choice, and `harness init` sets it up. Running `harness` for the first time with no config offers to run setup.
+Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` sets it up. Running `switchback` for the first time with no config offers to run setup.
 
 In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/usage` shows spend and savings, and `esc` cancels.
 
@@ -66,7 +66,7 @@ Budget and availability guards then apply. Over budget means staying local; a pr
 
 ## Configuration
 
-`harness init` writes `~/.config/harness/config.json` (this machine) or `.harness/config.json` (this project). You can also edit these files directly: `harness config edit` opens one, `harness config show` prints the merged result, and the VS Code extension validates and autocompletes both. A typical file:
+`switchback init` writes `~/.config/switchback/config.json` (this machine) or `.switchback/config.json` (this project). You can also edit these files directly: `switchback config edit` opens one, `switchback config show` prints the merged result, and the VS Code extension validates and autocompletes both. A typical file:
 
 ```jsonc
 {
@@ -98,7 +98,7 @@ packages/
   engine/     sessions, agent loop, tools, permissions, subagents, config, usage ledger
   client/     typed protocol client and the shared view model
 apps/
-  cli/        `harness` binary: TUI, run, serve --stdio, doctor, usage
+  cli/        `switchback` binary: TUI, run, serve --stdio, doctor, usage
   vscode/     VS Code extension
 docs/         architecture, routing, subagents, providers, protocol, ADRs
 ```
@@ -114,4 +114,4 @@ To work on the VS Code extension, open this folder in VS Code and run the **Run 
 
 ## License
 
-Harness is licensed under the [Apache License 2.0](LICENSE). The exception is `apps/site`, the hosted console for company sites, which is proprietary ([apps/site/LICENSE](apps/site/LICENSE)). Using Harness on your own is free; companies pay for a site to manage it for their team ([ADR 0014](docs/adr/0014-open-core-licensing.md)).
+Switchback is licensed under the [Apache License 2.0](LICENSE). The exception is `apps/site`, the hosted console for company sites, which is proprietary ([apps/site/LICENSE](apps/site/LICENSE)). Using Switchback on your own is free; companies pay for a site to manage it for their team ([ADR 0014](docs/adr/0014-open-core-licensing.md)).

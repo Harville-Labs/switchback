@@ -15,7 +15,7 @@ import {
   statSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 
 export interface SessionHeader {
   id: string;

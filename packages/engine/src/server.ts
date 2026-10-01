@@ -23,7 +23,7 @@ import {
   SessionPromptParams,
   type Transport,
   UsageGetParams,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 import type { z } from 'zod';
 import type { Engine } from './engine.ts';
 
@@ -153,7 +153,7 @@ export function stdioTransport(): Transport {
     (m) => {
       for (const h of handlers) h(m);
     },
-    (line) => process.stderr.write(`harness: ignoring malformed input: ${line.slice(0, 200)}\n`),
+    (line) => process.stderr.write(`switchback: ignoring malformed input: ${line.slice(0, 200)}\n`),
   );
   process.stdin.on('data', (chunk: Buffer) => decoder.push(chunk));
   process.stdin.on('end', () => {

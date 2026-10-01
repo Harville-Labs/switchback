@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 import { aliasModels, CATALOG } from './catalog.ts';
 import { effortParams, normalizeUsage, OpenAICompatibleProvider } from './openai-compatible.ts';
 import { createProvider } from './registry.ts';
@@ -204,12 +204,12 @@ describe('openai SDK transport', () => {
       baseUrl: 'https://api.example/v1',
       tier: 'remote',
       apiKey: 'k1',
-      headers: { 'x-title': 'harness' },
+      headers: { 'x-title': 'switchback' },
       fetch: fetchStub,
     });
     await drain(p, {});
     expect(seen[0]?.headers.get('authorization')).toBe('Bearer k1');
-    expect(seen[0]?.headers.get('x-title')).toBe('harness');
+    expect(seen[0]?.headers.get('x-title')).toBe('switchback');
   });
 
   test('5xx from a local server is retryable and not retried by the SDK', async () => {

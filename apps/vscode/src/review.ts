@@ -1,13 +1,13 @@
 /**
  * Review proposed edits in VS Code's diff editor. The proposed file is a
- * virtual `harness-proposed:` document; Accept / Reject buttons in the editor
+ * virtual `switchback-proposed:` document; Accept / Reject buttons in the editor
  * title answer the pending permission request. The tab closes when the
  * request resolves, wherever it was answered.
  */
 import { existsSync } from 'node:fs';
 import * as vscode from 'vscode';
 
-export const PROPOSED_SCHEME = 'harness-proposed';
+export const PROPOSED_SCHEME = 'switchback-proposed';
 
 export class EditReview implements vscode.TextDocumentContentProvider, vscode.Disposable {
   private readonly contents = new Map<string, string>();
@@ -43,7 +43,7 @@ export class EditReview implements vscode.TextDocumentContentProvider, vscode.Di
       'vscode.diff',
       left,
       right,
-      `${proposed.path} (proposed by Harness)`,
+      `${proposed.path} (proposed by Switchback)`,
       { preview: false },
     );
     // Recorded once the tab exists, so `pending()` means "visible to the user".

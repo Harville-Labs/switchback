@@ -6,7 +6,7 @@ import { defineConfig } from '@vscode/test-cli';
 // Integration tests run inside a real VS Code with the extension loaded.
 const base = {
   launchArgs: ['--disable-extensions', '--disable-workspace-trust'],
-  env: { HARNESS_HOME: mkdtempSync(join(tmpdir(), 'harness-vscode-test-')) },
+  env: { SWITCHBACK_HOME: mkdtempSync(join(tmpdir(), 'switchback-vscode-test-')) },
 };
 
 export default defineConfig([

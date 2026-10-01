@@ -17,14 +17,14 @@ jobs:
       postgres:
         image: postgres:18-alpine
         env:
-          POSTGRES_USER: harness
-          POSTGRES_PASSWORD: harness
-          POSTGRES_DB: harness_site_test
+          POSTGRES_USER: switchback
+          POSTGRES_PASSWORD: switchback
+          POSTGRES_DB: switchback_site_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U harness" --health-interval 2s --health-retries 30
+          --health-cmd "pg_isready -U switchback" --health-interval 2s --health-retries 30
     env:
-      TEST_DATABASE_URL: postgres://harness:harness@localhost:5432/harness_site_test
+      TEST_DATABASE_URL: postgres://switchback:switchback@localhost:5432/switchback_site_test
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -78,13 +78,13 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - name: Compile CLI binary
-        run: bun apps/cli/scripts/build.ts --outfile dist/harness
+        run: bun apps/cli/scripts/build.ts --outfile dist/switchback
       - name: Smoke test binary
         shell: bash
         run: |
-          export HARNESS_HOME="$RUNNER_TEMP/harness-home"
-          ./dist/harness --version
-          ./dist/harness run --mock "ping" | grep -q "You said: ping"
+          export SWITCHBACK_HOME="$RUNNER_TEMP/switchback-home"
+          ./dist/switchback --version
+          ./dist/switchback run --mock "ping" | grep -q "You said: ping"
       - name: Build VS Code extension
         if: matrix.os == 'ubuntu-latest'
         run: bun run --cwd apps/vscode build

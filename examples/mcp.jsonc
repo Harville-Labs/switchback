@@ -1,5 +1,5 @@
 // MCP servers next to your models. Tools show up as mcp__<server>__<tool>.
-// Project-level servers (.harness/config.json or .mcp.json) need `harness mcp trust`.
+// Project-level servers (.switchback/config.json or .mcp.json) need `switchback mcp trust`.
 {
   "mcpServers": {
     "github": {

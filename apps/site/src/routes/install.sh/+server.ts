@@ -1,7 +1,7 @@
 import script from '../../../../../scripts/install.sh?raw';
 import type { RequestHandler } from './$types';
 
-/** `curl -fsSL https://harness.harville.ai/install.sh | sh`; plain text so browsers show it. */
+/** `curl -fsSL https://switchback.harville.ai/install.sh | sh`; plain text so browsers show it. */
 export const GET: RequestHandler = () =>
   new Response(script, {
     headers: {

@@ -12,16 +12,16 @@ Writing code with a remote model is expensive because every step resends the gro
 }
 ```
 
-Turn it on or off for a single prompt without changing config: `/review on|off|default` in the TUI, **Harness: Set Remote Review of Local Edits** in VS Code, or `harness run --review` / `--no-review`.
+Turn it on or off for a single prompt without changing config: `/review on|off|default` in the TUI, **Switchback: Set Remote Review of Local Edits** in VS Code, or `switchback run --review` / `--no-review`.
 
 ## What happens
 
-1. The turn runs as usual. Harness notes every file a model edits with `edit` or `write`, including edits by subagents in the same checkout, and remembers each file's content before its first edit.
+1. The turn runs as usual. Switchback notes every file a model edits with `edit` or `write`, including edits by subagents in the same checkout, and remembers each file's content before its first edit.
 2. If a **local** model edited anything, the reviewer gets the user's request, the model's closing summary, and a unified diff of the whole turn's changes (capped at 2,000 lines). No tools, no conversation history.
 3. The reviewer answers `approve` or `revise`, with a one-sentence summary and specific findings (`file:line`, severity `bug` / `risk` / `nit`, and what to do). A `revise` with only nits counts as an approve.
 4. On `revise`, the findings are added to the conversation as a message to the local model, which fixes them (or explains why it disagrees). The fixed diff, still measured from the files' original content, is reviewed again, up to `maxRounds` reviews. Findings from the last review are shown to you but not sent back.
 
-Both clients show each review: `✓ Reviewed by claude-opus-5: approved`, or `↻ claude-opus-5 asked for changes` with the findings listed. The reviewer's call appears as a routing decision with rule `review`, and its cost is recorded under `review` in `harness usage --by rule`.
+Both clients show each review: `✓ Reviewed by claude-opus-5: approved`, or `↻ claude-opus-5 asked for changes` with the findings listed. The reviewer's call appears as a routing decision with rule `review`, and its cost is recorded under `review` in `switchback usage --by rule`.
 
 ## When it doesn't run
 

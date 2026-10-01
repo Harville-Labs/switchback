@@ -19,7 +19,7 @@ export const bashTool = defineTool({
       stdout: 'pipe',
       stderr: 'pipe',
       stdin: 'ignore',
-      env: { ...process.env, HARNESS: '1' },
+      env: { ...process.env, SWITCHBACK: '1' },
     });
     const timeout = setTimeout(() => proc.kill(), input.timeoutMs ?? 120_000);
     const onAbort = () => proc.kill();

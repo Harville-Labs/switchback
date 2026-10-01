@@ -6,7 +6,7 @@ import { grepJs, grepRipgrep } from './fs.ts';
 
 let root: string;
 beforeAll(() => {
-  root = realpathSync(mkdtempSync(join(tmpdir(), 'harness-grep-')));
+  root = realpathSync(mkdtempSync(join(tmpdir(), 'switchback-grep-')));
   mkdirSync(join(root, 'src'));
   mkdirSync(join(root, 'node_modules', 'dep'), { recursive: true });
   mkdirSync(join(root, 'build'));

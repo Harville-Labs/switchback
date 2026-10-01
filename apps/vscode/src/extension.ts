@@ -1,18 +1,18 @@
 /**
- * VS Code extension host. A thin client: it spawns `harness serve --stdio`,
+ * VS Code extension host. A thin client: it spawns `switchback serve --stdio`,
  * relays engine events to the chat webview, and forwards user actions back.
  * All behavior (routing, tools, permissions, agents) lives in the engine.
  */
 
 import { chmodSync, existsSync } from 'node:fs';
-import { connectDaemon, HarnessClient, spawnEngine } from '@harness/client';
+import { connectDaemon, SwitchbackClient, spawnEngine } from '@switchback/client';
 import type {
   EngineEvent,
   InitializeResult,
   Message,
   RoutePreference,
   SessionSummary,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 import * as vscode from 'vscode';
 import { type AttachChoice, EditorContext } from './context.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
@@ -26,22 +26,22 @@ const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
 let bundledBinary: string | undefined;
 
 /**
- * The harness executable and leading args: the user's setting if set, else
- * the bundled binary, else `harness` on PATH. `${workspaceFolder}` is expanded.
+ * The switchback executable and leading args: the user's setting if set, else
+ * the bundled binary, else `switchback` on PATH. `${workspaceFolder}` is expanded.
  */
-function harnessCommand(root: string): { command: string; args: string[] } {
-  const cfg = vscode.workspace.getConfiguration('harness');
+function switchbackCommand(root: string): { command: string; args: string[] } {
+  const cfg = vscode.workspace.getConfiguration('switchback');
   // VS Code does not expand variables in extension settings; support the common one.
   const expand = (v: string) => v.replaceAll(WORKSPACE_FOLDER_VAR, root);
   const configured = cfg.get<string>('executablePath', '').trim();
   return {
-    command: configured ? expand(configured) : (bundledBinary ?? 'harness'),
+    command: configured ? expand(configured) : (bundledBinary ?? 'switchback'),
     args: cfg.get<string[]>('executableArgs', []).map(expand),
   };
 }
 
 class EngineConnection implements vscode.Disposable {
-  client: HarnessClient | undefined;
+  client: SwitchbackClient | undefined;
   init: InitializeResult | undefined;
   session: SessionSummary | undefined;
   route: RoutePreference;
@@ -55,7 +55,7 @@ class EngineConnection implements vscode.Disposable {
     private readonly review: EditReview,
   ) {
     this.route = vscode.workspace
-      .getConfiguration('harness')
+      .getConfiguration('switchback')
       .get<RoutePreference>('defaultRoute', 'auto');
   }
 
@@ -68,15 +68,15 @@ class EngineConnection implements vscode.Disposable {
     for (const l of this.listeners) l(m);
   }
 
-  /** True when attached to the workspace's shared daemon (see harness.sharedEngine). */
+  /** True when attached to the workspace's shared daemon (see switchback.sharedEngine). */
   shared = false;
 
   async start(): Promise<void> {
-    const cfg = vscode.workspace.getConfiguration('harness');
-    const { command, args: baseArgs } = harnessCommand(this.root);
-    // VS Code's own telemetry switch is an opt-out for Harness too.
-    const env = vscode.env.isTelemetryEnabled ? {} : { HARNESS_TELEMETRY: '0' };
-    let client: HarnessClient | undefined;
+    const cfg = vscode.workspace.getConfiguration('switchback');
+    const { command, args: baseArgs } = switchbackCommand(this.root);
+    // VS Code's own telemetry switch is an opt-out for Switchback too.
+    const env = vscode.env.isTelemetryEnabled ? {} : { SWITCHBACK_TELEMETRY: '0' };
+    let client: SwitchbackClient | undefined;
     let init: InitializeResult | undefined;
     // Share the engine with the TUI (and other windows) unless disabled; mock
     // engines are never shared.
@@ -98,7 +98,7 @@ class EngineConnection implements vscode.Disposable {
     if (!client) {
       const args = [...baseArgs, 'serve', '--stdio'];
       this.log.appendLine(`starting: ${command} ${args.join(' ')} (cwd ${this.root})`);
-      client = new HarnessClient(
+      client = new SwitchbackClient(
         spawnEngine({ command, args, cwd: this.root, env, onStderr: (t) => this.log.append(t) }),
       );
     }
@@ -106,10 +106,10 @@ class EngineConnection implements vscode.Disposable {
     connected.onClose(() => {
       if (this.client !== connected) return;
       this.client = undefined;
-      this.setStatus('$(error) Harness', 'Engine stopped. Run "Harness: Restart Engine".');
+      this.setStatus('$(error) Switchback', 'Engine stopped. Run "Switchback: Restart Engine".');
       this.broadcast({
         type: 'disconnected',
-        message: 'The harness engine stopped. See "Harness: Show Engine Logs".',
+        message: 'The switchback engine stopped. See "Switchback: Show Engine Logs".',
       });
     });
     client.on((event) => {
@@ -120,14 +120,16 @@ class EngineConnection implements vscode.Disposable {
       if (
         event.type === 'permission.requested' &&
         event.proposed &&
-        vscode.workspace.getConfiguration('harness').get<boolean>('reviewEditsInDiffEditor', true)
+        vscode.workspace
+          .getConfiguration('switchback')
+          .get<boolean>('reviewEditsInDiffEditor', true)
       ) {
         void this.review.show(this.root, event.requestId, event.proposed);
       }
       if (event.type === 'permission.resolved') void this.review.close(event.requestId);
       if (event.type === 'config.updated' && event.org) {
         void vscode.window.showInformationMessage(
-          `${event.org.name} updated its Harness policy${event.notes.length ? `: ${event.notes.join('; ')}` : '.'}`,
+          `${event.org.name} updated its Switchback policy${event.notes.length ? `: ${event.notes.join('; ')}` : '.'}`,
         );
       }
     });
@@ -145,7 +147,9 @@ class EngineConnection implements vscode.Disposable {
     if (!c) return;
     const sessions = await c.request('session.list', {});
     if (!sessions.length) {
-      void vscode.window.showInformationMessage('No saved Harness sessions in this workspace yet.');
+      void vscode.window.showInformationMessage(
+        'No saved Switchback sessions in this workspace yet.',
+      );
       return;
     }
     const pick = await vscode.window.showQuickPick(
@@ -155,7 +159,7 @@ class EngineConnection implements vscode.Disposable {
         detail: new Date(x.updatedAt).toLocaleString(),
         id: x.id,
       })),
-      { title: 'Harness sessions', matchOnDescription: true },
+      { title: 'Switchback sessions', matchOnDescription: true },
     );
     if (!pick) return;
     const { session, messages } = await c.request('session.get', { sessionId: pick.id });
@@ -205,7 +209,7 @@ class EngineConnection implements vscode.Disposable {
         if (/^https?:\/\//i.test(m.href)) await vscode.env.openExternal(vscode.Uri.parse(m.href));
         return;
       case 'openHistory':
-        await vscode.commands.executeCommand('harness.openSession');
+        await vscode.commands.executeCommand('switchback.openSession');
         return;
     }
     if (m.type === 'loaded') {
@@ -256,7 +260,7 @@ class EngineConnection implements vscode.Disposable {
     const icon = this.lastTier === 'remote' ? '$(cloud)' : '$(home)';
     this.setStatus(
       `${icon} ${this.route} · $${this.lastCost.toFixed(3)}`,
-      'Harness: click to change routing',
+      'Switchback: click to change routing',
     );
   }
 
@@ -272,7 +276,7 @@ class EngineConnection implements vscode.Disposable {
     this.broadcast({ type: 'usage', usage: u });
     const $ = (n: number) => `$${n.toFixed(2)}`;
     vscode.window.showInformationMessage(
-      `Harness, last 7 days: remote ${$(u.byTier.remote.costUsd)}, saved ~${$(u.estimatedSavingsUsd)} vs. all-remote. Today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}.`,
+      `Switchback, last 7 days: remote ${$(u.byTier.remote.costUsd)}, saved ~${$(u.estimatedSavingsUsd)} vs. all-remote. Today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}.`,
     );
   }
 
@@ -292,10 +296,10 @@ class EngineConnection implements vscode.Disposable {
         {
           label: 'Follow config',
           value: undefined,
-          detail: 'Use review.mode from your Harness config.',
+          detail: 'Use review.mode from your Switchback config.',
         },
       ],
-      { title: 'Harness: Remote Review of Local Edits' },
+      { title: 'Switchback: Remote Review of Local Edits' },
     );
     if (pick) this.remoteReview = pick.value;
   }
@@ -309,7 +313,7 @@ class EngineConnection implements vscode.Disposable {
         ? ` Running it all on ${u.referenceModel} would have cost ~$${total.toFixed(2)}: saved ~$${u.estimatedSavingsUsd.toFixed(2)} (${Math.round((u.estimatedSavingsUsd / total) * 100)}%).`
         : '';
     vscode.window.showInformationMessage(
-      `Harness, this session (with subagents): $${u.byTier.remote.costUsd.toFixed(2)} on remote models.${saved}`,
+      `Switchback, this session (with subagents): $${u.byTier.remote.costUsd.toFixed(2)} on remote models.${saved}`,
     );
   }
 
@@ -318,7 +322,7 @@ class EngineConnection implements vscode.Disposable {
     const { compacted } = await this.client.request('session.compact', {
       sessionId: this.session.id,
     });
-    if (!compacted) vscode.window.showInformationMessage('Harness: nothing to compact yet.');
+    if (!compacted) vscode.window.showInformationMessage('Switchback: nothing to compact yet.');
   }
 
   dispose() {
@@ -353,7 +357,7 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((m: WebviewToHost) => {
       this.engine()
         ?.handle(m)
-        .catch((err) => vscode.window.showErrorMessage(`Harness: ${(err as Error).message}`));
+        .catch((err) => vscode.window.showErrorMessage(`Switchback: ${(err as Error).message}`));
     });
   }
 
@@ -363,7 +367,7 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 }
 
 /** Returned from activate() for the integration tests; not a public API. */
-export interface HarnessTestApi {
+export interface SwitchbackTestApi {
   connected(): boolean;
   pendingReviews(): string[];
   init(): InitializeResult | undefined;
@@ -372,11 +376,11 @@ export interface HarnessTestApi {
   transcript(): Promise<Message[]>;
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<HarnessTestApi> {
+export async function activate(context: vscode.ExtensionContext): Promise<SwitchbackTestApi> {
   const bin = vscode.Uri.joinPath(
     context.extensionUri,
     'bin',
-    process.platform === 'win32' ? 'harness.exe' : 'harness',
+    process.platform === 'win32' ? 'switchback.exe' : 'switchback',
   ).fsPath;
   if (existsSync(bin)) {
     bundledBinary = bin;
@@ -389,9 +393,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       }
     }
   }
-  const log = vscode.window.createOutputChannel('Harness');
+  const log = vscode.window.createOutputChannel('Switchback');
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  status.command = 'harness.setRoute';
+  status.command = 'switchback.setRoute';
   context.subscriptions.push(log, status);
 
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -413,7 +417,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
   let engine: EngineConnection | undefined;
   const chat = new ChatViewProvider(context.extensionUri, () => engine);
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('harness.chat', chat, {
+    vscode.window.registerWebviewViewProvider('switchback.chat', chat, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
@@ -421,8 +425,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
   const start = async () => {
     engine?.dispose();
     if (!root) {
-      status.text = '$(circle-slash) Harness';
-      status.tooltip = 'Open a folder to use Harness';
+      status.text = '$(circle-slash) Switchback';
+      status.tooltip = 'Open a folder to use Switchback';
       status.show();
       return;
     }
@@ -437,11 +441,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       if (!engine.init?.models.some((m) => m.tier === 'local')) {
         void vscode.window
           .showInformationMessage(
-            'Harness has no local model configured, so every turn runs remotely.',
+            'Switchback has no local model configured, so every turn runs remotely.',
             'Set Up Models',
           )
           .then((pick) => {
-            if (pick) void vscode.commands.executeCommand('harness.runSetup');
+            if (pick) void vscode.commands.executeCommand('switchback.runSetup');
           });
       }
     } catch (err) {
@@ -449,15 +453,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       log.appendLine(`failed to start engine: ${message}`);
       chat.post({
         type: 'disconnected',
-        message: `Could not start harness: ${message}. Check the "harness.executablePath" setting.`,
+        message: `Could not start switchback: ${message}. Check the "switchback.executablePath" setting.`,
       });
       void vscode.window
-        .showErrorMessage('Harness could not start its engine.', 'Open Settings', 'Show Logs')
+        .showErrorMessage('Switchback could not start its engine.', 'Open Settings', 'Show Logs')
         .then((pick) => {
           if (pick === 'Open Settings')
             void vscode.commands.executeCommand(
               'workbench.action.openSettings',
-              'harness.executablePath',
+              'switchback.executablePath',
             );
           if (pick === 'Show Logs') log.show();
         });
@@ -465,27 +469,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
   };
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('harness.newSession', () => engine?.newSession()),
-    vscode.commands.registerCommand('harness.openSession', () => engine?.openSession()),
-    vscode.commands.registerCommand('harness.acceptEdit', answerEdit('allow_once')),
-    vscode.commands.registerCommand('harness.rejectEdit', answerEdit('deny')),
-    vscode.commands.registerCommand('harness.cancel', () => engine?.handle({ type: 'cancel' })),
-    vscode.commands.registerCommand('harness.showUsage', () => engine?.usage()),
-    vscode.commands.registerCommand('harness.setReview', () => engine?.chooseReview()),
-    vscode.commands.registerCommand('harness.showReceipt', () =>
+    vscode.commands.registerCommand('switchback.newSession', () => engine?.newSession()),
+    vscode.commands.registerCommand('switchback.openSession', () => engine?.openSession()),
+    vscode.commands.registerCommand('switchback.acceptEdit', answerEdit('allow_once')),
+    vscode.commands.registerCommand('switchback.rejectEdit', answerEdit('deny')),
+    vscode.commands.registerCommand('switchback.cancel', () => engine?.handle({ type: 'cancel' })),
+    vscode.commands.registerCommand('switchback.showUsage', () => engine?.usage()),
+    vscode.commands.registerCommand('switchback.setReview', () => engine?.chooseReview()),
+    vscode.commands.registerCommand('switchback.showReceipt', () =>
       engine?.receipt().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),
-    vscode.commands.registerCommand('harness.compact', () =>
+    vscode.commands.registerCommand('switchback.compact', () =>
       engine?.compact().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),
-    vscode.commands.registerCommand('harness.restartEngine', start),
-    vscode.commands.registerCommand('harness.runSetup', () => {
+    vscode.commands.registerCommand('switchback.restartEngine', start),
+    vscode.commands.registerCommand('switchback.runSetup', () => {
       if (!root) return;
-      // Setup is interactive and shared with the CLI, so run `harness init` in a terminal
+      // Setup is interactive and shared with the CLI, so run `switchback init` in a terminal
       // and restart the engine when it closes to pick up the new config.
-      const { command, args } = harnessCommand(root);
+      const { command, args } = switchbackCommand(root);
       const terminal = vscode.window.createTerminal({
-        name: 'Harness Setup',
+        name: 'Switchback Setup',
         cwd: root,
         shellPath: command,
         shellArgs: [...args, 'init'],
@@ -498,22 +502,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<Harnes
       context.subscriptions.push(sub);
       terminal.show();
     }),
-    vscode.commands.registerCommand('harness.showLogs', () => log.show()),
-    vscode.commands.registerCommand('harness.setRoute', async () => {
+    vscode.commands.registerCommand('switchback.showLogs', () => log.show()),
+    vscode.commands.registerCommand('switchback.setRoute', async () => {
       const pick = await vscode.window.showQuickPick(
         [
           { label: 'auto', description: 'Local first, escalate to remote when needed' },
           { label: 'local', description: 'Only local models' },
           { label: 'remote', description: 'Only remote models' },
         ],
-        { title: 'Harness routing' },
+        { title: 'Switchback routing' },
       );
       if (pick) engine?.setRoute(pick.label as RoutePreference);
     }),
-    vscode.commands.registerCommand('harness.askAboutSelection', async () => {
+    vscode.commands.registerCommand('switchback.askAboutSelection', async () => {
       if (!root || !editorContext) return;
       engine?.post({ type: 'context', state: editorContext.state() });
-      await vscode.commands.executeCommand('harness.chat.focus');
+      await vscode.commands.executeCommand('switchback.chat.focus');
       engine?.post({ type: 'attachSelection' });
     }),
     { dispose: () => engine?.dispose() },

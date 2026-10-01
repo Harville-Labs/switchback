@@ -9,10 +9,10 @@ const t = $derived(data.telemetry);
 const calls = $derived(t.calls.local + t.calls.remote);
 </script>
 
-<svelte:head><title>Harness managers · Harness</title></svelte:head>
+<svelte:head><title>Switchback managers · Switchback</title></svelte:head>
 
-<h1 class="page-title">Harness managers</h1>
-<p class="muted mb-4">Every site, its operators, and what Harness is doing across them.</p>
+<h1 class="page-title">Switchback managers</h1>
+<p class="muted mb-4">Every site, its operators, and what Switchback is doing across them.</p>
 <Flash error={form?.error} notice={form?.notice} />
 
 <h2 class="mt-6 mb-2 section-title">Telemetry, last 30 days</h2>
@@ -102,7 +102,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
   </table>
 </div>
 
-<h2 class="mt-8 mb-2 section-title">Harness managers</h2>
+<h2 class="mt-8 mb-2 section-title">Switchback managers</h2>
 <p class="muted mb-2 text-sm">
   Harville Labs staff who can see every site and assign its operators. Addresses in
   <code>MANAGER_EMAILS</code> are made managers again whenever the site starts.

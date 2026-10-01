@@ -5,7 +5,7 @@
  * their origin) and replays only to the same model, the same rule as Claude
  * thinking blocks and DeepSeek `reasoning_content`.
  */
-import type { Message, ModelRef, Part, StopReason, Usage } from '@harness/protocol';
+import type { Message, ModelRef, Part, StopReason, Usage } from '@switchback/protocol';
 import OpenAI from 'openai';
 import type {
   Response,

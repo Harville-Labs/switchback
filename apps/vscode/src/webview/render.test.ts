@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from 'bun:test';
-import { initialView, reduce, type ViewState } from '@harness/client/view';
-import type { EngineEvent } from '@harness/protocol';
+import { initialView, reduce, type ViewState } from '@switchback/client/view';
+import type { EngineEvent } from '@switchback/protocol';
 import { Window } from 'happy-dom';
 
 let renderItem: typeof import('./render.ts').renderItem;

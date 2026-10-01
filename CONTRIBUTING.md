@@ -1,10 +1,10 @@
 # Contributing
 
-Harness is developed by Harville Labs. This guide covers the workflow for anyone working on the codebase, including AI agents. Read [AGENTS.md](AGENTS.md) first; it has the architecture rules.
+Switchback is developed by Harville Labs. This guide covers the workflow for anyone working on the codebase, including AI agents. Read [AGENTS.md](AGENTS.md) first; it has the architecture rules.
 
 ## Licensing of contributions
 
-Harness is licensed under Apache-2.0, and contributions are accepted under the same license (section 5 of the [LICENSE](LICENSE)); there's no separate agreement to sign. `apps/site` is proprietary and developed by Harville Labs only, so pull requests that change it can't be accepted from outside contributors.
+Switchback is licensed under Apache-2.0, and contributions are accepted under the same license (section 5 of the [LICENSE](LICENSE)); there's no separate agreement to sign. `apps/site` is proprietary and developed by Harville Labs only, so pull requests that change it can't be accepted from outside contributors.
 
 ## Setup
 
@@ -31,7 +31,7 @@ bun run check        # must pass before you start and before you push
 
 ## Live tests
 
-Unit tests never touch real models. `bun run test:live` runs scenarios against a real local model (detected, or `HARNESS_LIVE_LOCAL_URL` + `HARNESS_LIVE_LOCAL_MODEL`) and against every hosted provider whose API key is set (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`), each on its cheapest model; the run prints what it spent. The **Live models** workflow runs nightly with an Ollama container and can be triggered manually with a different model. Run it before changing an adapter.
+Unit tests never touch real models. `bun run test:live` runs scenarios against a real local model (detected, or `SWITCHBACK_LIVE_LOCAL_URL` + `SWITCHBACK_LIVE_LOCAL_MODEL`) and against every hosted provider whose API key is set (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`), each on its cheapest model; the run prints what it spent. The **Live models** workflow runs nightly with an Ollama container and can be triggered manually with a different model. Run it before changing an adapter.
 
 ## Labels
 

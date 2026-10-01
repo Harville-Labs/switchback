@@ -16,7 +16,7 @@ const problems = $derived(form && 'problems' in form ? form.problems : undefined
 
 <Flash notice={form && 'notice' in form ? form.notice : undefined} error={form && 'error' in form ? form.error : undefined} />
 <p class="muted mb-3">
-  What members' Harness receives: <code>defaults</code> (below their own config), <code>enforced</code>
+  What members' Switchback receives: <code>defaults</code> (below their own config), <code>enforced</code>
   (above it), and <code>restrictions</code>. Saving creates version {data.version + 1}.
 </p>
 {#if problems?.length}
@@ -62,7 +62,7 @@ const problems = $derived(form && 'problems' in form ? form.problems : undefined
           </td>
         </tr>
       {:else}
-        <tr><td colspan="5" class="muted">No policy yet: members get Harness's defaults.</td></tr>
+        <tr><td colspan="5" class="muted">No policy yet: members get Switchback's defaults.</td></tr>
       {/each}
     </tbody>
   </table>

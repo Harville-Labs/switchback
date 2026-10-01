@@ -1,5 +1,5 @@
 {
-  "name": "@harness/client",
+  "name": "@switchback/client",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
@@ -9,6 +9,6 @@
     "./view": "./src/view.ts"
   },
   "dependencies": {
-    "@harness/protocol": "workspace:*"
+    "@switchback/protocol": "workspace:*"
   }
 }

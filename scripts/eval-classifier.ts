@@ -10,8 +10,8 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { classifyPrompt } from '@harness/engine';
-import { OpenAICompatibleProvider } from '@harness/providers';
+import { classifyPrompt } from '@switchback/engine';
+import { OpenAICompatibleProvider } from '@switchback/providers';
 
 const { values } = parseArgs({
   options: {

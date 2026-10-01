@@ -1,5 +1,5 @@
 /**
- * Shared engine daemon: one `harness serve --socket` per workspace that the
+ * Shared engine daemon: one `switchback serve --socket` per workspace that the
  * TUI and VS Code both attach to, so they can share live sessions.
  *
  * Discovery: an info file (0600) in `<data>/daemons/` records the socket path,
@@ -18,8 +18,8 @@ import {
   type JsonRpcMessage,
   NdjsonDecoder,
   type Transport,
-} from '@harness/protocol';
-import { HarnessClient } from './client.ts';
+} from '@switchback/protocol';
+import { SwitchbackClient } from './client.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -31,10 +31,10 @@ export interface DaemonInfo {
   workspaceRoot: string;
 }
 
-/** Mirrors harnessPaths() in @harness/engine (kept in sync by a test). */
+/** Mirrors switchbackPaths() in @switchback/engine (kept in sync by a test). */
 export function dataDir(env: Env = process.env): string {
-  if (env.HARNESS_HOME) return join(env.HARNESS_HOME, 'data');
-  return join(env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'harness');
+  if (env.SWITCHBACK_HOME) return join(env.SWITCHBACK_HOME, 'data');
+  return join(env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'switchback');
 }
 
 export function daemonPaths(workspaceRoot: string, env: Env = process.env) {
@@ -44,10 +44,10 @@ export function daemonPaths(workspaceRoot: string, env: Env = process.env) {
   const unixSocket = join(dir, `${id}.sock`);
   const socket =
     process.platform === 'win32'
-      ? `\\\\.\\pipe\\harness-${id}`
+      ? `\\\\.\\pipe\\switchback-${id}`
       : unixSocket.length < 100
         ? unixSocket
-        : join('/tmp', `harness-${process.getuid?.() ?? 'u'}-${id}.sock`);
+        : join('/tmp', `switchback-${process.getuid?.() ?? 'u'}-${id}.sock`);
   return { dir, info: join(dir, `${id}.json`), socket };
 }
 
@@ -101,10 +101,10 @@ export function socketTransport(path: string): Promise<Transport> {
 
 export interface ConnectDaemonOptions {
   workspaceRoot: string;
-  /** This client's harness version; a daemon of another version is not used. */
+  /** This client's switchback version; a daemon of another version is not used. */
   version: string;
   client: { name: string; version: string };
-  /** How to start `harness` if no daemon is running: argv[0] and leading args. */
+  /** How to start `switchback` if no daemon is running: argv[0] and leading args. */
   spawn: { command: string; args: string[] };
   env?: Env;
   startTimeoutMs?: number;
@@ -113,7 +113,7 @@ export interface ConnectDaemonOptions {
 
 async function attach(info: DaemonInfo, o: ConnectDaemonOptions) {
   const transport = await socketTransport(info.socket);
-  const client = new HarnessClient(transport);
+  const client = new SwitchbackClient(transport);
   try {
     const init = await client.initialize(o.client, o.workspaceRoot, info.token);
     return { client, init };
@@ -129,7 +129,7 @@ async function attach(info: DaemonInfo, o: ConnectDaemonOptions) {
  */
 export async function connectDaemon(
   o: ConnectDaemonOptions,
-): Promise<{ client: HarnessClient; init: InitializeResult } | undefined> {
+): Promise<{ client: SwitchbackClient; init: InitializeResult } | undefined> {
   const env = o.env ?? process.env;
   const existing = readDaemonInfo(o.workspaceRoot, env);
   if (existing) {

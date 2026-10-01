@@ -1,12 +1,12 @@
 /**
- * `harness agents`: list agents.
- * `harness agents new`: interview the user and write an agent file, optionally
+ * `switchback agents`: list agents.
+ * `switchback agents new`: interview the user and write an agent file, optionally
  * with a system prompt drafted by their model. Every question has a flag, so it
  * also runs unattended.
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AGENT_NAME, harnessPaths, projectPaths, renderAgentFile } from '@harness/engine';
+import { AGENT_NAME, projectPaths, renderAgentFile, switchbackPaths } from '@switchback/engine';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 
@@ -40,7 +40,7 @@ const TOOL_PRESETS = [
 export async function agents(sub: string | undefined, flags: AgentNewFlags): Promise<number> {
   if (sub === 'new') return newAgent(flags);
   if (sub && sub !== 'list') {
-    process.stderr.write(`harness agents: unknown subcommand "${sub}" (list, new)\n`);
+    process.stderr.write(`switchback agents: unknown subcommand "${sub}" (list, new)\n`);
     return 2;
   }
   const { engine, agentErrors } = createEngine(flags, 'deny');
@@ -56,7 +56,7 @@ class AgentError extends Error {}
 
 async function newAgent(flags: AgentNewFlags): Promise<number> {
   if (!flags.yes && !process.stdin.isTTY) {
-    process.stderr.write('harness agents new: not a terminal; pass --yes with flags\n');
+    process.stderr.write('switchback agents new: not a terminal; pass --yes with flags\n');
     return 2;
   }
   const p = flags.yes ? undefined : new Prompter();
@@ -64,7 +64,7 @@ async function newAgent(flags: AgentNewFlags): Promise<number> {
     return await interview(flags, p);
   } catch (err) {
     if (err instanceof AgentError) {
-      process.stderr.write(`harness agents new: ${err.message}\n`);
+      process.stderr.write(`switchback agents new: ${err.message}\n`);
       return 2;
     }
     throw err;
@@ -95,12 +95,16 @@ async function interview(flags: AgentNewFlags, p: Prompter | undefined): Promise
           {
             label: 'This project',
             value: 'project' as const,
-            hint: '.harness/agents/, shared with the team',
+            hint: '.switchback/agents/, shared with the team',
           },
-          { label: 'All my projects', value: 'user' as const, hint: '~/.config/harness/agents/' },
+          {
+            label: 'All my projects',
+            value: 'user' as const,
+            hint: '~/.config/switchback/agents/',
+          },
         ])
       : 'project');
-  const dir = scope === 'project' ? projectPaths(flags.cwd).agentsDir : harnessPaths().agentsDir;
+  const dir = scope === 'project' ? projectPaths(flags.cwd).agentsDir : switchbackPaths().agentsDir;
   const file = join(dir, `${name}.md`);
   if (existsSync(file) && !(p && (await p.confirm(`${file} exists. Replace it?`, false))))
     throw new AgentError(`${file} already exists`);

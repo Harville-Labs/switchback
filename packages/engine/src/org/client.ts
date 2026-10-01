@@ -16,8 +16,8 @@ import type { OrgAuth } from './store.ts';
 
 type Fetch = typeof fetch;
 
-/** The OAuth client ID Harness presents to every organization server. */
-export const CLIENT_ID = 'harness';
+/** The OAuth client ID Switchback presents to every organization server. */
+export const CLIENT_ID = 'switchback';
 
 export class OrgAuthError extends Error {
   constructor(message: string) {
@@ -86,19 +86,19 @@ function mapError(err: unknown, base: string): never {
   if (err instanceof oidc.ResponseBodyError) {
     if (err.error === 'access_denied') throw new OrgAuthError('sign-in was denied');
     if (err.error === 'expired_token')
-      throw new OrgAuthError('the sign-in code expired; run `harness login` again');
+      throw new OrgAuthError('the sign-in code expired; run `switchback login` again');
     if (err.error === 'invalid_grant' || err.status === 401)
       throw new OrgAuthError(
         err.error_description
-          ? `${err.error_description}; run \`harness login\``
-          : 'session expired; run `harness login`',
+          ? `${err.error_description}; run \`switchback login\``
+          : 'session expired; run `switchback login`',
       );
     throw new OrgServerError(
       `sign-in failed (HTTP ${err.status}: ${err.error}${err.error_description ? `, ${err.error_description}` : ''})`,
     );
   }
   if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError'))
-    throw new OrgAuthError('the sign-in code expired; run `harness login` again');
+    throw new OrgAuthError('the sign-in code expired; run `switchback login` again');
   // openid-client rejects responses that break the OAuth specs with a ClientError;
   // a failed request surfaces as the fetch's own TypeError.
   if (err instanceof oidc.ClientError) {
@@ -137,7 +137,7 @@ export class OrgClient {
       headers.set('origin', origin);
       return this.fetchImpl(url, { ...(options as RequestInit), headers });
     };
-    // Local development servers (`harness login --server http://localhost:…`).
+    // Local development servers (`switchback login --server http://localhost:…`).
     if (this.base.startsWith('http://')) oidc.allowInsecureRequests(this.oauth);
   }
 
@@ -213,7 +213,7 @@ export class OrgClient {
     }
     if (res.status === 304) return { status: 'unchanged' };
     if (res.status === 401 || res.status === 403)
-      throw new OrgAuthError('not authorized; run `harness login`');
+      throw new OrgAuthError('not authorized; run `switchback login`');
     if (!res.ok) throw new OrgServerError(`policy fetch failed (HTTP ${res.status})`);
     const parsed = OrgPolicy.safeParse(await res.json());
     if (!parsed.success) {
@@ -230,7 +230,7 @@ export class OrgClient {
     const res = await this.post('/v1/usage', { entries }, token);
     if (res.status === 404 || res.status === 405) return false;
     if (res.status === 401 || res.status === 403)
-      throw new OrgAuthError('not authorized; run `harness login`');
+      throw new OrgAuthError('not authorized; run `switchback login`');
     if (!res.ok) throw new OrgServerError(`usage report failed (HTTP ${res.status})`);
     return true;
   }

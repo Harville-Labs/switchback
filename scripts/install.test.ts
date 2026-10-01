@@ -27,8 +27,8 @@ const sha = (body: string) => createHash('sha256').update(body).digest('hex');
 const binary = (version: string) => `#!/bin/sh\necho ${version}\n`;
 
 function release(version: string, tamper = false) {
-  const bin = `harness-${version}-${OS}-${ARCH}`;
-  const vsix = `harness-vscode-${version}-${OS}-${ARCH}.vsix`;
+  const bin = `switchback-${version}-${OS}-${ARCH}`;
+  const vsix = `switchback-vscode-${version}-${OS}-${ARCH}.vsix`;
   const files: Record<string, string> = { [bin]: binary(version), [vsix]: 'fake vsix' };
   const sums = Object.entries(files)
     .map(([name, body]) => `${sha(tamper ? `${body}!` : body)}  ${name}`)
@@ -57,7 +57,7 @@ beforeAll(() => {
       return body ? new Response(body) : new Response('Not found', { status: 404 });
     },
   });
-  root = mkdtempSync(join(tmpdir(), 'harness-install-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-install-'));
 });
 afterAll(() => {
   server.stop(true);
@@ -75,8 +75,8 @@ async function run(shell: string, args: string[], extraPath?: string) {
       HOME: root,
       SHELL: '/bin/zsh',
       PATH: extraPath ? `${extraPath}:${process.env.PATH}` : (process.env.PATH ?? ''),
-      HARNESS_DOWNLOAD_URL: `http://localhost:${server.port}/download`,
-      HARNESS_RELEASES_API: `http://localhost:${server.port}/releases`,
+      SWITCHBACK_DOWNLOAD_URL: `http://localhost:${server.port}/download`,
+      SWITCHBACK_RELEASES_API: `http://localhost:${server.port}/releases`,
     },
   });
   const [out, err, code] = await Promise.all([
@@ -93,16 +93,16 @@ for (const shell of shells) {
       const r = await run(shell, []);
       expect(r.err).toBe('');
       expect(r.code).toBe(0);
-      expect(readFileSync(join(r.dir, 'harness'), 'utf8')).toBe(binary('1.2.3'));
-      expect(r.out).toContain(`Installed Harness 1.2.3 to ${r.dir}/harness`);
+      expect(readFileSync(join(r.dir, 'switchback'), 'utf8')).toBe(binary('1.2.3'));
+      expect(r.out).toContain(`Installed Switchback 1.2.3 to ${r.dir}/switchback`);
       expect(r.out).toContain(`echo 'export PATH="${r.dir}:$PATH"' >> ~/.zshrc`);
-      expect(r.out).toContain('harness init');
+      expect(r.out).toContain('switchback init');
     });
 
     test('installs a pinned version, with or without the v', async () => {
       for (const args of [['--version', 'v1.0.0'], ['--version=1.0.0']]) {
         const r = await run(shell, args);
-        expect(readFileSync(join(r.dir, 'harness'), 'utf8')).toBe(binary('1.0.0'));
+        expect(readFileSync(join(r.dir, 'switchback'), 'utf8')).toBe(binary('1.0.0'));
       }
     });
 
@@ -110,17 +110,19 @@ for (const shell of shells) {
       const r = await run(shell, ['--version', '0.9.0']);
       expect(r.code).toBe(1);
       expect(r.err).toContain("doesn't match its checksum");
-      expect(existsSync(join(r.dir, 'harness'))).toBe(false);
+      expect(existsSync(join(r.dir, 'switchback'))).toBe(false);
     });
 
     test('says so when a version does not exist', async () => {
       const r = await run(shell, ['--version', '4.5.6']);
       expect(r.code).toBe(1);
-      expect(r.err).toContain("couldn't find Harness 4.5.6");
+      expect(r.err).toContain("couldn't find Switchback 4.5.6");
     });
 
     test('rejects nonsense versions and options', async () => {
-      expect((await run(shell, ['--version', 'banana'])).err).toContain("isn't a Harness version");
+      expect((await run(shell, ['--version', 'banana'])).err).toContain(
+        "isn't a Switchback version",
+      );
       expect((await run(shell, ['--frobnicate'])).err).toContain('unknown option --frobnicate');
     });
 
@@ -134,7 +136,9 @@ for (const shell of shells) {
       expect(r.code).toBe(0);
       expect(r.out).toContain('Installed the extension in code.');
       expect(readFileSync(log, 'utf8')).toMatch(
-        new RegExp(`--install-extension .*harness-vscode-1\\.2\\.3-${OS}-${ARCH}\\.vsix --force`),
+        new RegExp(
+          `--install-extension .*switchback-vscode-1\\.2\\.3-${OS}-${ARCH}\\.vsix --force`,
+        ),
       );
     });
   });

@@ -2,18 +2,18 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ScriptedProvider } from '@harness/providers';
-import { HarnessConfig } from './config.ts';
+import { ScriptedProvider } from '@switchback/providers';
+import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import { FileSessionStore } from './store.ts';
 
 let dir: string;
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'harness-store-'));
+  dir = mkdtempSync(join(tmpdir(), 'switchback-store-'));
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-const config = HarnessConfig.parse({
+const config = SwitchbackConfig.parse({
   providers: { lp: { type: 'mock', tier: 'local' } },
   models: { local: { provider: 'lp', model: 'm' } },
 });

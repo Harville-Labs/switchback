@@ -19,12 +19,12 @@ const isDevicePage = $derived(page.route.id?.endsWith('/device') ?? false);
 {#if !isDevicePage}
   <h1 class="page-title">{data.site.name}</h1>
   <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-    <span class="label">Connect Harness</span>
-    <CopyCommand command="harness login --site {data.site.slug}" quiet />
+    <span class="label">Connect Switchback</span>
+    <CopyCommand command="switchback login --site {data.site.slug}" quiet />
   </div>
-  {#if data.harnessManager && data.role !== 'operator'}
+  {#if data.switchbackManager && data.role !== 'operator'}
     <p class="card mb-4 text-sm">
-      You're viewing this site as a Harness manager{data.role ? ` (you're also its ${data.role})` : ''}.
+      You're viewing this site as a Switchback manager{data.role ? ` (you're also its ${data.role})` : ''}.
       <a href="/admin/{data.site.slug}">Assign operators and seats</a>.
     </p>
   {/if}

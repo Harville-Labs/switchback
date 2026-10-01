@@ -1,6 +1,6 @@
-/** `harness doctor`: explain the effective configuration and check every provider. */
-import { formatMcpServers } from '@harness/client';
-import { createProvider, tierOf } from '@harness/providers';
+/** `switchback doctor`: explain the effective configuration and check every provider. */
+import { formatMcpServers } from '@switchback/client';
+import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
 export async function doctor(flags: CommonFlags): Promise<number> {
@@ -72,11 +72,11 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   }
   if (!locals.length && r.mode !== 'remote-only') {
     problems++;
-    out('  ✗ no local model configured; run `harness init` to pick one');
+    out('  ✗ no local model configured; run `switchback init` to pick one');
   }
   if (!r.remote.some((a) => config.models[a]) && r.mode !== 'local-only') {
     problems++;
-    out('  ✗ no remote model configured; run `harness init`');
+    out('  ✗ no remote model configured; run `switchback init`');
   }
 
   const { servers } = await engine.mcpStatus();

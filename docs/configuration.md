@@ -6,39 +6,39 @@ Layers deep-merge in this order, with later layers winning:
 
 1. Built-in defaults (below)
 2. Organization policy `defaults`, when signed in ([organizations.md](organizations.md))
-3. `~/.config/harness/config.json` (user; respects `XDG_CONFIG_HOME`)
-4. `.harness/config.json` in the workspace (project)
+3. `~/.config/switchback/config.json` (user; respects `XDG_CONFIG_HOME`)
+4. `.switchback/config.json` in the workspace (project)
 5. Organization policy `enforced`, then its `restrictions`
 6. `--mock` (any command) then swaps every provider for a scripted mock
 
-Files are JSONC: `//` and `/* */` comments and trailing commas are allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `harness doctor` shows which files were loaded.
+Files are JSONC: `//` and `/* */` comments and trailing commas are allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `switchback doctor` shows which files were loaded.
 
-`HARNESS_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/agents/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
+`SWITCHBACK_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/agents/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
 ## Setting up
 
 ```sh
-harness init              # interactive: detect local servers, choose models, budgets
-harness init --yes --local-model <name> --remote anthropic   # unattended
-harness config path       # where config files live and which exist
-harness config show       # effective merged config (secrets redacted)
-harness config edit       # open the user config in $EDITOR (--scope project for the project file)
-harness config schema     # JSON Schema for editor validation
+switchback init              # interactive: detect local servers, choose models, budgets
+switchback init --yes --local-model <name> --remote anthropic   # unattended
+switchback config path       # where config files live and which exist
+switchback config show       # effective merged config (secrets redacted)
+switchback config edit       # open the user config in $EDITOR (--scope project for the project file)
+switchback config schema     # JSON Schema for editor validation
 ```
 
-`harness init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `harness --help`.
+`switchback init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `switchback --help`.
 
 Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config.
 
-The VS Code extension validates both files against the schema and offers autocomplete. Other editors can use the output of `harness config schema`.
+The VS Code extension validates both files against the schema and offers autocomplete. Other editors can use the output of `switchback config schema`.
 
 ## Built-in defaults
 
-There are **no default providers or models**, local or remote. Harness doesn't choose a vendor for you; `harness init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `harness` offers setup.
+There are **no default providers or models**, local or remote. Switchback doesn't choose a vendor for you; `switchback init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `switchback` offers setup.
 
 If only one tier is configured:
 
-- With no local model, `auto` routing sends turns remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing. `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `harness init`.
+- With no local model, `auto` routing sends turns remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing. `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `switchback init`.
 - With no remote model, turns stay local and escalation is unavailable.
 
 ## Several providers at once
@@ -63,7 +63,7 @@ Any number of providers can be configured together, including several local serv
 }
 ```
 
-`harness init` builds this for you: after the first local model it offers to add more (from any detected server), and after the first remote provider it offers fallbacks. Unattended, repeat `--local-model` and `--remote`. How the router picks within a list is in [routing.md](routing.md).
+`switchback init` builds this for you: after the first local model it offers to add more (from any detected server), and after the first remote provider it offers fallbacks. Unattended, repeat `--local-model` and `--remote`. How the router picks within a list is in [routing.md](routing.md).
 
 ## Keys
 
@@ -114,7 +114,7 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 
 ```jsonc
 "mcpServers": {
-  "github": {                                   // stdio: Harness starts the process
+  "github": {                                   // stdio: Switchback starts the process
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-github"],
     "env": { "GITHUB_TOKEN": "{env:GITHUB_TOKEN}" }
@@ -135,7 +135,7 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 | `enabled` | `true` | Keep a definition without starting it |
 | `timeoutMs` | 60000 | Per tool call |
 
-**Project servers need trust.** A server defined in a project's `.harness/config.json` or `.mcp.json` runs a command from the repository, so it doesn't start until you approve it with `harness mcp trust` (or `harness mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `harness mcp` and `harness doctor` show every server's state and tool count.
+**Project servers need trust.** A server defined in a project's `.switchback/config.json` or `.mcp.json` runs a command from the repository, so it doesn't start until you approve it with `switchback mcp trust` (or `switchback mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `switchback mcp` and `switchback doctor` show every server's state and tool count.
 
 ### `privacy`
 
@@ -160,8 +160,8 @@ See [review.md](review.md).
 
 | Key | Default | |
 |---|---|---|
-| `enabled` | `false` | Anonymous daily usage statistics. Set with `harness telemetry on\|off`; a project config can turn it off but not on. See [telemetry.md](telemetry.md) |
-| `endpoint` | `https://harness.harville.ai/api/telemetry/v1` | Where reports are sent |
+| `enabled` | `false` | Anonymous daily usage statistics. Set with `switchback telemetry on\|off`; a project config can turn it off but not on. See [telemetry.md](telemetry.md) |
+| `endpoint` | `https://switchback.harville.ai/api/telemetry/v1` | Where reports are sent |
 
 ### Other keys
 
@@ -181,14 +181,14 @@ See [review.md](review.md).
 
 | Variable | Effect |
 |---|---|
-| `HARNESS_HOME` | Relocate all config and data |
-| `HARNESS_ORG_SERVER`, `HARNESS_ORG_TOKEN` | Organization sign-in without `harness login` (CI, managed installs) |
+| `SWITCHBACK_HOME` | Relocate all config and data |
+| `SWITCHBACK_ORG_SERVER`, `SWITCHBACK_ORG_TOKEN` | Organization sign-in without `switchback login` (CI, managed installs) |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME` | Standard base directories |
-| `DO_NOT_TRACK=1`, `HARNESS_TELEMETRY=0` | Telemetry off, whatever the config says |
+| `DO_NOT_TRACK=1`, `SWITCHBACK_TELEMETRY=0` | Telemetry off, whatever the config says |
 | `OPENAI_API_KEY` | OpenAI credentials |
 | `DEEPSEEK_API_KEY` | DeepSeek credentials |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_PROFILE` | Anthropic credentials (SDK chain) |
 | `AWS_REGION`, `AWS_PROFILE`, ... | Bedrock credentials (AWS chain) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Vertex credentials (ADC) |
 
-Bash tool subprocesses get `HARNESS=1` so scripts can detect they're running under the agent.
+Bash tool subprocesses get `SWITCHBACK=1` so scripts can detect they're running under the agent.

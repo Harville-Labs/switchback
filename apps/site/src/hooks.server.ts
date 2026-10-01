@@ -23,7 +23,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       return new Response('Not found', { status: 404 });
   }
   const actor = await actorFor(app.ctx, event.request.headers);
-  // Device tokens are for the Harness client's API, never the console.
+  // Device tokens are for the Switchback client's API, never the console.
   event.locals.actor = actor?.session.via === 'device' ? undefined : actor;
   event.locals.user = event.locals.actor?.user;
   const response = await svelteKitHandler({ event, resolve, auth: app.ctx.auth, building });

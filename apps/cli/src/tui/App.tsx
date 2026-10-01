@@ -8,23 +8,23 @@ import {
   formatReceipt,
   formatUsage,
   fromTranscript,
-  type HarnessClient,
   initialView,
   reduce,
   resolveEscalation,
   resolvePermission,
   reviewLines,
+  type SwitchbackClient,
   subagentList,
   toolLabel,
   type ViewItem,
   type ViewState,
-} from '@harness/client';
+} from '@switchback/client';
 import type {
   InitializeResult,
   RoutePreference,
   SessionSummary,
   UsageReport,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
 import { copyText, pickCopy } from './clipboard.ts';
@@ -33,7 +33,7 @@ import { renderMarkdown } from './markdown.ts';
 import { PromptInput } from './PromptInput.tsx';
 
 interface Props {
-  client: HarnessClient;
+  client: SwitchbackClient;
   init: InitializeResult;
   initialSession: SessionSummary;
   /** Present when resuming: the rebuilt history of `initialSession`. */
@@ -202,7 +202,7 @@ export function App({
         case 'agent':
           return newSession(args[0]);
         case 'agents': {
-          // Asked each time, so agents created meanwhile (harness agents new) show up.
+          // Asked each time, so agents created meanwhile (switchback agents new) show up.
           const agents = await client.request('agents.list', {}).catch(() => init.agents);
           setView((v) =>
             addInfo(
@@ -376,7 +376,7 @@ export function App({
           item.kind === 'header' ? (
             <Box key="header" flexDirection="column" marginBottom={1}>
               <Text bold>
-                harness <Text dimColor>{init.engineVersion}</Text>
+                switchback <Text dimColor>{init.engineVersion}</Text>
               </Text>
               <Text dimColor>{init.workspaceRoot} · /help for commands</Text>
             </Box>

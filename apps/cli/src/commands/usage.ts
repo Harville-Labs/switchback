@@ -1,6 +1,6 @@
-/** `harness usage`: spend by tier, savings, cache hits, and optional breakdowns. */
-import { formatUsage, type UsageBreakdown } from '@harness/client';
-import type { UsagePeriod } from '@harness/protocol';
+/** `switchback usage`: spend by tier, savings, cache hits, and optional breakdowns. */
+import { formatUsage, type UsageBreakdown } from '@switchback/client';
+import type { UsagePeriod } from '@switchback/protocol';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
 const PERIODS = ['today', 'week', 'month'] as const;
@@ -10,11 +10,11 @@ export async function usage(
   flags: CommonFlags & { json: boolean; by?: string; period?: string },
 ): Promise<number> {
   if (flags.period && !PERIODS.includes(flags.period as UsagePeriod)) {
-    process.stderr.write(`harness: --period must be one of ${PERIODS.join(', ')}\n`);
+    process.stderr.write(`switchback: --period must be one of ${PERIODS.join(', ')}\n`);
     return 2;
   }
   if (flags.by && !BREAKDOWNS.includes(flags.by as UsageBreakdown)) {
-    process.stderr.write(`harness: --by must be one of ${BREAKDOWNS.join(', ')}\n`);
+    process.stderr.write(`switchback: --by must be one of ${BREAKDOWNS.join(', ')}\n`);
     return 2;
   }
   const report = createEngine(flags, 'deny').engine.usage(flags.period as UsagePeriod | undefined);

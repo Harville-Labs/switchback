@@ -4,10 +4,10 @@ import {
   type JsonRpcMessage,
   NdjsonDecoder,
   type Transport,
-} from '@harness/protocol';
+} from '@switchback/protocol';
 
 export interface SpawnOptions {
-  /** Path to the `harness` executable. */
+  /** Path to the `switchback` executable. */
   command: string;
   args?: string[];
   cwd: string;
@@ -17,7 +17,7 @@ export interface SpawnOptions {
 }
 
 /**
- * Start `harness serve --stdio` as a child process and talk to it over its
+ * Start `switchback serve --stdio` as a child process and talk to it over its
  * stdin/stdout. Uses node:child_process so it runs inside VS Code's extension
  * host as well as under Bun.
  */

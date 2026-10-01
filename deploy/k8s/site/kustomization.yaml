@@ -1,4 +1,4 @@
-# Applied by Flux from the homelab repo (apps/harville-labs/harness-site). CI
+# Applied by Flux from the homelab repo (apps/harville-labs/switchback-site). CI
 # (.github/workflows/site-image.yml) bumps the tag on every build of main.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -6,5 +6,5 @@ resources:
   - deployment.yaml
   - service.yaml
 images:
-  - name: ghcr.io/harville-labs/harness-site
+  - name: ghcr.io/harville-labs/switchback-site
     newTag: sha-592b5046b5efc355db1b7ddc08b372541deda0e7

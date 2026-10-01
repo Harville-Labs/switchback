@@ -3,7 +3,7 @@
  * servers (the hosted site) can validate policies without importing the
  * engine.
  */
-import type { ProviderConfig } from '@harness/providers';
+import type { ProviderConfig } from '@switchback/providers';
 import { z } from 'zod';
 
 const PROVIDER_TYPES = [

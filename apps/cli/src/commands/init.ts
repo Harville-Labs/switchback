@@ -1,5 +1,5 @@
 /**
- * `harness init`: guided configuration. Detects local model servers, asks
+ * `switchback init`: guided configuration. Detects local model servers, asks
  * which local and remote models to use, and writes a config file. Every
  * question has a flag so setup can also run unattended (`--yes`).
  */
@@ -9,7 +9,6 @@ import {
   catalogFor,
   type DetectedServer,
   detectLocalServers,
-  harnessPaths,
   type LocalAnswer,
   parseJsonc,
   projectPaths,
@@ -17,14 +16,15 @@ import {
   type RemoteAnswer,
   type RemoteKind,
   type SetupAnswers,
+  switchbackPaths,
   writeConfigLayer,
-} from '@harness/engine';
+} from '@switchback/engine';
 import {
   CATALOG,
   CREDENTIAL_ENV,
   type HostedProviderKind,
   hasAnthropicCredentials,
-} from '@harness/providers';
+} from '@switchback/providers';
 import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 import { doctor } from './doctor.ts';
 import { setTelemetry, TELEMETRY_PROMPT } from './telemetry.ts';
@@ -65,7 +65,7 @@ class SetupError extends Error {}
 export async function init(flags: InitFlags): Promise<number> {
   if (!flags.yes && !process.stdin.isTTY) {
     process.stderr.write(
-      'harness init: not a terminal; pass --yes with flags (see `harness --help`)\n',
+      'switchback init: not a terminal; pass --yes with flags (see `switchback --help`)\n',
     );
     return 2;
   }
@@ -74,7 +74,7 @@ export async function init(flags: InitFlags): Promise<number> {
     return await run(flags, p);
   } catch (err) {
     if (err instanceof SetupError) {
-      process.stderr.write(`harness init: ${err.message}\n`);
+      process.stderr.write(`switchback init: ${err.message}\n`);
       return 2;
     }
     throw err;
@@ -86,7 +86,7 @@ export async function init(flags: InitFlags): Promise<number> {
 async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   if (p) {
     console.log(
-      `${bold('Harness setup')}\n${dim('Configure the local model you run and the remote model Harness escalates to.')}\n`,
+      `${bold('Switchback setup')}\n${dim('Configure the local model you run and the remote model Switchback escalates to.')}\n`,
     );
   }
 
@@ -102,11 +102,11 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
           {
             label: 'Project config',
             value: 'project' as const,
-            hint: '.harness/config.json in this workspace',
+            hint: '.switchback/config.json in this workspace',
           },
         ])
       : 'user');
-  const file = scope === 'user' ? harnessPaths().configFile : projectPaths(flags.cwd).configFile;
+  const file = scope === 'user' ? switchbackPaths().configFile : projectPaths(flags.cwd).configFile;
   if (
     existsSync(file) &&
     p &&
@@ -176,7 +176,7 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
     flags.telemetry ??
     (p && !telemetryChosen()
       ? await p.confirm(
-          `${TELEMETRY_PROMPT}\n${dim('  Details: docs/telemetry.md. Change it any time with `harness telemetry on|off`.')}\n `,
+          `${TELEMETRY_PROMPT}\n${dim('  Details: docs/telemetry.md. Change it any time with `switchback telemetry on|off`.')}\n `,
           false,
         )
       : undefined);
@@ -190,7 +190,7 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
 
 /** Whether the user has answered before (either way): their config says. */
 function telemetryChosen(): boolean {
-  const file = harnessPaths().configFile;
+  const file = switchbackPaths().configFile;
   if (!existsSync(file)) return false;
   try {
     const cfg = parseJsonc(readFileSync(file, 'utf8')) as { telemetry?: { enabled?: unknown } };
@@ -302,7 +302,7 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
     const pick = await p.select(
       chosen.length
         ? '\nWhich model should back it up?'
-        : '\nWhich local model should Harness use first?',
+        : '\nWhich local model should Switchback use first?',
       choices,
       remaining.length ? preferred : choices.length - 2,
     );
@@ -344,7 +344,7 @@ async function detectedLocal(
   if (model.tools === false) {
     console.log(
       yellow(
-        `  ${model.id} doesn't report tool-calling support. Harness will escalate often with it.`,
+        `  ${model.id} doesn't report tool-calling support. Switchback will escalate often with it.`,
       ),
     );
   }
@@ -563,11 +563,13 @@ async function chooseRemote(
 /** First-run prompt before the TUI opens. */
 export async function offerSetup(cwd: string): Promise<number> {
   const p = new Prompter();
-  const yes = await p.confirm(`${bold('No Harness configuration found.')} Set up your models now?`);
+  const yes = await p.confirm(
+    `${bold('No Switchback configuration found.')} Set up your models now?`,
+  );
   p.close();
   if (!yes) {
     console.log(
-      dim('Continuing without configured models. Run `harness init` any time to choose them.\n'),
+      dim('Continuing without configured models. Run `switchback init` any time to choose them.\n'),
     );
     return 0;
   }

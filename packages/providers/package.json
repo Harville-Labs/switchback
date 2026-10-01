@@ -1,5 +1,5 @@
 {
-  "name": "@harness/providers",
+  "name": "@switchback/providers",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
@@ -14,7 +14,7 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "@anthropic-ai/vertex-sdk": "^0.19.11",
     "@google/genai": "^2.24.0",
-    "@harness/protocol": "workspace:*",
+    "@switchback/protocol": "workspace:*",
     "openai": "^7.23.0",
     "zod": "^4.6.5"
   }

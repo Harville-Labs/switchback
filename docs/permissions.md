@@ -1,6 +1,6 @@
 # Permissions and safety
 
-Harness runs tools on the user's machine, so every tool call passes three checks.
+Switchback runs tools on the user's machine, so every tool call passes three checks.
 
 ## 1. Validation
 
@@ -28,7 +28,7 @@ With `ask`, the engine emits `permission.requested` and waits. For `edit` and `w
 - **Always**: every call in this category for the rest of the engine's lifetime. For MCP tools, "always" covers that one server's tools.
 - **Deny**: the model is told the user declined and not to retry.
 
-Cancelling the turn denies any pending request. Headless `harness run` denies `ask` permissions unless you pass `--yes`.
+Cancelling the turn denies any pending request. Headless `switchback run` denies `ask` permissions unless you pass `--yes`.
 
 ## Cost safety
 

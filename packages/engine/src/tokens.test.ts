@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 import { countTokens, messageTokens, nearThreshold, promptText, promptTokens } from './tokens.ts';
 
 describe('token counting', () => {

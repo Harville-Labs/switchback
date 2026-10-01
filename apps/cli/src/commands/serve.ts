@@ -1,15 +1,15 @@
 /**
- * `harness serve --stdio`: expose the engine over stdin/stdout for one client
+ * `switchback serve --stdio`: expose the engine over stdin/stdout for one client
  * (the VS Code extension's private engine, or any integration). stdout carries
  * protocol messages only; everything else goes to stderr.
  *
- * `harness serve --socket`: the shared daemon for this workspace. Many clients
+ * `switchback serve --socket`: the shared daemon for this workspace. Many clients
  * (TUI, VS Code) attach and share live sessions. It exits after being idle.
  */
 import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { type DaemonInfo, daemonPaths, readDaemonInfo, socketTransport } from '@harness/client';
-import { listenSocket, serve as serveEngine, stdioTransport } from '@harness/engine';
+import { type DaemonInfo, daemonPaths, readDaemonInfo, socketTransport } from '@switchback/client';
+import { listenSocket, serve as serveEngine, stdioTransport } from '@switchback/engine';
 import {
   CLI_VERSION,
   type CommonFlags,
@@ -21,7 +21,7 @@ export async function serve(flags: CommonFlags & { socket?: boolean }): Promise<
   await refreshOrgPolicyQuickly();
   if (flags.socket) return serveSocket(flags);
   const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true, telemetry: true });
-  for (const e of agentErrors) process.stderr.write(`harness: agent definition skipped: ${e}\n`);
+  for (const e of agentErrors) process.stderr.write(`switchback: agent definition skipped: ${e}\n`);
   const transport = stdioTransport();
   return new Promise((resolve) => {
     serveEngine(engine, transport, () => resolve(0));
@@ -29,7 +29,7 @@ export async function serve(flags: CommonFlags & { socket?: boolean }): Promise<
   });
 }
 
-const IDLE_MS = Number(process.env.HARNESS_DAEMON_IDLE_MS) || 10 * 60_000;
+const IDLE_MS = Number(process.env.SWITCHBACK_DAEMON_IDLE_MS) || 10 * 60_000;
 
 async function serveSocket(flags: CommonFlags): Promise<number> {
   const paths = daemonPaths(flags.cwd);
@@ -44,7 +44,7 @@ async function serveSocket(flags: CommonFlags): Promise<number> {
       () => false,
     );
     if (alive) {
-      process.stderr.write(`harness: a daemon is already running for ${flags.cwd}\n`);
+      process.stderr.write(`switchback: a daemon is already running for ${flags.cwd}\n`);
       return 0;
     }
   }
@@ -57,7 +57,7 @@ async function serveSocket(flags: CommonFlags): Promise<number> {
   if (process.platform !== 'win32') rmSync(paths.socket, { force: true }); // stale socket from a crash
 
   const { engine, agentErrors } = createEngine(flags, 'prompt', { syncOrg: true, telemetry: true });
-  for (const e of agentErrors) process.stderr.write(`harness: agent definition skipped: ${e}\n`);
+  for (const e of agentErrors) process.stderr.write(`switchback: agent definition skipped: ${e}\n`);
 
   const token = randomBytes(24).toString('hex');
   let connections = 0;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message } from '@harness/protocol';
+import type { Message } from '@switchback/protocol';
 import type { Response } from 'openai/resources/responses/responses';
 import { fromResponse, OpenAIResponsesProvider, toResponsesInput } from './openai-responses.ts';
 import { createProvider } from './registry.ts';

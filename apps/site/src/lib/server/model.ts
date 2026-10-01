@@ -6,13 +6,13 @@
  * Credentials are Better Auth's (auth.ts). Changes a site member makes go
  * through `ctx.auth.api` with their own session, so the plugins check their
  * permissions too; this file adds the rules Better Auth doesn't know (only
- * Harness managers assign operators, a site keeps one, invitations take
- * seats, SSO sessions stay on their site). Harness managers act on sites they
+ * Switchback managers assign operators, a site keeps one, invitations take
+ * seats, SSO sessions stay on their site). Switchback managers act on sites they
  * don't belong to, which the plugins don't model, so their changes to
  * memberships are written directly.
  */
-import { OrgPolicy } from '@harness/engine/org/schema';
-import { DailyReport } from '@harness/engine/telemetry/schema';
+import { OrgPolicy } from '@switchback/engine/org/schema';
+import { DailyReport } from '@switchback/engine/telemetry/schema';
 import { APIError } from 'better-auth/api';
 import { and, count, desc, eq, gt, gte, isNull, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -24,7 +24,7 @@ export interface Ctx {
   db: Db;
   auth: Auth;
   now: () => Date;
-  /** Harness managers must sign in through Harville Labs' identity provider. */
+  /** Switchback managers must sign in through Harville Labs' identity provider. */
   managerSsoRequired?: boolean;
 }
 
@@ -44,7 +44,7 @@ export interface User {
   email: string;
   name: string | null;
   /** Harville Labs staff: see every site, create them, and assign their operators. */
-  harnessManager: boolean;
+  switchbackManager: boolean;
 }
 
 /** A signed-in person: who, how they signed in, and the headers that prove it. */
@@ -116,7 +116,7 @@ const toUser = (r: typeof t.user.$inferSelect): User => ({
   id: r.id,
   email: r.email,
   name: r.name === r.email ? null : r.name,
-  harnessManager: r.role === MANAGER,
+  switchbackManager: r.role === MANAGER,
 });
 
 export async function userByEmail(ctx: Ctx, address: string): Promise<User | undefined> {
@@ -144,9 +144,9 @@ export async function ensureUser(ctx: Ctx, address: string, manager = false): Pr
     );
     user = (await userByEmail(ctx, e)) as User;
   }
-  if (manager && !user.harnessManager) {
+  if (manager && !user.switchbackManager) {
     await ctx.db.update(t.user).set({ role: MANAGER }).where(eq(t.user.id, user.id));
-    user = { ...user, harnessManager: true };
+    user = { ...user, switchbackManager: true };
   }
   return user;
 }
@@ -256,8 +256,8 @@ async function siteById(ctx: Ctx, id: string): Promise<Site | undefined> {
   return r ? toSite(r) : undefined;
 }
 
-function assertHarnessManager(actor: User, what: string): void {
-  if (!actor.harnessManager) throw new SiteError(`Only Harness managers can ${what}.`, 403);
+function assertSwitchbackManager(actor: User, what: string): void {
+  if (!actor.switchbackManager) throw new SiteError(`Only Switchback managers can ${what}.`, 403);
 }
 
 /** Members plus pending invitations: an invitation holds a seat until it's answered. */
@@ -280,7 +280,7 @@ const pendingInvitations = (ctx: Ctx, siteId: string) =>
     gt(t.invitation.expiresAt, ctx.now()),
   );
 
-/** Every site, for Harness managers: seats in use and who operates it. */
+/** Every site, for Switchback managers: seats in use and who operates it. */
 export async function listSites(
   ctx: Ctx,
 ): Promise<(Site & { used: number; operators: string[]; sso: boolean })[]> {
@@ -313,7 +313,7 @@ export async function createSite(
   actor: User,
   input: { slug: string; name: string; seats: number; operatorEmail: string },
 ): Promise<Site> {
-  assertHarnessManager(actor, 'create sites');
+  assertSwitchbackManager(actor, 'create sites');
   if (!SLUG.test(input.slug))
     throw new SiteError(
       'The site ID must be 3 to 40 lowercase letters, digits, or dashes, starting with a letter.',
@@ -350,7 +350,7 @@ export async function createSite(
 }
 
 export async function setSeats(ctx: Ctx, actor: User, site: Site, seats: number): Promise<void> {
-  assertHarnessManager(actor, 'change seats');
+  assertSwitchbackManager(actor, 'change seats');
   if (!Number.isInteger(seats) || seats < 1) throw new SiteError('A site needs at least one seat.');
   await ctx.db.update(t.organization).set({ seats }).where(eq(t.organization.id, site.id));
   await audit(ctx, site.id, actor, 'site.seats', `${site.seats} → ${seats}`);
@@ -454,19 +454,19 @@ export async function listMembers(ctx: Ctx, site: Site): Promise<MemberRow[]> {
   ].sort((a, b) => a.email.localeCompare(b.email));
 }
 
-/** Operators and admins manage a site; Harness managers manage every site. */
+/** Operators and admins manage a site; Switchback managers manage every site. */
 export function canManage(m: Membership | undefined, user: User): boolean {
-  return user.harnessManager || m?.role === 'operator' || m?.role === 'admin';
+  return user.switchbackManager || m?.role === 'operator' || m?.role === 'admin';
 }
 
 function assertManager(m: Membership | undefined, user: User): void {
   if (!canManage(m, user)) throw new SiteError('Only operators and admins can do that.', 403);
 }
 
-/** Operators are Harville Labs' contact at a company, so only a Harness manager assigns them. */
+/** Operators are Harville Labs' contact at a company, so only a Switchback manager assigns them. */
 function assertMayAssign(actor: User, from: Role | undefined, to: Role | undefined): void {
-  if ((from === 'operator' || to === 'operator') && !actor.harnessManager)
-    throw new SiteError('Only a Harness manager can assign or remove site operators.', 403);
+  if ((from === 'operator' || to === 'operator') && !actor.switchbackManager)
+    throw new SiteError('Only a Switchback manager can assign or remove site operators.', 403);
 }
 
 async function operatorCount(ctx: Ctx, site: Site): Promise<number> {
@@ -487,7 +487,7 @@ async function assertSeat(ctx: Ctx, site: Site): Promise<void> {
 
 /**
  * Invite someone as a member or admin. A member of the site sends a Better
- * Auth invitation, which holds a seat until it's accepted; a Harness manager
+ * Auth invitation, which holds a seat until it's accepted; a Switchback manager
  * who isn't a member adds the person directly.
  */
 export async function invite(
@@ -586,7 +586,7 @@ export async function changeRole(
   assertMayAssign(actor.user, current.role, role);
   if (current.role === 'operator' && (await operatorCount(ctx, site)) <= 1)
     throw new SiteError('A site needs at least one operator. Assign another operator first.');
-  if (mine && !actor.user.harnessManager)
+  if (mine && !actor.user.switchbackManager)
     await authCall(() =>
       ctx.auth.api.updateMemberRole({
         body: { memberId: current.id, role: toPluginRole(role), organizationId: site.id },
@@ -621,7 +621,7 @@ export async function removeMember(
   assertMayAssign(actor.user, current.role, undefined);
   if (current.role === 'operator' && (await operatorCount(ctx, site)) <= 1)
     throw new SiteError('A site needs at least one operator. Assign another operator first.');
-  if (mine && !actor.user.harnessManager)
+  if (mine && !actor.user.switchbackManager)
     await authCall(() =>
       ctx.auth.api.removeMember({
         body: { memberIdOrEmail: current.id, organizationId: site.id },
@@ -636,7 +636,7 @@ export async function removeMember(
 }
 
 /**
- * Harness manager: make someone an operator of a site. A member is promoted in
+ * Switchback manager: make someone an operator of a site. A member is promoted in
  * place; anyone else is added, taking a seat.
  */
 export async function assignOperator(
@@ -645,7 +645,7 @@ export async function assignOperator(
   actor: Actor,
   emailInput: string,
 ): Promise<User> {
-  assertHarnessManager(actor.user, 'assign site operators');
+  assertSwitchbackManager(actor.user, 'assign site operators');
   const user = await ensureUser(ctx, emailInput);
   const current = await membership(ctx, site, user);
   if (current) {
@@ -663,10 +663,10 @@ export async function assignOperator(
 }
 
 // ---------------------------------------------------------------------------
-// Harness managers (Harville Labs staff)
+// Switchback managers (Harville Labs staff)
 // ---------------------------------------------------------------------------
 
-export async function listHarnessManagers(ctx: Ctx): Promise<User[]> {
+export async function listSwitchbackManagers(ctx: Ctx): Promise<User[]> {
   const rows = await ctx.db
     .select()
     .from(t.user)
@@ -676,23 +676,23 @@ export async function listHarnessManagers(ctx: Ctx): Promise<User[]> {
 }
 
 /**
- * Grant or revoke Harness manager access, through Better Auth's admin plugin
+ * Grant or revoke Switchback manager access, through Better Auth's admin plugin
  * as the acting manager. Nobody can revoke their own, so there's always
  * someone left who can. Addresses in MANAGER_EMAILS are granted again at
  * every startup.
  */
-export async function setHarnessManager(
+export async function setSwitchbackManager(
   ctx: Ctx,
   actor: Actor,
   emailInput: string,
   grant: boolean,
 ): Promise<User> {
-  assertHarnessManager(actor.user, 'change who is a Harness manager');
+  assertSwitchbackManager(actor.user, 'change who is a Switchback manager');
   const address = email(emailInput);
   if (!grant && address === actor.user.email)
-    throw new SiteError("You can't remove your own Harness manager access.");
+    throw new SiteError("You can't remove your own Switchback manager access.");
   const user = grant ? await ensureUser(ctx, address) : await userByEmail(ctx, address);
-  if (!user) throw new SiteError(`${address} isn't a Harness manager.`, 404);
+  if (!user) throw new SiteError(`${address} isn't a Switchback manager.`, 404);
   await authCall(() =>
     ctx.auth.api.setRole({
       body: { userId: user.id, role: grant ? MANAGER : 'user' },
@@ -702,7 +702,7 @@ export async function setHarnessManager(
   // Revoked access ends the sessions that carried it.
   if (!grant) await ctx.db.delete(t.session).where(eq(t.session.userId, user.id));
   await audit(ctx, null, actor.user, grant ? 'manager.added' : 'manager.removed', user.email);
-  return { ...user, harnessManager: grant };
+  return { ...user, switchbackManager: grant };
 }
 
 // ---------------------------------------------------------------------------
@@ -733,7 +733,7 @@ export interface SiteSso {
   record?: { name: string; value: string };
 }
 
-const DNS_PREFIX = '_harness-sso';
+const DNS_PREFIX = '_switchback-sso';
 
 export async function siteSso(ctx: Ctx, site: Site): Promise<SiteSso | undefined> {
   const [p] = await ctx.db
@@ -863,26 +863,30 @@ export async function setSsoRequired(
 /**
  * Whether this sign-in may be used on this site: SSO and device sessions are
  * bound to their site, and a site that requires SSO accepts only its own.
- * Returns why not, or undefined. Harness managers are held to the first rule
+ * Returns why not, or undefined. Switchback managers are held to the first rule
  * only: they reach sites through /admin, not the site's identity provider.
  */
 export function sessionProblem(site: Site, actor: Actor): string | undefined {
   const { siteId, via } = actor.session;
-  if (via === 'device') return 'Device tokens only work with the Harness client.';
+  if (via === 'device') return 'Device tokens only work with the Switchback client.';
   if (siteId && siteId !== site.id)
     return `You signed in with another site's single sign-on, which only works for that site. Sign out, then sign in again.`;
-  if (site.ssoRequired && !actor.user.harnessManager && via !== `sso:${siteProviderId(site.slug)}`)
+  if (
+    site.ssoRequired &&
+    !actor.user.switchbackManager &&
+    via !== `sso:${siteProviderId(site.slug)}`
+  )
     return `${site.name} requires its single sign-on. Sign out, then sign in again with your ${site.name} account.`;
   return undefined;
 }
 
-/** Whether this sign-in may use the Harness manager console. */
+/** Whether this sign-in may use the Switchback manager console. */
 export function managerSessionProblem(ctx: Ctx, actor: Actor): string | undefined {
-  if (!actor.user.harnessManager) return 'Only Harness managers can see this.';
+  if (!actor.user.switchbackManager) return 'Only Switchback managers can see this.';
   if (actor.session.siteId || actor.session.via === 'device')
     return 'This sign-in only works for one site. Sign out, then sign in as Harville Labs staff.';
   if (ctx.managerSsoRequired && actor.session.via !== `sso:${STAFF_SSO}`)
-    return 'Harness managers sign in with Harville Labs single sign-on. Sign out, then choose “Harville Labs staff”.';
+    return 'Switchback managers sign in with Harville Labs single sign-on. Sign out, then choose “Harville Labs staff”.';
   return undefined;
 }
 
@@ -994,7 +998,7 @@ export async function decideDevice(
     if (problem) throw new SiteError(problem, 403);
   }
   if (!(await pendingDevice(ctx, site, actor, userCode)))
-    throw new SiteError('That code has expired or was already used. Run `harness login` again.');
+    throw new SiteError('That code has expired or was already used. Run `switchback login` again.');
   await authCall(() =>
     approve
       ? ctx.auth.api.deviceApprove({ body: { userCode }, headers: actor.headers })
@@ -1292,7 +1296,7 @@ export interface TelemetrySummary {
   crashes: { day: string; site: string; name: string; message: string; stack: string }[];
 }
 
-/** Harness manager view: telemetry across every site (and unaffiliated installs) for recent days. */
+/** Switchback manager view: telemetry across every site (and unaffiliated installs) for recent days. */
 export async function telemetrySummary(ctx: Ctx, days = 30): Promise<TelemetrySummary> {
   const from = new Date(ctx.now().getTime() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
   const rows = await ctx.db
@@ -1379,7 +1383,7 @@ export async function audit(
   });
 }
 
-/** Changes made outside any one site, such as granting Harness manager access. */
+/** Changes made outside any one site, such as granting Switchback manager access. */
 export async function platformAuditLog(ctx: Ctx, limit = 50) {
   return ctx.db
     .select({

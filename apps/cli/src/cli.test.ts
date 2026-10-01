@@ -6,10 +6,10 @@ import { afterAll, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HarnessClient, spawnEngine } from '@harness/client';
-import type { EngineEvent } from '@harness/protocol';
+import { SwitchbackClient, spawnEngine } from '@switchback/client';
+import type { EngineEvent } from '@switchback/protocol';
 
-const home = mkdtempSync(join(tmpdir(), 'harness-home-'));
+const home = mkdtempSync(join(tmpdir(), 'switchback-home-'));
 afterAll(() => rmSync(home, { recursive: true, force: true }));
 const main = join(import.meta.dir, 'main.ts');
 
@@ -18,9 +18,9 @@ test('serve --stdio completes a turn for an out-of-process client', async () => 
     command: process.execPath,
     args: [main, 'serve', '--stdio', '--mock'],
     cwd: join(import.meta.dir, '..', '..', '..'),
-    env: { HARNESS_HOME: home },
+    env: { SWITCHBACK_HOME: home },
   });
-  const client = new HarnessClient(transport);
+  const client = new SwitchbackClient(transport);
   const init = await client.initialize({ name: 'e2e', version: '0' }, process.cwd());
   expect(init.protocolVersion).toBe(1);
 
@@ -46,7 +46,7 @@ test('serve --stdio completes a turn for an out-of-process client', async () => 
 
 test('run exits non-zero with a clear message on bad flags', async () => {
   const proc = Bun.spawn([process.execPath, main, 'run', '--route', 'cloud', 'hi'], {
-    env: { ...process.env, HARNESS_HOME: home },
+    env: { ...process.env, SWITCHBACK_HOME: home },
     stderr: 'pipe',
   });
   expect(await proc.exited).toBe(2);
@@ -54,15 +54,15 @@ test('run exits non-zero with a clear message on bad flags', async () => {
 });
 
 test('agents new writes a valid file that a running engine picks up without a restart', async () => {
-  const ws = mkdtempSync(join(tmpdir(), 'harness-agents-'));
+  const ws = mkdtempSync(join(tmpdir(), 'switchback-agents-'));
   const transport = spawnEngine({
     command: process.execPath,
     args: [main, 'serve', '--stdio', '--mock', '--cwd', ws],
     // Not the workspace itself: Windows can't delete a directory a live process sits in.
     cwd: import.meta.dir,
-    env: { HARNESS_HOME: home },
+    env: { SWITCHBACK_HOME: home },
   });
-  const client = new HarnessClient(transport);
+  const client = new SwitchbackClient(transport);
   await client.initialize({ name: 'e2e', version: '0' }, ws);
   expect((await client.request('agents.list', {})).map((a) => a.name)).not.toContain('reviewer');
 
@@ -88,10 +88,10 @@ test('agents new writes a valid file that a running engine picks up without a re
       '--prompt',
       'You review diffs: look for bugs, report file:line.',
     ],
-    { env: { ...process.env, HARNESS_HOME: home }, stdout: 'pipe', stderr: 'pipe' },
+    { env: { ...process.env, SWITCHBACK_HOME: home }, stdout: 'pipe', stderr: 'pipe' },
   );
   expect(made.exitCode).toBe(0);
-  const file = readFileSync(join(ws, '.harness', 'agents', 'reviewer.md'), 'utf8');
+  const file = readFileSync(join(ws, '.switchback', 'agents', 'reviewer.md'), 'utf8');
   expect(file).toContain('name: reviewer');
   expect(file).toContain('budgetUsd: 0.5');
 
@@ -118,7 +118,7 @@ test('agents new writes a valid file that a running engine picks up without a re
       '--description',
       'x',
     ],
-    { env: { ...process.env, HARNESS_HOME: home }, stdout: 'pipe', stderr: 'pipe' },
+    { env: { ...process.env, SWITCHBACK_HOME: home }, stdout: 'pipe', stderr: 'pipe' },
   );
   expect(bad.exitCode).toBe(2);
   expect(bad.stderr.toString()).toContain('lowercase');

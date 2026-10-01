@@ -3,16 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { EngineEvent } from '@harness/protocol';
-import { type Provider, ScriptedProvider } from '@harness/providers';
+import type { EngineEvent } from '@switchback/protocol';
+import { type Provider, ScriptedProvider } from '@switchback/providers';
 import { loadAgents, parseAgentFile } from '../agents.ts';
-import { HarnessConfig } from '../config.ts';
+import { SwitchbackConfig } from '../config.ts';
 import { Engine, type EngineOptions } from '../engine.ts';
 import { ClaudeAgentSdkRuntime } from './claude-agent-sdk.ts';
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'harness-rt-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-rt-'));
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -91,7 +91,7 @@ function engine(opts: Partial<Omit<EngineOptions, 'config'>> & { config?: object
   const { config, ...rest } = opts;
   const e = new Engine({
     workspaceRoot: root,
-    config: HarnessConfig.parse({
+    config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
       runtimes: { claude: { type: 'claude-agent-sdk', model: 'claude-sonnet-5' } },
@@ -136,7 +136,7 @@ describe('external runtime as a subagent', () => {
       { name: 'Edit', output: 'edited', isError: false },
     ]);
 
-    // Options passed to the SDK: workspace, the agent's budget, Harness answering permissions.
+    // Options passed to the SDK: workspace, the agent's budget, Switchback answering permissions.
     expect(calls[0]?.prompt).toBe('fix a.ts');
     expect(calls[0]?.options).toMatchObject({
       cwd: root,

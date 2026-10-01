@@ -1,20 +1,20 @@
 /**
- * Layered configuration: built-in defaults <- user (~/.config/harness/config.json)
- * <- project (.harness/config.json). Later layers deep-merge over earlier ones.
+ * Layered configuration: built-in defaults <- user (~/.config/switchback/config.json)
+ * <- project (.switchback/config.json). Later layers deep-merge over earlier ones.
  * String values of the form `{env:NAME}` are replaced with the environment
  * variable so secrets never need to live in a config file.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { type Price, ProviderConfig } from '@harness/providers';
-import { RoutingConfig } from '@harness/router';
+import { type Price, ProviderConfig } from '@switchback/providers';
+import { RoutingConfig } from '@switchback/router';
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
 import { McpServerConfig, McpServerName } from './mcp/config.ts';
 import { isTrusted } from './mcp/trust.ts';
 import { applyRestrictions, leafPaths, type OrgPolicy, type OrgStatus } from './org/policy.ts';
 import { readCachedPolicy } from './org/store.ts';
-import { harnessPaths, projectPaths } from './paths.ts';
+import { projectPaths, switchbackPaths } from './paths.ts';
 import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
 
 export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
@@ -41,7 +41,7 @@ export const ModelConfig = z.object({
 });
 export type ModelConfig = z.infer<typeof ModelConfig>;
 
-export const HarnessConfig = z.object({
+export const SwitchbackConfig = z.object({
   $schema: z.string().optional(),
   providers: z.record(z.string(), ProviderConfig).default({}),
   models: z.record(z.string(), ModelConfig).default({}),
@@ -97,7 +97,7 @@ export const HarnessConfig = z.object({
     .prefault({}),
   /**
    * Anonymous usage statistics (docs/telemetry.md). Off unless turned on;
-   * `DO_NOT_TRACK=1` or `HARNESS_TELEMETRY=0` force it off.
+   * `DO_NOT_TRACK=1` or `SWITCHBACK_TELEMETRY=0` force it off.
    */
   telemetry: z
     .object({
@@ -134,16 +134,16 @@ export const HarnessConfig = z.object({
     })
     .prefault({}),
 });
-export type HarnessConfig = z.infer<typeof HarnessConfig>;
+export type SwitchbackConfig = z.infer<typeof SwitchbackConfig>;
 
 export interface LoadedConfig {
-  config: HarnessConfig;
+  config: SwitchbackConfig;
   /** Files that contributed, lowest precedence first. */
   sources: string[];
   prices: Record<string, Price>;
   /** Present when an organization policy applied. */
   org?: OrgStatus;
-  /** Project-defined MCP servers left out until trusted (`harness mcp trust`). */
+  /** Project-defined MCP servers left out until trusted (`switchback mcp trust`). */
   untrustedMcp: { name: string; source: string; definition: unknown }[];
 }
 
@@ -158,8 +158,8 @@ export class ConfigError extends Error {
 }
 
 /**
- * Built-in defaults: none. Harness doesn't pick a model vendor for anyone.
- * `harness init` writes the providers and models the user chooses, local and
+ * Built-in defaults: none. Switchback doesn't pick a model vendor for anyone.
+ * `switchback init` writes the providers and models the user chooses, local and
  * remote alike.
  */
 export function defaultConfig(): Record<string, unknown> {
@@ -182,7 +182,7 @@ export function loadConfig(
   // Claude Code's .mcp.json sits between the user and project files; only its
   // `mcpServers` is read.
   const files: { file: string; project: boolean; only?: 'mcpServers' }[] = [
-    { file: harnessPaths(env).configFile, project: false },
+    { file: switchbackPaths(env).configFile, project: false },
     { file: pp.mcpJson, project: true, only: 'mcpServers' },
     { file: pp.configFile, project: true },
   ];
@@ -239,7 +239,7 @@ export function loadConfig(
   }
   merged = { ...merged, mcpServers: servers };
 
-  const result = HarnessConfig.safeParse(resolveEnv(merged, env));
+  const result = SwitchbackConfig.safeParse(resolveEnv(merged, env));
   if (!result.success) {
     const issues = result.error.issues
       .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
@@ -270,14 +270,14 @@ export function loadConfig(
   return { config, sources, prices, untrustedMcp, ...(orgStatus ? { org: orgStatus } : {}) };
 }
 
-/** `DO_NOT_TRACK` (consoledonottrack.com) or `HARNESS_TELEMETRY=0`. */
+/** `DO_NOT_TRACK` (consoledonottrack.com) or `SWITCHBACK_TELEMETRY=0`. */
 export function telemetryOptedOut(env: Record<string, string | undefined>): boolean {
   const off = (v: string | undefined) => !!v && !['0', 'false', ''].includes(v.toLowerCase());
-  return off(env.DO_NOT_TRACK) || ['0', 'false', 'off'].includes(env.HARNESS_TELEMETRY ?? '');
+  return off(env.DO_NOT_TRACK) || ['0', 'false', 'off'].includes(env.SWITCHBACK_TELEMETRY ?? '');
 }
 
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */
-export function referenceProblem(config: HarnessConfig): string | undefined {
+export function referenceProblem(config: SwitchbackConfig): string | undefined {
   for (const [alias, m] of Object.entries(config.models)) {
     if (!config.providers[m.provider])
       return `models.${alias} references unknown provider "${m.provider}"`;
@@ -330,13 +330,13 @@ export function parseJsonc(text: string): unknown {
 
 /** JSON Schema for config files (input shape: everything with a default is optional). */
 export function configJsonSchema(): Record<string, unknown> {
-  const schema = z.toJSONSchema(HarnessConfig, { io: 'input', unrepresentable: 'any' }) as Record<
-    string,
-    unknown
-  >;
+  const schema = z.toJSONSchema(SwitchbackConfig, {
+    io: 'input',
+    unrepresentable: 'any',
+  }) as Record<string, unknown>;
   return {
     ...schema,
-    title: 'Harness configuration',
+    title: 'Switchback configuration',
     description:
       'See docs/configuration.md. String values may reference environment variables as {env:NAME}.',
   };

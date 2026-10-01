@@ -1,20 +1,20 @@
 /**
- * `harness telemetry [status|on|off|preview]`: opt in or out of anonymous
+ * `switchback telemetry [status|on|off|preview]`: opt in or out of anonymous
  * usage statistics, and see exactly what would be sent (docs/telemetry.md).
  */
 import {
-  harnessPaths,
   loadConfig,
   optIn,
   optOut,
   pendingReports,
   readAuth,
   readTelemetryState,
+  switchbackPaths,
   telemetryOptedOut,
   telemetryTarget,
   todaysReport,
   writeConfigLayer,
-} from '@harness/engine';
+} from '@switchback/engine';
 import { CLI_VERSION, type CommonFlags, createEngine } from '../bootstrap.ts';
 import { bold, dim, green, yellow } from '../prompt.ts';
 
@@ -26,19 +26,19 @@ export const TELEMETRY_PROMPT =
  * in a project file the rest of a team would share.
  */
 export function setTelemetry(enabled: boolean): void {
-  writeConfigLayer(harnessPaths().configFile, { telemetry: { enabled } });
-  const { dataDir } = harnessPaths();
+  writeConfigLayer(switchbackPaths().configFile, { telemetry: { enabled } });
+  const { dataDir } = switchbackPaths();
   if (enabled) optIn(dataDir, new Date());
   else optOut(dataDir);
 }
 
 export async function telemetry(sub: string | undefined, flags: CommonFlags): Promise<number> {
-  const { dataDir } = harnessPaths();
+  const { dataDir } = switchbackPaths();
   switch (sub ?? 'status') {
     case 'on':
       setTelemetry(true);
       console.log(
-        `${green('✓')} Telemetry on. Thank you. ${dim('`harness telemetry preview` shows what is sent; `harness telemetry off` stops it.')}`,
+        `${green('✓')} Telemetry on. Thank you. ${dim('`switchback telemetry preview` shows what is sent; `switchback telemetry off` stops it.')}`,
       );
       return reportEffective(flags, true);
     case 'off':
@@ -49,7 +49,7 @@ export async function telemetry(sub: string | undefined, flags: CommonFlags): Pr
       const { config } = loadConfig(flags.cwd, process.env);
       const state = readTelemetryState(dataDir);
       console.log(
-        `${bold('Telemetry')} ${config.telemetry.enabled ? green('on') : 'off'}${telemetryOptedOut(process.env) ? dim(' (forced off by DO_NOT_TRACK / HARNESS_TELEMETRY)') : ''}`,
+        `${bold('Telemetry')} ${config.telemetry.enabled ? green('on') : 'off'}${telemetryOptedOut(process.env) ? dim(' (forced off by DO_NOT_TRACK / SWITCHBACK_TELEMETRY)') : ''}`,
       );
       const auth = readAuth();
       console.log(
@@ -61,7 +61,7 @@ export async function telemetry(sub: string | undefined, flags: CommonFlags): Pr
         console.log(`  sent through ${state.sentThrough ?? 'nothing yet'}`);
       }
       console.log(
-        dim('\nWhat is sent: docs/telemetry.md. See it for yourself: harness telemetry preview'),
+        dim('\nWhat is sent: docs/telemetry.md. See it for yourself: switchback telemetry preview'),
       );
       return 0;
     }
@@ -94,7 +94,7 @@ export async function telemetry(sub: string | undefined, flags: CommonFlags): Pr
     }
     default:
       process.stderr.write(
-        `harness telemetry: unknown subcommand "${sub}" (status, on, off, preview)\n`,
+        `switchback telemetry: unknown subcommand "${sub}" (status, on, off, preview)\n`,
       );
       return 2;
   }
@@ -105,7 +105,7 @@ function reportEffective(flags: CommonFlags, wanted: boolean): number {
   const { config, org } = loadConfig(flags.cwd, process.env);
   if (config.telemetry.enabled === wanted) return 0;
   const why = telemetryOptedOut(process.env)
-    ? 'DO_NOT_TRACK or HARNESS_TELEMETRY=0 is set'
+    ? 'DO_NOT_TRACK or SWITCHBACK_TELEMETRY=0 is set'
     : org
       ? `${org.name} policy sets it`
       : 'a project config file sets it';

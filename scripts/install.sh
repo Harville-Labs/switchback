@@ -1,20 +1,20 @@
 #!/bin/sh
-# Install Harness, the local-first coding agent from Harville Labs.
+# Install Switchback, the local-first coding agent from Harville Labs.
 #
-#   curl -fsSL https://harness.harville.ai/install.sh | sh
-#   curl -fsSL https://harness.harville.ai/install.sh | sh -s -- --vscode
+#   curl -fsSL https://switchback.harville.ai/install.sh | sh
+#   curl -fsSL https://switchback.harville.ai/install.sh | sh -s -- --vscode
 #
 # Options:
-#   --version <x.y.z>   or HARNESS_VERSION       a specific release (default: the latest)
-#   --dir <path>        or HARNESS_INSTALL_DIR   where to put `harness` (default: ~/.local/bin)
+#   --version <x.y.z>   or SWITCHBACK_VERSION       a specific release (default: the latest)
+#   --dir <path>        or SWITCHBACK_INSTALL_DIR   where to put `switchback` (default: ~/.local/bin)
 #   --vscode                                     also install the VS Code extension
 #
 # It downloads one binary for this machine from the GitHub release, checks it
 # against the release's SHA256SUMS, and puts it in place. It never uses sudo and never edits your
 # shell profile; if the directory isn't on your PATH, it says what to add.
 #
-# The source is scripts/install.sh in https://github.com/Harville-Labs/harness;
-# harness.harville.ai serves it. HARNESS_DOWNLOAD_URL and HARNESS_RELEASES_API
+# The source is scripts/install.sh in https://github.com/Harville-Labs/switchback;
+# switchback.harville.ai serves it. SWITCHBACK_DOWNLOAD_URL and SWITCHBACK_RELEASES_API
 # point it at a mirror (or a test server) instead of GitHub.
 
 set -eu
@@ -24,17 +24,17 @@ set -eu
 
 say() { printf '%s\n' "$*"; }
 fail() {
-  printf 'harness install: %s\n' "$*" >&2
+  printf 'switchback install: %s\n' "$*" >&2
   exit 1
 }
 has() { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
   cat <<'EOF'
-Install Harness: curl -fsSL https://harness.harville.ai/install.sh | sh -s -- [options]
+Install Switchback: curl -fsSL https://switchback.harville.ai/install.sh | sh -s -- [options]
 
-  --version <x.y.z>   a specific release (default: the latest)     HARNESS_VERSION
-  --dir <path>        where to put `harness` (default: ~/.local/bin) HARNESS_INSTALL_DIR
+  --version <x.y.z>   a specific release (default: the latest)     SWITCHBACK_VERSION
+  --dir <path>        where to put `switchback` (default: ~/.local/bin) SWITCHBACK_INSTALL_DIR
   --vscode            also install the VS Code extension
   -h, --help          show this help
 EOF
@@ -53,7 +53,7 @@ fetch() {
       wget --quiet --output-document="$2" "$1"
     fi
   else
-    fail 'needs curl or wget to download Harness.'
+    fail 'needs curl or wget to download Switchback.'
   fi
 }
 
@@ -81,13 +81,13 @@ detect_platform() {
     Darwin) OS=darwin ;;
     Linux) OS=linux ;;
     MINGW* | MSYS* | CYGWIN*)
-      fail "this script is for macOS and Linux. On Windows, download harness-<version>-windows-x64.exe from $RELEASES." ;;
-    *) fail "Harness has no build for $(uname -s). It runs on macOS, Linux, and Windows." ;;
+      fail "this script is for macOS and Linux. On Windows, download switchback-<version>-windows-x64.exe from $RELEASES." ;;
+    *) fail "Switchback has no build for $(uname -s). It runs on macOS, Linux, and Windows." ;;
   esac
   case $(uname -m) in
     x86_64 | amd64) ARCH=x64 ;;
     arm64 | aarch64) ARCH=arm64 ;;
-    *) fail "Harness has no build for $(uname -m) processors (only x64 and arm64)." ;;
+    *) fail "Switchback has no build for $(uname -m) processors (only x64 and arm64)." ;;
   esac
   # A shell running under Rosetta reports x86_64 on an Apple silicon Mac.
   if [ "$OS" = darwin ] && [ "$ARCH" = x64 ] &&
@@ -95,7 +95,7 @@ detect_platform() {
     ARCH=arm64
   fi
   if [ "$OS" = linux ] && { ls /lib/ld-musl-* >/dev/null 2>&1 || ldd --version 2>&1 | grep -qi musl; }; then
-    fail "Harness's Linux builds need glibc; Alpine and other musl systems aren't supported yet."
+    fail "Switchback's Linux builds need glibc; Alpine and other musl systems aren't supported yet."
   fi
 }
 
@@ -117,7 +117,7 @@ path_hint() {
 }
 
 install_vscode() {
-  vsix="harness-vscode-$VERSION-$OS-$ARCH.vsix"
+  vsix="switchback-vscode-$VERSION-$OS-$ARCH.vsix"
   say "Downloading the VS Code extension ($vsix)"
   fetch "$BASE/v$VERSION/$vsix" "$TMP/$vsix"
   verify "$TMP" "$vsix"
@@ -133,14 +133,14 @@ install_vscode() {
   say "install it from the Extensions view (… > Install from VSIX)."
 }
 
-RELEASES=https://github.com/Harville-Labs/harness/releases
+RELEASES=https://github.com/Harville-Labs/switchback/releases
 
 main() {
-  VERSION=${HARNESS_VERSION:-}
-  DIR=${HARNESS_INSTALL_DIR:-${HOME:?HOME is not set}/.local/bin}
-  BASE=${HARNESS_DOWNLOAD_URL:-$RELEASES/download}
+  VERSION=${SWITCHBACK_VERSION:-}
+  DIR=${SWITCHBACK_INSTALL_DIR:-${HOME:?HOME is not set}/.local/bin}
+  BASE=${SWITCHBACK_DOWNLOAD_URL:-$RELEASES/download}
   BASE=${BASE%/}
-  API=${HARNESS_RELEASES_API:-https://api.github.com/repos/Harville-Labs/harness/releases}
+  API=${SWITCHBACK_RELEASES_API:-https://api.github.com/repos/Harville-Labs/switchback/releases}
   VSCODE=
   while [ $# -gt 0 ]; do
     case $1 in
@@ -156,11 +156,11 @@ main() {
   case $BASE in
     https://*) PROTO='=https' ;;
     http://*) PROTO='=http,https' ;;
-    *) fail "HARNESS_DOWNLOAD_URL must be an http(s) URL, not $BASE" ;;
+    *) fail "SWITCHBACK_DOWNLOAD_URL must be an http(s) URL, not $BASE" ;;
   esac
 
   detect_platform
-  TMP=$(mktemp -d 2>/dev/null || mktemp -d -t harness)
+  TMP=$(mktemp -d 2>/dev/null || mktemp -d -t switchback)
   trap 'rm -rf "$TMP"' EXIT
   trap 'rm -rf "$TMP"; exit 130' INT TERM
 
@@ -171,43 +171,43 @@ main() {
     fetch "$API?per_page=1" "$TMP/releases" ||
       fail "couldn't look up the latest release (GitHub's API allows 60 lookups an hour per address). Choose one with --version; see $RELEASES."
     VERSION=$(tr ',' '\n' <"$TMP/releases" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
-    [ -n "$VERSION" ] || fail "found no Harness releases at $API."
+    [ -n "$VERSION" ] || fail "found no Switchback releases at $API."
   fi
   VERSION=${VERSION#v}
   case $VERSION in
     [0-9]*.[0-9]*.[0-9]*) ;;
-    *) fail "\"$VERSION\" isn't a Harness version (expected something like 0.5.0)." ;;
+    *) fail "\"$VERSION\" isn't a Switchback version (expected something like 0.5.0)." ;;
   esac
 
-  file="harness-$VERSION-$OS-$ARCH"
-  say "Downloading Harness $VERSION for $OS-$ARCH"
+  file="switchback-$VERSION-$OS-$ARCH"
+  say "Downloading Switchback $VERSION for $OS-$ARCH"
   fetch "$BASE/v$VERSION/SHA256SUMS" "$TMP/SHA256SUMS" ||
-    fail "couldn't find Harness $VERSION. See $RELEASES for releases."
+    fail "couldn't find Switchback $VERSION. See $RELEASES for releases."
   fetch "$BASE/v$VERSION/$file" "$TMP/$file"
   verify "$TMP" "$file"
 
   mkdir -p "$DIR" 2>/dev/null && [ -w "$DIR" ] ||
     fail "can't write to $DIR. Choose a directory you own with --dir."
   chmod 755 "$TMP/$file"
-  mv -f "$TMP/$file" "$DIR/harness"
+  mv -f "$TMP/$file" "$DIR/switchback"
   if [ "$OS" = darwin ]; then
     # Builds aren't notarized yet; a quarantine flag would make Gatekeeper refuse them.
-    xattr -d com.apple.quarantine "$DIR/harness" 2>/dev/null || true
+    xattr -d com.apple.quarantine "$DIR/switchback" 2>/dev/null || true
   fi
-  installed=$("$DIR/harness" --version 2>/dev/null) ||
-    fail "$DIR/harness was installed but doesn't run. Please report this with the output of: $DIR/harness --version"
-  say "Installed Harness $installed to $DIR/harness"
+  installed=$("$DIR/switchback" --version 2>/dev/null) ||
+    fail "$DIR/switchback was installed but doesn't run. Please report this with the output of: $DIR/switchback --version"
+  say "Installed Switchback $installed to $DIR/switchback"
 
   [ -z "$VSCODE" ] || install_vscode
 
-  found=$(command -v harness 2>/dev/null || true)
-  if [ -n "$found" ] && [ "$found" != "$DIR/harness" ]; then
+  found=$(command -v switchback 2>/dev/null || true)
+  if [ -n "$found" ] && [ "$found" != "$DIR/switchback" ]; then
     say ''
-    say "Note: $found comes first on your PATH, so \`harness\` runs that copy. Remove it, or put $DIR first."
+    say "Note: $found comes first on your PATH, so \`switchback\` runs that copy. Remove it, or put $DIR first."
   fi
   path_hint "$DIR"
   say ''
-  say 'Next: run `harness init` to choose your models, then `harness` in a project.'
+  say 'Next: run `switchback init` to choose your models, then `switchback` in a project.'
 }
 
 main "$@"

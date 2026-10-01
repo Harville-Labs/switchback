@@ -13,9 +13,9 @@
  * and still hit the prompt cache.
  */
 import { isAbsolute, relative, resolve, sep } from 'node:path';
-import type { Message, Part } from '@harness/protocol';
 import { lintSource } from '@secretlint/core';
 import { creator as recommended } from '@secretlint/secretlint-rule-preset-recommend';
+import type { Message, Part } from '@switchback/protocol';
 import { Glob } from 'bun';
 
 export type PrivatePathMatcher = (workspacePath: string) => boolean;

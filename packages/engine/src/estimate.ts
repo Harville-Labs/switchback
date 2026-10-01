@@ -3,7 +3,7 @@
  * user isn't approving blind. It needs to be the right order of magnitude, not
  * exact: the target is within 2x of the real bill.
  */
-import { costUsd, type Price } from '@harness/providers';
+import { costUsd, type Price } from '@switchback/providers';
 
 /** Used until a session has history to learn from; typical of one agentic step. */
 export const DEFAULT_OUTPUT_TOKENS = 800;

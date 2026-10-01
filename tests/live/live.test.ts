@@ -1,9 +1,9 @@
 /**
- * Live tests against real models. Skipped unless HARNESS_LIVE=1.
+ * Live tests against real models. Skipped unless SWITCHBACK_LIVE=1.
  *
- *   HARNESS_LIVE=1 bun run test:live
+ *   SWITCHBACK_LIVE=1 bun run test:live
  *
- * Local model: HARNESS_LIVE_LOCAL_URL + HARNESS_LIVE_LOCAL_MODEL, or the first
+ * Local model: SWITCHBACK_LIVE_LOCAL_URL + SWITCHBACK_LIVE_LOCAL_MODEL, or the first
  * tool-capable model on a detected local server.
  * Remote models: every hosted provider with credentials in the environment
  * (OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY) runs the same
@@ -13,25 +13,25 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Engine, HarnessConfig } from '@harness/engine';
-import type { EngineEvent } from '@harness/protocol';
+import { Engine, SwitchbackConfig } from '@switchback/engine';
+import type { EngineEvent } from '@switchback/protocol';
 import {
   CATALOG,
   CREDENTIAL_ENV,
   detectLocalServers,
   type HostedProviderKind,
-} from '@harness/providers';
+} from '@switchback/providers';
 
-const LIVE = process.env.HARNESS_LIVE === '1';
+const LIVE = process.env.SWITCHBACK_LIVE === '1';
 const TIMEOUT = 300_000;
 
 async function findLocal(): Promise<
   { baseUrl: string; model: string; contextWindow?: number } | undefined
 > {
-  if (process.env.HARNESS_LIVE_LOCAL_URL && process.env.HARNESS_LIVE_LOCAL_MODEL) {
+  if (process.env.SWITCHBACK_LIVE_LOCAL_URL && process.env.SWITCHBACK_LIVE_LOCAL_MODEL) {
     return {
-      baseUrl: process.env.HARNESS_LIVE_LOCAL_URL,
-      model: process.env.HARNESS_LIVE_LOCAL_MODEL,
+      baseUrl: process.env.SWITCHBACK_LIVE_LOCAL_URL,
+      model: process.env.SWITCHBACK_LIVE_LOCAL_MODEL,
     };
   }
   for (const server of await detectLocalServers()) {
@@ -63,7 +63,7 @@ afterAll(() => {
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'harness-live-'));
+  root = mkdtempSync(join(tmpdir(), 'switchback-live-'));
   writeFileSync(join(root, 'secret.txt'), 'The launch code is PELICAN-42.\n');
   writeFileSync(
     join(root, 'math.ts'),
@@ -76,7 +76,7 @@ function engineFor(
   providers: Record<string, unknown>,
   routing: Record<string, unknown> = {},
 ) {
-  const config = HarnessConfig.parse({
+  const config = SwitchbackConfig.parse({
     providers,
     models,
     routing,
@@ -160,7 +160,7 @@ describe.skipIf(!LIVE || !local)('local model', () => {
   );
 
   // Small models (like the 1.7B one in nightly CI) rarely delegate; opt in with a stronger model.
-  test.skipIf(!process.env.HARNESS_LIVE_LOCAL_DELEGATION)(
+  test.skipIf(!process.env.SWITCHBACK_LIVE_LOCAL_DELEGATION)(
     'delegates to the explore subagent',
     async () => {
       const { engine, events } = setup();

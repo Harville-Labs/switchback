@@ -7,7 +7,7 @@ import {
   expect,
   test,
 } from 'bun:test';
-import { OrgAuthError, OrgClient } from '@harness/engine';
+import { OrgAuthError, OrgClient } from '@switchback/engine';
 import { eq } from 'drizzle-orm';
 import { OAuth2Server } from 'oauth2-mock-server';
 import postgres from 'postgres';
@@ -38,7 +38,7 @@ async function resetDatabase(url: string) {
   await sql.end();
 }
 
-const BASE = 'https://harness.test';
+const BASE = 'https://switchback.test';
 let database: Database;
 let app: SiteApp;
 let mailer: MemoryMailer;
@@ -152,11 +152,11 @@ describe('sign-in', () => {
 });
 
 describe('sites, seats, and roles', () => {
-  test('only Harness managers create sites; IDs are validated and unique', async () => {
+  test('only Switchback managers create sites; IDs are validated and unique', async () => {
     const { operator } = await acme();
     const create = (by: m.User, slug: string, operatorEmail = 'a@x.co') =>
       m.createSite(app.ctx, by, { slug, name: 'X', seats: 1, operatorEmail });
-    await expect(create(operator.user, 'x-co')).rejects.toThrow('Only Harness managers');
+    await expect(create(operator.user, 'x-co')).rejects.toThrow('Only Switchback managers');
     await expect(create(ops.user, 'Bad Slug')).rejects.toThrow('site ID');
     await expect(create(ops.user, 'acme')).rejects.toThrow('already exists');
     await expect(create(ops.user, 'y-co', 'nope')).rejects.toThrow('valid email');
@@ -197,7 +197,7 @@ describe('sites, seats, and roles', () => {
     ]);
   });
 
-  test('only Harness managers assign or remove operators; a site keeps one', async () => {
+  test('only Switchback managers assign or remove operators; a site keeps one', async () => {
     const { site, operator } = await acme(5);
     const dev = await member(site, operator, 'dev@acme.com');
     const lead = await member(site, operator, 'lead@acme.com', 'admin');
@@ -208,17 +208,17 @@ describe('sites, seats, and roles', () => {
     // Not even an operator can make or unmake operators.
     for (const who of [lead, operator]) {
       await expect(m.invite(app.ctx, site, who, 'x@acme.com', 'operator')).rejects.toThrow(
-        'Only a Harness manager',
+        'Only a Switchback manager',
       );
       await expect(m.changeRole(app.ctx, site, who, devUser, 'operator')).rejects.toThrow(
-        'Only a Harness manager',
+        'Only a Switchback manager',
       );
     }
     await expect(m.removeMember(app.ctx, site, lead, operator.user)).rejects.toThrow(
-      'Only a Harness manager',
+      'Only a Switchback manager',
     );
     await expect(m.changeRole(app.ctx, site, operator, operator.user, 'admin')).rejects.toThrow(
-      'Only a Harness manager',
+      'Only a Switchback manager',
     );
     // Operators and admins run everything else, through Better Auth's own checks.
     await m.changeRole(app.ctx, site, operator, devUser, 'admin');
@@ -235,7 +235,7 @@ describe('sites, seats, and roles', () => {
     await m.assignOperator(app.ctx, site, ops, 'new@acme.com');
     await m.changeRole(app.ctx, site, ops, operator.user, 'admin');
     await expect(m.assignOperator(app.ctx, site, operator, 'dev@acme.com')).rejects.toThrow(
-      'Only Harness managers',
+      'Only Switchback managers',
     );
     expect(await members(site)).toEqual([
       ['dev@acme.com', 'member', 'active'],
@@ -246,7 +246,7 @@ describe('sites, seats, and roles', () => {
     expect((await m.auditLog(app.ctx, site)).map((a) => a.action)).toContain('member.role');
   });
 
-  test('Harness managers see every site without taking a seat', async () => {
+  test('Switchback managers see every site without taking a seat', async () => {
     const { site } = await acme(1);
     expect(await m.membership(app.ctx, site, ops.user)).toBeUndefined();
     expect(m.canManage(undefined, ops.user)).toBe(true);
@@ -255,23 +255,23 @@ describe('sites, seats, and roles', () => {
     expect(await m.seatsUsed(app.ctx, site)).toBe(1);
   });
 
-  test('Harness managers add and remove each other, but not themselves', async () => {
+  test('Switchback managers add and remove each other, but not themselves', async () => {
     const { operator } = await acme();
-    await expect(m.setHarnessManager(app.ctx, operator, 'operator@acme.com', true)).rejects.toThrow(
-      'Only Harness managers',
-    );
-    expect(m.managerSessionProblem(app.ctx, operator)).toContain('Only Harness managers');
-    await m.setHarnessManager(app.ctx, ops, 'second@harville.ai', true);
-    expect((await m.listHarnessManagers(app.ctx)).map((u) => u.email)).toEqual([
+    await expect(
+      m.setSwitchbackManager(app.ctx, operator, 'operator@acme.com', true),
+    ).rejects.toThrow('Only Switchback managers');
+    expect(m.managerSessionProblem(app.ctx, operator)).toContain('Only Switchback managers');
+    await m.setSwitchbackManager(app.ctx, ops, 'second@harville.ai', true);
+    expect((await m.listSwitchbackManagers(app.ctx)).map((u) => u.email)).toEqual([
       'ops@harville.ai',
       'second@harville.ai',
     ]);
-    await expect(m.setHarnessManager(app.ctx, ops, 'ops@harville.ai', false)).rejects.toThrow(
+    await expect(m.setSwitchbackManager(app.ctx, ops, 'ops@harville.ai', false)).rejects.toThrow(
       'your own',
     );
     const second = await signIn('second@harville.ai');
-    await m.setHarnessManager(app.ctx, second, 'ops@harville.ai', false);
-    expect((await m.listHarnessManagers(app.ctx)).map((u) => u.email)).toEqual([
+    await m.setSwitchbackManager(app.ctx, second, 'ops@harville.ai', false);
+    expect((await m.listSwitchbackManagers(app.ctx)).map((u) => u.email)).toEqual([
       'second@harville.ai',
     ]);
     // Revoking manager access ends the sessions that carried it.
@@ -337,8 +337,8 @@ const clientFetch = (async (input: string | URL | Request, init?: RequestInit) =
     : new Response('not found', { status: 404 });
 }) as typeof fetch;
 
-describe('the Harness client protocol, end to end', () => {
-  /** `harness login --site <slug>`, approved in the browser by `who`. */
+describe('the Switchback client protocol, end to end', () => {
+  /** `switchback login --site <slug>`, approved in the browser by `who`. */
   async function login(who: m.Actor, slug = 'acme') {
     const site = (await m.siteBySlug(app.ctx, slug)) as m.Site;
     const client = new OrgClient(`${BASE}/sites/${slug}`, clientFetch);
@@ -431,7 +431,7 @@ describe('the Harness client protocol, end to end', () => {
       new Headers({ authorization: `Bearer ${token.access_token}` }),
     )) as m.Actor;
     expect(device.session).toMatchObject({ via: 'device', siteId: site.id });
-    expect(m.sessionProblem(site, device)).toContain('only work with the Harness client');
+    expect(m.sessionProblem(site, device)).toContain('only work with the Switchback client');
 
     // A code shown on Acme's page can't be redeemed at Globex's token endpoint.
     const acmeClient = new OrgClient(`${BASE}/sites/acme`, clientFetch);
@@ -530,7 +530,7 @@ describe('single sign-on', () => {
   test('a site’s provider signs its members in to that site only', async () => {
     const { site, operator, sso } = await acmeSso(false);
     expect(sso.verified).toBe(false);
-    expect(sso.record?.name).toBe('_harness-sso-site-acme.acme.com');
+    expect(sso.record?.name).toBe('_switchback-sso-site-acme.acme.com');
     // Unverified: the DNS record isn't there, and sign-in stays on emailed links.
     await expect(m.verifySsoDomain(app.ctx, site, operator)).rejects.toThrow();
     expect(
@@ -563,9 +563,9 @@ describe('single sign-on', () => {
     const globex = (await m.siteBySlug(app.ctx, 'globex')) as m.Site;
     expect(m.sessionProblem(globex, actor as m.Actor)).toContain("another site's single sign-on");
     await m.assignOperator(app.ctx, site, ops, 'boss@acme.com');
-    await m.setHarnessManager(app.ctx, ops, 'boss@acme.com', true);
+    await m.setSwitchbackManager(app.ctx, ops, 'boss@acme.com', true);
     const boss = await ssoSignIn({ email: 'boss@acme.com' }, 'boss@acme.com');
-    expect(boss.actor?.user.harnessManager).toBe(true);
+    expect(boss.actor?.user.switchbackManager).toBe(true);
     expect(m.managerSessionProblem(app.ctx, boss.actor as m.Actor)).toContain(
       'only works for one site',
     );
@@ -605,7 +605,7 @@ describe('single sign-on', () => {
     ).rejects.toThrow("site's operators and admins");
   });
 
-  test('Harville Labs’ provider signs in Harness managers only', async () => {
+  test('Harville Labs’ provider signs in Switchback managers only', async () => {
     const staff = await ssoSignIn({ providerId: 'harville-labs' }, 'ops@harville.ai');
     expect(staff.actor?.session).toMatchObject({ via: 'sso:harville-labs', siteId: null });
     expect(

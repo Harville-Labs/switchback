@@ -1,6 +1,6 @@
 # Roadmap
 
-Each milestone below is a GitHub milestone. Individual work items are [issues](https://github.com/Harville-Labs/harness/issues) labeled by area and priority. This page covers direction; the issues are the source of truth for status. The pinned [roadmap issue #38](https://github.com/Harville-Labs/harness/issues/38) links them all.
+Each milestone below is a GitHub milestone. Individual work items are [issues](https://github.com/Harville-Labs/switchback/issues) labeled by area and priority. This page covers direction; the issues are the source of truth for status. The pinned [roadmap issue #38](https://github.com/Harville-Labs/switchback/issues/38) links them all.
 
 ## v0.1 Foundation (done)
 
@@ -10,7 +10,7 @@ Engine/client split, protocol, router with escalation signals and budgets, OpenA
 
 Make the local path excellent, since it's where users spend most of their time.
 
-- ~~`harness init`: detect local servers, choose models, write config~~ (done)
+- ~~`switchback init`: detect local servers, choose models, write config~~ (done)
 - Offer `ollama pull` for a recommended tool-capable model when none is installed
 - Session list and resume in the TUI and VS Code
 - Multi-line input, input history, `@file` mentions with completion
@@ -39,7 +39,7 @@ Escalate less often and more precisely.
 - Refusal handling: a fallback chain for every provider, plus Anthropic's server-side fallbacks
 - Prompt cache verification and a documented stickiness decision
 - Append-only context compaction for long sessions
-- Routing analytics: `harness usage --by rule|agent|model`, cache hit rate
+- Routing analytics: `switchback usage --by rule|agent|model`, cache hit rate
 
 ## v0.5 Subagents and integrations (released)
 
@@ -50,11 +50,11 @@ Escalate less often and more precisely.
 - External agent runtimes as subagents, starting with Claude Code via the Claude Agent SDK (Managed Agents, OpenAI Agents SDK, and Bedrock AgentCore are next)
 - Per-agent budgets
 - More providers: Google Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry
-- `harness agents new` for guided agent authoring
+- `switchback agents new` for guided agent authoring
 
 ## v1.0 Product readiness
 
-- Open-core licensing: Apache-2.0 for Harness, paid company sites (ADR 0014)
+- Open-core licensing: Apache-2.0 for Switchback, paid company sites (ADR 0014)
 - Opt-in telemetry and crash reporting
 - Signed and notarized binaries, auto-update, Homebrew (the install script shipped)
 - OS sandboxing for `bash` (macOS Seatbelt, Linux bubblewrap)

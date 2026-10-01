@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { probeContextWindow } from '@harness/providers';
-import { HarnessConfig, loadConfig, parseJsonc } from './config.ts';
+import { probeContextWindow } from '@switchback/providers';
+import { loadConfig, parseJsonc, SwitchbackConfig } from './config.ts';
 import {
   buildSetupConfig,
   detectLocalServers,
@@ -96,7 +96,7 @@ describe('buildSetupConfig', () => {
       escalationPolicy: 'ask',
       budget: { dailyUsd: 3 },
     });
-    const parsed = HarnessConfig.parse(layer);
+    const parsed = SwitchbackConfig.parse(layer);
     expect(parsed.models.remote).toMatchObject({
       provider: 'bedrock',
       model: 'anthropic.claude-sonnet-5',
@@ -117,7 +117,7 @@ describe('buildSetupConfig', () => {
       ['deepseek', 'deepseek-flash'],
       ['gemini', 'gemini-3.8-flash'],
     ] as const) {
-      const parsed = HarnessConfig.parse(
+      const parsed = SwitchbackConfig.parse(
         buildSetupConfig({ locals: [local], remotes: [{ kind, model }], escalationPolicy: 'auto' }),
       );
       expect(parsed.providers[kind]?.type).toBe(kind);
@@ -128,7 +128,7 @@ describe('buildSetupConfig', () => {
   });
 
   test('Claude Platform on AWS and Foundry use bare Claude IDs and the Claude catalog', () => {
-    const parsed = HarnessConfig.parse(
+    const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [],
         remotes: [
@@ -169,7 +169,7 @@ describe('buildSetupConfig', () => {
   });
 
   test('any OpenAI-compatible API can be the remote', () => {
-    const parsed = HarnessConfig.parse(
+    const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [local],
         remotes: [
@@ -211,7 +211,7 @@ describe('buildSetupConfig', () => {
   });
 
   test('several local servers and remote providers become ordered chains', () => {
-    const parsed = HarnessConfig.parse(
+    const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [
           local,
@@ -251,12 +251,12 @@ describe('buildSetupConfig', () => {
 describe('writeConfigLayer', () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'harness-setup-'));
+    dir = mkdtempSync(join(tmpdir(), 'switchback-setup-'));
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   test('merges into an existing file, keeps unrelated keys, and backs it up', () => {
-    const file = join(dir, '.harness', 'config.json');
+    const file = join(dir, '.switchback', 'config.json');
     writeConfigLayer(file, { permissions: { bash: 'deny' } });
     const layer = buildSetupConfig({
       locals: [
@@ -276,7 +276,7 @@ describe('writeConfigLayer', () => {
     expect(written.permissions.bash).toBe('deny');
     expect(written.models.local.model).toBe('m');
     // The written project file loads cleanly through the normal path.
-    const { config } = loadConfig(dir, { HARNESS_HOME: join(dir, 'home') });
+    const { config } = loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') });
     expect(config.routing.mode).toBe('local-only');
   });
 

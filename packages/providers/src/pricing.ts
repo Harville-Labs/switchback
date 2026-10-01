@@ -1,4 +1,4 @@
-import type { Usage } from '@harness/protocol';
+import type { Usage } from '@switchback/protocol';
 import { catalogPrices } from './catalog.ts';
 
 /** USD per million tokens. */

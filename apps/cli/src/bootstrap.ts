@@ -1,10 +1,8 @@
-import { connectDaemon, HarnessClient } from '@harness/client';
+import { connectDaemon, SwitchbackClient } from '@switchback/client';
 import {
   ConfigError,
   Engine,
   type EngineOptions,
-  type HarnessConfig,
-  harnessPaths,
   loadConfig,
   OrgSync,
   optIn,
@@ -12,11 +10,13 @@ import {
   readTelemetryState,
   recordEngineEvent,
   refreshPolicy,
+  type SwitchbackConfig,
   sendTelemetry,
   serve,
-} from '@harness/engine';
-import { createTransportPair, type InitializeResult } from '@harness/protocol';
-import { tierOf } from '@harness/providers';
+  switchbackPaths,
+} from '@switchback/engine';
+import { createTransportPair, type InitializeResult } from '@switchback/protocol';
+import { tierOf } from '@switchback/providers';
 import pkg from '../package.json' with { type: 'json' };
 
 export const CLI_VERSION = pkg.version;
@@ -31,8 +31,8 @@ export interface CommonFlags {
  * add mock local/remote models where none are configured, for demos and UI work with no
  * model running.
  */
-export function mockify(config: HarnessConfig): HarnessConfig {
-  const providers: HarnessConfig['providers'] = {};
+export function mockify(config: SwitchbackConfig): SwitchbackConfig {
+  const providers: SwitchbackConfig['providers'] = {};
   for (const [id, pc] of Object.entries(config.providers))
     providers[id] = { type: 'mock', tier: tierOf(pc) };
   const models = { ...config.models };
@@ -90,7 +90,7 @@ export function createEngine(
     return { engine, loaded, agentErrors };
   } catch (err) {
     if (err instanceof ConfigError) {
-      process.stderr.write(`harness: ${err.file ? `${err.file}: ` : ''}${err.message}\n`);
+      process.stderr.write(`switchback: ${err.file ? `${err.file}: ` : ''}${err.message}\n`);
       process.exit(2);
     }
     throw err;
@@ -104,8 +104,8 @@ export function createEngine(
  */
 function startTelemetry(engine: Engine, loaded: ReturnType<typeof load>): void {
   if (!loaded.config.telemetry.enabled) return;
-  const { dataDir } = harnessPaths();
-  // Turned on by an organization policy or a config edit rather than `harness telemetry on`.
+  const { dataDir } = switchbackPaths();
+  // Turned on by an organization policy or a config edit rather than `switchback telemetry on`.
   if (!readTelemetryState(dataDir)) optIn(dataDir, new Date());
   engine.subscribe((e) => {
     try {
@@ -141,12 +141,12 @@ export async function connectInProcess(
   const { engine, agentErrors } = createEngine(flags, interaction, { ...options, telemetry: true });
   const [serverSide, clientSide] = createTransportPair();
   serve(engine, serverSide);
-  const client = new HarnessClient(clientSide);
+  const client = new SwitchbackClient(clientSide);
   const init = await client.initialize({ name: clientName, version: CLI_VERSION }, flags.cwd);
   return { client, init, agentErrors };
 }
 
-/** How to start this same harness as a daemon: the binary, or bun + this script in dev. */
+/** How to start this same switchback as a daemon: the binary, or bun + this script in dev. */
 export function selfCommand(): { command: string; args: string[] } {
   const compiled = !Bun.main.endsWith('.ts') && !Bun.main.endsWith('.tsx');
   return compiled
@@ -161,7 +161,12 @@ export function selfCommand(): { command: string; args: string[] } {
 export async function connectShared(
   flags: CommonFlags & { daemon: boolean },
   clientName: string,
-): Promise<{ client: HarnessClient; init: InitializeResult; warnings: string[]; shared: boolean }> {
+): Promise<{
+  client: SwitchbackClient;
+  init: InitializeResult;
+  warnings: string[];
+  shared: boolean;
+}> {
   const warnings: string[] = [];
   // Mock engines are never shared: a daemon must serve real sessions only.
   if (flags.daemon && !flags.mock) {

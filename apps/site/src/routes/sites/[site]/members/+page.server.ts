@@ -19,7 +19,7 @@ export const load: PageServerLoad = async (event) => {
   return {
     members: members.map((m) => ({ ...m, lastSeen: m.lastSeen?.toISOString() ?? null })),
     used: await seatsUsed(app.ctx, site),
-    harnessManager: user.harnessManager,
+    switchbackManager: user.switchbackManager,
   };
 };
 

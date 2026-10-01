@@ -65,7 +65,7 @@ export function startDevOrgServer(options: DevOrgServerOptions) {
       switch (`${req.method} ${url.pathname}`) {
         case 'POST /v1/device/code': {
           const form = new URLSearchParams(await req.text());
-          if (form.get('client_id') !== 'harness')
+          if (form.get('client_id') !== 'switchback')
             return Response.json({ error: 'invalid_client' }, { status: 400 });
           const deviceCode = randomUUID();
           const userCode =
@@ -131,7 +131,7 @@ export function startDevOrgServer(options: DevOrgServerOptions) {
   return {
     url: `http://localhost:${server.port}`,
     usage,
-    /** Mint a token directly (tests, `harness login --token`). */
+    /** Mint a token directly (tests, `switchback login --token`). */
     token: () => issueToken().access_token,
     stop: () => server.stop(true),
   };
@@ -144,5 +144,5 @@ if (import.meta.main) {
     process.exit(2);
   }
   const s = startDevOrgServer({ policy: file, port: Number(port) || 8787 });
-  console.log(`dev org server on ${s.url}\n  harness login --server ${s.url}`);
+  console.log(`dev org server on ${s.url}\n  switchback login --server ${s.url}`);
 }

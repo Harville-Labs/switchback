@@ -1,5 +1,5 @@
 {
-  "name": "harness",
+  "name": "switchback",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -20,7 +20,7 @@
     "check": "bun run lint && bun run typecheck && bun run --cwd apps/site check && bun run test",
     "build": "bun run --cwd apps/cli build && bun run --cwd apps/vscode build && bun run --cwd apps/site build",
     "schema": "bun scripts/gen-schema.ts && biome format --write apps/vscode/schemas/config.schema.json",
-    "test:live": "HARNESS_LIVE=1 bun test tests/live --timeout 600000"
+    "test:live": "SWITCHBACK_LIVE=1 bun test tests/live --timeout 600000"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
@@ -30,8 +30,8 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@harness/engine": "workspace:*",
-    "@harness/protocol": "workspace:*",
-    "@harness/providers": "workspace:*"
+    "@switchback/engine": "workspace:*",
+    "@switchback/protocol": "workspace:*",
+    "@switchback/providers": "workspace:*"
   }
 }

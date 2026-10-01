@@ -2,7 +2,7 @@
  * Tracks what the user is looking at (active file, selection, diagnostics) so
  * the chat can offer it as context, and builds prompt attachments from it.
  */
-import type { Attachment } from '@harness/protocol';
+import type { Attachment } from '@switchback/protocol';
 import * as vscode from 'vscode';
 
 export interface EditorContextState {

@@ -18,21 +18,21 @@ Any server exposing `/v1/chat/completions` with SSE streaming and function calli
 }
 ```
 
-`harness init` detects these servers and fills this in for you. There is no default local model.
+`switchback init` detects these servers and fills this in for you. There is no default local model.
 
 Choosing a local model:
 
 - It must support **tool calling** through the chat completions API. Models without it will trip the malformed-tool-call signal and escalate constantly.
-- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `harness init` reads the effective value from each server, and if you leave `contextWindow` out the engine asks the server at runtime (`doctor` shows the value and where it came from).
+- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `switchback init` reads the effective value from each server, and if you leave `contextWindow` out the engine asks the server at runtime (`doctor` shows the value and where it came from).
 - Reasoning output (`reasoning_content` / `reasoning`) is shown in the UI but never sent back to the server.
 
 Health is checked with `GET {baseUrl}/models` (2-second timeout, cached for 30 seconds). If it fails, routing falls back to remote.
 
 ## Remote providers
 
-Harness treats hosted providers equally. None is a default: `harness init` asks which one to use, and you can configure several (for example OpenAI as `remote` and DeepSeek for a cheap subagent alias). Known models and list prices live in `packages/providers/src/catalog.ts`. Anything else works when configured by hand.
+Switchback treats hosted providers equally. None is a default: `switchback init` asks which one to use, and you can configure several (for example OpenAI as `remote` and DeepSeek for a cheap subagent alias). Known models and list prices live in `packages/providers/src/catalog.ts`. Anything else works when configured by hand.
 
-| Type | Models offered by `harness init` | Credentials |
+| Type | Models offered by `switchback init` | Credentials |
 |---|---|---|
 | `anthropic` | Claude Opus 5, Sonnet 5, Haiku 4.5 | `ANTHROPIC_API_KEY`, `ant auth login`, or `apiKey` |
 | `openai` | GPT-6 Astra, Sol, Luna | `OPENAI_API_KEY` or `apiKey` |
@@ -43,7 +43,7 @@ Harness treats hosted providers equally. None is a default: `harness init` asks 
 
 ### Model aliases are tiers
 
-Agent definitions can say `model: opus`, `model: sonnet`, or `model: haiku`. The names come from Claude Code agent files, but in Harness they mean the **large, medium, and small** model of whichever remote provider you chose. Setup maps them from the catalog:
+Agent definitions can say `model: opus`, `model: sonnet`, or `model: haiku`. The names come from Claude Code agent files, but in Switchback they mean the **large, medium, and small** model of whichever remote provider you chose. Setup maps them from the catalog:
 
 | Alias | Anthropic | OpenAI | DeepSeek |
 |---|---|---|---|
@@ -62,7 +62,7 @@ Point any alias at any provider in config. If an agent names an alias that isn't
 
 Uses Chat Completions with streaming and function calling. Sends `max_completion_tokens` (OpenAI's reasoning models reject `max_tokens`) and passes `effort` through as `reasoning_effort`. Cached prompt tokens (`prompt_tokens_details.cached_tokens`) are priced at the cached rate. Optional: `baseUrl` (Azure OpenAI or a proxy) and `organization`.
 
-Set `"api": "responses"` to use the Responses API instead. It keeps the model's reasoning between tool calls, which helps reasoning models on multi-step agent work. Requests use `store: false` (nothing is kept on OpenAI's side) and ask for encrypted reasoning, which Harness keeps in the transcript and sends back only to the model that produced it, the same rule as Claude thinking and DeepSeek reasoning. `effort` becomes `reasoning.effort`, with reasoning summaries shown in the clients. Chat Completions remains the default until the Responses path has been verified against the live API.
+Set `"api": "responses"` to use the Responses API instead. It keeps the model's reasoning between tool calls, which helps reasoning models on multi-step agent work. Requests use `store: false` (nothing is kept on OpenAI's side) and ask for encrypted reasoning, which Switchback keeps in the transcript and sends back only to the model that produced it, the same rule as Claude thinking and DeepSeek reasoning. `effort` becomes `reasoning.effort`, with reasoning summaries shown in the clients. Chat Completions remains the default until the Responses path has been verified against the live API.
 
 ### DeepSeek
 
@@ -104,7 +104,7 @@ Bedrock uses the Mantle client from `@anthropic-ai/bedrock-sdk` with standard AW
 "models": { "remote": { "provider": "gemini", "model": "gemini-3.8-flash", "contextWindow": 1048576 } }
 ```
 
-Uses Google's `@google/genai` SDK. The key defaults to `$GEMINI_API_KEY` (or `$GOOGLE_API_KEY`); set `project` (and optionally `location`, default `global`) to use Gemini on Vertex AI with Application Default Credentials instead. `effort` maps to a thinking level on Gemini 3 models (`low`, `medium`, `high`) and to a thinking budget on 2.x models, where `none` turns thinking off. Gemini attaches thought signatures to each model turn; Harness keeps the raw turn and sends it back verbatim, and only to the same model, as the API requires. Safety stops (`SAFETY`, `PROHIBITED_CONTENT`, ...) are refusals and go to the next model in `routing.remote`. The catalog lists Gemini 3.1 Pro (preview), 3.8 Flash, and 2.5 Flash; 3.8 Flash's introductory price doubles in 2027, and Pro prices double for prompts over 200k tokens, so set `price` if that applies.
+Uses Google's `@google/genai` SDK. The key defaults to `$GEMINI_API_KEY` (or `$GOOGLE_API_KEY`); set `project` (and optionally `location`, default `global`) to use Gemini on Vertex AI with Application Default Credentials instead. `effort` maps to a thinking level on Gemini 3 models (`low`, `medium`, `high`) and to a thinking budget on 2.x models, where `none` turns thinking off. Gemini attaches thought signatures to each model turn; Switchback keeps the raw turn and sends it back verbatim, and only to the same model, as the API requires. Safety stops (`SAFETY`, `PROHIBITED_CONTENT`, ...) are refusals and go to the next model in `routing.remote`. The catalog lists Gemini 3.1 Pro (preview), 3.8 Flash, and 2.5 Flash; 3.8 Flash's introductory price doubles in 2027, and Pro prices double for prompts over 200k tokens, so set `price` if that applies.
 
 ### Claude Platform on AWS and Microsoft Foundry
 
@@ -122,7 +122,7 @@ Claude Platform on AWS (`@anthropic-ai/aws-sdk`) is operated by Anthropic with A
 
 Microsoft Foundry (`@anthropic-ai/foundry-sdk`) needs the Foundry resource name (or `baseUrl`) and an API key (`apiKey` or `ANTHROPIC_FOUNDRY_API_KEY`). It has no server-side refusal fallback, so refusals go to the next model in `routing.remote`. Foundry billing can differ from list prices; set `price` for accurate savings.
 
-Both use the same Claude adapter as the first-party API, so thinking replay, caching, and tool translation behave identically. `harness init` offers both.
+Both use the same Claude adapter as the first-party API, so thinking replay, caching, and tool translation behave identically. `switchback init` offers both.
 
 ### Any other OpenAI-compatible API
 

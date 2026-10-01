@@ -9,7 +9,7 @@
  * Pipeline: the first matching rule picks a target, then guards (budget,
  * availability) may redirect it. See docs/routing.md.
  */
-import type { ModelRef, RoutePreference, Tier } from '@harness/protocol';
+import type { ModelRef, RoutePreference, Tier } from '@switchback/protocol';
 import type { RoutingConfig } from './config.ts';
 import type { SignalSnapshot } from './signals.ts';
 
@@ -143,7 +143,7 @@ export class Router {
         return {
           kind: 'block',
           rule,
-          reason: `${reason}, but no model is configured for it; run \`harness init\``,
+          reason: `${reason}, but no model is configured for it; run \`switchback init\``,
         } as const;
       // A detour within the tier (another server was down or too small) is the
       // more specific explanation, so it names the rule.
@@ -236,7 +236,7 @@ export class Router {
     // 8. Default: local first.
     return local.model
       ? route(local, 'default', 'local by default')
-      : route(remote, 'default', 'no local model configured (run `harness init`)');
+      : route(remote, 'default', 'no local model configured (run `switchback init`)');
   }
 
   /** A would-be remote turn kept local for privacy; blocked when no local model can take it. */
