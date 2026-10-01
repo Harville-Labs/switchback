@@ -69,8 +69,8 @@ The Marketplace takes no long-lived secret. Azure DevOps personal access tokens 
 1. Create the `harville-labs` publisher at <https://marketplace.visualstudio.com/manage>.
 2. In Azure, create a **user-assigned managed identity**. An app registration signs in but then fails to publish with `InvalidAccessException`.
 3. On the identity, add a federated credential: GitHub Actions, organization `Harville-Labs`, repository `switchback`, entity type **Environment**, environment `marketplace`.
-4. Get the identity's Azure DevOps profile ID: sign in as the identity (for example from a one-off run of the workflow) and run `az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798`. Add that `id` (not the client ID) as a **Contributor** under the publisher's Members.
-5. Set the repository variables `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` from the identity's properties.
+4. Set the repository variables `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` from the identity's **Overview**.
+5. Run **Publish VS Code extension** for any release tag. The publish step fails until the next step is done, but the run's summary shows the identity's Marketplace ID ("Show the Marketplace identity"). Add that ID (not the client ID) under the publisher's **Members** as a **Contributor**, then run the workflow again.
 
 For Open VSX, sign in at <https://open-vsx.org> with an Eclipse account, sign the publisher agreement, create the namespace with `bunx ovsx create-namespace harville-labs -p <token>`, then either set the `OVSX_PAT` secret or configure trusted publishing for this repository and set the variable `OVSX_TRUSTED_PUBLISHING` to `true`.
 
