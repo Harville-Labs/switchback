@@ -1,0 +1,21 @@
+Copyright (c) 2026 Harville Labs, LLC. All rights reserved.
+
+This license covers everything in the apps/site directory: the hosted
+console for Harness sites that Harville Labs runs at harness.harville.ai.
+The rest of the Harness repository is licensed under the Apache License,
+Version 2.0 (see ../../LICENSE).
+
+The files in this directory are the proprietary property of Harville Labs,
+LLC. They are published so customers can see how the service handles their
+data. No license, express or implied, is granted to any person to use, copy,
+modify, merge, publish, distribute, sublicense, sell, or run this software,
+or to offer it as a service, except under a separate written agreement with
+Harville Labs, LLC.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

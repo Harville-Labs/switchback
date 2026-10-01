@@ -101,6 +101,8 @@ jobs:
           mkdir -p apps/vscode/bin
           cp "bin-download/harness-$VERSION-${{ matrix.platform }}${{ matrix.ext }}" "apps/vscode/bin/harness${{ matrix.ext }}"
           chmod +x "apps/vscode/bin/harness${{ matrix.ext }}"
+      - name: Third-party notices
+        run: bun scripts/third-party-notices.ts --out apps/vscode/THIRD-PARTY-NOTICES.txt
       - name: Package
         working-directory: apps/vscode
         run: |
@@ -132,6 +134,12 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - run: bun install --frozen-lockfile
+      # Apache-2.0 and the bundled packages' licenses travel with the binaries.
+      - name: License files
+        run: |
+          bun scripts/third-party-notices.ts --out dist/THIRD-PARTY-NOTICES.txt
+          cp LICENSE NOTICE dist/
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS

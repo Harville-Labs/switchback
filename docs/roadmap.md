@@ -54,9 +54,9 @@ Escalate less often and more precisely.
 
 ## v1.0 Product readiness
 
-- Licensing and activation
+- Open-core licensing: Apache-2.0 for Harness, paid company sites (ADR 0014)
 - Opt-in telemetry and crash reporting
-- Signed and notarized binaries, auto-update, Homebrew and install script
+- Signed and notarized binaries, auto-update, Homebrew (the install script shipped)
 - OS sandboxing for `bash` (macOS Seatbelt, Linux bubblewrap)
 - Managed policies for teams (locked budgets, allowed providers, required `ask`)
 - Team usage dashboard

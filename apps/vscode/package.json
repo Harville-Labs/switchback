@@ -10,7 +10,7 @@
     "color": "#000000",
     "theme": "dark"
   },
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
   "engines": {
     "vscode": "^1.95.0"
   },

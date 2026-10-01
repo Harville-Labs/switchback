@@ -2,6 +2,7 @@
   "name": "@harness/site",
   "version": "0.1.0",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "description": "Harness sites: the hosted control plane for organizations (docs/adr/0010-hosted-sites.md)",
   "scripts": {

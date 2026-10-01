@@ -2,13 +2,10 @@
  * Compile the `harness` single-file executable.
  *
  *   bun apps/cli/scripts/build.ts [--target bun-darwin-arm64] [--outfile dist/harness]
- *
- * Ink optionally imports react-devtools-core when DEV=true. Bun hoists external
- * imports to the top of a compiled bundle, which would make every run fail, so
- * we replace the module with an empty stub instead.
  */
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { stubReactDevtools } from './stub-devtools.ts';
 
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
@@ -26,21 +23,7 @@ const result = await Bun.build({
   },
   // Keep identifiers so customer stack traces stay readable without shipping sourcemaps.
   minify: { whitespace: true, syntax: true, identifiers: false },
-  plugins: [
-    {
-      name: 'stub-react-devtools',
-      setup(build) {
-        build.onResolve({ filter: /^react-devtools-core$/ }, () => ({
-          path: 'react-devtools-core',
-          namespace: 'stub',
-        }));
-        build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
-          contents: 'export default { initialize() {}, connectToDevTools() {} };',
-          loader: 'js',
-        }));
-      },
-    },
-  ],
+  plugins: [stubReactDevtools],
 });
 
 if (!result.success) {

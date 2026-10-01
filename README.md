@@ -114,4 +114,4 @@ To work on the VS Code extension, open this folder in VS Code and run the **Run 
 
 ## License
 
-Proprietary. Copyright © 2026 Harville Labs, LLC. All rights reserved. See [LICENSE](LICENSE).
+Harness is licensed under the [Apache License 2.0](LICENSE). The exception is `apps/site`, the hosted console for company sites, which is proprietary ([apps/site/LICENSE](apps/site/LICENSE)). Using Harness on your own is free; companies pay for a site to manage it for their team ([ADR 0014](docs/adr/0014-open-core-licensing.md)).

@@ -1,6 +1,10 @@
 # Contributing
 
-Harness is developed by Harville Labs. This guide covers the workflow for employees, contractors, and AI agents working on the codebase. Read [AGENTS.md](AGENTS.md) first; it has the architecture rules.
+Harness is developed by Harville Labs. This guide covers the workflow for anyone working on the codebase, including AI agents. Read [AGENTS.md](AGENTS.md) first; it has the architecture rules.
+
+## Licensing of contributions
+
+Harness is licensed under Apache-2.0, and contributions are accepted under the same license (section 5 of the [LICENSE](LICENSE)); there's no separate agreement to sign. `apps/site` is proprietary and developed by Harville Labs only, so pull requests that change it can't be accepted from outside contributors.
 
 ## Setup
 

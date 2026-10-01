@@ -34,6 +34,7 @@ Set `HARNESS_HOME=$(mktemp -d)` when running the CLI during development so you n
 | `packages/client` | Typed protocol client, child-process transport, shared view-model reducer | Import engine code |
 | `apps/cli` | `harness` binary: TUI (Ink), `run`, `serve --stdio`, `doctor`, `usage` | Contain agent behavior |
 | `apps/vscode` | VS Code extension (host + webview) | Contain agent behavior |
+| `apps/site` | Hosted console for company sites (proprietary; see `apps/site/LICENSE`) | Be imported by any Apache-2.0 package |
 
 ## Invariants
 

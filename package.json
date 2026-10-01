@@ -1,6 +1,7 @@
 {
   "name": "harness",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "bun@1.4.2",
   "engines": {
