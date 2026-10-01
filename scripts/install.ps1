@@ -107,7 +107,16 @@ With options: & ([scriptblock]::Create((irm https://switchback.harville.ai/insta
         }
       }
       if (-not $expected) { Fail "release $Version lists no checksum for $file." }
-      $actual = (Get-FileHash -LiteralPath (Join-Path $dir $file) -Algorithm SHA256).Hash.ToLowerInvariant()
+      # Not Get-FileHash: Windows PowerShell can't load it when started from PowerShell 7,
+      # whose module path it inherits.
+      $sha = [Security.Cryptography.SHA256]::Create()
+      $stream = [IO.File]::OpenRead((Join-Path $dir $file))
+      try {
+        $actual = -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') })
+      } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+      }
       if ($actual -ne $expected) {
         Fail "$file doesn't match its checksum (expected $expected, got $actual). Nothing was installed; try again."
       }

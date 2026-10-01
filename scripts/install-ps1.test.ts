@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,7 +51,8 @@ function release(version: string, bin: Buffer<ArrayBuffer>, tamper = false) {
 
 beforeAll(async () => {
   if (!shells.length) return;
-  root = mkdtempSync(join(tmpdir(), 'switchback-install-ps1-'));
+  // The long path: tmpdir() can be an 8.3 short name, which the installer expands.
+  root = realpathSync.native(mkdtempSync(join(tmpdir(), 'switchback-install-ps1-')));
   const v123 = await fakeBinary('1.2.3');
   const v100 = await fakeBinary('1.0.0');
   releases['v1.2.3'] = release('1.2.3', v123);
@@ -79,8 +88,11 @@ async function run(
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
-        ...process.env,
-        PATH: extraPath ? `${extraPath};${process.env.PATH}` : (process.env.PATH ?? ''),
+        // Windows names it Path; setting PATH alongside would leave two entries.
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PATH'),
+        ),
+        Path: extraPath ? `${extraPath};${process.env.PATH}` : (process.env.PATH ?? ''),
         SWITCHBACK_DOWNLOAD_URL: `http://localhost:${server.port}/download`,
         SWITCHBACK_RELEASES_API: `http://localhost:${server.port}/releases`,
       },

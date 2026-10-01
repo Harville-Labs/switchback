@@ -63,7 +63,9 @@ test.if(process.platform !== 'win32')(
 
 test('installer location and command per platform', () => {
   expect(installedCliPaths('win32', 'C:/Users/me')[0]).toEndWith('switchback.exe');
-  expect(installedCliPaths('darwin', '/Users/me')[0]).toBe('/Users/me/.local/bin/switchback');
+  expect(installedCliPaths('darwin', '/Users/me')[0]).toBe(
+    join('/Users/me', '.local', 'bin', 'switchback'),
+  );
   expect(installerShell('win32').shellArgs.join(' ')).toContain('install.ps1 | iex');
   expect(installerShell('linux').shellArgs.join(' ')).toContain('install.sh');
 });

@@ -82,7 +82,8 @@ const options = (name: string) => ({
 
 afterAll(() => {
   model.stop(true);
-  rmSync(base, { recursive: true, force: true });
+  // Windows holds a directory while a daemon still runs in it; give stragglers a moment.
+  rmSync(base, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test('two clients share one daemon and see each other’s live turns', async () => {
@@ -192,7 +193,12 @@ test('a newer client retires an idle older daemon and starts its own', async () 
   if (!c.client) throw new Error(c.reason);
   expect(readDaemonInfo(ws, env)?.version).toBe(CLI_VERSION);
   expect(logs.join('\n')).toContain('retired the shared engine running older Switchback 0.0.1');
+  // Stop the daemon this test started, so it isn't left running in the workspace.
+  const started = readDaemonInfo(ws, env);
+  await c.client.request('daemon.retire', { token: started?.token ?? '' });
   c.client.close();
+  const deadline = Date.now() + 3000;
+  while (readDaemonInfo(ws, env) && Date.now() < deadline) await Bun.sleep(50);
 }, 20_000);
 
 test('an older daemon that is in use, or too old to ask, is left alone with a reason', async () => {
