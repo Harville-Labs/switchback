@@ -7,7 +7,7 @@ let { data, form } = $props();
 <svelte:head><title>Invitation · Harness</title></svelte:head>
 
 <section class="mx-auto mt-10 max-w-md">
-  <h1 class="mb-4 text-2xl font-semibold">Join {data.invitation.site}</h1>
+  <h1 class="mb-4 page-title">Join {data.invitation.site}</h1>
   <Flash error={form?.error} />
   {#if !data.usable}
     <p class="card">This invitation has expired or was already answered. Ask the site's operator for a new one.</p>

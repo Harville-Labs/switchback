@@ -11,19 +11,19 @@ const calls = $derived(t.calls.local + t.calls.remote);
 
 <svelte:head><title>Harness managers · Harness</title></svelte:head>
 
-<h1 class="text-2xl font-semibold">Harness managers</h1>
+<h1 class="page-title">Harness managers</h1>
 <p class="muted mb-4">Every site, its operators, and what Harness is doing across them.</p>
 <Flash error={form?.error} notice={form?.notice} />
 
-<h2 class="mt-6 mb-2 text-lg font-semibold">Telemetry, last 30 days</h2>
+<h2 class="mt-6 mb-2 section-title">Telemetry, last 30 days</h2>
 <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-  <div class="card"><div class="label">Installs</div><div class="text-2xl">{t.installs}</div></div>
+  <div class="card"><div class="label">Installs</div><div class="stat">{t.installs}</div></div>
   <div class="card">
     <div class="label">Local share of calls</div>
-    <div class="text-2xl">{calls ? `${Math.round((t.calls.local / calls) * 100)}%` : '—'}</div>
+    <div class="stat">{calls ? `${Math.round((t.calls.local / calls) * 100)}%` : '—'}</div>
   </div>
-  <div class="card"><div class="label">Remote spend</div><div class="text-2xl">{usd(t.costUsd)}</div></div>
-  <div class="card"><div class="label">Saved vs. all-remote</div><div class="text-2xl">{usd(t.savingsUsd)}</div></div>
+  <div class="card"><div class="label">Remote spend</div><div class="stat">{usd(t.costUsd)}</div></div>
+  <div class="card"><div class="label">Saved vs. all-remote</div><div class="stat">{usd(t.savingsUsd)}</div></div>
 </div>
 
 <div class="mt-3 grid gap-3 md:grid-cols-2">
@@ -60,7 +60,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
 {/if}
 
 {#if t.crashes.length}
-  <h2 class="mt-6 mb-2 text-lg font-semibold">Recent crashes</h2>
+  <h2 class="mt-6 mb-2 section-title">Recent crashes</h2>
   {#each t.crashes as c, i (i)}
     <details class="card mb-2">
       <summary><b>{c.name}</b> <span class="muted">{c.day} · {c.site}</span> {c.message}</summary>
@@ -69,7 +69,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
   {/each}
 {/if}
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">Sites</h2>
+<h2 class="mt-8 mb-2 section-title">Sites</h2>
 <form method="POST" action="?/create" use:enhance class="card mb-3 grid gap-2 md:grid-cols-[1fr_1fr_90px_1fr_auto] md:items-end">
   <label class="flex flex-col gap-1"><span class="label">Company</span><input class="field" name="name" required /></label>
   <label class="flex flex-col gap-1">
@@ -86,7 +86,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
     <tbody>
       {#each data.sites as s (s.id)}
         <tr>
-          <td><a href="/s/{s.slug}">{s.name}</a></td>
+          <td><a href="/sites/{s.slug}">{s.name}</a></td>
           <td><code>{s.slug}</code></td>
           <td>
             {#if s.operators.length}{s.operators.join(', ')}{:else}<span class="muted">None</span>{/if}
@@ -102,7 +102,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
   </table>
 </div>
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">Harness managers</h2>
+<h2 class="mt-8 mb-2 section-title">Harness managers</h2>
 <p class="muted mb-2 text-sm">
   Harville Labs staff who can see every site and assign its operators. Addresses in
   <code>MANAGER_EMAILS</code> are made managers again whenever the site starts.
@@ -135,7 +135,7 @@ const calls = $derived(t.calls.local + t.calls.remote);
 </div>
 
 {#if data.log.length}
-  <h2 class="mt-8 mb-2 text-lg font-semibold">Recent manager changes</h2>
+  <h2 class="mt-8 mb-2 section-title">Recent manager changes</h2>
   <div class="card overflow-x-auto p-0">
     <table class="table">
       <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>

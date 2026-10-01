@@ -1,26 +1,49 @@
 <script lang="ts">
 import '../app.css';
+import { page } from '$app/state';
+import Monogram from '$lib/components/Monogram.svelte';
 
 let { data, children } = $props();
+let menuOpen = $state(false);
+const close = () => (menuOpen = false);
 </script>
 
-<header class="flex items-center gap-3 bg-ink px-5 py-3 text-paper">
-  <a href="/" class="flex items-center gap-2 no-underline">
-    <img src="/icon.svg" alt="" class="h-7 w-7 invert" />
-    <span class="font-semibold">Harness</span>
-  </a>
-  <span class="text-sm opacity-60">by Harville Labs</span>
-  {#if data.user}
-    <nav class="ml-auto flex items-center gap-4 text-sm">
-      {#if data.user.harnessManager}<a href="/admin" class="opacity-80 hover:opacity-100">All sites</a>{/if}
-      <span class="hidden opacity-60 sm:inline">{data.user.email}</span>
-      <form method="POST" action="/logout">
-        <button class="rounded border border-white/20 px-3 py-1 hover:bg-white/10">Sign out</button>
-      </form>
+<a class="skip-link" href="#top">Skip to content</a>
+
+<header class="topbar">
+  <div class="frame topbar-inner">
+    <a class="brand" href="/" aria-label="Harness sites" onclick={close}>
+      <Monogram />
+      <span>Harness</span>
+      <small class="hidden sm:inline">Sites</small>
+    </a>
+    <nav class:open={menuOpen} aria-label="Primary">
+      {#if data.user}
+        {#if data.user.harnessManager}
+          <a href="/admin" class="nav-item" class:active={page.url.pathname.startsWith('/admin')} onclick={close}>All sites</a>
+        {/if}
+        <a href="/sites" class="nav-item" class:active={page.url.pathname === '/sites'} onclick={close}>Your sites</a>
+        <span class="who">{data.user.email}</span>
+        <form method="POST" action="/logout"><button class="nav-item pill">Sign out</button></form>
+      {:else}
+        <a href="https://harville.ai/harness" class="nav-item">About Harness</a>
+        <a href="/login" class="nav-item pill" class:active={page.url.pathname === '/login'} onclick={close}>Sign in</a>
+      {/if}
     </nav>
-  {/if}
+    <button class="menu-toggle" type="button" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onclick={() => (menuOpen = !menuOpen)}>{menuOpen ? 'Close' : 'Menu'}</button>
+  </div>
 </header>
 
-<main class="mx-auto max-w-5xl px-4 pt-6 pb-16">
-  {@render children()}
-</main>
+<main id="top" class="frame console">{@render children()}</main>
+
+<footer class="site-footer">
+  <div class="frame footer-row">
+    <a class="brand" href="https://harville.ai" aria-label="Harville Labs"><Monogram /><span>Harville Labs</span></a>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://harville.ai/harness">Harness</a>
+      <a href="https://github.com/Harville-Labs/harness">GitHub ↗</a>
+      <a href="mailto:hello@harville.ai">hello@harville.ai</a>
+    </nav>
+    <p class="label">© {new Date().getFullYear()} Harville Labs, LLC</p>
+  </div>
+</footer>

@@ -7,8 +7,11 @@ let { data, form } = $props();
 <svelte:head><title>Sign in · Harness</title></svelte:head>
 
 <section class="mx-auto mt-10 max-w-md">
-  <h1 class="mb-1 text-2xl font-semibold">Sign in</h1>
-  <p class="muted mb-4">Your company's Harness site: members, policy, and usage.</p>
+  <h1 class="mb-1 page-title">Sign in</h1>
+  <p class="muted mb-4">
+    Your company's Harness site: members, policy, and usage. Using Harness on your own? You don't
+    need a site; <a href="https://harville.ai/harness">install Harness</a> and go.
+  </p>
   <Flash error={form?.error ?? data.error} />
   {#if form?.sent}
     <div class="card">
@@ -33,7 +36,7 @@ let { data, form } = $props();
     </form>
     {#if data.staffSso}
       <form method="POST" action="?/staff" class="mt-3 text-center">
-        <input type="hidden" name="next" value={data.next === '/' ? '/admin' : data.next} />
+        <input type="hidden" name="next" value={data.next === '/sites' ? '/admin' : data.next} />
         <button class="btn quiet">Harville Labs staff</button>
       </form>
     {/if}

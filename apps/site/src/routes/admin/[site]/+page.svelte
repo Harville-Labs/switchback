@@ -10,14 +10,14 @@ const full = $derived(data.used >= data.site.seats);
 <svelte:head><title>{data.site.name} · Harness managers</title></svelte:head>
 
 <p class="muted mb-1 text-sm"><a href="/admin">Harness managers</a> / {data.site.slug}</p>
-<h1 class="text-2xl font-semibold">{data.site.name}</h1>
+<h1 class="page-title">{data.site.name}</h1>
 <p class="muted mb-4">
   {data.used} of {data.site.seats} seats used · usage statistics {data.site.telemetry} ·
-  <a href="/s/{data.site.slug}">Open the site console</a>
+  <a href="/sites/{data.site.slug}">Open the site console</a>
 </p>
 <Flash error={form?.error} notice={form?.notice} />
 
-<h2 class="mt-6 mb-2 text-lg font-semibold">Operators</h2>
+<h2 class="mt-6 mb-2 section-title">Operators</h2>
 <p class="muted mb-2 text-sm">
   Operators run the site for their company: they manage its members, admins, policy, and devices.
   Only Harness managers assign them, and a site always keeps at least one.
@@ -63,10 +63,10 @@ const full = $derived(data.used >= data.site.seats);
 </div>
 <p class="muted mt-2 text-sm">
   {data.others} other {data.others === 1 ? 'member' : 'members'}; see
-  <a href="/s/{data.site.slug}/members">Members</a>.
+  <a href="/sites/{data.site.slug}/members">Members</a>.
 </p>
 
-<h2 class="mt-8 mb-2 text-lg font-semibold">Seats</h2>
+<h2 class="mt-8 mb-2 section-title">Seats</h2>
 <form method="POST" action="?/seats" use:enhance class="card flex flex-wrap items-end gap-2">
   <label class="flex flex-col gap-1">
     <span class="label">Seats</span>
