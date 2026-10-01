@@ -103,7 +103,7 @@ import {
 import { currentShell } from './tools/shell.ts';
 import { createWorktree, finishWorktree, type Worktree } from './worktree.ts';
 
-export const ENGINE_VERSION = '0.5.0';
+export const ENGINE_VERSION = '0.6.0';
 
 export interface EngineOptions {
   workspaceRoot: string;
