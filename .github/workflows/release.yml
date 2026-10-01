@@ -141,7 +141,7 @@ jobs:
             bun scripts/release.ts notes "${{ needs.verify.outputs.version }}"
             echo
             echo "### Install"
-            echo "Download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`harness\`. Then run \`harness init\`."
+            echo "On macOS and Linux: \`curl -fsSL https://harness.harville.ai/install.sh | sh\` (add \`-s -- --vscode\` after \`sh\` for the VS Code extension too). Or download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`harness\`. Then run \`harness init\`."
             echo "Install the VS Code extension for your platform with \`code --install-extension harness-vscode-${{ needs.verify.outputs.version }}-<platform>.vsix\`; it includes the engine, so no separate install is needed. The universal .vsix uses \`harness\` from your PATH."
             echo
             echo "Binaries are not yet signed or notarized (tracked for 1.0). On macOS, clear the quarantine flag with \`xattr -d com.apple.quarantine harness\`."

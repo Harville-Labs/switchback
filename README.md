@@ -13,22 +13,37 @@ A local-first coding agent from Harville Labs. Most of the work runs on a model 
 
 > Status: pre-release (v0.1). Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/harness/issues) and the [roadmap](docs/roadmap.md).
 
+## Install
+
+On macOS or Linux:
+
+```sh
+curl -fsSL https://harness.harville.ai/install.sh | sh
+```
+
+The script ([scripts/install.sh](scripts/install.sh)) downloads the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/harness/releases), checks it against the release's `SHA256SUMS`, and puts it in `~/.local/bin`. It never uses sudo or edits your shell profile. Add options after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. On Windows, download `harness-<version>-windows-x64.exe` from the release.
+
+For VS Code alone, install the `.vsix` for your platform from the release (**Extensions: Install from VSIX…**). It includes the engine.
+
 ## Quick start
 
-Requires [Bun](https://bun.sh) 1.4+.
+Start a local model server (Ollama, LM Studio, llama.cpp, or vLLM) with a model that supports tool calling, then:
+
+```sh
+harness init                   # detects your local server, picks models, writes the config
+harness doctor                 # check config, providers, and agents
+harness                        # open the TUI in the current directory
+harness run "explain src/index.ts"   # headless, one prompt
+```
+
+### From source
+
+Requires [Bun](https://bun.sh) 1.4+. `bun run dev --` stands in for `harness`:
 
 ```sh
 bun install
 bun run dev -- --mock          # try the TUI with scripted models, no setup needed
-```
-
-With real models, start a local model server (Ollama, LM Studio, llama.cpp, or vLLM) with a model that supports tool calling, then:
-
-```sh
-bun run dev -- init            # detects your local server, picks models, writes the config
-bun run dev -- doctor          # check config, providers, and agents
-bun run dev                    # open the TUI in the current directory
-bun run dev -- run "explain src/index.ts"   # headless, one prompt
+bun run dev -- init
 ```
 
 Harness ships with no default local model. Which server and model your machine runs is your choice, and `harness init` sets it up. Running `harness` for the first time with no config offers to run setup.
@@ -94,8 +109,6 @@ docs/         architecture, routing, subagents, providers, protocol, ADRs
 bun run check       # Biome lint + TypeScript + tests (what CI runs)
 bun test --watch
 ```
-
-Read [AGENTS.md](AGENTS.md) before contributing, whether you're a person or an AI agent. It covers the architectural invariants and how to add providers, tools, routing rules, and protocol methods. Process details are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 To work on the VS Code extension, open this folder in VS Code and run the **Run Extension** launch configuration. It builds the extension and points it at the dev CLI.
 

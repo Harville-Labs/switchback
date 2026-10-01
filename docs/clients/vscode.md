@@ -42,7 +42,7 @@ Build a `.vsix` with `bun run --cwd apps/vscode package`.
 
 ## Distribution
 
-Each release publishes one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`) with the engine binary inside, so installing the extension is all a user needs. A universal `.vsix` without a binary uses `harness` from PATH. When `VSCE_PAT` / `OVSX_PAT` repository secrets are set, releases also publish to the VS Code Marketplace and Open VSX; otherwise that step is skipped.
+Each release publishes one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`) with the engine binary inside, so installing the extension is all a user needs. `curl -fsSL https://harness.harville.ai/install.sh | sh -s -- --vscode` installs the CLI and the extension for the machine's platform with the first editor command it finds (`code`, `code-insiders`, `codium`, `cursor`). A universal `.vsix` without a binary uses `harness` from PATH. When `VSCE_PAT` / `OVSX_PAT` repository secrets are set, releases also publish to the VS Code Marketplace and Open VSX; otherwise that step is skipped.
 
 ## Planned
 
