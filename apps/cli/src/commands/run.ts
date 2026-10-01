@@ -9,7 +9,7 @@ export interface RunFlags extends CommonFlags {
   agent?: string;
   yes: boolean;
   json: boolean;
-  /** Remote review of local edits; undefined follows `review.mode`. */
+  /** Review of local edits; undefined follows `review.mode`. */
   review?: boolean;
 }
 

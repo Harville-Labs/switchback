@@ -790,7 +790,7 @@ export class Engine {
         done.usage,
         { rule, agent: agent.name },
       );
-      s.signals.recordTurn(model.tier, escalated);
+      s.signals.recordTurn(decision.step, escalated);
       escalationApproved = false;
 
       const toolCalls = done.parts.filter((p) => p.type === 'tool_call');
@@ -859,7 +859,7 @@ export class Engine {
     const routing = this.options.config.routing;
     const c = routing.classifier;
     if (!c || preference !== 'auto' || routing.mode !== 'auto') return undefined;
-    if (agent.model || agent.route !== 'auto' || s.signals.snapshot().stickyRemoteTurns > 0)
+    if (agent.model || agent.route !== 'auto' || s.signals.snapshot().stickyTurns > 0)
       return undefined;
     if (!routing.remote.some((a) => this.options.config.models[a])) return undefined;
     const model = this.modelInfo(c.model);
@@ -911,7 +911,7 @@ export class Engine {
   }
 
   // -------------------------------------------------------------------------
-  // Draft locally, review remotely (docs/review.md)
+  // Draft locally, review with a stronger model (docs/review.md)
   // -------------------------------------------------------------------------
 
   /** Remember a file's content before its first edit this turn, on the top-level session. */

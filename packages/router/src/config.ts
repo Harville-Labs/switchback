@@ -15,8 +15,14 @@ export const EscalationConfig = z.object({
   loopThreshold: z.number().int().positive().default(3),
   /** Escalate when estimated input exceeds this fraction of the local context window. */
   contextHeadroom: z.number().min(0.1).max(1).default(0.85),
-  /** After an escalation, keep routing remote for this many turns before retrying local. */
+  /** After an escalation, stay on the model it reached for this many turns before retrying local. */
   stickyTurns: z.number().int().nonnegative().default(2),
+  /**
+   * Steps between the local chain and the remote chain, in order: each
+   * escalation moves one step up. Usually bigger local models
+   * (`["large"]` makes the ladder local → large → remote); any alias works.
+   */
+  via: z.array(z.string().min(1)).default([]),
 });
 
 export const BudgetConfig = z.object({

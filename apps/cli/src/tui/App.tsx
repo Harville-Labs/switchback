@@ -54,7 +54,7 @@ const HELP = `Commands
   /usage [rule|agent|model] this week's spend, savings, and why
   /receipt                 this session's cost vs. running it all-remote
   /copy [n]                copy the last reply, or its nth code block, to the clipboard
-  /review on|off|default   remote review of local edits (default: review.mode)
+  /review on|off|default   review of local edits (default: review.mode)
   /mcp                     MCP servers and their tools
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
@@ -86,7 +86,7 @@ export function App({
   // Items before this index are final and rendered once via <Static>.
   const [committed, setCommitted] = useState(0);
   const [route, setRoute] = useState<RoutePreference>(initialRoute);
-  /** Remote review of local edits; undefined follows `review.mode` in config. */
+  /** Review of local edits; undefined follows `review.mode` in config. */
   const [review, setReview] = useState<boolean | undefined>(undefined);
   const [history] = useState(() => new PromptHistory(init.workspaceRoot));
   const [usage, setUsage] = useState<UsageReport | undefined>();

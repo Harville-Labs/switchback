@@ -87,7 +87,7 @@
       },
       {
         "command": "switchback.setReview",
-        "title": "Set Remote Review of Local Edits",
+        "title": "Set Review of Local Edits",
         "category": "Switchback"
       },
       {

@@ -114,11 +114,11 @@ describe('Router', () => {
   test('stays remote for stickyTurns after escalating, then returns local', () => {
     const cfg = RoutingConfig.parse({ escalation: { stickyTurns: 2 } });
     const t = new SignalTracker(cfg.escalation);
-    t.recordTurn('remote', true);
+    t.recordTurn(1, true);
     const r = router({ escalation: { stickyTurns: 2 } });
     expect(routed(r.decide(input({ signals: t.snapshot() }))).rule).toBe('sticky');
-    t.recordTurn('remote', false);
-    t.recordTurn('remote', false);
+    t.recordTurn(1, false);
+    t.recordTurn(1, false);
     expect(routed(r.decide(input({ signals: t.snapshot() }))).model.alias).toBe('local');
   });
 
@@ -359,7 +359,7 @@ describe('refusal fallback', () => {
   });
 
   test('a model that refused is skipped for the rest of the turn', () => {
-    const signals = { ...input().signals, stickyRemoteTurns: 2 };
+    const signals = { ...input().signals, stickyTurns: 2, escalationStep: 1 };
     const d = routed(r().decide(input({ refused: ['remote'], signals })));
     expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'sol' } });
   });
@@ -419,7 +419,7 @@ describe('classifier rule', () => {
 
 describe('agent budgets', () => {
   const budget = (spentUsd: number) => ({ agent: 'reviewer', limitUsd: 0.5, spentUsd });
-  const remoteTurn = { signals: { ...input().signals, stickyRemoteTurns: 1 } };
+  const remoteTurn = { signals: { ...input().signals, stickyTurns: 1, escalationStep: 1 } };
 
   test('under budget: no effect', () => {
     const d = routed(router().decide(input({ ...remoteTurn, invocationBudget: budget(0.2) })));
@@ -443,5 +443,120 @@ describe('agent budgets', () => {
 
   test('local calls are never limited by a budget', () => {
     expect(routed(router().decide(input({ invocationBudget: budget(9) }))).rule).toBe('default');
+  });
+});
+
+describe('escalation ladder (escalation.via)', () => {
+  const LARGE: ModelInfo = {
+    alias: 'large',
+    ref: { provider: 'gpu-box', model: 'qwen3-coder-480b' },
+    tier: 'local',
+    contextWindow: 128_000,
+    available: true,
+  };
+  const ladder = (config: Record<string, unknown> = {}, large: ModelInfo = LARGE) =>
+    router(
+      { ...config, escalation: { via: ['large'], ...(config.escalation as object) } },
+      { large },
+    );
+  const stuck = { ...input().signals, consecutiveToolErrors: 3 };
+  const onLarge = (extra = {}) => ({
+    ...input().signals,
+    stickyTurns: 2,
+    escalationStep: 1,
+    ...extra,
+  });
+
+  test('a struggling local model escalates to the bigger local model first', () => {
+    const d = routed(ladder().decide(input({ signals: stuck })));
+    expect(d).toMatchObject({
+      rule: 'escalation',
+      model: { alias: 'large' },
+      step: 1,
+      escalated: true,
+    });
+    expect(d.reason).toBe('3 consecutive tool errors; escalating to large (step 1 of 2)');
+  });
+
+  test('stays on the step it reached, then climbs to remote if that model struggles too', () => {
+    const sticky = routed(ladder().decide(input({ signals: onLarge() })));
+    expect(sticky).toMatchObject({ rule: 'sticky', model: { alias: 'large' }, step: 1 });
+    expect(sticky.reason).toBe('recently escalated to large (2 turns left)');
+    const up = routed(ladder().decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }) })));
+    expect(up).toMatchObject({ rule: 'escalation', model: { alias: 'remote' }, step: 2 });
+  });
+
+  test('ask policy: local steps never ask; the remote step does', () => {
+    const r = ladder({ escalation: { policy: 'ask' } });
+    expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
+    const d = r.decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }) }));
+    expect(d).toMatchObject({ kind: 'ask', target: { alias: 'remote' } });
+  });
+
+  test('off policy escalates nowhere on quality signals', () => {
+    const d = routed(ladder({ escalation: { policy: 'off' } }).decide(input({ signals: stuck })));
+    expect(d.model.alias).toBe('local');
+  });
+
+  test('local-only mode climbs through local models but never goes remote', () => {
+    const r = ladder({ mode: 'local-only' });
+    expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
+    const top = routed(r.decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }) })));
+    expect(top).toMatchObject({ model: { alias: 'large' }, rule: 'sticky' });
+  });
+
+  test('a private session can escalate to a local model, and stops there', () => {
+    const privacy = { reason: 'secrets/prod.env' };
+    const first = routed(ladder().decide(input({ signals: stuck, privacy })));
+    expect(first.model.alias).toBe('large');
+    const top = routed(
+      ladder().decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }), privacy })),
+    );
+    expect(top.rule).toBe('privacy');
+    expect(top.model.tier).toBe('local');
+  });
+
+  test('context overflow goes to the bigger local window before remote', () => {
+    const fitsLarge = routed(ladder().decide(input({ estimatedInputTokens: 60_000 })));
+    expect(fitsLarge).toMatchObject({
+      rule: 'context-overflow',
+      model: { alias: 'large' },
+      step: 1,
+    });
+    const tooBig = routed(ladder().decide(input({ estimatedInputTokens: 200_000 })));
+    expect(tooBig).toMatchObject({ rule: 'context-overflow', model: { alias: 'remote' }, step: 2 });
+  });
+
+  test('a step whose server is down is skipped', () => {
+    const d = routed(ladder({}, { ...LARGE, available: false }).decide(input({ signals: stuck })));
+    expect(d).toMatchObject({ model: { alias: 'remote' }, step: 2 });
+  });
+
+  test('a spent budget does not stop a local step', () => {
+    const d = routed(
+      ladder({ budget: { dailyUsd: 1 } }).decide(
+        input({ signals: stuck, spend: { todayUsd: 5, monthUsd: 5 } }),
+      ),
+    );
+    expect(d).toMatchObject({ rule: 'escalation', model: { alias: 'large' } });
+  });
+
+  test('the classifier climbs one step too', () => {
+    const d = routed(
+      ladder({ classifier: { model: 'local' } }).decide(
+        input({ difficulty: { level: 'hard', reason: 'large refactor' } }),
+      ),
+    );
+    expect(d).toMatchObject({ rule: 'classifier', model: { alias: 'large' }, step: 1 });
+  });
+
+  test('the tracker keeps the step for stickyTurns turns on it, then resets', () => {
+    const t = new SignalTracker(RoutingConfig.parse({}).escalation);
+    t.recordTurn(1, true);
+    expect(t.snapshot()).toMatchObject({ stickyTurns: 2, escalationStep: 1 });
+    t.recordTurn(0, false); // a turn elsewhere (a user override) doesn't count down
+    t.recordTurn(1, false);
+    t.recordTurn(1, false);
+    expect(t.snapshot()).toMatchObject({ stickyTurns: 0, escalationStep: 0 });
   });
 });

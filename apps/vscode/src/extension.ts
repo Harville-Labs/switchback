@@ -321,7 +321,7 @@ class EngineConnection implements vscode.Disposable {
     );
   }
 
-  /** Remote review of local edits for this window; undefined follows `review.mode`. */
+  /** Review of local edits for this window; undefined follows `review.mode`. */
   remoteReview: boolean | undefined = undefined;
 
   async chooseReview() {
@@ -340,7 +340,7 @@ class EngineConnection implements vscode.Disposable {
           detail: 'Use review.mode from your Switchback config.',
         },
       ],
-      { title: 'Switchback: Remote Review of Local Edits' },
+      { title: 'Switchback: Review of Local Edits' },
     );
     if (pick) this.remoteReview = pick.value;
   }

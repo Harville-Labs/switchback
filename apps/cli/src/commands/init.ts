@@ -38,6 +38,10 @@ export interface InitFlags {
   /** Local models in order of preference; `contextWindows` pairs with them by position. */
   localModels: string[];
   contextWindows: number[];
+  /** Bigger local models to escalate to before remote, in order (`routing.escalation.via`). */
+  localEscalationModels: string[];
+  /** `remote`, or the name of a chosen local model. */
+  reviewer?: string;
   noLocal: boolean;
   /** Remote providers in order of preference; `remoteModels` pairs with them by position. */
   remotes: (RemoteKind | 'none')[];
@@ -151,11 +155,14 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
       budget = { ...(dailyUsd ? { dailyUsd } : {}), ...(monthlyUsd ? { monthlyUsd } : {}) };
   }
 
+  const reviewer = await chooseReviewer(flags, p, locals, remotes.length > 0);
+
   const answers: SetupAnswers = {
     locals,
     remotes,
     escalationPolicy,
     ...(budget ? { budget } : {}),
+    ...(reviewer ? { reviewer } : {}),
   };
   const layer = buildSetupConfig(answers);
 
@@ -202,9 +209,59 @@ function telemetryChosen(): boolean {
 
 // ---------------------------------------------------------------------------
 // Local
+/**
+ * Review of the local model's edits (docs/review.md): by the first remote
+ * model, or by one of the local ones, which costs nothing.
+ */
+async function chooseReviewer(
+  flags: InitFlags,
+  p: Prompter | undefined,
+  locals: LocalAnswer[],
+  hasRemote: boolean,
+): Promise<SetupAnswers['reviewer']> {
+  if (flags.reviewer) {
+    if (flags.reviewer === 'remote') {
+      if (!hasRemote) throw new SetupError('--reviewer remote needs a remote provider');
+      return 'remote';
+    }
+    const local = locals.findIndex((l) => l.model === flags.reviewer);
+    if (local === -1)
+      throw new SetupError(
+        `--reviewer "${flags.reviewer}" isn't one of the local models; use remote or a --local-model / --local-escalation-model name`,
+      );
+    return { local };
+  }
+  if (!p || !locals.length) return undefined;
+  // The first local model writes the code; any other model can review it.
+  const options: { label: string; value: SetupAnswers['reviewer'] | 'off'; hint?: string }[] = [
+    { label: 'No', value: 'off' },
+    ...(hasRemote
+      ? [
+          {
+            label: 'Yes, with the remote model',
+            value: 'remote' as const,
+            hint: 'about a cent per review',
+          },
+        ]
+      : []),
+    ...locals.flatMap((l, i) =>
+      i === 0 ? [] : [{ label: `Yes, with ${l.model}`, value: { local: i }, hint: 'local, free' }],
+    ),
+  ];
+  if (options.length === 1) return undefined;
+  const pick = await p.select(
+    "\nReview the local model's edits automatically? A second model checks each change and sends problems back to fix.",
+    options,
+  );
+  return pick === 'off' ? undefined : pick;
+}
+
 // ---------------------------------------------------------------------------
 
 type Pick = { server: DetectedServer; model: DetectedServer['models'][number] } | 'manual' | 'done';
+
+const ESCALATE_LOCAL =
+  'Escalate to a bigger local model before going remote? (For example a large model on a GPU server. Local steps cost nothing.)';
 
 const ADD_LOCAL =
   'Add another local model? It takes over when earlier ones are down or a prompt is too big for them.';
@@ -226,7 +283,20 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
       );
     }
     const urls = flags.localUrls.map(normalizeUrl);
-    return flags.localModels.map((name, i) => {
+    const escalation = flags.localEscalationModels.map((name): LocalAnswer => {
+      const server = servers.find((s) => s.models.some((m) => m.id === name));
+      const baseUrl = server?.baseUrl ?? urls[0];
+      if (!baseUrl) throw new SetupError(`no running server has "${name}"; pass --local-url`);
+      const contextWindow = server?.models.find((m) => m.id === name)?.contextWindow;
+      return {
+        providerId: server?.kind === 'openai-compatible' || !server ? 'local-server' : server.kind,
+        baseUrl,
+        model: name,
+        ...(contextWindow ? { contextWindow } : {}),
+        role: 'escalation',
+      };
+    });
+    const chain = flags.localModels.map((name, i) => {
       const server =
         servers.find((s) => urls[i] === s.baseUrl && s.models.some((m) => m.id === name)) ??
         servers.find((s) => s.models.some((m) => m.id === name));
@@ -245,6 +315,7 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
         contextWindow,
       };
     });
+    return [...chain, ...escalation];
   }
 
   const options: { label: string; value: Pick; hint?: string }[] = [];
@@ -309,6 +380,33 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
     if (pick === 'done') break;
     chosen.push(pick === 'manual' ? await manualLocal(flags, p) : await detectedLocal(pick, p));
     if (!(await p.confirm(`\n${ADD_LOCAL}`, false))) break;
+  }
+
+  // Escalation steps: bigger local models tried before anything remote.
+  if (chosen.length && (await p.confirm(`\n${ESCALATE_LOCAL}`, false))) {
+    for (;;) {
+      const remaining = options.filter((o) => {
+        const v = o.value;
+        return (
+          typeof v === 'object' &&
+          !chosen.some((c) => c.baseUrl === v.server.baseUrl && c.model === v.model.id)
+        );
+      });
+      const choices = [
+        ...remaining,
+        { label: 'Enter a server URL and model manually', value: 'manual' as const },
+        { label: 'Done', value: 'done' as const },
+      ];
+      const pick = await p.select(
+        '\nWhich bigger local model should escalations reach first?',
+        choices,
+        remaining.length ? 0 : choices.length - 2,
+      );
+      if (pick === 'done') break;
+      const answer = pick === 'manual' ? await manualLocal(flags, p) : await detectedLocal(pick, p);
+      chosen.push({ ...answer, role: 'escalation' });
+      if (!(await p.confirm('\nAdd another step after it, before going remote?', false))) break;
+    }
   }
   return chosen;
 }
@@ -414,9 +512,7 @@ function credentialHint(kind: RemoteKind): string {
 async function chooseRemotes(flags: InitFlags, p: Prompter | undefined): Promise<RemoteAnswer[]> {
   if (!p) {
     if (!flags.remotes.length)
-      throw new SetupError(
-        'pass --remote (anthropic, openai, deepseek, bedrock, vertex, openai-compatible, none)',
-      );
+      throw new SetupError(`pass --remote (${[...REMOTE_KINDS, 'none'].join(', ')})`);
     const kinds = flags.remotes.filter((k): k is RemoteKind => k !== 'none');
     const out: RemoteAnswer[] = [];
     for (const [i, kind] of kinds.entries())
@@ -580,6 +676,7 @@ export async function offerSetup(cwd: string): Promise<number> {
     localUrls: [],
     localModels: [],
     contextWindows: [],
+    localEscalationModels: [],
     remotes: [],
     remoteModels: [],
   });

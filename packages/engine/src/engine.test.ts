@@ -169,6 +169,53 @@ describe('Engine', () => {
     expect(engine.usage().byTier.remote.costUsd).toBeGreaterThan(0);
   });
 
+  test('climbs through a bigger local model (escalation.via) before going remote', async () => {
+    const bad = (name: string) => ({ toolCalls: [{ name, input: {} }] });
+    const lp = new ScriptedProvider('lp', 'local', [bad('reed'), bad('reed')]);
+    const gp = new ScriptedProvider('gp', 'local', [bad('raed'), bad('raed')]);
+    const rp = new ScriptedProvider('rp', 'remote', [{ text: 'fixed it remotely' }]);
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: SwitchbackConfig.parse({
+        providers: {
+          lp: { type: 'mock', tier: 'local' },
+          gp: { type: 'mock', tier: 'local' },
+          rp: { type: 'mock', tier: 'remote' },
+        },
+        models: {
+          local: { provider: 'lp', model: 'small', contextWindow: 8_000 },
+          large: { provider: 'gp', model: 'large', contextWindow: 128_000 },
+          remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
+        },
+        routing: { escalation: { via: ['large'] } },
+        permissions: { edit: 'allow', bash: 'deny' },
+      }),
+      providers: new Map([
+        ['lp', lp],
+        ['gp', gp],
+        ['rp', rp],
+      ]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    const s = engine.createSession({});
+    const r = await engine.runTurn(s.id, 'do the thing');
+    expect(r.text).toBe('fixed it remotely');
+    const routes = events.flatMap((e) =>
+      e.type === 'route.decided' ? [`${e.rule}:${e.model.model}`] : [],
+    );
+    expect(routes).toEqual([
+      'default:small',
+      'default:small',
+      'escalation:large',
+      'sticky:large',
+      'escalation:claude-opus-5',
+    ]);
+    expect(gp.requests).toHaveLength(2);
+    // The local step is free; only the last step costs anything.
+    expect(engine.usage().byTier.remote.costUsd).toBeGreaterThan(0);
+  });
+
   test('falls back to remote when the local provider errors', async () => {
     const { engine, rp } = setup(
       [{ error: new ProviderError('connection refused', 'lp', true) }],

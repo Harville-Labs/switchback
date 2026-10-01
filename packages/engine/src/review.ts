@@ -1,5 +1,5 @@
 /**
- * Draft locally, review remotely (docs/review.md).
+ * Draft locally, review with a stronger model (docs/review.md).
  *
  * After a turn in which a local model edited files, a remote model reviews
  * the turn's diff against the user's request. Reviewing is cheap next to

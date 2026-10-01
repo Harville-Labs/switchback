@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { probeContextWindow } from '@switchback/providers';
-import { loadConfig, parseJsonc, SwitchbackConfig } from './config.ts';
+import { loadConfig, parseJsonc, referenceProblem, SwitchbackConfig } from './config.ts';
 import {
   buildSetupConfig,
   detectLocalServers,
@@ -208,6 +208,56 @@ describe('buildSetupConfig', () => {
     });
     expect((remoteOnly.routing as { mode: string }).mode).toBe('remote-only');
     expect((localOnly.routing as { mode: string }).mode).toBe('local-only');
+  });
+
+  test('a bigger local model becomes an escalation step, and can review', () => {
+    const large = {
+      providerId: 'vllm',
+      baseUrl: 'http://gpu-box:8000/v1',
+      model: 'qwen3-coder-480b',
+      role: 'escalation' as const,
+    };
+    const parsed = SwitchbackConfig.parse(
+      buildSetupConfig({
+        locals: [local, large],
+        remotes: [{ kind: 'anthropic', model: 'claude-opus-5' }],
+        escalationPolicy: 'auto',
+        reviewer: { local: 1 },
+      }),
+    );
+    expect(parsed.routing.local).toEqual(['local']);
+    expect(parsed.routing.escalation.via).toEqual(['large']);
+    // No context window given: the engine asks the server at runtime.
+    expect(parsed.models.large).toEqual(
+      expect.objectContaining({ provider: 'vllm', model: 'qwen3-coder-480b' }),
+    );
+    expect(parsed.models.large?.contextWindow).toBeUndefined();
+    expect(parsed.review).toMatchObject({ mode: 'auto', model: 'large' });
+    expect(referenceProblem(parsed)).toBeUndefined();
+  });
+
+  test('a remote reviewer leaves the model to default to routing.remote', () => {
+    const parsed = SwitchbackConfig.parse(
+      buildSetupConfig({
+        locals: [local],
+        remotes: [{ kind: 'openai', model: 'gpt-6-sol' }],
+        escalationPolicy: 'auto',
+        reviewer: 'remote',
+      }),
+    );
+    expect(parsed.review).toMatchObject({ mode: 'auto' });
+    expect(parsed.review.model).toBeUndefined();
+    expect(parsed.routing.escalation.via).toEqual([]);
+  });
+
+  test('an escalation model needs something to escalate from', () => {
+    expect(() =>
+      buildSetupConfig({
+        locals: [{ ...local, role: 'escalation' }],
+        remotes: [],
+        escalationPolicy: 'auto',
+      }),
+    ).toThrow('needs a local model to escalate from');
   });
 
   test('several local servers and remote providers become ordered chains', () => {

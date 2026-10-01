@@ -105,7 +105,7 @@ export const SessionPromptParams = z.object({
   attachments: z.array(Attachment).max(20).optional(),
   /** Per-turn routing override. `auto` defers to the configured policy. */
   route: RoutePreference.default('auto'),
-  /** Remote review of local edits for this prompt; overrides `review.mode` (docs/review.md). */
+  /** Review of local edits for this prompt; overrides `review.mode` (docs/review.md). */
   review: z.boolean().optional(),
 });
 export type SessionPromptParams = z.input<typeof SessionPromptParams>;
@@ -165,7 +165,7 @@ export interface UsageRow {
   savingsUsd: number;
 }
 
-/** One finding from a remote review of local edits. */
+/** One finding from a review of local edits. */
 export interface ReviewIssue {
   file: string;
   line?: number | null;

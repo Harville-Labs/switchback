@@ -63,6 +63,21 @@ describe('config', () => {
   });
 });
 
+test('an unknown escalation step is a config error, not a silent gap in the ladder', () => {
+  mkdirSync(join(dir, '.switchback'), { recursive: true });
+  writeFileSync(
+    join(dir, '.switchback', 'config.json'),
+    JSON.stringify({
+      providers: { ollama: { type: 'openai-compatible', baseUrl: 'http://localhost:11434/v1' } },
+      models: { local: { provider: 'ollama', model: 'small' } },
+      routing: { escalation: { via: ['larg'] } },
+    }),
+  );
+  expect(() => loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') })).toThrow(
+    'routing.escalation.via references unknown model "larg"',
+  );
+});
+
 describe('agents', () => {
   test('parses Claude Code agent files unchanged', () => {
     const agent = parseAgentFile(

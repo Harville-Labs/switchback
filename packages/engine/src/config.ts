@@ -84,10 +84,10 @@ export const SwitchbackConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
-  /** Draft locally, review remotely (docs/review.md). */
+  /** Draft locally, review with a stronger model (docs/review.md). */
   review: z
     .object({
-      /** `auto`: after a turn in which a local model edited files, a remote model reviews the diff. */
+      /** `auto`: after a turn in which a local model edited files, `review.model` reviews the diff. */
       mode: z.enum(['off', 'auto']).default('off'),
       /** Reviewer model alias; defaults to the first available model in `routing.remote`. */
       model: z.string().optional(),
@@ -281,6 +281,11 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
   for (const [alias, m] of Object.entries(config.models)) {
     if (!config.providers[m.provider])
       return `models.${alias} references unknown provider "${m.provider}"`;
+  }
+  // A misspelled step would silently drop out of the ladder.
+  for (const alias of config.routing.escalation.via) {
+    if (!config.models[alias])
+      return `routing.escalation.via references unknown model "${alias}"; add it under models or remove it`;
   }
   return undefined;
 }

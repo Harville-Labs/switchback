@@ -6,6 +6,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ### Added
 - `switchback self-update [version]` updates the CLI in place to the newest release, or to a given one, checked against the release's `SHA256SUMS`. `--check` only reports. A failed download never breaks the install, and it works on Windows, where a running .exe can't be overwritten (#56)
+- Escalation ladder (#58): `routing.escalation.via` lists steps between the local chain and the remote chain, usually bigger local models, so escalation goes fast local → large local → remote, one step at a time. Stickiness keeps the session on the step it reached. Local steps never ask and aren't budgeted, and they also work in `local-only` mode and in private sessions. `switchback init` offers a bigger local model as an escalation step (`--local-escalation-model`) and any model as the automatic reviewer of local edits (`--reviewer remote|<local model>`). `switchback doctor` shows the ladder
+
+### Changed
+- "Remote review" is now "review of local edits" everywhere (the VS Code command is **Set Review of Local Edits**), since the reviewer can be a local model
+- `switchback init --yes` without `--remote` lists every supported remote provider in its error
 
 ### Fixed
 - OpenRouter (#54): structured `reasoning_details` (Claude thinking and Gemini thought signatures, encrypted OpenAI reasoning) are kept and sent back to the same model on tool-call turns, which those models need after a tool result. Server-side failures reported inside a stream are retryable, so the router falls back to the next model, and a stream that ends with `finish_reason: "error"` is a failure rather than an empty answer. `effort` goes out as OpenRouter's `reasoning.effort`
