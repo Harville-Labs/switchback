@@ -76,10 +76,6 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
-      - name: Download .vsix files
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ inputs.tag }}" --pattern 'switchback-vscode-*.vsix' --dir vsix
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -92,6 +88,10 @@ jobs:
           id=$(az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me \
             --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv)
           echo "::notice::Marketplace identity for the harville-labs publisher: $id"
+      - name: Download .vsix files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.tag }}" --pattern 'switchback-vscode-*.vsix' --dir vsix
       # The universal .vsix (no target) is the fallback for platforms without a
       # bundled engine; it uses `switchback` from PATH.
       - name: Publish
