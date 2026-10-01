@@ -7,4 +7,4 @@ resources:
   - service.yaml
 images:
   - name: ghcr.io/harville-labs/switchback-site
-    newTag: sha-592b5046b5efc355db1b7ddc08b372541deda0e7
+    newTag: sha-5d288f3e0e85d23dcd507ba5ff9b172964a052c8
