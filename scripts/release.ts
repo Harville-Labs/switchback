@@ -4,6 +4,7 @@
  *   bun scripts/release.ts prepare 0.2.0   bump every version and cut the changelog section
  *   bun scripts/release.ts verify v0.2.0   CI: fail unless everything matches the tag
  *   bun scripts/release.ts notes 0.2.0     print the changelog section (release notes)
+ *   bun scripts/release.ts channel 0.2.0   print the extension channel: release, pre-release, or none
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +49,16 @@ export function cutChangelog(changelog: string, version: string, date: string): 
   return `${changelog.slice(0, after)}\n\n## [${version}] - ${date}${changelog.slice(after)}`;
 }
 
+/**
+ * Where a version's .vsix goes on the VS Code Marketplace and Open VSX. 0.x ships as
+ * pre-release. Extension versions must be plain major.minor.patch, so a SemVer
+ * pre-release tag (1.0.0-rc.1) is not published at all.
+ */
+export function extensionChannel(version: string): 'release' | 'pre-release' | 'none' {
+  if (version.includes('-')) return 'none';
+  return version.startsWith('0.') ? 'pre-release' : 'release';
+}
+
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
 function main(argv: string[]): number {
@@ -85,8 +96,16 @@ function main(argv: string[]): number {
       console.log(notes);
       return 0;
     }
+    case 'channel': {
+      const version = arg?.replace(/^v/, '');
+      if (!version || !SEMVER.test(version)) throw new Error('usage: channel <version>');
+      console.log(extensionChannel(version));
+      return 0;
+    }
     default:
-      console.error('usage: release.ts prepare <version> | verify <tag> | notes <version>');
+      console.error(
+        'usage: release.ts prepare <version> | verify <tag> | notes <version> | channel <version>',
+      );
       return 2;
   }
 }

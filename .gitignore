@@ -14,3 +14,4 @@ apps/vscode/out/
 apps/site/.svelte-kit/
 apps/site/build/
 apps/vscode/THIRD-PARTY-NOTICES.txt
+apps/vscode/CHANGELOG.md

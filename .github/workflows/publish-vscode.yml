@@ -1,0 +1,122 @@
+name: Publish VS Code extension
+
+# Publishes a GitHub release's .vsix files to the VS Code Marketplace and Open VSX.
+# Release runs it after creating the release; run it by hand to retry a failed
+# publish or to publish an existing tag. Already-published versions are skipped.
+#
+# Marketplace: Microsoft Entra ID through GitHub OIDC (Azure DevOps PATs are retired
+# on 2026-12-01). Needs repository variables AZURE_CLIENT_ID and AZURE_TENANT_ID for a
+# user-assigned managed identity that is a Contributor on the harville-labs publisher,
+# with a federated credential for this repo's `marketplace` environment.
+# Open VSX: the OVSX_PAT secret, or trusted publishing when the variable
+# OVSX_TRUSTED_PUBLISHING is `true`. Setup steps: docs/clients/vscode.md.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (for example v0.6.0)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.plan.outputs.channel }}
+      marketplace: ${{ steps.plan.outputs.marketplace }}
+      openvsx: ${{ steps.plan.outputs.openvsx }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - id: plan
+        env:
+          TAG: ${{ inputs.tag }}
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          OVSX_TRUSTED_PUBLISHING: ${{ vars.OVSX_TRUSTED_PUBLISHING }}
+        run: |
+          channel=$(bun scripts/release.ts channel "$TAG")
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          if [ "$channel" = none ]; then
+            echo "::notice::$TAG has a SemVer pre-release tag, which extension marketplaces don't accept; not publishing."
+            exit 0
+          fi
+          if [ -n "$AZURE_CLIENT_ID" ]; then
+            echo "marketplace=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Not publishing to the VS Code Marketplace: the AZURE_CLIENT_ID variable is not set."
+          fi
+          if [ -n "$OVSX_PAT" ] || [ "$OVSX_TRUSTED_PUBLISHING" = true ]; then
+            echo "openvsx=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Not publishing to Open VSX: set the OVSX_PAT secret or OVSX_TRUSTED_PUBLISHING=true."
+          fi
+
+  marketplace:
+    needs: plan
+    if: needs.plan.outputs.marketplace == 'true'
+    runs-on: ubuntu-latest
+    # The managed identity's federated credential trusts only this environment.
+    environment: marketplace
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Download .vsix files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.tag }}" --pattern 'switchback-vscode-*.vsix' --dir vsix
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      # The universal .vsix (no target) is the fallback for platforms without a
+      # bundled engine; it uses `switchback` from PATH.
+      - name: Publish
+        working-directory: apps/vscode
+        run: |
+          flags=""
+          [ "${{ needs.plan.outputs.channel }}" = pre-release ] && flags="--pre-release"
+          bunx vsce publish --azure-credential --skip-duplicate $flags --packagePath ../../vsix/*.vsix
+
+  openvsx:
+    needs: plan
+    if: needs.plan.outputs.openvsx == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Trusted publishing exchanges the job's OIDC token when OVSX_PAT is unset.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Download .vsix files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.tag }}" --pattern 'switchback-vscode-*.vsix' --dir vsix
+      - name: Publish
+        working-directory: apps/vscode
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          flags=""
+          [ "${{ needs.plan.outputs.channel }}" = pre-release ] && flags="--pre-release"
+          bunx ovsx publish --skip-duplicate $flags --packagePath ../../vsix/*.vsix

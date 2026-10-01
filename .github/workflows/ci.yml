@@ -85,6 +85,7 @@ jobs:
           export SWITCHBACK_HOME="$RUNNER_TEMP/switchback-home"
           ./dist/switchback --version
           ./dist/switchback run --mock "ping" | grep -q "You said: ping"
-      - name: Build VS Code extension
+      # Packaging validates the manifest and README the way the Marketplace will.
+      - name: Package VS Code extension
         if: matrix.os == 'ubuntu-latest'
-        run: bun run --cwd apps/vscode build
+        run: bun run --cwd apps/vscode package -o ../../dist/switchback-vscode.vsix

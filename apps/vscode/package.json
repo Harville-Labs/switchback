@@ -1,5 +1,5 @@
 {
-  "name": "switchback-vscode",
+  "name": "switchback",
   "displayName": "Switchback",
   "description": "Local-first coding agent that escalates to a hosted model (OpenAI, Anthropic, DeepSeek, ...) only when it needs to.",
   "version": "0.5.0",
@@ -11,6 +11,27 @@
     "theme": "dark"
   },
   "license": "Apache-2.0",
+  "homepage": "https://harville.ai/switchback",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Harville-Labs/switchback.git",
+    "directory": "apps/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/Harville-Labs/switchback/issues"
+  },
+  "keywords": [
+    "agent",
+    "local",
+    "ollama",
+    "llm",
+    "ai",
+    "coding agent",
+    "openai",
+    "anthropic",
+    "deepseek",
+    "gemini"
+  ],
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -106,7 +127,7 @@
       },
       {
         "command": "switchback.openSession",
-        "title": "Open Session\u2026",
+        "title": "Open Session…",
         "category": "Switchback",
         "icon": "$(history)"
       },
@@ -217,7 +238,7 @@
   },
   "scripts": {
     "build": "bun build src/extension.ts --target=node --format=cjs --external vscode --outfile dist/extension.js && bun build src/webview/main.ts --target=browser --outfile dist/webview.js",
-    "package": "bun run build && bunx @vscode/vsce package --no-dependencies",
+    "package": "bun run build && cp ../../CHANGELOG.md CHANGELOG.md && vsce package --no-dependencies --baseContentUrl https://github.com/Harville-Labs/switchback/blob/main --baseImagesUrl https://github.com/Harville-Labs/switchback/raw/main",
     "build:test": "bun build test/suite/*.itest.ts --outdir out/test --target node --format cjs --external vscode",
     "test": "bun run build && bun run build:test && vscode-test --label dev",
     "test:bundled": "bun run build && bun run build:test && bun ../cli/scripts/build.ts --outfile bin/switchback && vscode-test --label bundled"
@@ -232,7 +253,9 @@
     "@types/mocha": "^10.0.10",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.0.0",
     "happy-dom": "^20.14.5",
-    "mocha": "^12.0.2"
+    "mocha": "^12.0.2",
+    "ovsx": "^1.2.0"
   }
 }
