@@ -14,8 +14,9 @@
 # shell profile; if the directory isn't on your PATH, it says what to add.
 #
 # The source is scripts/install.sh in https://github.com/Harville-Labs/switchback;
-# switchback.harville.ai serves it. SWITCHBACK_DOWNLOAD_URL and SWITCHBACK_RELEASES_API
-# point it at a mirror (or a test server) instead of GitHub.
+# switchback.harville.ai serves it, and scripts/install.ps1 is the Windows
+# counterpart. SWITCHBACK_DOWNLOAD_URL and SWITCHBACK_RELEASES_API point it at a
+# mirror (or a test server) instead of GitHub.
 
 set -eu
 
@@ -81,7 +82,7 @@ detect_platform() {
     Darwin) OS=darwin ;;
     Linux) OS=linux ;;
     MINGW* | MSYS* | CYGWIN*)
-      fail "this script is for macOS and Linux. On Windows, download switchback-<version>-windows-x64.exe from $RELEASES." ;;
+      fail "this script is for macOS and Linux. On Windows, run this in PowerShell: irm https://switchback.harville.ai/install.ps1 | iex" ;;
     *) fail "Switchback has no build for $(uname -s). It runs on macOS, Linux, and Windows." ;;
   esac
   case $(uname -m) in

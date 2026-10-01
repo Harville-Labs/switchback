@@ -1,6 +1,7 @@
 <script lang="ts">
 import { page } from '$app/state';
 import CopyCommand from '$lib/components/CopyCommand.svelte';
+import { INSTALL_COMMANDS, type InstallPlatform } from '$lib/install';
 
 let { data, children } = $props();
 
@@ -14,10 +15,21 @@ const tabs = $derived([
 ]);
 const base = $derived(`/sites/${data.site.slug}`);
 const isDevicePage = $derived(page.route.id?.endsWith('/device') ?? false);
+// Detected from the request on the server; the switch is for setting up another machine.
+let chosenPlatform = $state<InstallPlatform | undefined>();
+const platform = $derived(chosenPlatform ?? data.installPlatform);
+const otherPlatform = $derived<InstallPlatform>(platform === 'windows' ? 'unix' : 'windows');
 </script>
 
 {#if !isDevicePage}
   <h1 class="page-title">{data.site.name}</h1>
+  <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+    <span class="label">Install Switchback</span>
+    <CopyCommand command={INSTALL_COMMANDS[platform]} quiet />
+    <button type="button" class="muted text-sm underline underline-offset-2" onclick={() => (chosenPlatform = otherPlatform)}>
+      {otherPlatform === 'windows' ? 'Windows' : 'macOS and Linux'} instead
+    </button>
+  </div>
   <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
     <span class="label">Connect Switchback</span>
     <CopyCommand command="switchback login --site {data.site.slug}" quiet />

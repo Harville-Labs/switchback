@@ -4,16 +4,26 @@
  */
 import { afterAll, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   connectDaemon,
+  type DaemonInfo,
   daemonPaths,
   readDaemonInfo,
   SwitchbackClient,
   socketTransport,
 } from '@switchback/client';
-import type { EngineEvent } from '@switchback/protocol';
+import {
+  type EngineEvent,
+  ErrorCode,
+  encodeNdjson,
+  isRequest,
+  type JsonRpcMessage,
+  NdjsonDecoder,
+  PROTOCOL_VERSION,
+} from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'switchback-daemon-')));
@@ -72,13 +82,14 @@ const options = (name: string) => ({
 
 afterAll(() => {
   model.stop(true);
-  rmSync(base, { recursive: true, force: true });
+  // Windows holds a directory while a daemon still runs in it; give stragglers a moment.
+  rmSync(base, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test('two clients share one daemon and see each other’s live turns', async () => {
   const a = await connectDaemon(options('a'));
   const b = await connectDaemon(options('b'));
-  if (!a || !b) throw new Error('daemon unavailable');
+  if (!a.client || !b.client) throw new Error(a.reason ?? b.reason);
   const info = readDaemonInfo(workspace, env);
   expect(info?.version).toBe(CLI_VERSION);
   if (process.platform !== 'win32') {
@@ -125,3 +136,127 @@ test('two clients share one daemon and see each other’s live turns', async () 
   while (readDaemonInfo(workspace, env) && Date.now() < deadline) await Bun.sleep(100);
   expect(readDaemonInfo(workspace, env)).toBeUndefined();
 }, 30_000);
+
+/**
+ * A stand-in for another version's daemon: answers `daemon.retire` as told (or
+ * not at all, like daemons from before handover) and refuses everything else.
+ */
+function fakeDaemon(
+  ws: string,
+  info: { version: string; protocolVersion?: number },
+  retire?: { retired: boolean; reason?: string },
+) {
+  const { dir, info: infoPath, socket } = daemonPaths(ws, env);
+  mkdirSync(dir, { recursive: true });
+  if (process.platform !== 'win32') rmSync(socket, { force: true });
+  const server = createServer((conn) => {
+    const decoder = new NdjsonDecoder((m) => {
+      if (!isRequest(m)) return;
+      const reply = (body: object) =>
+        conn.write(encodeNdjson({ jsonrpc: '2.0', id: m.id, ...body } as JsonRpcMessage));
+      if (m.method === 'daemon.retire' && retire) {
+        reply({ result: retire });
+        if (retire.retired) {
+          rmSync(infoPath, { force: true });
+          server.close();
+        }
+      } else
+        reply({ error: { code: ErrorCode.MethodNotFound, message: `unknown method ${m.method}` } });
+    });
+    conn.on('data', (chunk: Buffer) => decoder.push(new Uint8Array(chunk)));
+    conn.on('error', () => conn.destroy());
+  });
+  server.listen(socket);
+  writeFileSync(
+    infoPath,
+    JSON.stringify({ pid: 1, socket, token: 't', workspaceRoot: ws, ...info } satisfies DaemonInfo),
+  );
+  return { close: () => server.close(), infoPath };
+}
+
+const freshWorkspace = (name: string) => {
+  const ws = join(base, name);
+  mkdirSync(ws, { recursive: true });
+  return ws;
+};
+
+test('a newer client retires an idle older daemon and starts its own', async () => {
+  const ws = freshWorkspace('handover');
+  const old = fakeDaemon(
+    ws,
+    { version: '0.0.1', protocolVersion: PROTOCOL_VERSION },
+    { retired: true },
+  );
+  const logs: string[] = [];
+  const c = await connectDaemon({ ...options('new'), workspaceRoot: ws, log: (m) => logs.push(m) });
+  old.close();
+  if (!c.client) throw new Error(c.reason);
+  expect(readDaemonInfo(ws, env)?.version).toBe(CLI_VERSION);
+  expect(logs.join('\n')).toContain('retired the shared engine running older Switchback 0.0.1');
+  // Stop the daemon this test started, so it isn't left running in the workspace.
+  const started = readDaemonInfo(ws, env);
+  await c.client.request('daemon.retire', { token: started?.token ?? '' });
+  c.client.close();
+  const deadline = Date.now() + 3000;
+  while (readDaemonInfo(ws, env) && Date.now() < deadline) await Bun.sleep(50);
+}, 20_000);
+
+test('an older daemon that is in use, or too old to ask, is left alone with a reason', async () => {
+  for (const [name, retire, expected] of [
+    ['busy', { retired: false, reason: 'a turn is running' }, 'a turn is running'],
+    ['ancient', undefined, 'too old to hand over'],
+  ] as const) {
+    const ws = freshWorkspace(name);
+    const old = fakeDaemon(ws, { version: '0.0.1' }, retire);
+    const c = await connectDaemon({ ...options(name), workspaceRoot: ws });
+    old.close();
+    expect(c.client).toBeUndefined();
+    expect(c.reason).toContain('Switchback 0.0.1');
+    expect(c.reason).toContain(expected);
+    // Still the old daemon's: nothing new was started.
+    expect(readDaemonInfo(ws, env)?.version).toBe('0.0.1');
+  }
+});
+
+test('a newer daemon on another protocol is not used, and says to update', async () => {
+  const ws = freshWorkspace('future');
+  const future = fakeDaemon(ws, { version: '99.0.0', protocolVersion: PROTOCOL_VERSION + 1 });
+  const c = await connectDaemon({ ...options('old'), workspaceRoot: ws });
+  future.close();
+  expect(c.client).toBeUndefined();
+  expect(c.reason).toContain("can't connect");
+  expect(c.reason).toContain('update Switchback');
+});
+
+test('an older client attaches to a newer daemon that speaks its protocol', async () => {
+  const ws = freshWorkspace('older-client');
+  const first = await connectDaemon({ ...options('first'), workspaceRoot: ws });
+  if (!first.client) throw new Error(first.reason);
+  const logs: string[] = [];
+  const older = await connectDaemon({
+    ...options('older'),
+    workspaceRoot: ws,
+    version: '0.0.1',
+    log: (m) => logs.push(m),
+  });
+  if (!older.client) throw new Error(older.reason);
+  expect(older.init.engineVersion).toBe(CLI_VERSION);
+  expect(logs.join('\n')).toContain('newer Switchback');
+
+  // The real daemon refuses to retire while another client is attached...
+  const info = readDaemonInfo(ws, env);
+  expect(await older.client.request('daemon.retire', { token: info?.token ?? '' })).toEqual({
+    retired: false,
+    reason: 'another window or terminal is attached',
+  });
+  first.client.close();
+  await Bun.sleep(100);
+  // ...and steps aside once it's the only one, removing its info file.
+  expect(await older.client.request('daemon.retire', { token: info?.token ?? '' })).toEqual({
+    retired: true,
+  });
+  older.client.close();
+  const deadline = Date.now() + 3000;
+  while (readDaemonInfo(ws, env) && Date.now() < deadline) await Bun.sleep(50);
+  expect(readDaemonInfo(ws, env)).toBeUndefined();
+}, 20_000);

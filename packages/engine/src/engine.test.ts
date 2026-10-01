@@ -845,4 +845,33 @@ describe('protocol round-trip', () => {
     const client = new SwitchbackClient(clientSide);
     await expect(client.request('session.list', {})).rejects.toThrow('initialize');
   });
+
+  test('daemon.retire works before initialize, checks the token, and reports back', async () => {
+    const { engine } = setup([], []);
+    const retired: string[] = [];
+    const connect = (options: Parameters<typeof serve>[3]) => {
+      const [serverSide, clientSide] = createTransportPair();
+      serve(engine, serverSide, undefined, options);
+      return new SwitchbackClient(clientSide);
+    };
+    // A private engine is never a shared daemon.
+    expect(await connect({}).request('daemon.retire', { token: 'x' })).toEqual({
+      retired: false,
+      reason: 'not a shared engine',
+    });
+    const shared = {
+      token: 'secret',
+      ownsEngine: false,
+      retire: () => ({ retired: true }),
+      onRetired: () => retired.push('retired'),
+    };
+    await expect(connect(shared).request('daemon.retire', { token: 'wrong' })).rejects.toThrow(
+      'invalid daemon token',
+    );
+    expect(retired).toEqual([]);
+    expect(await connect(shared).request('daemon.retire', { token: 'secret' })).toEqual({
+      retired: true,
+    });
+    expect(retired).toEqual(['retired']);
+  });
 });

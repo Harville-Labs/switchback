@@ -21,9 +21,15 @@ On macOS or Linux:
 curl -fsSL https://switchback.harville.ai/install.sh | sh
 ```
 
-The script ([scripts/install.sh](scripts/install.sh)) downloads the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/switchback/releases), checks it against the release's `SHA256SUMS`, and puts it in `~/.local/bin`. It never uses sudo or edits your shell profile. Add options after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. On Windows, download `switchback-<version>-windows-x64.exe` from the release.
+On Windows, in PowerShell:
 
-For VS Code alone, install the `.vsix` for your platform from the release (**Extensions: Install from VSIX…**). It includes the engine.
+```powershell
+irm https://switchback.harville.ai/install.ps1 | iex
+```
+
+The scripts ([install.sh](scripts/install.sh), [install.ps1](scripts/install.ps1)) download the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/switchback/releases), check it against the release's `SHA256SUMS`, and put it in `~/.local/bin`, without sudo or administrator rights. `install.sh` never edits your shell profile; `install.ps1` adds the directory to your user PATH unless you pass `-NoModifyPath`. Options for `install.sh` go after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. `install.ps1` takes `-VSCode`, `-Version`, and `-Dir` (run it as `& ([scriptblock]::Create((irm https://switchback.harville.ai/install.ps1))) -VSCode`) or the `SWITCHBACK_VERSION` and `SWITCHBACK_INSTALL_DIR` environment variables.
+
+For VS Code alone, install the `.vsix` for your platform from the release (**Extensions: Install from VSIX…**). It includes the engine. Use the terminal UI, the extension, or both: with both installed, they run the newer of the two engines and share live sessions.
 
 ## Quick start
 

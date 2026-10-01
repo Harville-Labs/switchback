@@ -24,6 +24,21 @@ export const InitializeParams = z.object({
 });
 export type InitializeParams = z.infer<typeof InitializeParams>;
 
+/**
+ * Ask a shared daemon to exit so a newer Switchback can take over the workspace.
+ * Accepted before `initialize` (with the daemon's token), so it works across
+ * protocol versions. The daemon refuses while other clients are attached or a
+ * turn is running.
+ */
+export const DaemonRetireParams = z.object({ token: z.string() });
+export type DaemonRetireParams = z.infer<typeof DaemonRetireParams>;
+
+export interface DaemonRetireResult {
+  retired: boolean;
+  /** Why not, when `retired` is false. */
+  reason?: string;
+}
+
 export interface InitializeResult {
   protocolVersion: number;
   engineVersion: string;
@@ -204,6 +219,7 @@ export interface Methods {
   /** MCP servers: connection state and tool counts, plus project servers awaiting trust. */
   'mcp.list': { params: Record<string, never>; result: McpListResult };
   shutdown: { params: Record<string, never>; result: { ok: true } };
+  'daemon.retire': { params: DaemonRetireParams; result: DaemonRetireResult };
 }
 
 export type MethodName = keyof Methods;

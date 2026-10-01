@@ -8,6 +8,7 @@ on:
       - packages/engine/src/org/schema.ts
       - packages/engine/src/telemetry-schema.ts
       - scripts/install.sh
+      - scripts/install.ps1
       - bun.lock
   workflow_dispatch:
 

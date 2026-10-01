@@ -177,7 +177,8 @@ export async function connectShared(
       spawn: selfCommand(),
       log: (m) => warnings.push(m),
     });
-    if (shared) return { ...shared, warnings, shared: true };
+    if (shared.client) return { client: shared.client, init: shared.init, warnings, shared: true };
+    warnings.push(shared.reason);
   }
   const local = await connectInProcess(flags, 'prompt', clientName, { syncOrg: true });
   return {

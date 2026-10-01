@@ -1,3 +1,4 @@
+import { installPlatform } from '$lib/install';
 import { siteContext } from '$lib/server/guards';
 import type { LayoutServerLoad } from './$types';
 
@@ -9,5 +10,6 @@ export const load: LayoutServerLoad = async (event) => {
     manager: ctx.manager,
     role: ctx.membership?.role ?? null,
     switchbackManager: ctx.user.switchbackManager,
+    installPlatform: installPlatform(event.request.headers),
   };
 };
