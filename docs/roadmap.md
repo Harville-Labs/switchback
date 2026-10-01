@@ -21,7 +21,7 @@ Make the local path excellent, since it's where users spend most of their time.
 
 ## v0.3 VS Code (released)
 
-- Platform-specific `.vsix` with the engine bundled; Marketplace/Open VSX publishing when tokens are configured
+- Platform-specific `.vsix` with the engine bundled
 - Markdown chat with Copy / Insert on code blocks; session history
 - Review proposed edits in the diff editor with Accept / Reject
 - Editor context attachments (selection, active file, problems)

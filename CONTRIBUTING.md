@@ -58,7 +58,8 @@ The tag runs `.github/workflows/release.yml`:
 
 1. `bun run check`, then `release.ts verify` (all versions and the changelog entry match the tag).
 2. Binaries for linux-x64, darwin-arm64, and windows-x64 are built and smoke-tested on native runners. linux-arm64 and darwin-x64 are cross-compiled and format-checked.
-3. The `.vsix` is built.
-4. A GitHub Release is created with the binaries, the `.vsix`, `SHA256SUMS`, and the changelog section as notes. 0.x and `-pre` versions are marked prerelease.
+3. A `.vsix` is built for each platform with its engine inside, plus a universal one.
+4. A GitHub Release is created with the binaries, the `.vsix` files, `SHA256SUMS`, and the changelog section as notes. 0.x and `-pre` versions are marked prerelease.
+5. The `.vsix` files are published to the VS Code Marketplace and Open VSX (pre-release for 0.x). See [docs/clients/vscode.md](docs/clients/vscode.md#publishing) for the one-time account setup.
 
-Code signing, notarization, and Marketplace publishing are tracked in #33 and #30.
+Code signing and notarization are tracked in #33.

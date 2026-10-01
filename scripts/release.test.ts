@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { changelogSection, cutChangelog, readVersions } from './release.ts';
+import { changelogSection, cutChangelog, extensionChannel, readVersions } from './release.ts';
 
 test('CLI, engine, and extension versions agree', () => {
   const versions = new Set(Object.values(readVersions()));
@@ -14,4 +14,10 @@ test('cutting and reading changelog sections', () => {
   expect(changelogSection(cut, '0.2.0')).toBe('### Added\n- thing');
   expect(changelogSection(cut, '0.1.0')).toBe('- first');
   expect(changelogSection(cut, 'Unreleased')).toBe('');
+});
+
+test('extension channel by version', () => {
+  expect(extensionChannel('0.6.0')).toBe('pre-release');
+  expect(extensionChannel('1.0.0')).toBe('release');
+  expect(extensionChannel('1.0.0-rc.1')).toBe('none');
 });
