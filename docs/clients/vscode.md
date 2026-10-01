@@ -54,7 +54,7 @@ Build a `.vsix` with `bun run --cwd apps/vscode package`.
 
 ## Distribution
 
-Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=harville-labs.switchback) or [Open VSX](https://open-vsx.org/extension/harville-labs/switchback) (Cursor, VSCodium, and other Open VSX editors): `code --install-extension harville-labs.switchback`. While Switchback is 0.x, every version is a pre-release, so add `--pre-release` on the command line.
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=isaiah-harville.switchback) or [Open VSX](https://open-vsx.org/extension/isaiah-harville/switchback) (Cursor, VSCodium, and other Open VSX editors): `code --install-extension isaiah-harville.switchback`. While Switchback is 0.x, every version is a pre-release, so add `--pre-release` on the command line.
 
 Each release builds one `.vsix` per platform (`darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`) with the engine binary inside, so installing the extension is all a user needs. A universal `.vsix` without a binary is the fallback on every other platform and uses `switchback` from PATH. The marketplaces pick the right one. The same files are attached to the GitHub release, and the installers can add the matching one using the first editor command they find (`code`, `code-insiders`, `codium`, `cursor`): `curl -fsSL https://switchback.harville.ai/install.sh | sh -s -- --vscode` on macOS and Linux, or `& ([scriptblock]::Create((irm https://switchback.harville.ai/install.ps1))) -VSCode` in PowerShell on Windows.
 
@@ -66,13 +66,13 @@ After a release is created, the **Publish VS Code extension** workflow (`.github
 
 The Marketplace takes no long-lived secret. Azure DevOps personal access tokens are retired on 2026-12-01, so the workflow signs in with Microsoft Entra ID through GitHub OIDC and runs `vsce publish --azure-credential`. One-time setup:
 
-1. Create the `harville-labs` publisher at <https://marketplace.visualstudio.com/manage>.
+1. The extension publishes under the `isaiah-harville` publisher (<https://marketplace.visualstudio.com/manage>). Its ID is the first half of the extension ID, so it can never change.
 2. In Azure, create a **user-assigned managed identity**. An app registration signs in but then fails to publish with `InvalidAccessException`.
 3. On the identity, add a federated credential: GitHub Actions, organization `Harville-Labs`, repository `switchback`, entity type **Environment**, environment `marketplace`.
 4. Set the repository variables `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` from the identity's **Overview**.
 5. Run **Publish VS Code extension** for any release tag. The publish step fails until the next step is done, but the run's summary shows the identity's Marketplace ID ("Show the Marketplace identity"). Add that ID (not the client ID) under the publisher's **Members** as a **Contributor**, then run the workflow again.
 
-For Open VSX, sign in at <https://open-vsx.org> with an Eclipse account, sign the publisher agreement, create the namespace with `bunx ovsx create-namespace harville-labs -p <token>`, then either set the `OVSX_PAT` secret or configure trusted publishing for this repository and set the variable `OVSX_TRUSTED_PUBLISHING` to `true`.
+For Open VSX, sign in at <https://open-vsx.org> with an Eclipse account, sign the publisher agreement, create the namespace with `bunx ovsx create-namespace isaiah-harville -p <token>`, then either set the `OVSX_PAT` secret or configure trusted publishing for this repository and set the variable `OVSX_TRUSTED_PUBLISHING` to `true`.
 
 If a marketplace isn't configured, the workflow skips it with a warning.
 
