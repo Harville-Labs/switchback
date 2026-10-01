@@ -6,7 +6,7 @@ name: Publish VS Code extension
 #
 # Marketplace: Microsoft Entra ID through GitHub OIDC (Azure DevOps PATs are retired
 # on 2026-12-01). Needs repository variables AZURE_CLIENT_ID and AZURE_TENANT_ID for a
-# user-assigned managed identity that is a Contributor on the harville-labs publisher,
+# user-assigned managed identity that is a Contributor on the isaiah-harville publisher,
 # with a federated credential for this repo's `marketplace` environment.
 # Open VSX: the OVSX_PAT secret, or trusted publishing when the variable
 # OVSX_TRUSTED_PUBLISHING is `true`. Setup steps: docs/clients/vscode.md.
@@ -87,7 +87,7 @@ jobs:
         run: |
           id=$(az rest -u https://app.vssps.visualstudio.com/_apis/profile/profiles/me \
             --resource 499b84ac-1321-427f-aa17-267ca6975798 --query id -o tsv)
-          echo "::notice::Marketplace identity for the harville-labs publisher: $id"
+          echo "::notice::Marketplace identity for the isaiah-harville publisher: $id"
       - name: Download .vsix files
         env:
           GH_TOKEN: ${{ github.token }}

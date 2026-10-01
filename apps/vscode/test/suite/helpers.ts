@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { SwitchbackTestApi } from '../../src/extension.ts';
 
 export async function api(): Promise<SwitchbackTestApi> {
-  const ext = vscode.extensions.getExtension<SwitchbackTestApi>('harville-labs.switchback');
+  const ext = vscode.extensions.getExtension<SwitchbackTestApi>('isaiah-harville.switchback');
   if (!ext) throw new Error('extension not found');
   const a = await ext.activate();
   await waitFor(() => a.connected(), 30_000, 'engine connection');
