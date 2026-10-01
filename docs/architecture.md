@@ -85,8 +85,9 @@ Append-only files make crash recovery trivial: a torn final line is ignored and 
 
 By default the TUI and VS Code don't each run an engine. They attach to one daemon per workspace, so a session started in the terminal can be watched, joined, or approved from VS Code and vice versa.
 
-- The first client runs `switchback serve --socket` in the background. It records the socket path, a random token, its version, and its pid in `<data>/daemons/<workspace-hash>.json` (mode 0600, directory 0700).
-- Clients connect and present the token in `initialize`. A daemon of another version is never used; that client runs a private engine instead.
+- The first client runs `switchback serve --socket` in the background. It records the socket path, a random token, its version and protocol version, and its pid in `<data>/daemons/<workspace-hash>.json` (mode 0600, directory 0700).
+- Clients connect and present the token in `initialize`.
+- **The newest version wins**, because the extension updates from the marketplace while the CLI updates on its own. A client uses a daemon of its own version, or a newer one that speaks the same protocol version. If the daemon is older, the client asks it to step aside with `daemon.retire` and starts its own. The daemon agrees only when the asking client is its only connection and no turn is running. Otherwise, or when the daemon is newer and speaks another protocol version, the client runs a private engine and shows why, so sessions are never split silently. A client matches the version of the binary it runs, which for VS Code can be the CLI rather than the extension (see [clients/vscode.md](clients/vscode.md#which-engine-runs)).
 - Clients leaving, including calling `shutdown`, don't affect others. The daemon exits after `SWITCHBACK_DAEMON_IDLE_MS` (default 10 minutes) with no clients and no running turns.
 - If anything fails, the client falls back to a private engine (in-process for the TUI, `serve --stdio` for VS Code). Opt out with `switchback --no-daemon` / `SWITCHBACK_NO_DAEMON=1` or the `switchback.sharedEngine` setting. Mock engines are never shared.
 - `session.list` marks running sessions, and opening one mid-turn continues with its live events.

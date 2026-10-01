@@ -5,6 +5,8 @@
 
 import { createServer } from 'node:net';
 import {
+  DaemonRetireParams,
+  type DaemonRetireResult,
   ErrorCode,
   EscalationRespondParams,
   encodeNdjson,
@@ -47,6 +49,10 @@ export interface ServeOptions {
    * client leaving must not affect the others.
    */
   ownsEngine?: boolean;
+  /** Shared daemons: whether to exit for a newer Switchback (`daemon.retire`). */
+  retire?: () => DaemonRetireResult;
+  /** Called after a successful `daemon.retire` reply has been sent. */
+  onRetired?: () => void;
 }
 
 export function serve(
@@ -62,6 +68,15 @@ export function serve(
   });
 
   const dispatch = async (req: JsonRpcRequest): Promise<unknown> => {
+    // Before the initialize check: a newer client may speak another protocol version.
+    if (req.method === 'daemon.retire') {
+      const p = parse(DaemonRetireParams, req.params);
+      if (!options.token || !options.retire)
+        return { retired: false, reason: 'not a shared engine' } satisfies DaemonRetireResult;
+      if (p.token !== options.token)
+        throw new RpcError(ErrorCode.Unauthorized, 'invalid daemon token');
+      return options.retire();
+    }
     if (req.method !== 'initialize' && !initialized)
       throw new RpcError(ErrorCode.NotInitialized, 'call initialize first');
     switch (req.method) {
@@ -123,6 +138,8 @@ export function serve(
         transport.send({ jsonrpc: '2.0', id: message.id, result: result ?? null });
         // Close only after the reply is written, or the client never sees it.
         if (message.method === 'shutdown') onShutdown?.();
+        if (message.method === 'daemon.retire' && (result as DaemonRetireResult).retired)
+          options.onRetired?.();
       },
       (err: unknown) => {
         const rpc = err instanceof RpcError ? err : undefined;
@@ -176,7 +193,12 @@ export function stdioTransport(): Transport {
 export function listenSocket(
   engine: Engine,
   path: string,
-  options: { token: string; onConnections?: (count: number) => void },
+  options: {
+    token: string;
+    onConnections?: (count: number) => void;
+    retire?: ServeOptions['retire'];
+    onRetired?: ServeOptions['onRetired'];
+  },
 ): Promise<{ close: () => void }> {
   let count = 0;
   const server = createServer((socket) => {
@@ -202,7 +224,12 @@ export function listenSocket(
       onClose: (h) => closers.push(h),
       close: () => socket.end(),
     };
-    serve(engine, transport, () => socket.end(), { token: options.token, ownsEngine: false });
+    serve(engine, transport, () => socket.end(), {
+      token: options.token,
+      ownsEngine: false,
+      retire: options.retire,
+      onRetired: options.onRetired,
+    });
   });
   return new Promise((resolve, reject) => {
     server.once('error', reject);

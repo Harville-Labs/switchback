@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { type DaemonInfo, daemonPaths, readDaemonInfo, socketTransport } from '@switchback/client';
 import { listenSocket, serve as serveEngine, stdioTransport } from '@switchback/engine';
+import { PROTOCOL_VERSION } from '@switchback/protocol';
 import {
   CLI_VERSION,
   type CommonFlags,
@@ -83,12 +84,29 @@ async function serveSocket(flags: CommonFlags): Promise<number> {
     }, IDLE_MS);
   };
 
+  let retiring = false;
   server = await listenSocket(engine, paths.socket, {
     token,
     onConnections: (n) => {
       connections = n;
+      if (retiring && n === 0) process.exit(0);
       if (n === 0) scheduleIdle();
       else if (idleTimer) clearTimeout(idleTimer);
+    },
+    // A newer Switchback asks this one to step aside. The asking client is one
+    // connection; anyone else attached would lose their live sessions.
+    retire: () => {
+      if (connections > 1)
+        return { retired: false, reason: 'another window or terminal is attached' };
+      if (engine.busy()) return { retired: false, reason: 'a turn is running' };
+      return { retired: true };
+    },
+    onRetired: () => {
+      retiring = true;
+      // Stop accepting clients and remove the info file now, so the newer client
+      // can start its own daemon; exit once the asking client hangs up.
+      cleanup();
+      setTimeout(() => process.exit(0), 2000).unref();
     },
   });
   if (process.platform !== 'win32') chmodSync(paths.socket, 0o600);
@@ -97,6 +115,7 @@ async function serveSocket(flags: CommonFlags): Promise<number> {
     socket: paths.socket,
     token,
     version: CLI_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
     workspaceRoot: flags.cwd,
   };
   writeFileSync(paths.info, JSON.stringify(info), { mode: 0o600 });

@@ -15,6 +15,13 @@ import type {
 } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import { type AttachChoice, EditorContext } from './context.ts';
+import {
+  chooseEngine,
+  type EngineBinary,
+  findCli,
+  installerShell,
+  probeVersion,
+} from './engine-binary.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
@@ -25,19 +32,35 @@ const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
 /** Set on activation when this .vsix ships a platform binary in `bin/`. */
 let bundledBinary: string | undefined;
 
+/** No engine to run: nothing bundled for this platform and no CLI installed. */
+class NoEngineError extends Error {}
+
 /**
- * The switchback executable and leading args: the user's setting if set, else
- * the bundled binary, else `switchback` on PATH. `${workspaceFolder}` is expanded.
+ * The engine to run: the user's setting if set, else the newer of the CLI and
+ * the bundled binary (see engine-binary.ts). `${workspaceFolder}` is expanded.
  */
-function switchbackCommand(root: string): { command: string; args: string[] } {
+async function resolveEngine(root: string): Promise<EngineBinary> {
   const cfg = vscode.workspace.getConfiguration('switchback');
   // VS Code does not expand variables in extension settings; support the common one.
   const expand = (v: string) => v.replaceAll(WORKSPACE_FOLDER_VAR, root);
+  const args = cfg.get<string[]>('executableArgs', []).map(expand);
   const configured = cfg.get<string>('executablePath', '').trim();
-  return {
-    command: configured ? expand(configured) : (bundledBinary ?? 'switchback'),
-    args: cfg.get<string[]>('executableArgs', []).map(expand),
-  };
+  if (configured) {
+    const command = expand(configured);
+    return { command, args, version: await probeVersion(command, args), source: 'setting' };
+  }
+  const cli = await findCli();
+  const chosen = chooseEngine({
+    cli,
+    bundled: bundledBinary
+      ? { command: bundledBinary, args: [], version: VERSION, source: 'bundled' }
+      : undefined,
+  });
+  if (!chosen)
+    throw new NoEngineError(
+      'no switchback engine found: this platform has no bundled engine and the switchback CLI is not installed',
+    );
+  return { ...chosen, args: [...chosen.args, ...args] };
 }
 
 class EngineConnection implements vscode.Disposable {
@@ -71,9 +94,17 @@ class EngineConnection implements vscode.Disposable {
   /** True when attached to the workspace's shared daemon (see switchback.sharedEngine). */
   shared = false;
 
+  /** The binary this connection runs (set by start). */
+  binary: EngineBinary | undefined;
+
   async start(): Promise<void> {
     const cfg = vscode.workspace.getConfiguration('switchback');
-    const { command, args: baseArgs } = switchbackCommand(this.root);
+    const binary = await resolveEngine(this.root);
+    this.binary = binary;
+    const { command, args: baseArgs } = binary;
+    this.log.appendLine(
+      `engine: ${command} (${binary.source}${binary.version ? `, Switchback ${binary.version}` : ''})`,
+    );
     // VS Code's own telemetry switch is an opt-out for Switchback too.
     const env = vscode.env.isTelemetryEnabled ? {} : { SWITCHBACK_TELEMETRY: '0' };
     let client: SwitchbackClient | undefined;
@@ -81,18 +112,28 @@ class EngineConnection implements vscode.Disposable {
     // Share the engine with the TUI (and other windows) unless disabled; mock
     // engines are never shared.
     if (cfg.get<boolean>('sharedEngine', true) && !baseArgs.includes('--mock')) {
-      const shared = await connectDaemon({
-        workspaceRoot: this.root,
-        version: VERSION,
-        client: { name: 'vscode', version: VERSION },
-        spawn: { command, args: baseArgs },
-        env: { ...process.env, ...env },
-        log: (m) => this.log.appendLine(m),
-      });
-      if (shared) {
-        ({ client, init } = shared);
-        this.shared = true;
-        this.log.appendLine('attached to the shared workspace engine');
+      if (!binary.version) {
+        // The daemon is matched by version, so without one it can't be shared safely.
+        this.log.appendLine(`${command} --version failed; not sharing the workspace engine`);
+      } else {
+        const shared = await connectDaemon({
+          workspaceRoot: this.root,
+          // The version of the binary that runs, which isn't the extension's
+          // when it's the CLI or the executablePath setting.
+          version: binary.version,
+          client: { name: 'vscode', version: VERSION },
+          spawn: { command, args: baseArgs },
+          env: { ...process.env, ...env },
+          log: (m) => this.log.appendLine(m),
+        });
+        if (shared.client) {
+          ({ client, init } = shared);
+          this.shared = true;
+          this.log.appendLine('attached to the shared workspace engine');
+        } else {
+          this.log.appendLine(shared.reason);
+          void vscode.window.showWarningMessage(shared.reason);
+        }
       }
     }
     if (!client) {
@@ -451,6 +492,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     } catch (err) {
       const message = (err as Error).message;
       log.appendLine(`failed to start engine: ${message}`);
+      if (err instanceof NoEngineError) {
+        chat.post({
+          type: 'disconnected',
+          message:
+            'Switchback needs its engine, the switchback CLI, which isn\'t installed. Run "Switchback: Install Terminal Command", or set "switchback.executablePath".',
+        });
+        void vscode.window
+          .showErrorMessage(
+            'Switchback needs the switchback CLI on this platform.',
+            'Install Terminal Command',
+            'Open Settings',
+          )
+          .then((pick) => {
+            if (pick === 'Install Terminal Command')
+              void vscode.commands.executeCommand('switchback.installCli');
+            if (pick === 'Open Settings')
+              void vscode.commands.executeCommand(
+                'workbench.action.openSettings',
+                'switchback.executablePath',
+              );
+          });
+        return;
+      }
       chat.post({
         type: 'disconnected',
         message: `Could not start switchback: ${message}. Check the "switchback.executablePath" setting.`,
@@ -483,11 +547,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
       engine?.compact().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),
     vscode.commands.registerCommand('switchback.restartEngine', start),
-    vscode.commands.registerCommand('switchback.runSetup', () => {
+    vscode.commands.registerCommand('switchback.installCli', () => {
+      // The same installer as the website, so the CLI has one update path. It runs
+      // where the extension runs (including remote hosts and containers); the
+      // engine restarts afterwards to pick up the CLI if it's newer.
+      const terminal = vscode.window.createTerminal({
+        name: 'Install Switchback',
+        ...installerShell(),
+      });
+      const sub = vscode.window.onDidCloseTerminal((t) => {
+        if (t !== terminal) return;
+        sub.dispose();
+        void start();
+      });
+      context.subscriptions.push(sub);
+      terminal.show();
+    }),
+    vscode.commands.registerCommand('switchback.runSetup', async () => {
       if (!root) return;
       // Setup is interactive and shared with the CLI, so run `switchback init` in a terminal
       // and restart the engine when it closes to pick up the new config.
-      const { command, args } = switchbackCommand(root);
+      let binary = engine?.binary;
+      if (!binary) {
+        try {
+          binary = await resolveEngine(root);
+        } catch (err) {
+          void vscode.window.showErrorMessage((err as Error).message);
+          return;
+        }
+      }
+      const { command, args } = binary;
       const terminal = vscode.window.createTerminal({
         name: 'Switchback Setup',
         cwd: root,

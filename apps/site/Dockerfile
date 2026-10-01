@@ -5,7 +5,7 @@ WORKDIR /repo
 COPY package.json bun.lock ./
 COPY packages ./packages
 COPY apps/site ./apps/site
-COPY scripts/install.sh ./scripts/install.sh
+COPY scripts/install.sh scripts/install.ps1 ./scripts/
 # The lockfile lists every workspace; their manifests are enough to install.
 COPY apps/cli/package.json ./apps/cli/package.json
 COPY apps/vscode/package.json ./apps/vscode/package.json

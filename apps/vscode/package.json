@@ -95,6 +95,11 @@
         "category": "Switchback"
       },
       {
+        "command": "switchback.installCli",
+        "title": "Install Terminal Command",
+        "category": "Switchback"
+      },
+      {
         "command": "switchback.runSetup",
         "title": "Set Up Models",
         "category": "Switchback"
@@ -167,7 +172,7 @@
         "switchback.executablePath": {
           "type": "string",
           "default": "",
-          "description": "Path to the switchback executable. Empty: use the binary bundled with the extension, or `switchback` on PATH. The extension runs `<path> serve --stdio`.",
+          "description": "Path to the switchback executable. Empty: the switchback CLI when it's at least as new as the engine bundled with the extension, else the bundled engine. The extension runs `<path> serve --stdio`.",
           "scope": "machine-overridable"
         },
         "switchback.executableArgs": {

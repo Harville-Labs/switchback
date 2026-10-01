@@ -46,6 +46,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, and error |
 | `usage.get` | `period?`: `today` \| `week` \| `month` (default); or `sessionId?` for one session and its subagents over their whole life (the receipt) | Spend, savings, the `referenceModel` savings are measured against, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
+| `daemon.retire` | `{ token }` | `{ retired, reason? }`. Asks a shared daemon to exit so a newer Switchback can take over. Accepted before `initialize`, so it works across protocol versions. Refused while other clients are attached or a turn is running. |
 
 ## Events
 
