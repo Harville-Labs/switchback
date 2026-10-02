@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- `switchback self-update [version]` updates the CLI in place to the newest release, or to a given one, checked against the release's `SHA256SUMS`. `--check` only reports. A failed download never breaks the install, and it works on Windows, where a running .exe can't be overwritten (#56)
+
 ### Fixed
 - OpenRouter (#54): structured `reasoning_details` (Claude thinking and Gemini thought signatures, encrypted OpenAI reasoning) are kept and sent back to the same model on tool-call turns, which those models need after a tool result. Server-side failures reported inside a stream are retryable, so the router falls back to the next model, and a stream that ends with `finish_reason: "error"` is a failure rather than an empty answer. `effort` goes out as OpenRouter's `reasoning.effort`
 
