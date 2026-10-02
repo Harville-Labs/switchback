@@ -7,7 +7,7 @@
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { compareVersions } from '@switchback/client';
+import { compareVersions, INSTALLERS, installCommand } from '@switchback/client';
 
 export interface EngineBinary {
   command: string;
@@ -16,12 +16,6 @@ export interface EngineBinary {
   version?: string;
   source: 'setting' | 'cli' | 'bundled';
 }
-
-/** The one-line installers that switchback.harville.ai serves (scripts/install.sh and install.ps1). */
-export const INSTALLERS = {
-  unix: 'https://switchback.harville.ai/install.sh',
-  windows: 'https://switchback.harville.ai/install.ps1',
-} as const;
 
 export function chooseEngine(found: {
   setting?: EngineBinary;
@@ -86,7 +80,7 @@ export function installerShell(platform = process.platform): {
         '-ExecutionPolicy',
         'Bypass',
         '-Command',
-        `irm ${INSTALLERS.windows} | iex; Read-Host 'Press Enter to close'`,
+        `${installCommand('windows')}; Read-Host 'Press Enter to close'`,
       ],
     };
   return {

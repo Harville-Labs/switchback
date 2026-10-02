@@ -1,6 +1,6 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
-import { formatMcpServers } from '@switchback/client';
-import { roleAliases } from '@switchback/engine';
+import { formatMcpServers, formatRoles } from '@switchback/client';
+import { configRoles, modelSummaries, roleAliases, tierOfModel } from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
@@ -37,25 +37,8 @@ export async function doctor(flags: CommonFlags): Promise<number> {
 
   out('\nRouting');
   const r = config.routing;
-  const tierOfAlias = (alias: string) => {
-    const m = config.models[alias];
-    const pc = m && config.providers[m.provider];
-    return pc ? tierOf(pc) : undefined;
-  };
-  const label = (alias: string) => {
-    const m = config.models[alias];
-    return m ? `${alias} (${m.model}, ${tierOfAlias(alias)})` : `${alias} (not configured)`;
-  };
-  out(`  start    ${r.start.map(label).join(' | ') || '(none)'}`);
-  for (const [i, step] of r.escalate.entries())
-    out(`  step ${i + 1}   ${step.map(label).join(' | ')}`);
-  if (config.review.mode === 'auto') {
-    const reviewers = config.review.models.length ? config.review.models : r.escalate;
-    out(
-      `  review   ${reviewers.map((step) => step.map(label).join(' | ')).join(' → ') || '(no reviewer: add review.models or an escalation step)'}`,
-    );
-  }
-  if (config.subagents.model) out(`  subagents ${label(config.subagents.model)}`);
+  for (const line of formatRoles(configRoles(config), modelSummaries(config)).split('\n'))
+    out(`  ${line}`);
   if (!r.allowRemote) out('  remote models are turned off (routing.allowRemote: false)');
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,
@@ -63,7 +46,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   const locals = roleAliases(r).flatMap((alias) => {
     const m = config.models[alias];
     const pc = m && config.providers[m.provider];
-    return m && pc && tierOf(pc) === 'local' ? [{ alias, m, pc }] : [];
+    return m && pc && tierOfModel(config, alias) === 'local' ? [{ alias, m, pc }] : [];
   });
   for (const { alias, m, pc } of locals) {
     if (m.contextWindow) {

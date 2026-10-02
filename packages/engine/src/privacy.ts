@@ -12,11 +12,12 @@
  * 4), and is deterministic, so consecutive remote calls keep the same prefix
  * and still hit the prompt cache.
  */
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { sep } from 'node:path';
 import { lintSource } from '@secretlint/core';
 import { creator as recommended } from '@secretlint/secretlint-rule-preset-recommend';
 import type { Message, Part } from '@switchback/protocol';
 import { Glob } from 'bun';
+import { toWorkspacePath } from './tools/tool.ts';
 
 export type PrivatePathMatcher = (workspacePath: string) => boolean;
 
@@ -34,13 +35,6 @@ export function privatePathMatcher(patterns: string[]): PrivatePathMatcher | und
     const p = path.split(sep).join('/').replace(/^\.\//, '');
     return globs.some((g) => g.match(p) || g.match(`${p}/`));
   };
-}
-
-/** A path as the workspace sees it, or undefined when it's outside. */
-function workspacePath(root: string, path: string): string | undefined {
-  const rel = relative(root, resolve(root, path));
-  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined;
-  return rel.split(sep).join('/');
 }
 
 /** Words of a shell command that look like paths: split on whitespace and shell punctuation, quotes removed. */
@@ -67,7 +61,8 @@ export function privateToolUse(
   const i = (input ?? {}) as Record<string, unknown>;
   const check = (path: unknown) => {
     if (typeof path !== 'string') return undefined;
-    const p = workspacePath(root, path);
+    // The workspace root itself ("") isn't a file a pattern can match.
+    const p = toWorkspacePath(root, path) || undefined;
     return p && matches(p) ? p : undefined;
   };
   if (tool === 'read' || tool === 'edit' || tool === 'write') {

@@ -6,8 +6,12 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { type Price, ProviderConfig } from '@switchback/providers';
+import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
+import { type Price, ProviderConfig, tierOf } from '@switchback/providers';
 import { ModelChain, RoutingConfig } from '@switchback/router';
+
+export { roleAliases } from '@switchback/router';
+
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
 import { McpServerConfig, McpServerName } from './mcp/config.ts';
@@ -291,11 +295,6 @@ export function telemetryOptedOut(env: Record<string, string | undefined>): bool
   return off(env.DO_NOT_TRACK) || ['0', 'false', 'off'].includes(env.SWITCHBACK_TELEMETRY ?? '');
 }
 
-/** Every model alias in a routing role, in role order: start, then each escalation step. */
-export function roleAliases(routing: SwitchbackConfig['routing']): string[] {
-  return [...new Set([...routing.start, ...routing.escalate.flat()])];
-}
-
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */
 export function referenceProblem(config: SwitchbackConfig): string | undefined {
   for (const [alias, m] of Object.entries(config.models)) {
@@ -326,33 +325,90 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
 
 /**
  * Keys removed by role-based routing (ADR 0015), with what replaced them. Zod
- * would drop them silently, which would quietly change how someone's turns route.
+ * would drop them silently, which would quietly change how someone's turns
+ * route; config loading reports them, and writing a layer migrates them.
  */
-export function removedKeyProblem(layer: unknown): string | undefined {
-  const review = removedReviewKey(layer);
-  if (review) return review;
-  const routing = (layer as { routing?: Record<string, unknown> } | undefined)?.routing;
-  if (!routing || typeof routing !== 'object') return undefined;
-  if ('local' in routing)
-    return 'routing.local was renamed routing.start: the models turns begin on (docs/routing.md)';
-  if ('remote' in routing)
-    return 'routing.remote was replaced by routing.escalate, an ordered ladder of any models; for example "escalate": [["remote"]] (docs/routing.md)';
-  if ('mode' in routing)
-    return 'routing.mode was removed: list the models you want in routing.start and routing.escalate, or set routing.allowRemote: false to keep remote models unused (docs/routing.md)';
-  const escalation = routing.escalation as Record<string, unknown> | undefined;
-  if (escalation && typeof escalation === 'object' && 'via' in escalation)
-    return 'routing.escalation.via was replaced by routing.escalate, which lists every step (docs/routing.md)';
-  if (routing.fallback && typeof routing.fallback === 'object')
-    return 'routing.fallback is now "nearest" (use the nearest other step that is up) or "none" (docs/routing.md)';
-  return undefined;
+export const REMOVED_KEYS: {
+  path: string[];
+  message: string;
+  when?: (value: unknown) => boolean;
+}[] = [
+  {
+    path: ['routing', 'local'],
+    message: 'routing.local was renamed routing.start: the models turns begin on (docs/routing.md)',
+  },
+  {
+    path: ['routing', 'remote'],
+    message:
+      'routing.remote was replaced by routing.escalate, an ordered ladder of any models; for example "escalate": [["remote"]] (docs/routing.md)',
+  },
+  {
+    path: ['routing', 'mode'],
+    message:
+      'routing.mode was removed: list the models you want in routing.start and routing.escalate, or set routing.allowRemote: false to keep remote models unused (docs/routing.md)',
+  },
+  {
+    path: ['routing', 'escalation', 'via'],
+    message:
+      'routing.escalation.via was replaced by routing.escalate, which lists every step (docs/routing.md)',
+  },
+  {
+    path: ['routing', 'fallback'],
+    // Only the old object form; "nearest" and "none" are the new values.
+    when: (v) => typeof v === 'object' && v !== null,
+    message:
+      'routing.fallback is now "nearest" (use the nearest other step that is up) or "none" (docs/routing.md)',
+  },
+  {
+    path: ['review', 'model'],
+    message:
+      'review.model was replaced by review.models, the reviewers in order; for example "models": ["large"] (docs/review.md)',
+  },
+];
+
+/** The removed keys a layer still sets. */
+export function removedKeysIn(layer: unknown): (typeof REMOVED_KEYS)[number][] {
+  return REMOVED_KEYS.filter(({ path, when }) => {
+    let node: unknown = layer;
+    for (const key of path) {
+      if (!node || typeof node !== 'object' || !(key in node)) return false;
+      node = (node as Record<string, unknown>)[key];
+    }
+    return when ? when(node) : true;
+  });
 }
 
-/** `review.model` became a list of reviewers (ADR 0015). */
-function removedReviewKey(layer: unknown): string | undefined {
-  const review = (layer as { review?: Record<string, unknown> } | undefined)?.review;
-  return review && typeof review === 'object' && 'model' in review
-    ? 'review.model was replaced by review.models, the reviewers in order; for example "models": ["large"] (docs/review.md)'
-    : undefined;
+/** The first removed key a layer sets, as a message naming its replacement. */
+export function removedKeyProblem(layer: unknown): string | undefined {
+  return removedKeysIn(layer)[0]?.message;
+}
+
+/** Whether a model alias runs locally or remotely, from its provider's config. */
+export function tierOfModel(config: SwitchbackConfig, alias: string): Tier | undefined {
+  const m = config.models[alias];
+  const pc = m && config.providers[m.provider];
+  return pc ? tierOf(pc) : undefined;
+}
+
+/** The roles the config sets, in the shape a session reports them (nothing overridden). */
+export function configRoles(config: SwitchbackConfig): SessionRoles {
+  const { routing, review, subagents } = config;
+  return {
+    start: routing.start,
+    escalate: routing.escalate,
+    review: { mode: review.mode, models: review.models },
+    ...(subagents.model ? { subagents: subagents.model } : {}),
+    overridden: [],
+  };
+}
+
+/** Every configured model, as clients list them. */
+export function modelSummaries(config: SwitchbackConfig): InitializeResult['models'] {
+  return Object.entries(config.models).map(([alias, m]) => ({
+    alias,
+    ref: { provider: m.provider, model: m.model },
+    tier: tierOfModel(config, alias) ?? 'remote',
+  }));
 }
 
 export function deepMerge(

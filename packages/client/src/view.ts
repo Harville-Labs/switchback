@@ -707,22 +707,37 @@ function modelLabel(alias: string, models: ModelSummary[]): string {
   return m ? `${alias} (${m.ref.model}, ${m.tier})` : `${alias} (not configured)`;
 }
 
+/** Ladder steps on one line: `large → opus | sol`; with `models`, each with its model and tier. */
+export function formatSteps(steps: string[][], models?: ModelSummary[]): string {
+  const name = (a: string) => (models ? modelLabel(a, models) : a);
+  return steps.map((step) => step.map(name).join(' | ')).join(' → ');
+}
+
+/** Who reviews, in words: `off`, the reviewers in order, or the escalation ladder. */
+export function formatReviewers(roles: SessionRoles, models?: ModelSummary[]): string {
+  if (roles.review.mode === 'off') return 'off';
+  if (roles.review.models.length) return formatSteps(roles.review.models, models);
+  return `the escalation ladder${roles.escalate.length ? '' : ' (empty: nobody reviews)'}`;
+}
+
+/** The roles a model fills: `start`, `step 2`, `reviews`, `subagents`. */
+export function rolesOfModel(alias: string, roles: SessionRoles): string[] {
+  return [
+    roles.start.includes(alias) ? 'start' : '',
+    ...roles.escalate.flatMap((step, i) => (step.includes(alias) ? [`step ${i + 1}`] : [])),
+    roles.review.models.some((s) => s.includes(alias)) ? 'reviews' : '',
+    roles.subagents === alias ? 'subagents' : '',
+  ].filter(Boolean);
+}
+
 /** A session's roles for people, marking what the session changed (ADR 0015). */
 export function formatRoles(roles: SessionRoles, models: ModelSummary[]): string {
-  const steps = (s: string[][]) =>
-    s.map((step) => step.map((a) => modelLabel(a, models)).join(' | '));
   const mark = (k: SessionRoles['overridden'][number]) =>
     roles.overridden.includes(k) ? '  (this session)' : '';
-  const reviewers =
-    roles.review.mode === 'off'
-      ? 'off'
-      : roles.review.models.length
-        ? steps(roles.review.models).join(' → ')
-        : `the escalation ladder${roles.escalate.length ? '' : ' (empty: nobody reviews)'}`;
   return [
-    `start      ${roles.start.map((a) => modelLabel(a, models)).join(' | ') || '(none)'}${mark('start')}`,
-    `escalate   ${steps(roles.escalate).join(' → ') || '(nothing)'}${mark('escalate')}`,
-    `review     ${reviewers}${mark('review')}`,
+    `start      ${formatSteps([roles.start], models) || '(none)'}${mark('start')}`,
+    `escalate   ${formatSteps(roles.escalate, models) || '(nothing)'}${mark('escalate')}`,
+    `review     ${formatReviewers(roles, models)}${mark('review')}`,
     `subagents  ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
   ].join('\n');
 }
@@ -736,15 +751,10 @@ export function formatLadder(ladder: ViewState['ladder']): string {
 
 /** Everything configured, with its tier and the roles it fills. */
 export function formatModels(models: ModelSummary[], roles?: SessionRoles): string {
-  const where = (alias: string) => {
-    if (!roles) return '';
-    const parts = [
-      roles.start.includes(alias) ? 'start' : '',
-      ...roles.escalate.flatMap((step, i) => (step.includes(alias) ? [`step ${i + 1}`] : [])),
-      roles.review.models.some((s) => s.includes(alias)) ? 'reviews' : '',
-      roles.subagents === alias ? 'subagents' : '',
-    ].filter(Boolean);
-    return parts.length ? `  · ${parts.join(', ')}` : '';
-  };
-  return models.map((m) => `${m.alias}  ${m.ref.model} (${m.tier})${where(m.alias)}`).join('\n');
+  return models
+    .map((m) => {
+      const filled = roles ? rolesOfModel(m.alias, roles) : [];
+      return `${m.alias}  ${m.ref.model} (${m.tier})${filled.length ? `  · ${filled.join(', ')}` : ''}`;
+    })
+    .join('\n');
 }

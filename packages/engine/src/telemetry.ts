@@ -15,6 +15,7 @@ import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { EngineEvent, StopReason } from '@switchback/protocol';
 import { CATALOG, tierOf } from '@switchback/providers';
+import { roleAliases } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import type { LedgerEntry } from './ledger.ts';
 import { type DailyReport, TELEMETRY_SCHEMA } from './telemetry-schema.ts';
@@ -183,7 +184,7 @@ export function recordCrash(dataDir: string, err: unknown, now: Date): void {
 
 function features(config: SwitchbackConfig, organization: boolean): DailyReport['features'] {
   const tierCount = (tier: 'local' | 'remote') =>
-    [...new Set([...config.routing.start, ...config.routing.escalate.flat()])].filter((a) => {
+    roleAliases(config.routing).filter((a) => {
       const m = config.models[a];
       const pc = m && config.providers[m.provider];
       return pc && tierOf(pc) === tier;

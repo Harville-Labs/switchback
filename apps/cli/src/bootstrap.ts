@@ -10,10 +10,12 @@ import {
   readTelemetryState,
   recordEngineEvent,
   refreshPolicy,
+  roleAliases,
   type SwitchbackConfig,
   sendTelemetry,
   serve,
   switchbackPaths,
+  tierOfModel,
 } from '@switchback/engine';
 import { createTransportPair, type InitializeResult } from '@switchback/protocol';
 import { tierOf } from '@switchback/providers';
@@ -38,10 +40,7 @@ export function mockify(config: SwitchbackConfig): SwitchbackConfig {
   const models = { ...config.models };
   const routing = { ...config.routing };
   const inRoles = (tier: 'local' | 'remote') =>
-    [...routing.start, ...routing.escalate.flat()].some((a) => {
-      const pc = models[a] && providers[models[a].provider];
-      return pc && tierOf(pc) === tier;
-    });
+    roleAliases(routing).some((a) => tierOfModel({ ...config, providers, models }, a) === tier);
   const add = (tier: 'local' | 'remote') => {
     providers[`mock-${tier}`] = { type: 'mock', tier };
     models[tier] = {

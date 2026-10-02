@@ -18,6 +18,7 @@ import {
   parseJsonc,
   referenceProblem,
   removedKeyProblem,
+  removedKeysIn,
   SwitchbackConfig,
 } from './config.ts';
 
@@ -134,16 +135,20 @@ export function aliasFor(model: string): string {
   return slug || 'model';
 }
 
-const REMOTE_WHERE: Record<RemoteAnswer['kind'], string> = {
-  anthropic: 'Anthropic API',
-  openai: 'OpenAI API',
-  deepseek: 'DeepSeek API',
-  gemini: 'Gemini API',
-  bedrock: 'Amazon Bedrock',
-  vertex: 'Vertex AI',
-  'anthropic-aws': 'Claude Platform on AWS',
-  foundry: 'Microsoft Foundry',
-  'openai-compatible': 'OpenAI-compatible API',
+/** How setup names each hosted provider: a short name, and what it serves when that helps. */
+export const REMOTE_PROVIDERS: Record<RemoteKind, { name: string; detail?: string }> = {
+  anthropic: { name: 'Anthropic API', detail: 'Claude' },
+  openai: { name: 'OpenAI API', detail: 'GPT' },
+  deepseek: { name: 'DeepSeek API' },
+  gemini: { name: 'Google Gemini API' },
+  bedrock: { name: 'Amazon Bedrock', detail: 'Claude' },
+  vertex: { name: 'Google Vertex AI', detail: 'Claude' },
+  'anthropic-aws': { name: 'Claude Platform on AWS', detail: 'Anthropic-operated, AWS billing' },
+  foundry: { name: 'Microsoft Foundry', detail: 'Claude' },
+  'openai-compatible': {
+    name: 'OpenAI-compatible API',
+    detail: 'OpenRouter, Together, Groq, ...',
+  },
 };
 
 /** The models the answers describe, with their aliases: locals first, then hosted, as chosen. */
@@ -171,7 +176,8 @@ export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): Planned
       alias,
       tier: 'remote',
       model: r.model,
-      where: r.kind === 'openai-compatible' ? new URL(r.baseUrl).host : REMOTE_WHERE[r.kind],
+      where:
+        r.kind === 'openai-compatible' ? new URL(r.baseUrl).host : REMOTE_PROVIDERS[r.kind].name,
       ...(contextWindow ? { contextWindow } : {}),
       ...(entry ? { inputPrice: entry.price.input } : {}),
     });
@@ -377,19 +383,11 @@ export function writeConfigLayer(
     backup = `${file}.bak`;
     copyFileSync(file, backup);
   }
-  // Writing routing replaces the keys role-based routing removed (ADR 0015),
-  // so re-running setup migrates an old file instead of failing on it.
-  if (layer.routing) {
-    const old = parseJsonc(text) as { routing?: Record<string, unknown> };
-    const paths: JSONPath[] = [];
-    for (const key of ['local', 'remote', 'mode'])
-      if (old.routing && key in old.routing) paths.push(['routing', key]);
-    if (old.routing?.fallback && typeof old.routing.fallback === 'object')
-      paths.push(['routing', 'fallback']);
-    const escalation = old.routing?.escalation as Record<string, unknown> | undefined;
-    if (escalation && 'via' in escalation) paths.push(['routing', 'escalation', 'via']);
-    for (const path of paths) text = applyEdits(text, modify(text, path, undefined, {}));
-  }
+  // Keys role-based routing removed (ADR 0015) under a section this layer
+  // writes are deleted, so re-running setup migrates an old file instead of
+  // failing on it.
+  for (const { path } of removedKeysIn(parseJsonc(text)))
+    if (path[0] && path[0] in layer) text = applyEdits(text, modify(text, path, undefined, {}));
   const existing = parseJsonc(text) as Record<string, unknown>;
   const merged = deepMerge(existing, layer);
   const check = SwitchbackConfig.safeParse(deepMerge(defaultConfig(), merged));

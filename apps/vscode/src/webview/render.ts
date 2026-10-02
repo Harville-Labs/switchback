@@ -4,9 +4,9 @@
  * sanitizing Markdown renderer.
  */
 import { toolLabel, type ViewItem, type ViewState } from '@switchback/client/view';
-import { renderMarkdown } from './markdown.ts';
+import { esc, renderMarkdown } from './markdown.ts';
 
-export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+export { esc };
 
 /**
  * One view item as HTML. `ctx` is the view that owns the item (the session or
