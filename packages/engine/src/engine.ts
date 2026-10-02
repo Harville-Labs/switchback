@@ -5,7 +5,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join } from 'node:path';
 import {
   type AgentSummary,
   type Attachment,
@@ -40,7 +40,16 @@ import {
   ProviderError,
   tierOf,
 } from '@switchback/providers';
-import { type Difficulty, type ModelInfo, Router, SignalTracker } from '@switchback/router';
+import {
+  budgetReached,
+  type Difficulty,
+  ladderSteps,
+  type ModelInfo,
+  Router,
+  roleAliases,
+  SignalTracker,
+  stepOf,
+} from '@switchback/router';
 import { z } from 'zod';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import { classifyPrompt } from './classifier.ts';
@@ -52,7 +61,7 @@ import {
   SUMMARIZER_PROMPT,
   summaryRequest,
 } from './compaction.ts';
-import { roleAliases, type SwitchbackConfig } from './config.ts';
+import { configRoles, type SwitchbackConfig, tierOfModel } from './config.ts';
 import { estimateEscalationCost } from './estimate.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { allowsMcpTool, McpHub } from './mcp/hub.ts';
@@ -101,6 +110,7 @@ import {
   type ToolPreview,
   toolSpec,
   toolsFor,
+  toWorkspacePath,
   truncate,
 } from './tools/index.ts';
 import { currentShell } from './tools/shell.ts';
@@ -200,11 +210,7 @@ const HEALTH_TTL_FAIL_MS = 5_000;
 
 /** The model whose prices define "saved": the first remote model in role order. */
 function referenceModel(config: SwitchbackConfig): string | undefined {
-  const alias = roleAliases(config.routing).find((a) => {
-    const m = config.models[a];
-    const pc = m && config.providers[m.provider];
-    return pc && tierOf(pc) === 'remote';
-  });
+  const alias = roleAliases(config.routing).find((a) => tierOfModel(config, a) === 'remote');
   return alias ? config.models[alias]?.model : undefined;
 }
 
@@ -495,6 +501,21 @@ export class Engine {
     return { ...result, ...(savedTo ? { savedTo } : {}) };
   }
 
+  /**
+   * Why a remote model may not be called for this session now, or undefined
+   * when it may: an organization's switch, `routing.allowRemote`, private
+   * content, or a spent budget. Remote calls made outside the router (review,
+   * summaries, the classifier, external runtimes) all check this.
+   */
+  private remoteBlocked(s?: LiveSession): string | undefined {
+    const { org, config } = this.options;
+    if (org?.remoteDisabled) return `remote models are disabled by ${org.name} policy`;
+    if (!config.routing.allowRemote) return 'remote models are turned off (routing.allowRemote)';
+    if (s?.private)
+      return `this session holds private content (${s.private}), which never leaves this machine`;
+    return budgetReached(config.routing.budget, this.ledger.spend());
+  }
+
   /** The top-level session of a subagent (or the session itself). */
   private top(s: LiveSession): LiveSession {
     let top = s;
@@ -507,15 +528,15 @@ export class Engine {
   }
 
   private rolesOf(s: LiveSession): SessionRoles {
-    const { routing, review, subagents } = this.options.config;
+    const base = configRoles(this.options.config);
     const own = this.top(s).roles ?? {};
-    const sub = own.subagents === null ? undefined : (own.subagents ?? subagents.model);
+    const sub = own.subagents === null ? undefined : (own.subagents ?? base.subagents);
     return {
-      start: own.start ?? routing.start,
-      escalate: own.escalate ?? routing.escalate,
+      start: own.start ?? base.start,
+      escalate: own.escalate ?? base.escalate,
       review: {
-        mode: own.review?.mode ?? review.mode,
-        models: own.review?.models ?? review.models,
+        mode: own.review?.mode ?? base.review.mode,
+        models: own.review?.models ?? base.review.models,
       },
       ...(sub ? { subagents: sub } : {}),
       overridden: (['start', 'escalate', 'review', 'subagents'] as const).filter(
@@ -928,14 +949,10 @@ export class Engine {
       // A remote refusal is retried on another model of the same step or above,
       // if there is one. The refused output is discarded, not added to the transcript.
       if (model.tier === 'remote' && done.stopReason === 'refusal') {
-        const { routing, models } = this.options.config;
-        const steps = [routing.start, ...routing.escalate];
-        const at = Math.max(
-          0,
-          steps.findIndex((c) => c.includes(model.alias)),
-        );
-        const others = steps
-          .slice(at)
+        const { models } = this.options.config;
+        const roles = this.rolesOf(s);
+        const others = ladderSteps(roles)
+          .slice(stepOf(roles, model.alias))
           .flat()
           .filter((a) => a !== model.alias && !refused.includes(a) && models[a]);
         if (others.length) {
@@ -973,7 +990,6 @@ export class Engine {
         toolCalls,
         turnId,
         signal,
-        model.tier,
         model.alias,
       );
       this.append(s, { role: 'user', parts: results });
@@ -1018,7 +1034,7 @@ export class Engine {
       return undefined;
     }
     // A remote classifier reads the prompt, so the remote rules apply to it.
-    if (model.tier === 'remote' && (s.private || !routing.allowRemote)) return undefined;
+    if (model.tier === 'remote' && this.remoteBlocked(s)) return undefined;
     if (!model.available) return undefined;
     const provider = this.providers.get(model.ref.provider);
     const prompt = s.messages.findLast(
@@ -1068,12 +1084,7 @@ export class Engine {
 
   /** Remember a file's content before its first edit this turn, on the top-level session. */
   private noteEdit(s: LiveSession, path: string, writer: string): void {
-    let top = s;
-    while (top.header.parentId) {
-      const parent = this.sessions.get(top.header.parentId);
-      if (!parent) break;
-      top = parent;
-    }
+    const top = this.top(s);
     // An isolated subagent's edits are on its own branch, reported with their own diff.
     if (!top.turnEdits || this.rootOf(s) !== this.rootOf(top)) return;
     let file: string;
@@ -1083,7 +1094,7 @@ export class Engine {
       return; // the tool will report the bad path
     }
     const entry = top.turnEdits.get(file) ?? {
-      path: relative(this.rootOf(top), file).split(sep).join('/'),
+      path: toWorkspacePath(this.rootOf(top), file) ?? file,
       before: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
       writers: new Set<string>(),
     };
@@ -1184,7 +1195,6 @@ export class Engine {
   ): { model: ModelInfo; step: number } | { skip: string } {
     if (!ladder.length)
       return { skip: 'no reviewer is configured (review.models, or a routing.escalate step)' };
-    const { routing } = this.options.config;
     const writerRefs = new Set(
       [...writers].flatMap((a) => {
         const m = this.modelInfo(a);
@@ -1207,18 +1217,7 @@ export class Engine {
         }
         if (model.tier === 'remote') {
           // Remote review is remote spend: every rule that keeps other calls local applies.
-          const spend = this.ledger.spend();
-          const b = routing.budget;
-          const blocked = this.options.org?.remoteDisabled
-            ? `remote models are disabled by ${this.options.org.name} policy`
-            : !routing.allowRemote
-              ? 'remote models are turned off (routing.allowRemote)'
-              : s.private
-                ? `this session holds private content (${s.private}), which never leaves this machine`
-                : (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd) ||
-                    (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd)
-                  ? 'the remote budget is spent'
-                  : undefined;
+          const blocked = this.remoteBlocked(s);
           if (blocked) {
             why ??= blocked;
             continue;
@@ -1531,14 +1530,7 @@ export class Engine {
     const inRoles = roleAliases(routing).flatMap((a) => this.modelInfo(a) ?? []);
     const local = inRoles.find((m) => m.tier === 'local' && m.available);
     if (local) return local;
-    if (!routing.allowRemote || s?.private) return undefined;
-    const spend = this.ledger.spend();
-    const b = routing.budget;
-    if (
-      (b.dailyUsd && spend.todayUsd >= b.dailyUsd) ||
-      (b.monthlyUsd && spend.monthUsd >= b.monthlyUsd)
-    )
-      return undefined;
+    if (this.remoteBlocked(s)) return undefined;
     return inRoles.find(
       (m) => m.tier === 'remote' && m.available && m.contextWindow > Math.min(tokens, 16_000),
     );
@@ -1588,7 +1580,6 @@ export class Engine {
     calls: { id: string; name: string; input: unknown }[],
     turnId: string,
     signal: AbortSignal,
-    tier: Tier,
     /** The alias of the model that made these calls, for review. */
     writer: string,
   ): Promise<ToolResultPart[]> {
@@ -1840,28 +1831,13 @@ export class Engine {
     let result: TurnResult;
     try {
       const runtime = this.runtime(name);
-      const routing = this.options.config.routing;
-      const spend = this.ledger.spend();
-      const b = routing.budget;
-      const over =
-        (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd) ||
-        (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd);
+      const blocked = this.remoteBlocked(s);
       const budget = this.invocationBudget(s).invocationBudget;
       if (!runtime)
         result = fail(
           `agent "${agent.name}" names runtime "${name}", which isn't configured under runtimes`,
         );
-      else if (this.options.org?.remoteDisabled)
-        result = fail(`external runtimes are disabled by ${this.options.org.name} policy`);
-      else if (!routing.allowRemote)
-        result = fail(
-          'remote models are turned off (routing.allowRemote); external runtimes are remote',
-        );
-      else if (s.private)
-        result = fail(
-          `this task carries private content (${s.private}), which never leaves this machine; external runtimes are remote`,
-        );
-      else if (over) result = fail('the remote budget is spent');
+      else if (blocked) result = fail(`${blocked}; external runtimes are remote`);
       else if (budget && budget.spentUsd >= budget.limitUsd)
         result = fail(
           `subagent "${budget.agent}" has spent its $${budget.limitUsd.toFixed(2)} budget`,

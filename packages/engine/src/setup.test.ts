@@ -406,3 +406,28 @@ describe('probeContextWindow', () => {
     ).toBeUndefined();
   });
 });
+
+test('writing a section migrates every removed key in it, review.model included', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'switchback-migrate-'));
+  try {
+    const file = join(dir, 'config.json');
+    writeFileSync(
+      file,
+      '{ "review": { "mode": "auto", "model": "big" }, "routing": { "mode": "auto" } }',
+    );
+    writeConfigLayer(file, {
+      providers: { lp: { type: 'openai-compatible', baseUrl: 'http://localhost:1234/v1' } },
+      models: { m: { provider: 'lp', model: 'm' } },
+      routing: { start: ['m'], escalate: [] },
+      review: { mode: 'off', models: [] },
+    });
+    const written = parseJsonc(readFileSync(file, 'utf8')) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(written.review).toEqual({ mode: 'off', models: [] });
+    expect(written.routing).not.toHaveProperty('mode');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

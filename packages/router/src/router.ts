@@ -16,6 +16,7 @@
  */
 import type { ModelRef, RoutePreference, Tier } from '@switchback/protocol';
 import type { RoutingConfig } from './config.ts';
+import { budgetReached, ladderSteps, stepOf } from './roles.ts';
 import type { SignalSnapshot } from './signals.ts';
 
 export interface ModelInfo {
@@ -116,20 +117,12 @@ export class Router {
     const ctx: Context = {
       input,
       tokens: input.estimatedInputTokens,
-      steps: [this.config.start, ...this.config.escalate].map((chain) =>
-        chain.filter((a) => !refused.has(a)),
-      ),
+      steps: ladderSteps(this.config).map((chain) => chain.filter((a) => !refused.has(a))),
       remoteOk: this.config.allowRemote && !input.privacy,
     };
     const picked = input.refusalRetry ? this.retryAfterRefusal(ctx) : this.pick(ctx);
     if (picked.kind !== 'route') return picked;
     return this.guard(ctx, picked);
-  }
-
-  /** The step whose chain lists `alias` (as configured), or 0. */
-  stepOf(alias: string): number {
-    const i = [this.config.start, ...this.config.escalate].findIndex((c) => c.includes(alias));
-    return Math.max(0, i);
   }
 
   /**
@@ -258,7 +251,7 @@ export class Router {
   /** A refused call retries on another model of the same step, else the next step up. */
   private retryAfterRefusal(ctx: Context): RouteDecision {
     const declined = ctx.input.refused?.at(-1) ?? 'the model';
-    const from = this.stepOf(declined);
+    const from = stepOf(this.config, declined);
     const same = this.chooseAllowed(ctx, from);
     const rung = same.model?.available ? { choice: same, step: from } : this.climb(ctx, from);
     if (!rung?.choice.model)
@@ -317,7 +310,7 @@ export class Router {
           'agent-pin',
           `agent "${input.agent.name}" pins ${pinned.alias}`,
           false,
-          this.stepOf(pinned.alias),
+          stepOf(this.config, pinned.alias),
         );
     }
     // A tier pin is a preference: if no model of that tier is in a role, route
@@ -396,11 +389,7 @@ export class Router {
         );
       // Nothing above fits: the biggest window above is still the best chance.
       const biggest = this.largestAbove(ctx, at);
-      if (
-        biggest &&
-        biggest.choice.model &&
-        biggest.choice.model.contextWindow > current.model.contextWindow
-      )
+      if (biggest?.choice.model && biggest.choice.model.contextWindow > current.model.contextWindow)
         return this.route(
           biggest.choice,
           'context-overflow',
@@ -518,7 +507,7 @@ export class Router {
 
     // Budget: never overspend unless the user explicitly asked for remote.
     if (d.model.tier === 'remote' && input.preference !== 'remote') {
-      const over = this.overBudget(input.spend);
+      const over = budgetReached(this.config.budget, input.spend);
       if (over) {
         const r = toLocal('budget', over, this.config.budget.onExceeded === 'block');
         if (r.kind !== 'route') return r;
@@ -559,7 +548,7 @@ export class Router {
    * higher steps first, then lower. Remote models over budget don't count.
    */
   private nearestUp(ctx: Context, from: number): Rung | undefined {
-    const over = this.overBudget(ctx.input.spend) !== undefined;
+    const over = budgetReached(this.config.budget, ctx.input.spend) !== undefined;
     const scoped = { ...ctx, remoteOk: ctx.remoteOk && !over };
     const order = [
       ...Array.from({ length: Math.max(0, ctx.steps.length - from - 1) }, (_, i) => from + 1 + i),
@@ -569,15 +558,6 @@ export class Router {
       const choice = this.chooseAllowed(scoped, step);
       if (choice.model?.available) return { choice: { ...choice, detour: undefined }, step };
     }
-    return undefined;
-  }
-
-  private overBudget(spend: RouteInput['spend']): string | undefined {
-    const b = this.config.budget;
-    if (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd)
-      return `daily remote budget of $${b.dailyUsd.toFixed(2)} reached`;
-    if (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd)
-      return `monthly remote budget of $${b.monthlyUsd.toFixed(2)} reached`;
     return undefined;
   }
 }

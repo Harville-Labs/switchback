@@ -13,7 +13,7 @@ On other platforms, install the `switchback` CLI and the extension uses it from 
 ## Features
 
 - **Chat** with streaming answers, tool activity, and subagents you can expand to see their own work
-- **Routing you can see**: choose auto, local, or remote in the chat or the status bar. Every escalation shows the rule that fired and why
+- **Routing you can see**: Auto, Local, or Remote buttons above the input, and the models that start, escalate, and review shown right there; click one to change it for the session or save it as your default. Every escalation shows the rule that fired and why
 - **Edit review**: proposed edits open in the diff editor with Accept and Reject buttons
 - **Editor context**: send the selection, the active file, or its problems with one click, or use **Ask About Selection** from the editor context menu
 - **Cost and savings** in the status bar: session cost, daily budget, and what you saved compared with running everything remotely

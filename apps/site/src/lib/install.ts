@@ -1,10 +1,12 @@
-/** The one-line installers that switchback.harville.ai serves (scripts/install.sh and install.ps1). */
-export const INSTALL_COMMANDS = {
-  unix: 'curl -fsSL https://switchback.harville.ai/install.sh | sh',
-  windows: 'irm https://switchback.harville.ai/install.ps1 | iex',
-} as const;
+import { type InstallPlatform, installCommand } from '@switchback/client';
 
-export type InstallPlatform = keyof typeof INSTALL_COMMANDS;
+export type { InstallPlatform };
+
+/** The command for each platform, as the console shows it. */
+export const INSTALL_COMMANDS: Record<InstallPlatform, string> = {
+  unix: installCommand('unix'),
+  windows: installCommand('windows'),
+};
 
 /**
  * Which installer to show first, from the request: the `Sec-CH-UA-Platform` client

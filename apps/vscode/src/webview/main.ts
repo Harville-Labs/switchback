@@ -6,6 +6,8 @@ import {
   addInfo,
   addUserPrompt,
   estimateLabel,
+  formatReviewers,
+  formatSteps,
   formatUsage,
   fromTranscript,
   initialView,
@@ -15,9 +17,9 @@ import {
   type ViewItem,
   type ViewState,
 } from '@switchback/client/view';
-import type { RoutePreference } from '@switchback/protocol';
+import type { RoutePreference, SessionRoles } from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
-import type { HostToWebview, WebviewToHost } from '../messages.ts';
+import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
 import { esc, renderDiff, renderItem as renderViewItem } from './render.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
@@ -27,6 +29,9 @@ let view: ViewState = initialView('');
 let route: RoutePreference = 'auto';
 let connected = false;
 let agents: string[] = [];
+let agent = '';
+/** Kept outside `view`, which is rebuilt when the session changes. */
+let roles: SessionRoles | undefined;
 
 const app = document.getElementById('app') as HTMLDivElement;
 app.innerHTML = `
@@ -77,15 +82,23 @@ app.innerHTML = `
   .bar { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: .85em; opacity: .85; gap: 6px; }
   button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 3px 10px; border-radius: 2px; cursor: pointer; }
   button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-  select { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border); }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 6px; font-size: .85em; }
+  .segmented { display: inline-flex; border: 1px solid var(--vscode-panel-border); border-radius: 3px; overflow: hidden; }
+  .segmented button { background: transparent; color: var(--vscode-foreground); border-radius: 0; padding: 2px 8px; opacity: .75; }
+  .segmented button.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
+  .pill { background: transparent; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border); border-radius: 10px; padding: 1px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill:hover, .segmented button:hover { border-color: var(--vscode-focusBorder); opacity: 1; }
+  .pill .k { opacity: .65; }
+  .pill .here { font-weight: 600; color: var(--vscode-charts-yellow); }
 </style>
 <div id="log"></div>
 <div id="prompts"></div>
 <footer>
+  <div id="controls" class="controls"></div>
   <div id="chips" class="chips"></div>
   <textarea id="input" placeholder="Ask anything (Enter to send, Shift+Enter for a newline)"></textarea>
   <div class="bar">
-    <span><select id="route"><option>auto</option><option>local</option><option>remote</option></select> <span id="status"></span></span>
+    <span id="status"></span>
     <span><button id="cancel" class="secondary" hidden>Cancel</button><button id="send">Send</button></span>
   </div>
 </footer>`;
@@ -94,7 +107,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const log = $<HTMLDivElement>('log');
 const prompts = $<HTMLDivElement>('prompts');
 const input = $<HTMLTextAreaElement>('input');
-const routeSelect = $<HTMLSelectElement>('route');
+const controls = $<HTMLDivElement>('controls');
 const statusEl = $<HTMLSpanElement>('status');
 const cancelBtn = $<HTMLButtonElement>('cancel');
 
@@ -112,14 +125,72 @@ function render() {
   prompts.innerHTML = perm
     ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${perm.preview ? renderDiff(perm.preview) : '<br>'}<button data-perm="allow_once">Allow once</button><button data-perm="allow_always" class="secondary">Always this session</button><button data-perm="deny" class="secondary">Deny</button></div>`
     : escl
-      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<br><button data-esc="1">Use remote</button><button data-esc="0" class="secondary">Stay local</button></div>`
+      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<br><button data-esc="1">Escalate</button><button data-esc="0" class="secondary">Stay on the current model</button></div>`
       : '';
   cancelBtn.hidden = !view.running;
-  routeSelect.value = route;
+  renderControls();
   statusEl.textContent = connected
     ? `${view.private ? '🔒 local only · ' : ''}${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
     : 'disconnected';
 }
+
+const ROUTES: { value: RoutePreference; label: string; title: string }[] = [
+  { value: 'auto', label: 'Auto', title: 'Start on the start model; escalate when it struggles' },
+  { value: 'local', label: 'Local', title: 'Only local models for the next prompts' },
+  { value: 'remote', label: 'Remote', title: 'Only hosted models for the next prompts' },
+];
+
+/** Routing, agent, and the models in each role, each one click from its picker. */
+function renderControls() {
+  const pill = (attrs: string, key: string, value: string, title: string) =>
+    `<button class="pill" ${attrs} title="${esc(title)}"><span class="k">${key}</span> ${value}</button>`;
+  const routes = `<span class="segmented">${ROUTES.map(
+    (r) =>
+      `<button class="${r.value === route ? 'on' : ''}" data-route="${r.value}" title="${esc(r.title)}">${r.label}</button>`,
+  ).join('')}</span>`;
+  const parts = [routes];
+  if (agent)
+    parts.push(pill('data-agent', 'Agent', esc(agent), 'Start a new session with another agent'));
+  if (roles) {
+    // The step the last call ran on is highlighted while the session is up the ladder.
+    const here = view.ladder?.step ?? 0;
+    const ladder = roles.escalate
+      .map((step, i) => {
+        const text = esc(formatSteps([step]));
+        return i + 1 === here ? `<span class="here">${text}</span>` : text;
+      })
+      .join(' → ');
+    parts.push(
+      pill(
+        'data-role="start"',
+        'Start',
+        esc(formatSteps([roles.start]) || 'none'),
+        'Where turns start',
+      ),
+      pill(
+        'data-role="escalate"',
+        'Escalate',
+        ladder || 'none',
+        'The escalation ladder, one step per escalation',
+      ),
+      pill('data-role="review"', 'Review', esc(formatReviewers(roles)), 'Who reviews edits'),
+    );
+  }
+  controls.innerHTML = parts.join('');
+}
+
+controls.addEventListener('click', (e) => {
+  const btn = (e.target as HTMLElement).closest('button');
+  if (!btn) return;
+  const r = btn.dataset.route as RoutePreference | undefined;
+  if (r) {
+    route = r;
+    vscode.postMessage({ type: 'setRoute', route: r });
+    render();
+  } else if (btn.hasAttribute('data-agent')) vscode.postMessage({ type: 'chooseAgent' });
+  else if (btn.dataset.role)
+    vscode.postMessage({ type: 'chooseRole', role: btn.dataset.role as RoleName });
+});
 
 // `toggle` doesn't bubble, so listen in the capture phase.
 log.addEventListener(
@@ -234,9 +305,6 @@ function send() {
 
 $<HTMLButtonElement>('send').addEventListener('click', send);
 cancelBtn.addEventListener('click', () => vscode.postMessage({ type: 'cancel' }));
-routeSelect.addEventListener('change', () =>
-  vscode.postMessage({ type: 'setRoute', route: routeSelect.value as RoutePreference }),
-);
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -250,6 +318,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
     case 'ready':
       connected = true;
       route = m.route;
+      agent = m.session.agent;
       agents = m.init.agents.map((a) => a.name);
       if (view.sessionId !== m.session.id)
         view = addInfo(
@@ -258,6 +327,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
         );
       break;
     case 'session':
+      agent = m.session.agent;
       view = addInfo(
         { ...initialView(m.session.id), items: view.items },
         `new session · agent ${m.session.agent}`,
@@ -265,6 +335,10 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       break;
     case 'event':
       view = reduce(view, m.event);
+      if (m.event.type === 'roles.updated') roles = m.event.roles;
+      break;
+    case 'roles':
+      roles = m.roles;
       break;
     case 'route':
       route = m.route;
@@ -273,6 +347,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       view = addInfo(view, formatUsage(m.usage, 'rule'));
       break;
     case 'history':
+      agent = m.session.agent;
       view = addInfo(
         fromTranscript(m.session, m.messages),
         `resumed "${m.session.title || m.session.id}"`,

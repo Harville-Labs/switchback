@@ -86,6 +86,17 @@ export class ToolError extends Error {
 }
 
 /**
+ * A path as the workspace sees it: relative, with forward slashes on every
+ * OS, so output and transcripts read the same everywhere. Undefined when the
+ * path is outside the workspace.
+ */
+export function toWorkspacePath(root: string, path: string): string | undefined {
+  const rel = relative(root, resolve(root, path));
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined;
+  return rel.split(sep).join('/');
+}
+
+/**
  * Resolve a model-supplied path and reject anything outside the workspace,
  * including escapes through symlinks.
  */

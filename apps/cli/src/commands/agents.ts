@@ -6,8 +6,15 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AGENT_NAME, projectPaths, renderAgentFile, switchbackPaths } from '@switchback/engine';
-import { tierOf } from '@switchback/providers';
+import { rolesOfModel } from '@switchback/client';
+import {
+  AGENT_NAME,
+  configRoles,
+  projectPaths,
+  renderAgentFile,
+  switchbackPaths,
+  tierOfModel,
+} from '@switchback/engine';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 
@@ -154,17 +161,8 @@ async function interview(flags: AgentNewFlags, p: Prompter | undefined): Promise
   } else tools = ['read', 'glob', 'grep'];
 
   const { engine, loaded } = createEngine(flags, 'deny');
-  const { models, providers, routing } = loaded.config;
-  const tierOfAlias = (alias: string) => {
-    const pc = providers[models[alias]?.provider ?? ''];
-    return pc ? tierOf(pc) : undefined;
-  };
-  const roleOf = (alias: string) =>
-    routing.start.includes(alias)
-      ? 'start'
-      : routing.escalate.findIndex((step) => step.includes(alias)) >= 0
-        ? `step ${routing.escalate.findIndex((step) => step.includes(alias)) + 1}`
-        : undefined;
+  const { config } = loaded;
+  const roles = configRoles(config);
   const model =
     flags.model ??
     (p
@@ -176,18 +174,20 @@ async function interview(flags: AgentNewFlags, p: Prompter | undefined): Promise
           },
           { label: 'Any local model', value: 'local', hint: 'never costs money' },
           { label: 'Any hosted model', value: 'remote', hint: 'the first in your roles' },
-          ...Object.keys(models)
+          ...Object.keys(config.models)
             // Tier keywords would read as tier pins, not these aliases.
             .filter((a) => !['local', 'remote'].includes(a))
             .map((a) => ({
               label: a,
               value: a,
-              hint: [models[a]?.model, tierOfAlias(a), roleOf(a)].filter(Boolean).join(' · '),
+              hint: [config.models[a]?.model, tierOfModel(config, a), ...rolesOfModel(a, roles)]
+                .filter(Boolean)
+                .join(' · '),
             })),
         ])
       : undefined);
 
-  const free = model === 'local' || (model !== undefined && tierOfAlias(model) === 'local');
+  const free = model === 'local' || (model !== undefined && tierOfModel(config, model) === 'local');
   const budget =
     flags.budget ??
     (p && !free ? await p.number('Remote budget per run in USD (empty for none)') : undefined);

@@ -1,15 +1,20 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
-import { defineTool, diffPreview, resolveInWorkspace, ToolError, truncate } from './tool.ts';
+import {
+  defineTool,
+  diffPreview,
+  resolveInWorkspace,
+  ToolError,
+  toWorkspacePath,
+  truncate,
+} from './tool.ts';
 
 const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)([\\/]|$)/;
 
 /** Workspace-relative path with forward slashes, so tool output is the same on every OS. */
-function workspacePath(root: string, file: string): string {
-  return relative(root, file).split(sep).join('/');
-}
+const workspacePath = (root: string, file: string) => toWorkspacePath(root, file) ?? file;
 
 export const readTool = defineTool({
   name: 'read',

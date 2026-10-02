@@ -5,6 +5,7 @@
  * also run unattended (`--yes`).
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { formatRoles, formatSteps } from '@switchback/client';
 import {
   buildSetupConfig,
   catalogFor,
@@ -17,6 +18,7 @@ import {
   planModels,
   projectPaths,
   REMOTE_KINDS,
+  REMOTE_PROVIDERS,
   type RemoteAnswer,
   type RemoteKind,
   type Roles,
@@ -24,6 +26,7 @@ import {
   switchbackPaths,
   writeConfigLayer,
 } from '@switchback/engine';
+import type { SessionRoles } from '@switchback/protocol';
 import {
   CATALOG,
   CREDENTIAL_ENV,
@@ -266,25 +269,25 @@ async function chooseRoles(
     roles.subagents = resolveAlias(plan, flags.subagentModel, '--subagent-model');
   if (!p) return roles;
 
-  const label = (alias: string) => {
-    const m = plan.find((x) => x.alias === alias);
-    return m ? `${alias} ${dim(`(${m.tier}, ${m.where})`)}` : alias;
-  };
-  const line = (steps: string[][]) => steps.map((s) => s.map(label).join(' | ')).join(' → ');
-  for (;;) {
-    const review =
+  // Shown exactly as `/roles` and `switchback doctor` show them.
+  const models = plan.map((m) => ({
+    alias: m.alias,
+    ref: { provider: m.where, model: m.model },
+    tier: m.tier,
+  }));
+  const asSession = (): SessionRoles => ({
+    start: roles.start,
+    escalate: roles.escalate,
+    review:
       roles.review === 'off'
-        ? 'off'
-        : roles.review === 'ladder'
-          ? roles.escalate.length
-            ? `the escalation ladder (${line(roles.escalate)})`
-            : 'off (no escalation steps to review with)'
-          : line(roles.review);
+        ? { mode: 'off', models: [] }
+        : { mode: 'auto', models: roles.review === 'ladder' ? [] : roles.review },
+    ...(roles.subagents ? { subagents: roles.subagents } : {}),
+    overridden: [],
+  });
+  for (;;) {
     console.log(`\n${bold('Which model does what')}`);
-    console.log(`  Start with      ${roles.start.map(label).join(' | ') || dim('none')}`);
-    console.log(`  Escalate to     ${line(roles.escalate) || dim('nothing: no escalation')}`);
-    console.log(`  Review edits    ${review}`);
-    console.log(`  Subagents use   ${roles.subagents ? label(roles.subagents) : 'normal routing'}`);
+    for (const line of formatRoles(asSession(), models).split('\n')) console.log(`  ${line}`);
     const action = await p.select('', [
       { label: 'Looks good', value: 'done' as const },
       { label: 'Change where turns start', value: 'start' as const },
@@ -332,7 +335,7 @@ async function chooseRoles(
         ...(roles.escalate.length
           ? [
               {
-                label: `Yes, with the escalation ladder (${line(roles.escalate)})`,
+                label: `Yes, with the escalation ladder (${formatSteps(roles.escalate)})`,
                 value: 'ladder' as const,
                 hint: 'the first reviews; the next steps in when its findings stand',
               },
@@ -362,7 +365,7 @@ async function chooseRoles(
     if (action === 'subagents') {
       const pick = await p.select('Which model should subagents use when their agent names none?', [
         { label: 'Normal routing', value: '' },
-        ...plan.map((m) => ({ label: label(m.alias), value: m.alias })),
+        ...plan.map((m) => ({ label: m.alias, value: m.alias, hint: `${m.model} · ${m.tier}` })),
       ]);
       roles.subagents = pick || undefined;
     }
@@ -568,16 +571,9 @@ function normalizeUrl(url: string): string {
 // Remote
 // ---------------------------------------------------------------------------
 
-const REMOTE_LABELS: Record<RemoteKind, string> = {
-  anthropic: 'Anthropic API (Claude)',
-  openai: 'OpenAI API (GPT)',
-  deepseek: 'DeepSeek API',
-  gemini: 'Google Gemini API',
-  bedrock: 'Amazon Bedrock (Claude)',
-  vertex: 'Google Vertex AI (Claude)',
-  'anthropic-aws': 'Claude Platform on AWS (Anthropic-operated, AWS billing)',
-  foundry: 'Microsoft Foundry (Claude)',
-  'openai-compatible': 'Other OpenAI-compatible API (OpenRouter, Together, Groq, ...)',
+const remoteLabel = (kind: RemoteKind) => {
+  const { name, detail } = REMOTE_PROVIDERS[kind];
+  return detail ? `${name} (${detail})` : name;
 };
 
 function credentialHint(kind: RemoteKind): string {
@@ -625,7 +621,7 @@ async function chooseRemotes(flags: InitFlags, p: Prompter | undefined): Promise
         : `\n${bold('Hosted models')}\nWhich provider?`,
       [
         ...REMOTE_KINDS.map((k) => ({
-          label: REMOTE_LABELS[k],
+          label: remoteLabel(k),
           value: k,
           hint: credentialHint(k),
         })),
@@ -690,7 +686,7 @@ async function chooseRemote(
   }
   const hint = credentialHint(kind);
   if (hint.startsWith('needs'))
-    console.log(yellow(`  ${REMOTE_LABELS[kind]} ${hint} before Switchback can use it.`));
+    console.log(yellow(`  ${remoteLabel(kind)} ${hint} before Switchback can use it.`));
 
   switch (kind) {
     case 'anthropic':
