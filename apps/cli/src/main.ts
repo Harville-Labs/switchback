@@ -46,10 +46,12 @@ init options (all optional; prompts cover anything not given)
   --local-model <name>     Local model name as the server lists it. Repeat for
                            fallbacks and bigger-context models, in order
   --context-window <n>     Tokens the server loads, per --local-model in order
-  --local-escalation-model <name>  A bigger local model to escalate to before
-                           remote. Repeat for more steps, in order
-  --reviewer <r>           Review local edits automatically: remote, or a local
-                           model's name (from --local-model / --local-escalation-model)
+  --start <m>              Where turns start (model ID or alias). Repeat for backups
+  --escalate <m[,m]>       An escalation step; repeat for the ladder, in order.
+                           Commas make alternatives for one step. Default: the
+                           other local models, then hosted ones, cheapest first
+  --reviewers <r>          off | ladder (the escalation ladder) | m,m (in order)
+  --subagent-model <m>     Default model for subagents
   --no-local               Remote only
   --remote <r>             anthropic | openai | deepseek | gemini | bedrock | vertex |
                            anthropic-aws | foundry | openai-compatible | none.
@@ -132,8 +134,10 @@ async function main(argv: string[]): Promise<number> {
       'local-url': { type: 'string', multiple: true },
       'local-model': { type: 'string', multiple: true },
       'context-window': { type: 'string', multiple: true },
-      'local-escalation-model': { type: 'string', multiple: true },
-      reviewer: { type: 'string' },
+      start: { type: 'string', multiple: true },
+      escalate: { type: 'string', multiple: true },
+      reviewers: { type: 'string' },
+      'subagent-model': { type: 'string' },
       'no-local': { type: 'boolean', default: false },
       remote: { type: 'string', multiple: true },
       'remote-model': { type: 'string', multiple: true },
@@ -226,8 +230,10 @@ async function main(argv: string[]): Promise<number> {
         localUrls: values['local-url'] ?? [],
         localModels: values['local-model'] ?? [],
         contextWindows,
-        localEscalationModels: values['local-escalation-model'] ?? [],
-        ...(values.reviewer ? { reviewer: values.reviewer } : {}),
+        ...(values.start ? { start: values.start } : {}),
+        ...(values.escalate ? { escalate: values.escalate } : {}),
+        ...(values.reviewers ? { reviewers: values.reviewers } : {}),
+        ...(values['subagent-model'] ? { subagentModel: values['subagent-model'] } : {}),
         remotes,
         remoteModels: values['remote-model'] ?? [],
         ...(remoteContextWindow ? { remoteContextWindow } : {}),

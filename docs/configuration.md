@@ -63,7 +63,7 @@ Any number of providers can be configured together, including several local serv
 }
 ```
 
-Turns start on the laptop; an escalation goes to the GPU box first, then to OpenAI, with DeepSeek as the fallback if OpenAI is down. `switchback init` builds this for you. How the router picks is in [routing.md](routing.md).
+Turns start on the laptop; an escalation goes to the GPU box first, then to OpenAI, with DeepSeek as the fallback if OpenAI is down. `switchback init` builds this for you: pick any number of models (local servers it detects, any hosted provider), then decide which model does what. Aliases come from model names (`qwen3-coder:30b` becomes `qwen3-coder-30b`). How the router picks is in [routing.md](routing.md).
 
 A list inside a role is a chain of alternatives (the first that's up and fits); each entry of `escalate` is one step. Any alias can also be the reviewer (`review.model`, see [review.md](review.md)), the default for subagents (`subagents.model`), or an agent's model (`model: big`), local or remote.
 
