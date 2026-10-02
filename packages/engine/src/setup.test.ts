@@ -233,11 +233,11 @@ describe('buildSetupConfig', () => {
       expect.objectContaining({ provider: 'vllm', model: 'qwen3-coder-480b' }),
     );
     expect(parsed.models.large?.contextWindow).toBeUndefined();
-    expect(parsed.review).toMatchObject({ mode: 'auto', model: 'large' });
+    expect(parsed.review).toMatchObject({ mode: 'auto', models: [['large']] });
     expect(referenceProblem(parsed)).toBeUndefined();
   });
 
-  test('a remote reviewer leaves the model to default to the first remote model in the roles', () => {
+  test('a remote reviewer reviews with the remote models', () => {
     const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [local],
@@ -246,8 +246,7 @@ describe('buildSetupConfig', () => {
         reviewer: 'remote',
       }),
     );
-    expect(parsed.review).toMatchObject({ mode: 'auto' });
-    expect(parsed.review.model).toBeUndefined();
+    expect(parsed.review).toMatchObject({ mode: 'auto', models: [['remote']] });
     expect(parsed.routing.escalate).toEqual([['remote']]);
   });
 

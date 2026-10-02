@@ -160,7 +160,8 @@ interface LiveSession {
    * subagents in the same checkout), keyed by absolute path: content before
    * the first edit, and whether a local model edited it. For review.
    */
-  turnEdits?: Map<string, { path: string; before: string | undefined; local: boolean }>;
+  /** Files edited this turn, their content before, and which models (aliases) edited them. */
+  turnEdits?: Map<string, { path: string; before: string | undefined; writers: Set<string> }>;
   /** Why the session holds private content and must stay local; never cleared. */
   private?: string;
   /** Secrets redacted from the last remote request, to report only new ones. */
@@ -841,7 +842,16 @@ export class Engine {
       if (toolCalls.length === 0)
         return done.stopReason === 'tool_use' ? 'end_turn' : done.stopReason;
 
-      const results = await this.runTools(s, tools, catalog, toolCalls, turnId, signal, model.tier);
+      const results = await this.runTools(
+        s,
+        tools,
+        catalog,
+        toolCalls,
+        turnId,
+        signal,
+        model.tier,
+        model.alias,
+      );
       this.append(s, { role: 'user', parts: results });
       if (signal.aborted) return 'cancelled';
     }
@@ -928,7 +938,7 @@ export class Engine {
   // -------------------------------------------------------------------------
 
   /** Remember a file's content before its first edit this turn, on the top-level session. */
-  private noteEdit(s: LiveSession, path: string, tier: Tier): void {
+  private noteEdit(s: LiveSession, path: string, writer: string): void {
     let top = s;
     while (top.header.parentId) {
       const parent = this.sessions.get(top.header.parentId);
@@ -946,15 +956,17 @@ export class Engine {
     const entry = top.turnEdits.get(file) ?? {
       path: relative(this.rootOf(top), file).split(sep).join('/'),
       before: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
-      local: false,
+      writers: new Set<string>(),
     };
-    if (tier === 'local') entry.local = true;
+    entry.writers.add(writer);
     top.turnEdits.set(file, entry);
   }
 
   /**
-   * Review what local models changed this turn; on `revise`, hand the
-   * findings back and let the model fix them, up to `review.maxRounds` reviews.
+   * Review what models changed this turn; on `revise`, hand the findings back
+   * and let the model fix them, up to `review.maxRounds` reviews. Reviewers
+   * form a ladder: when a reviewer's findings still stand after a fix, the
+   * next reviewer takes over.
    */
   private async reviewTurn(
     s: LiveSession,
@@ -964,11 +976,14 @@ export class Engine {
     signal: AbortSignal,
   ): Promise<StopReason> {
     const rounds = this.options.config.review.maxRounds;
+    const ladder = this.reviewLadder();
     let stopReason: StopReason = 'end_turn';
+    let at = 0;
+    let revisedBy = -1;
     for (let round = 1; round <= rounds && !signal.aborted; round++) {
       const edits = [...(s.turnEdits?.entries() ?? [])];
-      // Only what a local model wrote: a remote model's own work isn't sent for review.
-      if (!edits.some(([, e]) => e.local)) return stopReason;
+      if (!edits.length) return stopReason;
+      const writers = new Set(edits.flatMap(([, e]) => [...e.writers]));
       const diff = turnDiff(
         edits.map(([file, e]) => ({
           path: e.path,
@@ -977,8 +992,35 @@ export class Engine {
         })),
       );
       if (!diff) return stopReason;
-      const result = await this.review(s, request, diff, edits.length, round, turnId, signal);
+      const pick = this.pickReviewer(s, ladder, at, writers);
+      if ('skip' in pick) {
+        this.emit({
+          type: 'review.completed',
+          ...this.scope(s),
+          turnId,
+          verdict: 'skipped',
+          summary: pick.skip,
+          issues: [],
+          round,
+        });
+        return stopReason;
+      }
+      at = pick.step;
+      const result = await this.review(
+        s,
+        pick.model,
+        request,
+        diff,
+        edits.length,
+        round,
+        turnId,
+        signal,
+      );
       if (result?.answer.verdict !== 'revise' || round === rounds) return stopReason;
+      // This reviewer already asked for changes once and still does: the next one takes over.
+      const escalate = revisedBy === at && at + 1 < ladder.length;
+      revisedBy = at;
+      if (escalate) at += 1;
       this.append(s, {
         role: 'user',
         parts: [
@@ -995,6 +1037,70 @@ export class Engine {
     return stopReason;
   }
 
+  /** Reviewers in order: `review.models`, else the escalation ladder. */
+  private reviewLadder(): string[][] {
+    const { review, routing } = this.options.config;
+    return review.models.length ? review.models : routing.escalate;
+  }
+
+  /**
+   * The first reviewer from step `from` up that's configured, up, allowed,
+   * and didn't write the change; else why none could review.
+   */
+  private pickReviewer(
+    s: LiveSession,
+    ladder: string[][],
+    from: number,
+    writers: Set<string>,
+  ): { model: ModelInfo; step: number } | { skip: string } {
+    if (!ladder.length)
+      return { skip: 'no reviewer is configured (review.models, or a routing.escalate step)' };
+    const { routing } = this.options.config;
+    const writerRefs = new Set(
+      [...writers].flatMap((a) => {
+        const m = this.modelInfo(a);
+        return m ? [`${m.ref.provider}/${m.ref.model}`] : [];
+      }),
+    );
+    let why: string | undefined;
+    for (let step = from; step < ladder.length; step++) {
+      for (const alias of ladder[step] ?? []) {
+        const model = this.modelInfo(alias);
+        if (!model) continue;
+        // A model never reviews its own work.
+        if (writers.has(alias) || writerRefs.has(`${model.ref.provider}/${model.ref.model}`)) {
+          why ??= `${alias} wrote the change, and a model never reviews its own work`;
+          continue;
+        }
+        if (!model.available) {
+          why ??= `${alias} is unavailable`;
+          continue;
+        }
+        if (model.tier === 'remote') {
+          // Remote review is remote spend: every rule that keeps other calls local applies.
+          const spend = this.ledger.spend();
+          const b = routing.budget;
+          const blocked = this.options.org?.remoteDisabled
+            ? `remote models are disabled by ${this.options.org.name} policy`
+            : !routing.allowRemote
+              ? 'remote models are turned off (routing.allowRemote)'
+              : s.private
+                ? `this session holds private content (${s.private}), which never leaves this machine`
+                : (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd) ||
+                    (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd)
+                  ? 'the remote budget is spent'
+                  : undefined;
+          if (blocked) {
+            why ??= blocked;
+            continue;
+          }
+        }
+        return { model, step };
+      }
+    }
+    return { skip: why ?? 'no reviewer is available' };
+  }
+
   /** The agent's own model pin; for a subagent without one, `subagents.model`. */
   private pinnedModel(s: LiveSession, agent: AgentDefinition): { model?: string } {
     if (agent.model) return { model: agent.model };
@@ -1002,18 +1108,10 @@ export class Engine {
     return s.depth > 0 && agent.route === 'auto' && fallback ? { model: fallback } : {};
   }
 
-  /** The reviewer: `review.model`, else the first available remote model in role order. */
-  private reviewerModel(): ModelInfo | undefined {
-    const { review, routing } = this.options.config;
-    if (review.model) return this.modelInfo(review.model);
-    return roleAliases(routing)
-      .flatMap((a) => this.modelInfo(a) ?? [])
-      .find((m) => m.tier === 'remote' && m.available);
-  }
-
   /** One review call. Never fails the turn: problems are reported as `skipped`. */
   private async review(
     s: LiveSession,
+    model: ModelInfo,
     request: string,
     diff: string,
     files: number,
@@ -1021,7 +1119,6 @@ export class Engine {
     turnId: string,
     signal: AbortSignal,
   ): Promise<{ answer: ReviewAnswer; model: ModelInfo } | undefined> {
-    const model = this.reviewerModel();
     const skip = (summary: string) => {
       this.emit({
         type: 'review.completed',
@@ -1031,34 +1128,19 @@ export class Engine {
         summary,
         issues: [],
         round,
-        ...(model ? { model: model.ref } : {}),
+        model: model.ref,
       });
       return undefined;
     };
-    const { routing, privacy } = this.options.config;
-    if (!model) return skip('no reviewer model is available');
+    const { privacy } = this.options.config;
     const provider = this.providers.get(model.ref.provider);
     if (!provider) return skip(`provider "${model.ref.provider}" is not configured`);
     const summary = textOf(
       s.messages.findLast((m) => m.role === 'assistant') ?? { role: 'assistant', parts: [] },
     );
     let text = reviewRequest(request, summary, diff);
+    // Remote rules (privacy, budget, remote off) were checked when picking the reviewer.
     if (model.tier === 'remote') {
-      // Review is remote spend: every rule that keeps other calls local applies.
-      if (this.options.org?.remoteDisabled)
-        return skip(`remote models are disabled by ${this.options.org.name} policy`);
-      if (!routing.allowRemote) return skip('remote models are turned off (routing.allowRemote)');
-      if (s.private)
-        return skip(
-          `this session holds private content (${s.private}), which never leaves this machine`,
-        );
-      const spend = this.ledger.spend();
-      const b = routing.budget;
-      if (
-        (b.dailyUsd !== undefined && spend.todayUsd >= b.dailyUsd) ||
-        (b.monthlyUsd !== undefined && spend.monthUsd >= b.monthlyUsd)
-      )
-        return skip('the remote budget is spent');
       if (privacy.secrets !== 'off') {
         const scan = await redactSecrets(text);
         if (scan.found.length && privacy.secrets === 'block')
@@ -1080,7 +1162,7 @@ export class Engine {
       tier: model.tier,
       model: model.ref,
       rule: 'review',
-      reason: `reviewing ${files} changed file${files === 1 ? '' : 's'} from the local model${round > 1 ? ' (after revisions)' : ''}`,
+      reason: `reviewing ${files} changed file${files === 1 ? '' : 's'}${round > 1 ? ' (after revisions)' : ''}`,
     });
     const modelConfig = this.options.config.models[model.alias];
     let done: Extract<ChatEvent, { type: 'done' }> | undefined;
@@ -1378,6 +1460,8 @@ export class Engine {
     turnId: string,
     signal: AbortSignal,
     tier: Tier,
+    /** The alias of the model that made these calls, for review. */
+    writer: string,
   ): Promise<ToolResultPart[]> {
     const ctx: ToolContext = {
       workspaceRoot: this.rootOf(s),
@@ -1439,7 +1523,7 @@ export class Engine {
       } else {
         ran = true;
         if (tool.name === 'edit' || tool.name === 'write')
-          this.noteEdit(s, (parsed.data as { path: string }).path, tier);
+          this.noteEdit(s, (parsed.data as { path: string }).path, writer);
         try {
           output = await tool.run(parsed.data, callCtx);
         } catch (err) {

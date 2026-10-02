@@ -611,14 +611,30 @@
           "type": "string",
           "enum": ["off", "auto"]
         },
-        "model": {
-          "type": "string"
+        "models": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            ]
+          }
         },
         "maxRounds": {
-          "default": 2,
+          "default": 3,
           "type": "integer",
           "minimum": 1,
-          "maximum": 5
+          "maximum": 6
         }
       }
     },
