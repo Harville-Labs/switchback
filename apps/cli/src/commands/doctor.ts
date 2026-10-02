@@ -49,6 +49,13 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   out(`  start    ${r.start.map(label).join(' | ') || '(none)'}`);
   for (const [i, step] of r.escalate.entries())
     out(`  step ${i + 1}   ${step.map(label).join(' | ')}`);
+  if (config.review.mode === 'auto') {
+    const reviewers = config.review.models.length ? config.review.models : r.escalate;
+    out(
+      `  review   ${reviewers.map((step) => step.map(label).join(' | ')).join(' → ') || '(no reviewer: add review.models or an escalation step)'}`,
+    );
+  }
+  if (config.subagents.model) out(`  subagents ${label(config.subagents.model)}`);
   if (!r.allowRemote) out('  remote models are turned off (routing.allowRemote: false)');
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,

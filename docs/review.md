@@ -48,7 +48,7 @@ A reviewer that fails or returns something unreadable is reported as skipped; th
 
 ## Setting it up
 
-`switchback init` asks whether to review edits automatically and with which models, and `--reviewer remote|<model name>` sets it unattended. Any alias works in `review.models`:
+`switchback init` asks who reviews edits (off, the escalation ladder, or models you pick), and `--reviewers off|ladder|<model>,<model>` sets it unattended. Any alias works in `review.models`:
 
 ```jsonc
 "models": {

@@ -6,8 +6,10 @@ import { probeContextWindow } from '@switchback/providers';
 import { loadConfig, parseJsonc, referenceProblem, SwitchbackConfig } from './config.ts';
 import {
   buildSetupConfig,
+  defaultRoles,
   detectLocalServers,
   OLLAMA_DEFAULT_CONTEXT,
+  planModels,
   writeConfigLayer,
 } from './setup.ts';
 
@@ -89,7 +91,7 @@ describe('buildSetupConfig', () => {
     contextWindow: 32768,
   };
 
-  test('local + Bedrock points every Claude alias at Bedrock with prefixed IDs', () => {
+  test('aliases come from model names; local + Bedrock uses prefixed IDs', () => {
     const layer = buildSetupConfig({
       locals: [local],
       remotes: [{ kind: 'bedrock', model: 'claude-sonnet-5', region: 'us-west-2' }],
@@ -97,17 +99,20 @@ describe('buildSetupConfig', () => {
       budget: { dailyUsd: 3 },
     });
     const parsed = SwitchbackConfig.parse(layer);
-    expect(parsed.models.remote).toMatchObject({
+    expect(parsed.models['coder-7b']).toMatchObject({ provider: 'ollama', model: 'coder:7b' });
+    expect(parsed.models['claude-sonnet-5']).toMatchObject({
       provider: 'bedrock',
       model: 'anthropic.claude-sonnet-5',
     });
+    // Claude Code size aliases follow the first hosted provider.
     expect(parsed.models.haiku?.model).toBe('anthropic.claude-haiku-4-5');
     expect(parsed.routing).toMatchObject({
-      start: ['local'],
-      escalate: [['remote']],
+      start: ['coder-7b'],
+      escalate: [['claude-sonnet-5']],
       budget: { dailyUsd: 3 },
       escalation: { policy: 'ask' },
     });
+    expect(parsed.review.mode).toBe('off');
     expect(parsed.providers.ollama).toMatchObject({ type: 'openai-compatible', tier: 'local' });
   });
 
@@ -122,7 +127,7 @@ describe('buildSetupConfig', () => {
         buildSetupConfig({ locals: [local], remotes: [{ kind, model }], escalationPolicy: 'auto' }),
       );
       expect(parsed.providers[kind]?.type).toBe(kind);
-      expect(parsed.models.remote).toMatchObject({ provider: kind, model });
+      expect(parsed.models[model]).toMatchObject({ provider: kind, model });
       for (const alias of ['opus', 'sonnet', 'haiku'])
         expect(parsed.models[alias]?.provider).toBe(kind);
     }
@@ -149,14 +154,8 @@ describe('buildSetupConfig', () => {
       workspaceId: 'wrkspc_1',
     });
     expect(parsed.providers.foundry).toMatchObject({ type: 'foundry', resource: 'acme' });
-    expect(parsed.models.remote).toMatchObject({
-      provider: 'anthropic-aws',
-      model: 'claude-opus-5',
-    });
-    expect(parsed.models['remote-2']).toMatchObject({
-      provider: 'foundry',
-      model: 'claude-sonnet-5',
-    });
+    expect(parsed.models['claude-opus-5']?.provider).toBe('anthropic-aws');
+    expect(parsed.models['claude-sonnet-5']?.provider).toBe('foundry');
     expect(parsed.models.haiku?.model).toBe('claude-haiku-4-5');
   });
 
@@ -166,10 +165,12 @@ describe('buildSetupConfig', () => {
       remotes: [{ kind: 'deepseek', model: 'deepseek-v4-pro' }],
       escalationPolicy: 'auto',
     });
-    expect((layer.models as Record<string, { effort?: string }>).remote?.effort).toBe('high');
+    expect((layer.models as Record<string, { effort?: string }>)['deepseek-v4-pro']?.effort).toBe(
+      'high',
+    );
   });
 
-  test('any OpenAI-compatible API can be the remote', () => {
+  test('any OpenAI-compatible API can serve hosted models', () => {
     const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [local],
@@ -185,113 +186,112 @@ describe('buildSetupConfig', () => {
         escalationPolicy: 'auto',
       }),
     );
-    expect(parsed.providers.remote).toMatchObject({
+    expect(parsed.providers.openrouter).toMatchObject({
       type: 'openai-compatible',
       tier: 'remote',
       apiKey: '{env:OPENROUTER_API_KEY}',
     });
-    expect(parsed.models.remote).toMatchObject({
+    expect(parsed.models['qwen3-coder']).toMatchObject({
+      provider: 'openrouter',
       model: 'qwen/qwen3-coder',
       contextWindow: 262144,
     });
   });
 
-  test('remote-only starts on the remote models; local-only has nothing to escalate to', () => {
-    const remoteOnly = buildSetupConfig({
-      locals: [],
-      remotes: [{ kind: 'anthropic', model: 'claude-opus-5' }],
-      escalationPolicy: 'auto',
+  test('default roles: first local starts, other locals next, hosted cheapest first', () => {
+    const plan = planModels({
+      locals: [local, { ...local, baseUrl: 'http://gpu:8000/v1', model: 'big' }],
+      remotes: [
+        { kind: 'openai', model: 'gpt-6-sol' },
+        { kind: 'anthropic', model: 'claude-opus-5' },
+        { kind: 'deepseek', model: 'deepseek-v4-pro' },
+      ],
     });
-    const localOnly = buildSetupConfig({
-      locals: [local],
-      remotes: [],
-      escalationPolicy: 'auto',
+    expect(defaultRoles(plan)).toEqual({
+      start: ['coder-7b'],
+      escalate: [['big'], ['deepseek-v4-pro'], ['gpt-6-sol'], ['claude-opus-5']],
+      review: 'off',
     });
-    expect(remoteOnly.routing).toMatchObject({ start: ['remote'], escalate: [] });
-    expect(localOnly.routing).toMatchObject({ start: ['local'], escalate: [] });
-  });
-
-  test('a bigger local model becomes an escalation step, and can review', () => {
-    const large = {
-      providerId: 'vllm',
-      baseUrl: 'http://gpu-box:8000/v1',
-      model: 'qwen3-coder-480b',
-      role: 'escalation' as const,
-    };
-    const parsed = SwitchbackConfig.parse(
-      buildSetupConfig({
-        locals: [local, large],
-        remotes: [{ kind: 'anthropic', model: 'claude-opus-5' }],
-        escalationPolicy: 'auto',
-        reviewer: { local: 1 },
+    // All hosted: the cheapest starts.
+    const hosted = defaultRoles(
+      planModels({
+        locals: [],
+        remotes: [
+          { kind: 'anthropic', model: 'claude-opus-5' },
+          { kind: 'anthropic', model: 'claude-haiku-4-5' },
+        ],
       }),
     );
-    expect(parsed.routing.start).toEqual(['local']);
-    expect(parsed.routing.escalate).toEqual([['large'], ['remote']]);
-    // No context window given: the engine asks the server at runtime.
-    expect(parsed.models.large).toEqual(
-      expect.objectContaining({ provider: 'vllm', model: 'qwen3-coder-480b' }),
+    expect(hosted).toMatchObject({ start: ['claude-haiku-4-5'], escalate: [['claude-opus-5']] });
+  });
+
+  test('roles are written as chosen: any model anywhere, a review ladder, a subagent model', () => {
+    const parsed = SwitchbackConfig.parse(
+      buildSetupConfig({
+        locals: [local, { ...local, model: 'big' }],
+        remotes: [
+          { kind: 'anthropic', model: 'claude-haiku-4-5' },
+          { kind: 'anthropic', model: 'claude-opus-5' },
+        ],
+        roles: {
+          start: ['claude-haiku-4-5', 'coder-7b'],
+          escalate: [['big'], ['claude-opus-5']],
+          review: [['big'], ['claude-opus-5']],
+          subagents: 'coder-7b',
+        },
+        escalationPolicy: 'auto',
+      }),
     );
-    expect(parsed.models.large?.contextWindow).toBeUndefined();
-    expect(parsed.review).toMatchObject({ mode: 'auto', models: [['large']] });
+    expect(parsed.routing).toMatchObject({
+      start: ['claude-haiku-4-5', 'coder-7b'],
+      escalate: [['big'], ['claude-opus-5']],
+    });
+    expect(parsed.review).toMatchObject({ mode: 'auto', models: [['big'], ['claude-opus-5']] });
+    expect(parsed.subagents.model).toBe('coder-7b');
+    // Two Anthropic models share one provider entry.
+    expect(Object.keys(parsed.providers).filter((id) => id.startsWith('anthropic'))).toEqual([
+      'anthropic',
+    ]);
     expect(referenceProblem(parsed)).toBeUndefined();
   });
 
-  test('a remote reviewer reviews with the remote models', () => {
-    const parsed = SwitchbackConfig.parse(
-      buildSetupConfig({
-        locals: [local],
-        remotes: [{ kind: 'openai', model: 'gpt-6-sol' }],
-        escalationPolicy: 'auto',
-        reviewer: 'remote',
-      }),
-    );
-    expect(parsed.review).toMatchObject({ mode: 'auto', models: [['remote']] });
-    expect(parsed.routing.escalate).toEqual([['remote']]);
+  test('review: the escalation ladder is written as an empty list', () => {
+    const layer = buildSetupConfig({
+      locals: [local],
+      remotes: [{ kind: 'openai', model: 'gpt-6-sol' }],
+      roles: { start: ['coder-7b'], escalate: [['gpt-6-sol']], review: 'ladder' },
+      escalationPolicy: 'auto',
+    });
+    expect(layer.review).toEqual({ mode: 'auto', models: [] });
   });
 
-  test('an escalation model needs something to escalate from', () => {
+  test('roles must name chosen models', () => {
     expect(() =>
       buildSetupConfig({
-        locals: [{ ...local, role: 'escalation' }],
+        locals: [local],
         remotes: [],
+        roles: { start: ['ghost'], escalate: [], review: 'off' },
         escalationPolicy: 'auto',
       }),
-    ).toThrow('needs a local model to escalate from');
+    ).toThrow('start names "ghost"');
   });
 
-  test('several local servers and remote providers become ordered chains', () => {
+  test('several local servers: one provider per server; same-named models get distinct aliases', () => {
     const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [
           local,
           { ...local, model: 'coder:32b', contextWindow: 65536 }, // same server, bigger model
-          {
-            providerId: 'ollama',
-            baseUrl: 'http://gpu:11434/v1',
-            model: 'big',
-            contextWindow: 131072,
-          },
+          { providerId: 'ollama', baseUrl: 'http://gpu:11434/v1', model: 'coder:7b' },
         ],
-        remotes: [
-          { kind: 'openai', model: 'gpt-6-sol' },
-          { kind: 'deepseek', model: 'deepseek-v4-pro' },
-          { kind: 'anthropic', model: 'claude-sonnet-5' },
-        ],
+        remotes: [],
         escalationPolicy: 'auto',
       }),
     );
-    expect(parsed.routing.start).toEqual(['local', 'local-2', 'local-3']);
-    // The remote providers are one step: later ones are its fallbacks.
-    expect(parsed.routing.escalate).toEqual([['remote', 'remote-2', 'remote-3']]);
-    // One provider per server; a second Ollama server gets its own ID.
-    expect(parsed.models['local-2']?.provider).toBe('ollama');
-    expect(parsed.models['local-3']?.provider).toBe('ollama-2');
+    expect(Object.keys(parsed.models)).toEqual(['coder-7b', 'coder-32b', 'coder-7b-2']);
+    expect(parsed.models['coder-32b']?.provider).toBe('ollama');
+    expect(parsed.models['coder-7b-2']?.provider).toBe('ollama-2');
     expect(parsed.providers['ollama-2']).toMatchObject({ baseUrl: 'http://gpu:11434/v1' });
-    expect(parsed.models['remote-2']).toMatchObject({ provider: 'deepseek', effort: 'high' });
-    expect(parsed.models['remote-3']?.provider).toBe('anthropic');
-    // Size aliases follow the preferred remote provider.
-    expect(parsed.models.haiku?.provider).toBe('openai');
   });
 
   test('refuses an empty setup', () => {
@@ -325,10 +325,10 @@ describe('writeConfigLayer', () => {
     expect(result.backup && existsSync(result.backup)).toBe(true);
     const written = JSON.parse(readFileSync(file, 'utf8'));
     expect(written.permissions.bash).toBe('deny');
-    expect(written.models.local.model).toBe('m');
+    expect(written.models.m.model).toBe('m');
     // The written project file loads cleanly through the normal path.
     const { config } = loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') });
-    expect(config.routing).toMatchObject({ start: ['local'], escalate: [] });
+    expect(config.routing).toMatchObject({ start: ['m'], escalate: [] });
   });
 
   test('re-running setup on an old file replaces the removed routing keys', () => {

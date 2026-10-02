@@ -1,20 +1,25 @@
 /**
  * `switchback init`: guided configuration. Detects local model servers, asks
- * which local and remote models to use, and writes a config file. Every
- * question has a flag so setup can also run unattended (`--yes`).
+ * which models to use (local, hosted, or both), then which model does what
+ * (ADR 0015), and writes a config file. Every question has a flag so setup can
+ * also run unattended (`--yes`).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import {
   buildSetupConfig,
   catalogFor,
   type DetectedServer,
+  defaultRoles,
   detectLocalServers,
   type LocalAnswer,
+  type PlannedModel,
   parseJsonc,
+  planModels,
   projectPaths,
   REMOTE_KINDS,
   type RemoteAnswer,
   type RemoteKind,
+  type Roles,
   type SetupAnswers,
   switchbackPaths,
   writeConfigLayer,
@@ -38,10 +43,14 @@ export interface InitFlags {
   /** Local models in order of preference; `contextWindows` pairs with them by position. */
   localModels: string[];
   contextWindows: number[];
-  /** Bigger local models to escalate to before remote, in order (`routing.escalate` steps). */
-  localEscalationModels: string[];
-  /** `remote`, or the name of a chosen local model. */
-  reviewer?: string;
+  /** Roles by alias or model ID; defaults from `defaultRoles`. `start` is a chain. */
+  start?: string[];
+  /** Escalation steps in order; each an alias, or a comma-separated chain. */
+  escalate?: string[];
+  /** `off`, `ladder` (the escalation ladder), or comma-separated reviewers in order. */
+  reviewers?: string;
+  /** Default model for subagents. */
+  subagentModel?: string;
   noLocal: boolean;
   /** Remote providers in order of preference; `remoteModels` pairs with them by position. */
   remotes: (RemoteKind | 'none')[];
@@ -90,7 +99,7 @@ export async function init(flags: InitFlags): Promise<number> {
 async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   if (p) {
     console.log(
-      `${bold('Switchback setup')}\n${dim('Configure the local model you run and the remote model Switchback escalates to.')}\n`,
+      `${bold('Switchback setup')}\n${dim('Pick the models you want, local, hosted, or both; then choose which one starts, which ones it escalates to, and who reviews.')}\n`,
     );
   }
 
@@ -123,18 +132,34 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   const locals = await chooseLocals(flags, p);
   const remotes = await chooseRemotes(flags, p);
   if (!locals.length && !remotes.length)
-    throw new SetupError('configure a local model, a remote provider, or both');
+    throw new SetupError('pick at least one model, local or hosted');
+
+  const plan = planModels({ locals, remotes });
+  const roles = await chooseRoles(flags, p, plan);
+  const tierOf = (alias: string) => plan.find((m) => m.alias === alias)?.tier;
+  const escalatesRemote = roles.escalate.flat().some((a) => tierOf(a) === 'remote');
+  const usesRemote =
+    escalatesRemote ||
+    [
+      ...roles.start,
+      roles.subagents ?? '',
+      ...(Array.isArray(roles.review) ? roles.review.flat() : []),
+    ].some((a) => tierOf(a) === 'remote');
 
   const escalationPolicy =
     flags.policy ??
-    (p && locals.length && remotes.length
-      ? await p.select('\nWhen the local model struggles, escalate to remote:', [
-          { label: 'Automatically', value: 'auto' as const, hint: 'shows the reason each time' },
-          { label: 'Ask me first', value: 'ask' as const },
+    (p && escalatesRemote
+      ? await p.select('\nWhen a model struggles and the next step is a hosted model:', [
           {
-            label: 'Never',
+            label: 'Escalate automatically',
+            value: 'auto' as const,
+            hint: 'shows the reason each time',
+          },
+          { label: 'Ask me first', value: 'ask' as const, hint: 'local steps never ask' },
+          {
+            label: 'Never escalate',
             value: 'off' as const,
-            hint: 'only context overflow and outages go remote',
+            hint: 'only context overflow and outages move up',
           },
         ])
       : 'auto');
@@ -145,9 +170,9 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
       ...(flags.dailyBudget ? { dailyUsd: flags.dailyBudget } : {}),
       ...(flags.monthlyBudget ? { monthlyUsd: flags.monthlyBudget } : {}),
     };
-  } else if (p && remotes.length) {
+  } else if (p && usesRemote) {
     console.log(
-      dim('\nBudgets keep automatic escalations local once reached. Leave empty for no limit.'),
+      dim('\nBudgets keep calls on local models once reached. Leave empty for no limit.'),
     );
     const dailyUsd = await p.number('Daily remote budget in USD');
     const monthlyUsd = await p.number('Monthly remote budget in USD');
@@ -155,14 +180,12 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
       budget = { ...(dailyUsd ? { dailyUsd } : {}), ...(monthlyUsd ? { monthlyUsd } : {}) };
   }
 
-  const reviewer = await chooseReviewer(flags, p, locals, remotes.length > 0);
-
   const answers: SetupAnswers = {
     locals,
     remotes,
+    roles,
     escalationPolicy,
     ...(budget ? { budget } : {}),
-    ...(reviewer ? { reviewer } : {}),
   };
   const layer = buildSetupConfig(answers);
 
@@ -209,62 +232,179 @@ function telemetryChosen(): boolean {
 
 // ---------------------------------------------------------------------------
 // Local
-/**
- * Review of the local model's edits (docs/review.md): by the first remote
- * model, or by one of the local ones, which costs nothing.
- */
-async function chooseReviewer(
+// ---------------------------------------------------------------------------
+// Roles
+// ---------------------------------------------------------------------------
+
+/** A role reference (`alias` or model ID) to the alias setup gives that model. */
+function resolveAlias(plan: PlannedModel[], ref: string, flag: string): string {
+  const hit = plan.find((m) => m.alias === ref) ?? plan.find((m) => m.model === ref);
+  if (!hit)
+    throw new SetupError(
+      `${flag} "${ref}" isn't one of the chosen models (${plan.map((m) => m.alias).join(', ')})`,
+    );
+  return hit.alias;
+}
+
+/** Which model does what: flags unattended, else defaults the user can change. */
+async function chooseRoles(
   flags: InitFlags,
   p: Prompter | undefined,
-  locals: LocalAnswer[],
-  hasRemote: boolean,
-): Promise<SetupAnswers['reviewer']> {
-  if (flags.reviewer) {
-    if (flags.reviewer === 'remote') {
-      if (!hasRemote) throw new SetupError('--reviewer remote needs a remote provider');
-      return 'remote';
+  plan: PlannedModel[],
+): Promise<Roles> {
+  const roles = defaultRoles(plan);
+  const chain = (v: string, flag: string) =>
+    v.split(',').map((ref) => resolveAlias(plan, ref.trim(), flag));
+  if (flags.start?.length) roles.start = flags.start.flatMap((v) => chain(v, '--start'));
+  if (flags.escalate) roles.escalate = flags.escalate.map((v) => chain(v, '--escalate'));
+  if (flags.reviewers)
+    roles.review =
+      flags.reviewers === 'off' || flags.reviewers === 'ladder'
+        ? flags.reviewers
+        : chain(flags.reviewers, '--reviewers').map((alias) => [alias]);
+  if (flags.subagentModel)
+    roles.subagents = resolveAlias(plan, flags.subagentModel, '--subagent-model');
+  if (!p) return roles;
+
+  const label = (alias: string) => {
+    const m = plan.find((x) => x.alias === alias);
+    return m ? `${alias} ${dim(`(${m.tier}, ${m.where})`)}` : alias;
+  };
+  const line = (steps: string[][]) => steps.map((s) => s.map(label).join(' | ')).join(' → ');
+  for (;;) {
+    const review =
+      roles.review === 'off'
+        ? 'off'
+        : roles.review === 'ladder'
+          ? roles.escalate.length
+            ? `the escalation ladder (${line(roles.escalate)})`
+            : 'off (no escalation steps to review with)'
+          : line(roles.review);
+    console.log(`\n${bold('Which model does what')}`);
+    console.log(`  Start with      ${roles.start.map(label).join(' | ') || dim('none')}`);
+    console.log(`  Escalate to     ${line(roles.escalate) || dim('nothing: no escalation')}`);
+    console.log(`  Review edits    ${review}`);
+    console.log(`  Subagents use   ${roles.subagents ? label(roles.subagents) : 'normal routing'}`);
+    const action = await p.select('', [
+      { label: 'Looks good', value: 'done' as const },
+      { label: 'Change where turns start', value: 'start' as const },
+      { label: 'Change the escalation ladder', value: 'escalate' as const },
+      { label: 'Change who reviews edits', value: 'review' as const },
+      { label: 'Change the subagent model', value: 'subagents' as const },
+    ]);
+    if (action === 'done') return roles;
+    if (action === 'start') {
+      const first = await pickModel(p, plan, 'Which model should turns start on?', []);
+      if (!first) continue;
+      roles.start = [first];
+      for (;;) {
+        const backup = await pickModel(
+          p,
+          plan,
+          'Add a backup start model? It takes over when the first is down or a prompt is too big for it.',
+          roles.start,
+          'No more',
+        );
+        if (!backup) break;
+        roles.start.push(backup);
+      }
+      roles.escalate = roles.escalate.filter((step) => !step.some((a) => roles.start.includes(a)));
     }
-    const local = locals.findIndex((l) => l.model === flags.reviewer);
-    if (local === -1)
-      throw new SetupError(
-        `--reviewer "${flags.reviewer}" isn't one of the local models; use remote or a --local-model / --local-escalation-model name`,
-      );
-    return { local };
+    if (action === 'escalate') {
+      roles.escalate = [];
+      for (;;) {
+        const next = await pickModel(
+          p,
+          plan,
+          roles.escalate.length
+            ? 'If that one struggles too, escalate to:'
+            : 'When the start model struggles, escalate to:',
+          [...roles.start, ...roles.escalate.flat()],
+          roles.escalate.length ? 'Nothing more' : 'Nothing: no escalation',
+        );
+        if (!next) break;
+        roles.escalate.push([next]);
+      }
+    }
+    if (action === 'review') {
+      const how = await p.select('Review edits automatically?', [
+        { label: 'No', value: 'off' as const },
+        ...(roles.escalate.length
+          ? [
+              {
+                label: `Yes, with the escalation ladder (${line(roles.escalate)})`,
+                value: 'ladder' as const,
+                hint: 'the first reviews; the next steps in when its findings stand',
+              },
+            ]
+          : []),
+        { label: 'Yes, with models I choose', value: 'choose' as const },
+      ]);
+      if (how !== 'choose') roles.review = how;
+      else {
+        const reviewers: string[][] = [];
+        for (;;) {
+          const next = await pickModel(
+            p,
+            plan,
+            reviewers.length
+              ? "If that reviewer's findings still stand after a fix, the next reviewer:"
+              : 'Who reviews first? (A model never reviews its own edits.)',
+            reviewers.flat(),
+            reviewers.length ? 'No more' : 'Cancel',
+          );
+          if (!next) break;
+          reviewers.push([next]);
+        }
+        if (reviewers.length) roles.review = reviewers;
+      }
+    }
+    if (action === 'subagents') {
+      const pick = await p.select('Which model should subagents use when their agent names none?', [
+        { label: 'Normal routing', value: '' },
+        ...plan.map((m) => ({ label: label(m.alias), value: m.alias })),
+      ]);
+      roles.subagents = pick || undefined;
+    }
   }
-  if (!p || !locals.length) return undefined;
-  // The first local model writes the code; any other model can review it.
-  const options: { label: string; value: SetupAnswers['reviewer'] | 'off'; hint?: string }[] = [
-    { label: 'No', value: 'off' },
-    ...(hasRemote
-      ? [
-          {
-            label: 'Yes, with the remote model',
-            value: 'remote' as const,
-            hint: 'about a cent per review',
-          },
-        ]
-      : []),
-    ...locals.flatMap((l, i) =>
-      i === 0 ? [] : [{ label: `Yes, with ${l.model}`, value: { local: i }, hint: 'local, free' }],
-    ),
-  ];
-  if (options.length === 1) return undefined;
-  const pick = await p.select(
-    "\nReview the local model's edits automatically? A second model checks each change and sends problems back to fix.",
-    options,
-  );
-  return pick === 'off' ? undefined : pick;
+}
+
+/** One model from the plan, leaving out `taken`; undefined for the "none" choice. */
+async function pickModel(
+  p: Prompter,
+  plan: PlannedModel[],
+  question: string,
+  taken: string[],
+  none = 'Cancel',
+): Promise<string | undefined> {
+  const options = plan
+    .filter((m) => !taken.includes(m.alias))
+    .map((m) => ({
+      label: m.alias,
+      value: m.alias,
+      hint: [
+        m.tier,
+        m.where,
+        m.contextWindow ? `ctx ${m.contextWindow.toLocaleString('en-US')}` : undefined,
+        m.inputPrice !== undefined
+          ? `$${m.inputPrice}/M in`
+          : m.tier === 'local'
+            ? 'free'
+            : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    }));
+  const pick = await p.select(`\n${question}`, [...options, { label: none, value: '' }]);
+  return pick || undefined;
 }
 
 // ---------------------------------------------------------------------------
 
 type Pick = { server: DetectedServer; model: DetectedServer['models'][number] } | 'manual' | 'done';
 
-const ESCALATE_LOCAL =
-  'Escalate to a bigger local model before going remote? (For example a large model on a GPU server. Local steps cost nothing.)';
-
 const ADD_LOCAL =
-  'Add another local model? It takes over when earlier ones are down or a prompt is too big for them.';
+  'Add another local model? (A bigger one to escalate to, a backup, or a reviewer: you choose roles next.)';
 
 async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<LocalAnswer[]> {
   if (flags.noLocal) return [];
@@ -283,20 +423,7 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
       );
     }
     const urls = flags.localUrls.map(normalizeUrl);
-    const escalation = flags.localEscalationModels.map((name): LocalAnswer => {
-      const server = servers.find((s) => s.models.some((m) => m.id === name));
-      const baseUrl = server?.baseUrl ?? urls[0];
-      if (!baseUrl) throw new SetupError(`no running server has "${name}"; pass --local-url`);
-      const contextWindow = server?.models.find((m) => m.id === name)?.contextWindow;
-      return {
-        providerId: server?.kind === 'openai-compatible' || !server ? 'local-server' : server.kind,
-        baseUrl,
-        model: name,
-        ...(contextWindow ? { contextWindow } : {}),
-        role: 'escalation',
-      };
-    });
-    const chain = flags.localModels.map((name, i) => {
+    return flags.localModels.map((name, i) => {
       const server =
         servers.find((s) => urls[i] === s.baseUrl && s.models.some((m) => m.id === name)) ??
         servers.find((s) => s.models.some((m) => m.id === name));
@@ -315,7 +442,6 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
         contextWindow,
       };
     });
-    return [...chain, ...escalation];
   }
 
   const options: { label: string; value: Pick; hint?: string }[] = [];
@@ -366,14 +492,12 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
       ...remaining,
       { label: 'Enter a server URL and model manually', value: 'manual' as const },
       {
-        label: chosen.length ? 'Done' : 'Skip: no local model (remote only)',
+        label: chosen.length ? 'Done' : 'Skip: no local models (hosted only)',
         value: 'done' as const,
       },
     ];
     const pick = await p.select(
-      chosen.length
-        ? '\nWhich model should back it up?'
-        : '\nWhich local model should Switchback use first?',
+      chosen.length ? '\nWhich other local model?' : `\n${bold('Local models')}: which one first?`,
       choices,
       remaining.length ? preferred : choices.length - 2,
     );
@@ -382,32 +506,6 @@ async function chooseLocals(flags: InitFlags, p: Prompter | undefined): Promise<
     if (!(await p.confirm(`\n${ADD_LOCAL}`, false))) break;
   }
 
-  // Escalation steps: bigger local models tried before anything remote.
-  if (chosen.length && (await p.confirm(`\n${ESCALATE_LOCAL}`, false))) {
-    for (;;) {
-      const remaining = options.filter((o) => {
-        const v = o.value;
-        return (
-          typeof v === 'object' &&
-          !chosen.some((c) => c.baseUrl === v.server.baseUrl && c.model === v.model.id)
-        );
-      });
-      const choices = [
-        ...remaining,
-        { label: 'Enter a server URL and model manually', value: 'manual' as const },
-        { label: 'Done', value: 'done' as const },
-      ];
-      const pick = await p.select(
-        '\nWhich bigger local model should escalations reach first?',
-        choices,
-        remaining.length ? 0 : choices.length - 2,
-      );
-      if (pick === 'done') break;
-      const answer = pick === 'manual' ? await manualLocal(flags, p) : await detectedLocal(pick, p);
-      chosen.push({ ...answer, role: 'escalation' });
-      if (!(await p.confirm('\nAdd another step after it, before going remote?', false))) break;
-    }
-  }
   return chosen;
 }
 
@@ -523,20 +621,20 @@ async function chooseRemotes(flags: InitFlags, p: Prompter | undefined): Promise
   for (;;) {
     const kind: RemoteKind | 'none' = await p.select(
       chosen.length
-        ? '\nFallback provider (used when the ones above are down):'
-        : `\n${bold('Remote model')}\nWhere should escalated turns run?`,
+        ? '\nWhich provider for the next hosted model?'
+        : `\n${bold('Hosted models')}\nWhich provider?`,
       [
         ...REMOTE_KINDS.map((k) => ({
           label: REMOTE_LABELS[k],
           value: k,
           hint: credentialHint(k),
         })),
-        { label: chosen.length ? 'Done' : 'None: local only', value: 'none' as const },
+        { label: chosen.length ? 'Done' : 'None: local models only', value: 'none' as const },
       ],
     );
     if (kind === 'none') break;
     chosen.push(await chooseRemote(kind, undefined, flags, p));
-    if (!(await p.confirm('\nAdd a fallback remote provider?', false))) break;
+    if (!(await p.confirm('\nAdd another hosted model? (Same provider or another.)', false))) break;
   }
   return chosen;
 }
@@ -577,7 +675,7 @@ async function chooseRemote(
     modelFlag ??
     (p
       ? await p.select(
-          'Model for escalated turns:',
+          'Which model?',
           catalog.models.map((m) => ({
             label: m.label,
             value: m.id,
@@ -592,7 +690,7 @@ async function chooseRemote(
   }
   const hint = credentialHint(kind);
   if (hint.startsWith('needs'))
-    console.log(yellow(`  ${REMOTE_LABELS[kind]} ${hint} before escalating.`));
+    console.log(yellow(`  ${REMOTE_LABELS[kind]} ${hint} before Switchback can use it.`));
 
   switch (kind) {
     case 'anthropic':
@@ -614,7 +712,7 @@ async function chooseRemote(
       if (p)
         console.log(
           dim(
-            '  Bedrock bills differently from the Anthropic API; set models.remote.price for accurate savings.',
+            '  Bedrock bills differently from the Anthropic API; set models.<alias>.price for accurate savings.',
           ),
         );
       return { kind, model, region, ...(profile ? { profile } : {}) };
@@ -676,7 +774,6 @@ export async function offerSetup(cwd: string): Promise<number> {
     localUrls: [],
     localModels: [],
     contextWindows: [],
-    localEscalationModels: [],
     remotes: [],
     remoteModels: [],
   });

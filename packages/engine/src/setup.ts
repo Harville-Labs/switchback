@@ -63,11 +63,6 @@ export interface LocalAnswer {
   /** Detected or given; left out, the engine asks the server at runtime. */
   contextWindow?: number;
   apiKeyEnv?: string;
-  /**
-   * `chain` (default): part of `routing.start`, in order. `escalation`: its
-   * own `routing.escalate` step, before the remote models.
-   */
-  role?: 'chain' | 'escalation';
 }
 
 export type RemoteAnswer =
@@ -84,43 +79,146 @@ export type RemoteAnswer =
       contextWindow: number;
     };
 
+/**
+ * Which models do what (ADR 0015), by alias. `review`: `off`, `ladder` (the
+ * reviewers are the escalation ladder), or reviewers in order.
+ */
+export interface Roles {
+  start: string[];
+  escalate: string[][];
+  review: 'off' | 'ladder' | string[][];
+  /** Default model for subagents that don't pin one; normal routing when unset. */
+  subagents?: string;
+}
+
 export interface SetupAnswers {
-  /** Local models in order of preference: later ones take over when earlier ones are down or too small. */
+  /** Local models, in the order chosen. */
   locals: LocalAnswer[];
-  /** Remote providers in order of preference: later ones are fallbacks. */
+  /** Hosted models, in the order chosen. */
   remotes: RemoteAnswer[];
+  /** Defaults to `defaultRoles(planModels(...))`. */
+  roles?: Roles;
   escalationPolicy: 'auto' | 'ask' | 'off';
   budget?: { dailyUsd?: number; monthlyUsd?: number };
-  /**
-   * Review the local model's edits after each turn (docs/review.md): with the
-   * first remote model, or a local one (an index into `locals`).
-   */
-  reviewer?: 'remote' | { local: number };
+}
+
+/** A model setup will configure, with the alias it gets. */
+export interface PlannedModel {
+  alias: string;
+  tier: 'local' | 'remote';
+  /** The model ID the provider knows it by. */
+  model: string;
+  /** For people: where it runs or who serves it. */
+  where: string;
+  contextWindow?: number;
+  /** USD per million input tokens, when the catalog knows it. */
+  inputPrice?: number;
 }
 
 /** `base`, then `base-2`, `base-3`, ... whichever isn't taken. */
-function unique(base: string, taken: Record<string, unknown>): string {
-  if (!(base in taken)) return base;
+function unique(base: string, taken: Record<string, unknown> | Set<string>): string {
+  const has = (k: string) => (taken instanceof Set ? taken.has(k) : k in taken);
+  if (!has(base)) return base;
   let n = 2;
-  while (`${base}-${n}` in taken) n++;
+  while (has(`${base}-${n}`)) n++;
   return `${base}-${n}`;
+}
+
+/** A readable alias from a model ID: `qwen3-coder:30b` → `qwen3-coder-30b`, `openai/gpt-oss` → `gpt-oss`. */
+export function aliasFor(model: string): string {
+  const base = model.split('/').pop() ?? model;
+  const slug = base
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'model';
+}
+
+const REMOTE_WHERE: Record<RemoteAnswer['kind'], string> = {
+  anthropic: 'Anthropic API',
+  openai: 'OpenAI API',
+  deepseek: 'DeepSeek API',
+  gemini: 'Gemini API',
+  bedrock: 'Amazon Bedrock',
+  vertex: 'Vertex AI',
+  'anthropic-aws': 'Claude Platform on AWS',
+  foundry: 'Microsoft Foundry',
+  'openai-compatible': 'OpenAI-compatible API',
+};
+
+/** The models the answers describe, with their aliases: locals first, then hosted, as chosen. */
+export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): PlannedModel[] {
+  const taken = new Set<string>();
+  const plan: PlannedModel[] = [];
+  for (const l of a.locals) {
+    const alias = unique(aliasFor(l.model), taken);
+    taken.add(alias);
+    plan.push({
+      alias,
+      tier: 'local',
+      model: l.model,
+      where: new URL(l.baseUrl).host,
+      ...(l.contextWindow ? { contextWindow: l.contextWindow } : {}),
+    });
+  }
+  for (const r of a.remotes) {
+    const alias = unique(aliasFor(r.model), taken);
+    taken.add(alias);
+    const catalog = catalogFor(r.kind);
+    const entry = catalog ? CATALOG[catalog].models.find((m) => m.id === r.model) : undefined;
+    const contextWindow = r.kind === 'openai-compatible' ? r.contextWindow : entry?.contextWindow;
+    plan.push({
+      alias,
+      tier: 'remote',
+      model: r.model,
+      where: r.kind === 'openai-compatible' ? new URL(r.baseUrl).host : REMOTE_WHERE[r.kind],
+      ...(contextWindow ? { contextWindow } : {}),
+      ...(entry ? { inputPrice: entry.price.input } : {}),
+    });
+  }
+  return plan;
+}
+
+/**
+ * Roles to suggest for a set of models: the first local model starts (the
+ * cheapest hosted one with none), the other local models are the first
+ * escalation steps in the order chosen, then hosted models from cheapest to
+ * most expensive. Review starts off.
+ */
+export function defaultRoles(models: PlannedModel[]): Roles {
+  const locals = models.filter((m) => m.tier === 'local');
+  const remotes = models
+    .filter((m) => m.tier === 'remote')
+    .map((m, i) => ({ m, i }))
+    // Unknown prices keep their chosen order, after the known ones.
+    .sort(
+      (x, y) =>
+        (x.m.inputPrice ?? Number.POSITIVE_INFINITY) -
+          (y.m.inputPrice ?? Number.POSITIVE_INFINITY) || x.i - y.i,
+    )
+    .map(({ m }) => m);
+  const ordered = [...locals, ...remotes];
+  const [first, ...rest] = ordered;
+  return {
+    start: first ? [first.alias] : [],
+    escalate: rest.map((m) => [m.alias]),
+    review: 'off',
+  };
 }
 
 /** Build the config layer described by the answers. */
 export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   if (!a.locals.length && !a.remotes.length) {
-    throw new Error('configure at least a local model or a remote provider');
+    throw new Error('configure at least one model, local or hosted');
   }
+  const plan = planModels(a);
+  const roles = a.roles ?? defaultRoles(plan);
   const providers: Record<string, unknown> = {};
   const models: Record<string, unknown> = {};
-  const routing: Record<string, unknown> = { escalation: { policy: a.escalationPolicy } };
 
-  // One provider per server (several models may share it), one alias per model.
+  // One provider per server (several models may share it).
   const localIds = new Map<string, string>();
-  const localAliases: string[] = [];
-  const viaAliases: string[] = [];
-  const aliasOfLocal: string[] = [];
-  for (const l of a.locals) {
+  for (const [i, l] of a.locals.entries()) {
     let id = localIds.get(l.baseUrl);
     if (!id) {
       id = unique(l.providerId, providers);
@@ -132,37 +230,33 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
         ...(l.apiKeyEnv ? { apiKey: `{env:${l.apiKeyEnv}}` } : {}),
       };
     }
-    const list = l.role === 'escalation' ? viaAliases : localAliases;
-    const base = l.role === 'escalation' ? 'large' : 'local';
-    const alias = list.length ? `${base}-${list.length + 1}` : base;
-    models[alias] = {
+    models[plan[i]?.alias ?? aliasFor(l.model)] = {
       provider: id,
       model: l.model,
       ...(l.contextWindow ? { contextWindow: l.contextWindow } : {}),
     };
-    list.push(alias);
-    aliasOfLocal.push(alias);
   }
-  if (viaAliases.length && !localAliases.length)
-    throw new Error('an escalation model needs a local model to escalate from');
 
-  const remoteAliases: string[] = [];
-  for (const r of a.remotes) {
-    const alias = remoteAliases.length ? `remote-${remoteAliases.length + 1}` : 'remote';
-    remoteAliases.push(alias);
+  const hostedIds = new Map<string, string>();
+  let sizeAliasesFrom: HostedProviderKind | undefined;
+  for (const [i, r] of a.remotes.entries()) {
+    const alias = plan[a.locals.length + i]?.alias ?? aliasFor(r.model);
     if (r.kind === 'openai-compatible') {
-      const id = unique('remote', providers);
-      providers[id] = {
-        type: 'openai-compatible',
-        baseUrl: r.baseUrl,
-        tier: 'remote',
-        ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
-      };
+      let id = hostedIds.get(`compat:${r.baseUrl}`);
+      if (!id) {
+        id = unique(new URL(r.baseUrl).hostname.split('.').at(-2) ?? 'remote', providers);
+        hostedIds.set(`compat:${r.baseUrl}`, id);
+        providers[id] = {
+          type: 'openai-compatible',
+          baseUrl: r.baseUrl,
+          tier: 'remote',
+          ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
+        };
+      }
       models[alias] = { provider: id, model: r.model, contextWindow: r.contextWindow };
       continue;
     }
-    const id = unique(r.kind, providers);
-    providers[id] =
+    const providerConfig =
       r.kind === 'bedrock'
         ? { type: 'bedrock', region: r.region, ...(r.profile ? { profile: r.profile } : {}) }
         : r.kind === 'vertex'
@@ -177,6 +271,14 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
             : r.kind === 'foundry'
               ? { type: 'foundry', resource: r.resource }
               : { type: r.kind };
+    // Several models from the same provider share one provider entry.
+    const key = JSON.stringify(providerConfig);
+    let id = hostedIds.get(key);
+    if (!id) {
+      id = unique(r.kind, providers);
+      hostedIds.set(key, id);
+      providers[id] = providerConfig;
+    }
     const catalog = catalogFor(r.kind) as HostedProviderKind;
     // Bedrock model IDs carry the `anthropic.` prefix; everywhere else uses bare IDs.
     const wire = (m: string) => (r.kind === 'bedrock' ? `anthropic.${m}` : m);
@@ -191,37 +293,49 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
     const chosen = CATALOG[catalog].models.find((m) => m.id === r.model);
     models[alias] = chosen ? entry(chosen) : { provider: id, model: wire(r.model) };
     // Agent aliases (`model: opus|sonnet|haiku`) mean large/medium/small on the
-    // first (preferred) remote provider.
-    if (remoteAliases.length === 1)
-      for (const [tierAlias, m] of Object.entries(aliasModels(catalog)))
-        models[tierAlias] = entry(m);
+    // first hosted provider chosen; they never replace a chosen model's alias.
+    if (!sizeAliasesFrom) {
+      sizeAliasesFrom = catalog;
+      for (const [sizeAlias, m] of Object.entries(aliasModels(catalog)))
+        if (!(sizeAlias in models)) models[sizeAlias] = entry(m);
+    }
   }
 
-  // Roles (ADR 0015): local models start, each escalation model is a step, and
-  // the remote providers are the last step (later ones its fallbacks). With no
-  // local model, turns start on the remote ones. Always written in full, so
-  // re-running setup replaces earlier roles.
-  routing.start = localAliases.length ? localAliases : remoteAliases;
-  routing.escalate = [
-    ...viaAliases.map((alias) => [alias]),
-    ...(localAliases.length && remoteAliases.length ? [remoteAliases] : []),
-  ];
+  // Roles must name chosen models.
+  const known = new Set(plan.map((m) => m.alias));
+  const check = (alias: string, role: string) => {
+    if (!known.has(alias))
+      throw new Error(`${role} names "${alias}", which isn't one of the chosen models`);
+  };
+  for (const alias of roles.start) check(alias, 'start');
+  for (const step of roles.escalate) for (const alias of step) check(alias, 'escalate');
+  if (Array.isArray(roles.review))
+    for (const step of roles.review) for (const alias of step) check(alias, 'review');
+  if (roles.subagents) check(roles.subagents, 'subagents');
+
+  // Every role is written in full, so re-running setup replaces earlier choices.
+  const routing: Record<string, unknown> = {
+    start: roles.start,
+    escalate: roles.escalate,
+    escalation: { policy: a.escalationPolicy },
+  };
   if (a.budget?.dailyUsd || a.budget?.monthlyUsd) {
     routing.budget = {
       ...(a.budget.dailyUsd ? { dailyUsd: a.budget.dailyUsd } : {}),
       ...(a.budget.monthlyUsd ? { monthlyUsd: a.budget.monthlyUsd } : {}),
     };
   }
-  let review: Record<string, unknown> | undefined;
-  if (a.reviewer === 'remote') {
-    if (!remoteAliases.length) throw new Error('a remote reviewer needs a remote provider');
-    review = { mode: 'auto', models: [remoteAliases] };
-  } else if (a.reviewer) {
-    const alias = aliasOfLocal[a.reviewer.local];
-    if (!alias) throw new Error(`no local model #${a.reviewer.local + 1} to review with`);
-    review = { mode: 'auto', models: [alias] };
-  }
-  return { providers, models, routing, ...(review ? { review } : {}) };
+  const review =
+    roles.review === 'off'
+      ? { mode: 'off', models: [] }
+      : { mode: 'auto', models: roles.review === 'ladder' ? [] : roles.review };
+  return {
+    providers,
+    models,
+    routing,
+    review,
+    ...(roles.subagents ? { subagents: { model: roles.subagents } } : {}),
+  };
 }
 
 export interface WriteResult {
