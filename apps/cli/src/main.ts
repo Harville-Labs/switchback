@@ -35,7 +35,7 @@ Options
   --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
   --json             run/usage: machine-readable output
-  --review, --no-review  run: remote review of local edits (default: review.mode)
+  --review, --no-review  run: review of local edits (default: review.mode)
   --mock             Use scripted mock providers (no models needed)
   -v, --version      Print version
   -h, --help         Print this help
@@ -46,6 +46,10 @@ init options (all optional; prompts cover anything not given)
   --local-model <name>     Local model name as the server lists it. Repeat for
                            fallbacks and bigger-context models, in order
   --context-window <n>     Tokens the server loads, per --local-model in order
+  --local-escalation-model <name>  A bigger local model to escalate to before
+                           remote. Repeat for more steps, in order
+  --reviewer <r>           Review local edits automatically: remote, or a local
+                           model's name (from --local-model / --local-escalation-model)
   --no-local               Remote only
   --remote <r>             anthropic | openai | deepseek | gemini | bedrock | vertex |
                            anthropic-aws | foundry | openai-compatible | none.
@@ -128,6 +132,8 @@ async function main(argv: string[]): Promise<number> {
       'local-url': { type: 'string', multiple: true },
       'local-model': { type: 'string', multiple: true },
       'context-window': { type: 'string', multiple: true },
+      'local-escalation-model': { type: 'string', multiple: true },
+      reviewer: { type: 'string' },
       'no-local': { type: 'boolean', default: false },
       remote: { type: 'string', multiple: true },
       'remote-model': { type: 'string', multiple: true },
@@ -220,6 +226,8 @@ async function main(argv: string[]): Promise<number> {
         localUrls: values['local-url'] ?? [],
         localModels: values['local-model'] ?? [],
         contextWindows,
+        localEscalationModels: values['local-escalation-model'] ?? [],
+        ...(values.reviewer ? { reviewer: values.reviewer } : {}),
         remotes,
         remoteModels: values['remote-model'] ?? [],
         ...(remoteContextWindow ? { remoteContextWindow } : {}),

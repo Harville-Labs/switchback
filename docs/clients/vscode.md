@@ -16,7 +16,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `switchb
 - **Config validation**: `.switchback/config.json` and `~/.config/switchback/config.json` are validated and autocompleted against the bundled schema.
 - **Privacy and savings**: tool rows that brought in private content show `🔒 stays local`, and the status line shows `🔒 local only` once a session is pinned ([privacy.md](../privacy.md)); it also shows what the session has saved so far.
 - **Telemetry**: Switchback telemetry is off unless you opt in with `switchback telemetry on`, and VS Code's own `telemetry.telemetryLevel: off` keeps it off regardless ([telemetry.md](../telemetry.md)).
-- Commands: Set Up Models, Install Terminal Command, New Session, Cancel, Show Usage and Savings, Show Session Receipt, Set Remote Review of Local Edits, Compact Conversation, Restart Engine, Show Engine Logs.
+- Commands: Set Up Models, Install Terminal Command, New Session, Cancel, Show Usage and Savings, Show Session Receipt, Set Review of Local Edits, Compact Conversation, Restart Engine, Show Engine Logs.
 
 ## Settings
 

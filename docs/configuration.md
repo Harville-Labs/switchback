@@ -65,6 +65,8 @@ Any number of providers can be configured together, including several local serv
 
 `switchback init` builds this for you: after the first local model it offers to add more (from any detected server), and after the first remote provider it offers fallbacks. Unattended, repeat `--local-model` and `--remote`. How the router picks within a list is in [routing.md](routing.md).
 
+Models in `routing.local` are alternatives: the router uses the first that's up and fits. To make a bigger local model a step that escalations reach *before* going remote, list it in `routing.escalation.via` instead (see [Escalation ladder](routing.md#escalation-ladder)). Any alias can also be a reviewer (`review.model`, see [review.md](review.md)) or an agent's model (`model: big`), local or remote.
+
 ## Keys
 
 ### `providers.<id>`

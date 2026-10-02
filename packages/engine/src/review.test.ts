@@ -97,7 +97,7 @@ const reviews = (events: EngineEvent[]) =>
     (e): e is Extract<EngineEvent, { type: 'review.completed' }> => e.type === 'review.completed',
   );
 
-describe('draft locally, review remotely', () => {
+describe('draft locally, review with a stronger model', () => {
   test('a local edit is reviewed; approve ends the turn', async () => {
     const { engine, rp, events } = setup(
       [edit('a - b', 'a + b'), { text: 'Fixed add.' }],

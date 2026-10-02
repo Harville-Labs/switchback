@@ -27,12 +27,12 @@ The goal is to do most of the work locally and pay only for the calls that need 
 | 1 | `user-override` | The prompt was sent with `route: local` or `route: remote` | That tier |
 | 0 | `refusal-fallback` | The last remote call ended in `refusal`; retry on the next remote model not yet refused this turn | remote |
 | 1 | `escalation-declined` | An `ask` escalation was just declined (or the run is headless) | local |
-| 2 | `mode` | `routing.mode` is `local-only` or `remote-only` | That tier |
+| 2 | `mode` | `routing.mode` is `local-only` or `remote-only` | That tier (`local-only` can still climb through local [escalation steps](#escalation-ladder)) |
 | 3 | `agent-pin` | The agent's definition names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model or tier |
-| 4 | `context-overflow` | Input tokens exceed `escalation.contextHeadroom` × the `contextWindow` of every local model (see [Counting tokens](#counting-tokens)) | remote (counts as an escalation) |
-| 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` model calls | remote |
-| 6 | `classifier` | `routing.classifier` is set and rated the turn's prompt `escalateOn` or harder, and `escalation.policy` is `auto` (or the user approved an `ask`) | remote (counts as an escalation) |
-| 7 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | remote |
+| 4 | `context-overflow` | Input tokens exceed `escalation.contextHeadroom` × the `contextWindow` of every local model (see [Counting tokens](#counting-tokens)) | The first escalation step whose window fits, else remote (counts as an escalation) |
+| 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` model calls | The step it reached; one step higher if the model there is struggling too |
+| 6 | `classifier` | `routing.classifier` is set and rated the turn's prompt `escalateOn` or harder, and `escalation.policy` is `auto` (or the user approved an `ask`) | One step up (counts as an escalation) |
+| 7 | `escalation` | A quality signal crossed its threshold (below) and `escalation.policy` is `auto`, or the user approved an `ask` | One step up |
 | 8 | `default` | Nothing else matched | local (remote if no local model is configured) |
 
 A tier pin in an agent definition (`route: local`) is a preference: if that tier has no model configured, the router skips the pin. A user override (`--route local`) or `mode: local-only` with no local model is blocked with a pointer to `switchback init`.
@@ -47,6 +47,33 @@ Four guards then run on the chosen target:
 
 - **Budget** (`rule: budget`). If the target is remote, the user didn't explicitly ask for remote, and daily or monthly spend has reached `routing.budget`, the call stays local (`onExceeded: local`) or is refused (`onExceeded: block`).
 - **Availability** (`rule: fallback`). If every model in the chosen tier failed its health check, the call moves to the other tier per `routing.fallback`. If that's also unavailable or over budget, the call is blocked with an explanation.
+
+## Escalation ladder
+
+By default an escalation goes from the `routing.local` chain straight to `routing.remote`. With `escalation.via`, it climbs through steps in between, typically bigger local models:
+
+```jsonc
+"models": {
+  "fast":  { "provider": "ollama", "model": "qwen3-coder:30b" },
+  "large": { "provider": "gpu-box", "model": "qwen3-coder-480b" },
+  "opus":  { "provider": "anthropic", "model": "claude-opus-5" }
+},
+"routing": {
+  "local": ["fast"],
+  "remote": ["opus"],
+  "escalation": { "via": ["large"] }   // fast → large → opus
+}
+```
+
+- Each escalation moves **one step** from where the session is. When `fast` gets stuck, the turn goes to `large` (`3 consecutive tool errors; escalating to large (step 1 of 2)`). If `large` also gets stuck during its sticky turns, the next escalation goes remote.
+- Stickiness keeps the session on the step it reached for `stickyTurns` model calls, then routing starts again from the local chain.
+- Context overflow skips to the first step whose context window fits.
+- A step whose server is down, or whose window is too small for the prompt, is skipped.
+- Local steps cost nothing: `ask` doesn't prompt for them, budgets don't apply, and they work in `local-only` mode and in [private sessions](privacy.md), which can't otherwise escalate at all. `policy: off` still means no escalation on quality signals, at any step.
+- Any alias can be a step, including a remote one: `"via": ["haiku"]` tries a cheap remote model before `routing.remote`. Remote steps follow every rule that remote calls do.
+- A `via` alias that isn't under `models` is a config error, so a typo can't silently remove a step.
+
+`switchback init` offers an escalation step after the local models, and `--local-escalation-model <name>` adds one unattended. `switchback doctor` shows the ladder.
 
 ## Pre-routing classifier
 
@@ -145,7 +172,8 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
     "maxMalformedToolCalls": 2,
     "loopThreshold": 3,
     "contextHeadroom": 0.85,
-    "stickyTurns": 2
+    "stickyTurns": 2,
+    "via": []                     // escalation steps before remote, e.g. ["large"]
   },
   "budget": { "dailyUsd": 5, "monthlyUsd": 50, "onExceeded": "local" },
   "fallback": { "onLocalUnavailable": "remote", "onRemoteUnavailable": "local" }

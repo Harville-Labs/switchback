@@ -59,8 +59,14 @@ export interface LocalAnswer {
   providerId: string;
   baseUrl: string;
   model: string;
-  contextWindow: number;
+  /** Detected or given; left out, the engine asks the server at runtime. */
+  contextWindow?: number;
   apiKeyEnv?: string;
+  /**
+   * `chain` (default): part of `routing.local`, in order. `escalation`: a
+   * bigger model escalations reach before remote (`routing.escalation.via`).
+   */
+  role?: 'chain' | 'escalation';
 }
 
 export type RemoteAnswer =
@@ -84,6 +90,11 @@ export interface SetupAnswers {
   remotes: RemoteAnswer[];
   escalationPolicy: 'auto' | 'ask' | 'off';
   budget?: { dailyUsd?: number; monthlyUsd?: number };
+  /**
+   * Review the local model's edits after each turn (docs/review.md): with the
+   * first remote model, or a local one (an index into `locals`).
+   */
+  reviewer?: 'remote' | { local: number };
 }
 
 /** `base`, then `base-2`, `base-3`, ... whichever isn't taken. */
@@ -106,6 +117,8 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   // One provider per server (several models may share it), one alias per model.
   const localIds = new Map<string, string>();
   const localAliases: string[] = [];
+  const viaAliases: string[] = [];
+  const aliasOfLocal: string[] = [];
   for (const l of a.locals) {
     let id = localIds.get(l.baseUrl);
     if (!id) {
@@ -118,10 +131,19 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
         ...(l.apiKeyEnv ? { apiKey: `{env:${l.apiKeyEnv}}` } : {}),
       };
     }
-    const alias = localAliases.length ? `local-${localAliases.length + 1}` : 'local';
-    models[alias] = { provider: id, model: l.model, contextWindow: l.contextWindow };
-    localAliases.push(alias);
+    const list = l.role === 'escalation' ? viaAliases : localAliases;
+    const base = l.role === 'escalation' ? 'large' : 'local';
+    const alias = list.length ? `${base}-${list.length + 1}` : base;
+    models[alias] = {
+      provider: id,
+      model: l.model,
+      ...(l.contextWindow ? { contextWindow: l.contextWindow } : {}),
+    };
+    list.push(alias);
+    aliasOfLocal.push(alias);
   }
+  if (viaAliases.length && !localAliases.length)
+    throw new Error('an escalation model needs a local model to escalate from');
 
   const remoteAliases: string[] = [];
   for (const r of a.remotes) {
@@ -178,13 +200,24 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   routing.mode = !a.locals.length ? 'remote-only' : !a.remotes.length ? 'local-only' : 'auto';
   if (localAliases.length) routing.local = localAliases;
   if (remoteAliases.length) routing.remote = remoteAliases;
+  // Always written, so re-running setup without one removes an old ladder.
+  (routing.escalation as Record<string, unknown>).via = viaAliases;
   if (a.budget?.dailyUsd || a.budget?.monthlyUsd) {
     routing.budget = {
       ...(a.budget.dailyUsd ? { dailyUsd: a.budget.dailyUsd } : {}),
       ...(a.budget.monthlyUsd ? { monthlyUsd: a.budget.monthlyUsd } : {}),
     };
   }
-  return { providers, models, routing };
+  let review: Record<string, unknown> | undefined;
+  if (a.reviewer === 'remote') {
+    if (!remoteAliases.length) throw new Error('a remote reviewer needs a remote provider');
+    review = { mode: 'auto' };
+  } else if (a.reviewer) {
+    const alias = aliasOfLocal[a.reviewer.local];
+    if (!alias) throw new Error(`no local model #${a.reviewer.local + 1} to review with`);
+    review = { mode: 'auto', model: alias };
+  }
+  return { providers, models, routing, ...(review ? { review } : {}) };
 }
 
 export interface WriteResult {

@@ -43,6 +43,12 @@ export async function doctor(flags: CommonFlags): Promise<number> {
       .join(' → ');
   out(`  local  ${chainLine('local')}`);
   out(`  remote ${chainLine('remote')}`);
+  if (r.escalation.via.length)
+    out(
+      `  escalation steps: local → ${r.escalation.via
+        .map((alias) => `${alias} (${config.models[alias]?.model ?? 'not configured'})`)
+        .join(' → ')}${r.mode === 'local-only' ? '' : ' → remote'}`,
+    );
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,
   );

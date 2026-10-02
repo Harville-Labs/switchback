@@ -1,6 +1,6 @@
-# Draft locally, review remotely
+# Draft locally, review with a stronger model
 
-An optional workflow: your local model writes the code, and a stronger remote model reviews what it changed. When the reviewer finds a real problem, the findings go back to the local model to fix, and the fix is reviewed again.
+An optional workflow: your local model writes the code, and a stronger model reviews what it changed: a remote one, or a bigger local one that costs nothing. When the reviewer finds a real problem, the findings go back to the local model to fix, and the fix is reviewed again.
 
 Writing code with a remote model is expensive because every step resends the growing conversation. Reviewing is cheap: the reviewer sees one diff and answers with a short verdict. You get most of the stronger model's judgment for a fraction of its cost.
 
@@ -12,7 +12,7 @@ Writing code with a remote model is expensive because every step resends the gro
 }
 ```
 
-Turn it on or off for a single prompt without changing config: `/review on|off|default` in the TUI, **Switchback: Set Remote Review of Local Edits** in VS Code, or `switchback run --review` / `--no-review`.
+Turn it on or off for a single prompt without changing config: `/review on|off|default` in the TUI, **Switchback: Set Review of Local Edits** in VS Code, or `switchback run --review` / `--no-review`.
 
 ## What happens
 
@@ -34,7 +34,7 @@ A reviewer that fails or returns something unreadable is reported as skipped; th
 
 ## A bigger local model as the reviewer
 
-`review.model` can name any model alias, including a local one. A large local model reviewing a small, fast one costs nothing and works in `local-only` mode:
+`review.model` can name any model alias, including a local one. A large local model reviewing a small, fast one costs nothing and works in `local-only` mode and in private sessions. `switchback init` offers it when you've added more than one local model, and `--reviewer <model name>` sets it unattended (`--reviewer remote` for the first remote model):
 
 ```jsonc
 "models": {

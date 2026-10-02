@@ -43,7 +43,7 @@ Retries live in src/http/client.ts:88 ...
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
-| `/review on\|off\|default` | Remote review of local edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
+| `/review on\|off\|default` | Review of local edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
 | `/copy [n]` | Copy the last reply, or its `n`th code block, to the clipboard as raw text (no wrapping or indentation from the terminal rendering). Works over SSH in terminals that support OSC 52 |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/help`, `/exit` | |

@@ -2,7 +2,6 @@
  * Per-session quality signals that feed escalation. The engine reports what
  * happened on each turn; the router reads a snapshot when routing the next one.
  */
-import type { Tier } from '@switchback/protocol';
 import stableStringify from 'safe-stable-stringify';
 import type { EscalationConfig } from './config.ts';
 
@@ -10,8 +9,13 @@ export interface SignalSnapshot {
   consecutiveToolErrors: number;
   malformedToolCalls: number;
   loopDetected: boolean;
-  /** Remaining turns to stay remote after an escalation. */
-  stickyRemoteTurns: number;
+  /** Remaining turns to stay on the step reached by the last escalation. */
+  stickyTurns: number;
+  /**
+   * The escalation step the session is on while `stickyTurns` lasts: 0 is the
+   * local chain, then each `escalation.via` model, then the remote chain.
+   */
+  escalationStep: number;
   /** The last turn's local attempt ended in refusal, max_tokens, or a provider error. */
   localTurnFailed: boolean;
 }
@@ -21,7 +25,8 @@ export class SignalTracker {
   private malformedToolCalls = 0;
   private recentCalls: string[] = [];
   private loopDetected = false;
-  private stickyRemoteTurns = 0;
+  private stickyTurns = 0;
+  private escalationStep = 0;
   private localTurnFailed = false;
 
   constructor(private readonly config: EscalationConfig) {}
@@ -46,13 +51,15 @@ export class SignalTracker {
     this.localTurnFailed = true;
   }
 
-  /** Call once per completed model turn. */
-  recordTurn(tier: Tier, escalated: boolean): void {
+  /** Call once per completed model turn, with the escalation step its model was on. */
+  recordTurn(step: number, escalated: boolean): void {
     if (escalated) {
-      this.stickyRemoteTurns = this.config.stickyTurns;
+      this.escalationStep = step;
+      this.stickyTurns = this.config.stickyTurns;
       this.reset();
-    } else if (tier === 'remote' && this.stickyRemoteTurns > 0) {
-      this.stickyRemoteTurns--;
+    } else if (this.stickyTurns > 0 && step === this.escalationStep) {
+      this.stickyTurns--;
+      if (this.stickyTurns === 0) this.escalationStep = 0;
     }
   }
 
@@ -68,7 +75,8 @@ export class SignalTracker {
       consecutiveToolErrors: this.consecutiveToolErrors,
       malformedToolCalls: this.malformedToolCalls,
       loopDetected: this.loopDetected,
-      stickyRemoteTurns: this.stickyRemoteTurns,
+      stickyTurns: this.stickyTurns,
+      escalationStep: this.stickyTurns > 0 ? this.escalationStep : 0,
       localTurnFailed: this.localTurnFailed,
     };
   }
