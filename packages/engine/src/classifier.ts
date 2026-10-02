@@ -1,8 +1,8 @@
 /**
- * Pre-routing difficulty classifier (optional, off by default). A small local
- * model rates the user's prompt before the first model call of a turn so
- * obviously hard tasks can start on the remote tier instead of failing locally
- * first. The router stays pure: the rating is just another input.
+ * Pre-routing difficulty classifier (optional, off by default). A small model
+ * rates the user's prompt before the first model call of a turn, so obviously
+ * hard tasks start one step up the escalation ladder instead of failing on the
+ * start model first. The router stays pure: the rating is just another input.
  */
 import type { Usage } from '@switchback/protocol';
 import type { Provider } from '@switchback/providers';
