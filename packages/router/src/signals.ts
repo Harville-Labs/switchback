@@ -12,12 +12,12 @@ export interface SignalSnapshot {
   /** Remaining turns to stay on the step reached by the last escalation. */
   stickyTurns: number;
   /**
-   * The escalation step the session is on while `stickyTurns` lasts: 0 is the
-   * local chain, then each `escalation.via` model, then the remote chain.
+   * The escalation step the session is on while `stickyTurns` lasts: 0 is
+   * `routing.start`, k the k-th `routing.escalate` step.
    */
   escalationStep: number;
-  /** The last turn's local attempt ended in refusal, max_tokens, or a provider error. */
-  localTurnFailed: boolean;
+  /** The last call ended in refusal, max_tokens, or a provider error. */
+  turnFailed: boolean;
 }
 
 export class SignalTracker {
@@ -27,7 +27,7 @@ export class SignalTracker {
   private loopDetected = false;
   private stickyTurns = 0;
   private escalationStep = 0;
-  private localTurnFailed = false;
+  private turnFailed = false;
 
   constructor(private readonly config: EscalationConfig) {}
 
@@ -47,8 +47,8 @@ export class SignalTracker {
     if (repeats >= this.config.loopThreshold) this.loopDetected = true;
   }
 
-  recordLocalFailure(): void {
-    this.localTurnFailed = true;
+  recordFailure(): void {
+    this.turnFailed = true;
   }
 
   /** Call once per completed model turn, with the escalation step its model was on. */
@@ -77,7 +77,7 @@ export class SignalTracker {
       loopDetected: this.loopDetected,
       stickyTurns: this.stickyTurns,
       escalationStep: this.stickyTurns > 0 ? this.escalationStep : 0,
-      localTurnFailed: this.localTurnFailed,
+      turnFailed: this.turnFailed,
     };
   }
 
@@ -86,6 +86,6 @@ export class SignalTracker {
     this.malformedToolCalls = 0;
     this.loopDetected = false;
     this.recentCalls = [];
-    this.localTurnFailed = false;
+    this.turnFailed = false;
   }
 }

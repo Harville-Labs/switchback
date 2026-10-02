@@ -151,6 +151,7 @@ describe('engine compaction', () => {
           local: { provider: 'lp', model: 'small', contextWindow: localWindow },
           remote: { provider: 'rp', model: 'big', contextWindow: 1_000_000 },
         },
+        routing: { start: ['local'], escalate: [['remote']] },
         permissions: { bash: 'deny' },
         ...extra,
       }),
@@ -203,7 +204,7 @@ describe('engine compaction', () => {
 
   test('without a reachable local model, local-only routing never pays for a summary', async () => {
     const { e, remote, health, clock, events } = engine(16_000, {
-      routing: { mode: 'local-only' },
+      routing: { start: ['local'], allowRemote: false },
     });
     const s = e.createSession({});
     for (let i = 0; i < 12; i++) await e.runTurn(s.id, `step ${i}: ${'w'.repeat(300)}`);

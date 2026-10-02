@@ -7,7 +7,7 @@ Writing code with a remote model is expensive because every step resends the gro
 ```jsonc
 "review": {
   "mode": "auto",        // off (default) | auto
-  "model": "remote",     // optional; defaults to the first available model in routing.remote
+  "model": "remote",     // optional; defaults to the first available remote model in role order
   "maxRounds": 2         // reviews per prompt: review, fix, review again
 }
 ```
@@ -27,21 +27,21 @@ Both clients show each review: `âœ“ Reviewed by claude-opus-5: approved`, or `â†
 
 - No files changed, or only a remote model changed them (it doesn't review its own work).
 - The turn didn't finish normally (cancelled, error, out of steps).
-- The reviewer is remote and something keeps remote calls off: `routing.mode: local-only`, an organization's remote switch, a spent budget, or a [private session](privacy.md). You'll see `Review skipped:` with the reason.
+- The reviewer is remote and something keeps remote calls off: `routing.allowRemote: false`, an organization's remote switch, a spent budget, or a [private session](privacy.md). You'll see `Review skipped:` with the reason.
 - `privacy.secrets: block` and the diff contains a secret. With the default `redact`, secrets in the diff are replaced with placeholders first.
 
 A reviewer that fails or returns something unreadable is reported as skipped; the turn itself still succeeds.
 
 ## A bigger local model as the reviewer
 
-`review.model` can name any model alias, including a local one. A large local model reviewing a small, fast one costs nothing and works in `local-only` mode and in private sessions. `switchback init` offers it when you've added more than one local model, and `--reviewer <model name>` sets it unattended (`--reviewer remote` for the first remote model):
+`review.model` can name any model alias, including a local one. A large local model reviewing a small, fast one costs nothing and works with `routing.allowRemote: false` and in private sessions. `switchback init` offers it when you've added more than one local model, and `--reviewer <model name>` sets it unattended (`--reviewer remote` for the first remote model):
 
 ```jsonc
 "models": {
   "fast":  { "provider": "ollama", "model": "qwen3-coder:30b" },
   "large": { "provider": "gpu-box", "model": "qwen3-coder-480b" }
 },
-"routing": { "local": ["fast"] },
+"routing": { "start": ["fast"] },
 "review": { "mode": "auto", "model": "large" }
 ```
 

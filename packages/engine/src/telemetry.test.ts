@@ -65,7 +65,7 @@ describe('reports contain no user content', () => {
           local: { provider: 'acme-gpu-box', model: 'acme-finetune-7b', contextWindow: 32_000 },
           'big-brain': { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: { local: 'local', remote: 'big-brain' },
+        routing: { start: 'local', escalate: ['big-brain'] },
       });
       const agent = parseAgentFile(
         '---\nname: falcon-reviewer\ndescription: Reviews falcon\n---\nReview it.',

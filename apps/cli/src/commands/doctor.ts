@@ -1,5 +1,6 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
 import { formatMcpServers } from '@switchback/client';
+import { roleAliases } from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
@@ -36,26 +37,26 @@ export async function doctor(flags: CommonFlags): Promise<number> {
 
   out('\nRouting');
   const r = config.routing;
-  out(`  mode ${r.mode}`);
-  const chainLine = (tier: 'local' | 'remote') =>
-    r[tier]
-      .map((alias) => `${alias} (${config.models[alias]?.model ?? 'not configured'})`)
-      .join(' → ');
-  out(`  local  ${chainLine('local')}`);
-  out(`  remote ${chainLine('remote')}`);
-  if (r.escalation.via.length)
-    out(
-      `  escalation steps: local → ${r.escalation.via
-        .map((alias) => `${alias} (${config.models[alias]?.model ?? 'not configured'})`)
-        .join(' → ')}${r.mode === 'local-only' ? '' : ' → remote'}`,
-    );
+  const tierOfAlias = (alias: string) => {
+    const m = config.models[alias];
+    const pc = m && config.providers[m.provider];
+    return pc ? tierOf(pc) : undefined;
+  };
+  const label = (alias: string) => {
+    const m = config.models[alias];
+    return m ? `${alias} (${m.model}, ${tierOfAlias(alias)})` : `${alias} (not configured)`;
+  };
+  out(`  start    ${r.start.map(label).join(' | ') || '(none)'}`);
+  for (const [i, step] of r.escalate.entries())
+    out(`  step ${i + 1}   ${step.map(label).join(' | ')}`);
+  if (!r.allowRemote) out('  remote models are turned off (routing.allowRemote: false)');
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,
   );
-  const locals = r.local.flatMap((alias) => {
+  const locals = roleAliases(r).flatMap((alias) => {
     const m = config.models[alias];
     const pc = m && config.providers[m.provider];
-    return m && pc ? [{ alias, m, pc }] : [];
+    return m && pc && tierOf(pc) === 'local' ? [{ alias, m, pc }] : [];
   });
   for (const { alias, m, pc } of locals) {
     if (m.contextWindow) {
@@ -76,13 +77,11 @@ export async function doctor(flags: CommonFlags): Promise<number> {
       );
     }
   }
-  if (!locals.length && r.mode !== 'remote-only') {
+  if (!roleAliases(r).some((a) => config.models[a])) {
     problems++;
-    out('  ✗ no local model configured; run `switchback init` to pick one');
-  }
-  if (!r.remote.some((a) => config.models[a]) && r.mode !== 'local-only') {
-    problems++;
-    out('  ✗ no remote model configured; run `switchback init`');
+    out('  ✗ no model is in routing.start or routing.escalate; run `switchback init`');
+  } else if (!r.start.some((a) => config.models[a])) {
+    out('  no start model: turns begin on step 1');
   }
 
   const { servers } = await engine.mcpStatus();

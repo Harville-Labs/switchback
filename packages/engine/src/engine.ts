@@ -50,7 +50,7 @@ import {
   SUMMARIZER_PROMPT,
   summaryRequest,
 } from './compaction.ts';
-import type { SwitchbackConfig } from './config.ts';
+import { roleAliases, type SwitchbackConfig } from './config.ts';
 import { estimateEscalationCost } from './estimate.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { allowsMcpTool, McpHub } from './mcp/hub.ts';
@@ -186,9 +186,13 @@ const UNKNOWN_LOCAL_CONTEXT = 8_192;
 const UNKNOWN_REMOTE_CONTEXT = 200_000;
 const HEALTH_TTL_FAIL_MS = 5_000;
 
-/** The model whose prices define "saved": the first configured remote model. */
+/** The model whose prices define "saved": the first remote model in role order. */
 function referenceModel(config: SwitchbackConfig): string | undefined {
-  const alias = config.routing.remote.find((a) => config.models[a]);
+  const alias = roleAliases(config.routing).find((a) => {
+    const m = config.models[a];
+    const pc = m && config.providers[m.provider];
+    return pc && tierOf(pc) === 'remote';
+  });
   return alias ? config.models[alias]?.model : undefined;
 }
 
@@ -677,7 +681,7 @@ export class Engine {
         agent: {
           name: agent.name,
           route: agent.route,
-          ...(agent.model ? { model: agent.model } : {}),
+          ...this.pinnedModel(s, agent),
         },
         estimatedInputTokens: inputTokens,
         signals: s.signals.snapshot(),
@@ -764,7 +768,7 @@ export class Engine {
         if (signal.aborted) return 'cancelled';
         const retryable = err instanceof ProviderError && err.retryable;
         if (retryable) this.health.set(provider.id, { ok: false, at: this.now().getTime() });
-        if (model.tier === 'local') s.signals.recordLocalFailure();
+        s.signals.recordFailure();
         this.emit({
           type: 'log',
           level: 'warn',
@@ -796,13 +800,19 @@ export class Engine {
       const toolCalls = done.parts.filter((p) => p.type === 'tool_call');
       const truncatedTools = done.stopReason === 'max_tokens' && toolCalls.length > 0;
 
-      // A remote refusal is retried on the next remote model, if there is one.
-      // The refused output is discarded, not added to the transcript.
+      // A remote refusal is retried on another model of the same step or above,
+      // if there is one. The refused output is discarded, not added to the transcript.
       if (model.tier === 'remote' && done.stopReason === 'refusal') {
-        const routing = this.options.config.routing;
-        const others = routing.remote.filter(
-          (a) => a !== model.alias && !refused.includes(a) && this.options.config.models[a],
+        const { routing, models } = this.options.config;
+        const steps = [routing.start, ...routing.escalate];
+        const at = Math.max(
+          0,
+          steps.findIndex((c) => c.includes(model.alias)),
         );
+        const others = steps
+          .slice(at)
+          .flat()
+          .filter((a) => a !== model.alias && !refused.includes(a) && models[a]);
         if (others.length) {
           refused.push(model.alias);
           refusalRetry = true;
@@ -810,10 +820,10 @@ export class Engine {
         }
       }
 
-      // A local model that refuses or runs out of room gets one more chance on
-      // the remote tier instead of ending the user's turn.
-      if (model.tier === 'local' && (done.stopReason === 'refusal' || truncatedTools)) {
-        s.signals.recordLocalFailure();
+      // A model that refuses (a local one) or runs out of room mid-tool-call gets
+      // another chance one step up instead of ending the user's turn.
+      if ((model.tier === 'local' && done.stopReason === 'refusal') || truncatedTools) {
+        s.signals.recordFailure();
         if (++failures <= 2) continue;
       }
 
@@ -858,15 +868,18 @@ export class Engine {
   ): Promise<Difficulty | undefined> {
     const routing = this.options.config.routing;
     const c = routing.classifier;
-    if (!c || preference !== 'auto' || routing.mode !== 'auto') return undefined;
+    if (!c || preference !== 'auto') return undefined;
     if (agent.model || agent.route !== 'auto' || s.signals.snapshot().stickyTurns > 0)
       return undefined;
-    if (!routing.remote.some((a) => this.options.config.models[a])) return undefined;
+    // Nothing to escalate to.
+    if (!routing.escalate.flat().some((a) => this.options.config.models[a])) return undefined;
     const model = this.modelInfo(c.model);
-    if (model?.tier !== 'local') {
-      this.notify('warn', `routing.classifier.model "${c.model}" must be a configured local model`);
+    if (!model) {
+      this.notify('warn', `routing.classifier.model "${c.model}" is not a configured model`);
       return undefined;
     }
+    // A remote classifier reads the prompt, so the remote rules apply to it.
+    if (model.tier === 'remote' && (s.private || !routing.allowRemote)) return undefined;
     if (!model.available) return undefined;
     const provider = this.providers.get(model.ref.provider);
     const prompt = s.messages.findLast(
@@ -881,7 +894,7 @@ export class Engine {
       timeoutMs: c.timeoutMs,
     });
     if (r.usage)
-      this.recordUsage(s, 'local', model.ref, r.usage, { rule: 'classify', agent: agent.name });
+      this.recordUsage(s, model.tier, model.ref, r.usage, { rule: 'classify', agent: agent.name });
     this.notify(
       'debug',
       r.difficulty
@@ -982,11 +995,20 @@ export class Engine {
     return stopReason;
   }
 
-  /** The reviewer: `review.model`, else the first available remote model. */
+  /** The agent's own model pin; for a subagent without one, `subagents.model`. */
+  private pinnedModel(s: LiveSession, agent: AgentDefinition): { model?: string } {
+    if (agent.model) return { model: agent.model };
+    const fallback = this.options.config.subagents.model;
+    return s.depth > 0 && agent.route === 'auto' && fallback ? { model: fallback } : {};
+  }
+
+  /** The reviewer: `review.model`, else the first available remote model in role order. */
   private reviewerModel(): ModelInfo | undefined {
     const { review, routing } = this.options.config;
     if (review.model) return this.modelInfo(review.model);
-    return routing.remote.flatMap((a) => this.modelInfo(a) ?? []).find((m) => m.available);
+    return roleAliases(routing)
+      .flatMap((a) => this.modelInfo(a) ?? [])
+      .find((m) => m.tier === 'remote' && m.available);
   }
 
   /** One review call. Never fails the turn: problems are reported as `skipped`. */
@@ -1025,7 +1047,7 @@ export class Engine {
       // Review is remote spend: every rule that keeps other calls local applies.
       if (this.options.org?.remoteDisabled)
         return skip(`remote models are disabled by ${this.options.org.name} policy`);
-      if (routing.mode === 'local-only') return skip('routing mode is local-only');
+      if (!routing.allowRemote) return skip('remote models are turned off (routing.allowRemote)');
       if (s.private)
         return skip(
           `this session holds private content (${s.private}), which never leaves this machine`,
@@ -1195,13 +1217,16 @@ export class Engine {
     }
   }
 
-  /** The window compaction keeps a session inside: the largest local one, else the remote one. */
+  /**
+   * The window compaction keeps a session inside: the largest in the start
+   * chain, so turns can always go back to it; else the first escalation step's.
+   */
   private compactionWindow(): number | undefined {
     const routing = this.options.config.routing;
-    const locals = routing.local.flatMap((a) => this.modelInfo(a) ?? []);
-    if (locals.length) return Math.max(...locals.map((m) => m.contextWindow));
-    const remote = routing.remote.flatMap((a) => this.modelInfo(a) ?? [])[0];
-    return remote?.contextWindow;
+    const start = routing.start.flatMap((a) => this.modelInfo(a) ?? []);
+    if (start.length) return Math.max(...start.map((m) => m.contextWindow));
+    const first = (routing.escalate[0] ?? []).flatMap((a) => this.modelInfo(a) ?? [])[0];
+    return first?.contextWindow;
   }
 
   /**
@@ -1292,11 +1317,10 @@ export class Engine {
    */
   private summarizerModel(tokens: number, s?: LiveSession): ModelInfo | undefined {
     const routing = this.options.config.routing;
-    const local = routing.local
-      .flatMap((a) => this.modelInfo(a) ?? [])
-      .find((m) => m.tier === 'local' && m.available);
+    const inRoles = roleAliases(routing).flatMap((a) => this.modelInfo(a) ?? []);
+    const local = inRoles.find((m) => m.tier === 'local' && m.available);
     if (local) return local;
-    if (routing.mode === 'local-only' || s?.private) return undefined;
+    if (!routing.allowRemote || s?.private) return undefined;
     const spend = this.ledger.spend();
     const b = routing.budget;
     if (
@@ -1304,9 +1328,9 @@ export class Engine {
       (b.monthlyUsd && spend.monthUsd >= b.monthlyUsd)
     )
       return undefined;
-    return routing.remote
-      .flatMap((a) => this.modelInfo(a) ?? [])
-      .find((m) => m.available && m.contextWindow > Math.min(tokens, 16_000));
+    return inRoles.find(
+      (m) => m.tier === 'remote' && m.available && m.contextWindow > Math.min(tokens, 16_000),
+    );
   }
 
   private async summarize(
@@ -1616,8 +1640,10 @@ export class Engine {
         );
       else if (this.options.org?.remoteDisabled)
         result = fail(`external runtimes are disabled by ${this.options.org.name} policy`);
-      else if (routing.mode === 'local-only')
-        result = fail('routing mode is local-only; external runtimes are remote');
+      else if (!routing.allowRemote)
+        result = fail(
+          'remote models are turned off (routing.allowRemote); external runtimes are remote',
+        );
       else if (s.private)
         result = fail(
           `this task carries private content (${s.private}), which never leaves this machine; external runtimes are remote`,
@@ -2075,7 +2101,7 @@ export class Engine {
     const routing = this.options.config.routing;
     // With several local models, ask the first reachable one whose threshold
     // is close; the others either clearly fit or clearly don't.
-    for (const alias of routing.local) {
+    for (const alias of routing.start) {
       const local = this.modelInfo(alias);
       if (local?.tier !== 'local' || !local.available) continue;
       if (!nearThreshold(estimate, local.contextWindow * routing.escalation.contextHeadroom))

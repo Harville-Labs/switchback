@@ -30,6 +30,11 @@ function setup(
     },
     permissions: { edit: 'allow', bash: 'deny' },
     ...overrides,
+    routing: {
+      start: ['local'],
+      escalate: [['remote']],
+      ...(overrides as { routing?: object } | undefined)?.routing,
+    },
   });
   const lp = new ScriptedProvider('lp', 'local', local);
   const rp = new ScriptedProvider('rp', 'remote', remote);
@@ -69,6 +74,7 @@ describe('Engine', () => {
         local: { provider: 'lp', model: 'small' },
         remote: { provider: 'rp', model: 'big' },
       },
+      routing: { start: ['local'], escalate: [['remote']] },
     });
     const lp = Object.assign(new ScriptedProvider('lp', 'local', [{ text: 'local' }]), {
       contextWindow: async () => ({ contextWindow: 1_000, source: 'test' }),
@@ -187,7 +193,7 @@ describe('Engine', () => {
           large: { provider: 'gp', model: 'large', contextWindow: 128_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: { escalation: { via: ['large'] } },
+        routing: { start: ['local'], escalate: ['large', 'remote'] },
         permissions: { edit: 'allow', bash: 'deny' },
       }),
       providers: new Map([
@@ -493,7 +499,7 @@ describe('several providers at once', () => {
           sol: { provider: 'openai', model: 'gpt-6-sol' },
           pro: { provider: 'deepseek', model: 'deepseek-v4-pro' },
         },
-        routing: { local: ['small', 'big'], remote: ['sol', 'pro'] },
+        routing: { start: ['small', 'big'], escalate: [['sol', 'pro']] },
       }),
       providers: new Map<string, Provider>([
         ['laptop', laptop],
@@ -532,7 +538,7 @@ describe('refusal fallback', () => {
           opus: { provider: 'anthropic', model: 'claude-opus-5' },
           sol: { provider: 'openai', model: 'gpt-6-sol' },
         },
-        routing: { mode: 'remote-only', remote: ['opus', 'sol'] },
+        routing: { start: ['opus', 'sol'] },
       }),
       providers: new Map<string, Provider>([
         ['anthropic', anthropic],
@@ -545,7 +551,10 @@ describe('refusal fallback', () => {
     const r = await engine.runTurn(s.id, 'hi');
     expect(r).toEqual({ stopReason: 'end_turn', text: 'here you go' });
     const routes = events.filter((e) => e.type === 'route.decided');
-    expect(routes.map((e) => (e as { rule: string }).rule)).toEqual(['mode', 'refusal-fallback']);
+    expect(routes.map((e) => (e as { rule: string }).rule)).toEqual([
+      'default',
+      'refusal-fallback',
+    ]);
     expect(engine.getSession(s.id).messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     // Both calls are billed.
     expect(
@@ -553,12 +562,12 @@ describe('refusal fallback', () => {
         .usage('today')
         .byRule?.map((row) => row.key)
         .sort(),
-    ).toEqual(['mode', 'refusal-fallback']);
+    ).toEqual(['default', 'refusal-fallback']);
   });
 
   test('with no other remote model the refusal ends the turn as a refusal', async () => {
     const { engine } = setup([], [{ text: 'no', stopReason: 'refusal' }], {
-      config: { routing: { mode: 'remote-only' } },
+      config: { routing: { start: ['remote'], escalate: [] } },
     });
     const r = await engine.runTurn(engine.createSession({}).id, 'hi');
     expect(r.stopReason).toBe('refusal');
@@ -574,7 +583,7 @@ describe('prompt caching', () => {
         { text: 'it says hello' },
         { text: 'second answer' },
       ],
-      { config: { routing: { mode: 'remote-only' } } },
+      { config: { routing: { start: ['remote'], escalate: [] } } },
     );
     const s = engine.createSession({});
     await engine.runTurn(s.id, 'read hello.txt');
@@ -612,7 +621,7 @@ describe('prompt caching', () => {
             ? { toolCalls: [{ name: 'read', input: { path: 'hello.txt', n: i } }], usage }
             : { text: 'done', usage },
         ),
-        { config: { routing: { mode: 'remote-only' } } },
+        { config: { routing: { start: ['remote'], escalate: [] } } },
       );
       await engine.runTurn(engine.createSession({}).id, 'go');
       return events.filter(
@@ -666,7 +675,7 @@ describe('per-agent budgets', () => {
           local: { provider: 'lp', model: 'small', contextWindow: 100_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: { fallback: { onLocalUnavailable: 'fail' } },
+        routing: { start: ['local'], escalate: [['remote']], fallback: 'none' },
       }),
       providers: new Map<string, Provider>([
         ['lp', lp],
@@ -741,7 +750,7 @@ describe('background subagents', () => {
       config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' } },
         models: { local: { provider: 'lp', model: 'small', contextWindow: 100_000 } },
-        routing: { mode: 'local-only' },
+        routing: { start: ['local'], allowRemote: false },
       }),
       providers: new Map<string, Provider>([['lp', lp]]),
     });
@@ -821,6 +830,7 @@ describe('token counting', () => {
           local: { provider: 'lp', model: 'small', contextWindow },
           remote: { provider: 'rp', model: 'big', contextWindow: 1_000_000 },
         },
+        routing: { start: ['local'], escalate: [['remote']] },
       }),
       providers: new Map<string, Provider>([
         ['lp', lp],

@@ -285,12 +285,7 @@
       "default": {},
       "type": "object",
       "properties": {
-        "mode": {
-          "default": "auto",
-          "type": "string",
-          "enum": ["auto", "local-only", "remote-only"]
-        },
-        "local": {
+        "start": {
           "anyOf": [
             {
               "type": "string",
@@ -306,21 +301,28 @@
             }
           ]
         },
-        "remote": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "minItems": 1,
-              "type": "array",
-              "items": {
+        "escalate": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
                 "type": "string",
                 "minLength": 1
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
-            }
-          ]
+            ]
+          }
+        },
+        "allowRemote": {
+          "default": true,
+          "type": "boolean"
         },
         "escalation": {
           "default": {},
@@ -360,14 +362,6 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
-            },
-            "via": {
-              "default": [],
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
             }
           }
         },
@@ -411,20 +405,9 @@
           }
         },
         "fallback": {
-          "default": {},
-          "type": "object",
-          "properties": {
-            "onLocalUnavailable": {
-              "default": "remote",
-              "type": "string",
-              "enum": ["remote", "fail"]
-            },
-            "onRemoteUnavailable": {
-              "default": "local",
-              "type": "string",
-              "enum": ["local", "fail"]
-            }
-          }
+          "default": "nearest",
+          "type": "string",
+          "enum": ["nearest", "none"]
         }
       }
     },
@@ -607,6 +590,9 @@
         "budgetUsd": {
           "type": "number",
           "minimum": 0
+        },
+        "model": {
+          "type": "string"
         }
       }
     },

@@ -3,26 +3,21 @@ import { z } from 'zod';
 export const EscalationConfig = z.object({
   /**
    * `auto`: escalate without asking. `ask`: emit `escalation.requested` and wait
-   * for the user. `off`: never escalate on quality signals (context overflow and
-   * outages still fall back).
+   * for the user before escalating to a remote model (local steps never ask).
+   * `off`: never escalate on quality signals (context overflow and outages
+   * still move).
    */
   policy: z.enum(['auto', 'ask', 'off']).default('auto'),
-  /** Consecutive failed tool calls before the local model is considered stuck. */
+  /** Consecutive failed tool calls before the model is considered stuck. */
   maxConsecutiveToolErrors: z.number().int().positive().default(3),
   /** Malformed tool calls (unparseable args, unknown tool) in the current turn. */
   maxMalformedToolCalls: z.number().int().positive().default(2),
   /** Identical tool call repeated this many times counts as a loop. */
   loopThreshold: z.number().int().positive().default(3),
-  /** Escalate when estimated input exceeds this fraction of the local context window. */
+  /** A model fits a prompt when the estimate is at most this fraction of its window. */
   contextHeadroom: z.number().min(0.1).max(1).default(0.85),
-  /** After an escalation, stay on the model it reached for this many turns before retrying local. */
+  /** After an escalation, stay on the step it reached for this many model calls. */
   stickyTurns: z.number().int().nonnegative().default(2),
-  /**
-   * Steps between the local chain and the remote chain, in order: each
-   * escalation moves one step up. Usually bigger local models
-   * (`["large"]` makes the ladder local → large → remote); any alias works.
-   */
-  via: z.array(z.string().min(1)).default([]),
 });
 
 export const BudgetConfig = z.object({
@@ -33,29 +28,38 @@ export const BudgetConfig = z.object({
 });
 
 /**
- * One model alias or an ordered list. The router uses the first model in the
- * list that is reachable and whose context window fits the prompt, so a list
- * can mix servers: `["laptop", "gpu-box"]`.
+ * One model alias or an ordered list of alternatives: the router uses the
+ * first that is reachable and whose context window fits, so a chain can mix
+ * servers and providers: `["laptop", "gpu-box"]`, `["opus", "opus-aws"]`.
  */
-const ModelChain = z
+export const ModelChain = z
   .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
   .transform((v) => (typeof v === 'string' ? [v] : v));
 
+/**
+ * Roles, filled by any model (ADR 0015). Whether a model is local or remote is
+ * a property of its provider: it decides cost, budgets, `ask` prompts,
+ * privacy, and `allowRemote`, never which role a model can fill.
+ */
 export const RoutingConfig = z.object({
-  mode: z.enum(['auto', 'local-only', 'remote-only']).default('auto'),
-  /** Model aliases for local turns, in order of preference. */
-  local: ModelChain.default(['local']),
-  /** Model aliases for escalated and remote turns, in order of preference. */
-  remote: ModelChain.default(['remote']),
+  /** Where turns begin: a chain of alternatives. */
+  start: ModelChain.default([]),
+  /**
+   * The escalation ladder. Each escalation moves one step up; each step is an
+   * alias or a chain of alternatives (`["large", ["opus", "opus-aws"]]`).
+   */
+  escalate: z.array(ModelChain).default([]),
+  /** False: never call a remote model, even one configured in a role. */
+  allowRemote: z.boolean().default(true),
   escalation: EscalationConfig.prefault({}),
   /**
-   * Optional pre-routing classifier: a small local model rates each new
-   * prompt, and prompts rated `escalateOn` or harder start on the remote tier
+   * Optional pre-routing classifier: a small model rates each new prompt, and
+   * prompts rated `escalateOn` or harder start one step up the ladder
    * (subject to `escalation.policy`). Off unless configured.
    */
   classifier: z
     .object({
-      /** Model alias; must be a local model. */
+      /** Model alias; any model, though a small local one keeps it free and fast. */
       model: z.string(),
       escalateOn: z.enum(['medium', 'hard']).default('hard'),
       /** Skip the rating if the model hasn't answered by then. */
@@ -63,12 +67,11 @@ export const RoutingConfig = z.object({
     })
     .optional(),
   budget: BudgetConfig.prefault({}),
-  fallback: z
-    .object({
-      onLocalUnavailable: z.enum(['remote', 'fail']).default('remote'),
-      onRemoteUnavailable: z.enum(['local', 'fail']).default('local'),
-    })
-    .prefault({}),
+  /**
+   * When every model on the chosen step is down: `nearest` uses the nearest
+   * other step that's up (higher first, then lower); `none` stops instead.
+   */
+  fallback: z.enum(['nearest', 'none']).default('nearest'),
 });
 
 export type RoutingConfig = z.infer<typeof RoutingConfig>;

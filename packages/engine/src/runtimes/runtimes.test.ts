@@ -94,6 +94,7 @@ function engine(opts: Partial<Omit<EngineOptions, 'config'>> & { config?: object
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
+      routing: { start: ['local'], escalate: [] },
       runtimes: { claude: { type: 'claude-agent-sdk', model: 'claude-sonnet-5' } },
       ...config,
     }),
@@ -169,7 +170,7 @@ describe('external runtime as a subagent', () => {
   test('local-only routing never starts an external runtime', async () => {
     const { e, calls } = engine({
       interaction: 'approve',
-      config: { routing: { mode: 'local-only' } },
+      config: { routing: { start: ['local'], allowRemote: false } },
     });
     const s = e.createSession({});
     await e.runTurn(s.id, 'go');
@@ -178,7 +179,7 @@ describe('external runtime as a subagent', () => {
       .getSession(s.id)
       .messages.flatMap((m) => m.parts)
       .find((p) => p.type === 'tool_result');
-    expect(report?.type === 'tool_result' && report.content).toContain('local-only');
+    expect(report?.type === 'tool_result' && report.content).toContain('allowRemote');
   });
 
   test('a runtime may not touch private files, whatever the permission policy', async () => {

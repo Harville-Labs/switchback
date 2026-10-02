@@ -103,7 +103,7 @@ isolation: worktree
 
 - The parent delegates with the ordinary `task` tool. The subagent row shows Claude Code's text and tool calls as they happen.
 - Every tool Claude Code wants to use goes through the Switchback permission policy (`Read`/`Grep`/`Glob` as `read`, `Edit`/`Write` as `edit`, MCP tools as `mcp`, everything else as `bash`), including org-enforced denials.
-- It's remote spend: it doesn't start in `local-only` mode, when an organization disables remote models, or when the budget is spent. The agent's `budgetUsd` becomes Claude Code's own spending limit. Its cost, as reported by the SDK, is recorded per model under rule `runtime`, so `switchback usage --by rule` shows it.
+- It's remote spend: it doesn't start with `routing.allowRemote: false`, when an organization disables remote models, or when the budget is spent. The agent's `budgetUsd` becomes Claude Code's own spending limit. Its cost, as reported by the SDK, is recorded per model under rule `runtime`, so `switchback usage --by rule` shows it.
 - It uses Claude Code's credentials (`ANTHROPIC_API_KEY` or a Claude login). Claude Code itself isn't bundled with Switchback: install it so `claude` is on `PATH`, or set `runtimes.<name>.executable`.
 - Only the final report returns to the parent, like any subagent. `isolation: worktree` works as usual.
 
@@ -131,6 +131,7 @@ With `"background": true` the call returns at once with the task's ID and the pa
 |---|---|---|
 | `subagents.maxConcurrent` | 4 | Concurrent subagents per depth level. Extra calls queue. |
 | `subagents.maxDepth` | 2 | Agents at this depth don't get the `task` tool. |
+| `subagents.model` | none | Model for subagents whose agent doesn't pin a model or tier, for example a cheap local one for every delegated search. Any alias, local or remote. |
 | `maxStepsPerTurn` | 50 | Applies to each subagent turn too. |
 | `subagents.budgetUsd` | none | Remote spend per invocation for agents without their own `budgetUsd`. |
 

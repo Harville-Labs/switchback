@@ -36,21 +36,32 @@ export function mockify(config: SwitchbackConfig): SwitchbackConfig {
   for (const [id, pc] of Object.entries(config.providers))
     providers[id] = { type: 'mock', tier: tierOf(pc) };
   const models = { ...config.models };
-  for (const tier of ['local', 'remote'] as const) {
-    const chain = config.routing[tier];
-    const alias = chain[0] ?? tier;
-    // Never invent a remote tier that policy or config has switched off.
-    if (chain.some((a) => models[a]) || (tier === 'remote' && config.routing.mode === 'local-only'))
-      continue;
+  const routing = { ...config.routing };
+  const inRoles = (tier: 'local' | 'remote') =>
+    [...routing.start, ...routing.escalate.flat()].some((a) => {
+      const pc = models[a] && providers[models[a].provider];
+      return pc && tierOf(pc) === tier;
+    });
+  const add = (tier: 'local' | 'remote') => {
     providers[`mock-${tier}`] = { type: 'mock', tier };
-    models[alias] = {
+    models[tier] = {
       provider: `mock-${tier}`,
       model: `mock-${tier}`,
       contextWindow: 32_768,
       maxOutputTokens: 16_000,
     };
+  };
+  // A mock start model, and a mock remote step to escalate to, where the roles have none.
+  if (!inRoles('local')) {
+    add('local');
+    routing.start = ['local', ...routing.start.filter((a) => a !== 'local')];
   }
-  return { ...config, providers, models };
+  // Never invent remote models that policy or config has switched off.
+  if (!inRoles('remote') && routing.allowRemote) {
+    add('remote');
+    routing.escalate = [...routing.escalate, ['remote']];
+  }
+  return { ...config, providers, models, routing };
 }
 
 function load(flags: CommonFlags) {

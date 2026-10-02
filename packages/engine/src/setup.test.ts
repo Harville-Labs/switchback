@@ -103,7 +103,8 @@ describe('buildSetupConfig', () => {
     });
     expect(parsed.models.haiku?.model).toBe('anthropic.claude-haiku-4-5');
     expect(parsed.routing).toMatchObject({
-      mode: 'auto',
+      start: ['local'],
+      escalate: [['remote']],
       budget: { dailyUsd: 3 },
       escalation: { policy: 'ask' },
     });
@@ -195,7 +196,7 @@ describe('buildSetupConfig', () => {
     });
   });
 
-  test('remote-only and local-only set the routing mode', () => {
+  test('remote-only starts on the remote models; local-only has nothing to escalate to', () => {
     const remoteOnly = buildSetupConfig({
       locals: [],
       remotes: [{ kind: 'anthropic', model: 'claude-opus-5' }],
@@ -206,8 +207,8 @@ describe('buildSetupConfig', () => {
       remotes: [],
       escalationPolicy: 'auto',
     });
-    expect((remoteOnly.routing as { mode: string }).mode).toBe('remote-only');
-    expect((localOnly.routing as { mode: string }).mode).toBe('local-only');
+    expect(remoteOnly.routing).toMatchObject({ start: ['remote'], escalate: [] });
+    expect(localOnly.routing).toMatchObject({ start: ['local'], escalate: [] });
   });
 
   test('a bigger local model becomes an escalation step, and can review', () => {
@@ -225,8 +226,8 @@ describe('buildSetupConfig', () => {
         reviewer: { local: 1 },
       }),
     );
-    expect(parsed.routing.local).toEqual(['local']);
-    expect(parsed.routing.escalation.via).toEqual(['large']);
+    expect(parsed.routing.start).toEqual(['local']);
+    expect(parsed.routing.escalate).toEqual([['large'], ['remote']]);
     // No context window given: the engine asks the server at runtime.
     expect(parsed.models.large).toEqual(
       expect.objectContaining({ provider: 'vllm', model: 'qwen3-coder-480b' }),
@@ -236,7 +237,7 @@ describe('buildSetupConfig', () => {
     expect(referenceProblem(parsed)).toBeUndefined();
   });
 
-  test('a remote reviewer leaves the model to default to routing.remote', () => {
+  test('a remote reviewer leaves the model to default to the first remote model in the roles', () => {
     const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [local],
@@ -247,7 +248,7 @@ describe('buildSetupConfig', () => {
     );
     expect(parsed.review).toMatchObject({ mode: 'auto' });
     expect(parsed.review.model).toBeUndefined();
-    expect(parsed.routing.escalation.via).toEqual([]);
+    expect(parsed.routing.escalate).toEqual([['remote']]);
   });
 
   test('an escalation model needs something to escalate from', () => {
@@ -281,8 +282,9 @@ describe('buildSetupConfig', () => {
         escalationPolicy: 'auto',
       }),
     );
-    expect(parsed.routing.local).toEqual(['local', 'local-2', 'local-3']);
-    expect(parsed.routing.remote).toEqual(['remote', 'remote-2', 'remote-3']);
+    expect(parsed.routing.start).toEqual(['local', 'local-2', 'local-3']);
+    // The remote providers are one step: later ones are its fallbacks.
+    expect(parsed.routing.escalate).toEqual([['remote', 'remote-2', 'remote-3']]);
     // One provider per server; a second Ollama server gets its own ID.
     expect(parsed.models['local-2']?.provider).toBe('ollama');
     expect(parsed.models['local-3']?.provider).toBe('ollama-2');
@@ -327,7 +329,31 @@ describe('writeConfigLayer', () => {
     expect(written.models.local.model).toBe('m');
     // The written project file loads cleanly through the normal path.
     const { config } = loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') });
-    expect(config.routing.mode).toBe('local-only');
+    expect(config.routing).toMatchObject({ start: ['local'], escalate: [] });
+  });
+
+  test('re-running setup on an old file replaces the removed routing keys', () => {
+    const file = join(dir, 'config.json');
+    writeFileSync(
+      file,
+      `{
+  // keep me
+  "routing": { "local": ["old"], "remote": ["older"], "mode": "auto", "budget": { "dailyUsd": 2 } }
+}
+`,
+    );
+    writeConfigLayer(file, {
+      providers: { lp: { type: 'openai-compatible', baseUrl: 'http://localhost:1234/v1' } },
+      models: { local: { provider: 'lp', model: 'm' } },
+      routing: { start: ['local'], escalate: [] },
+    });
+    const text = readFileSync(file, 'utf8');
+    expect(text).toContain('// keep me');
+    expect(text).not.toContain('"mode"');
+    expect((parseJsonc(text) as { routing: unknown }).routing).toMatchObject({
+      start: ['local'],
+      budget: { dailyUsd: 2 },
+    });
   });
 
   test('keeps the user’s comments and formatting', () => {
@@ -360,7 +386,7 @@ describe('writeConfigLayer', () => {
       writeConfigLayer(file, { models: { local: { provider: 'ghost', model: 'x' } } }),
     ).toThrow('unknown provider "ghost"');
     expect(readFileSync(file, 'utf8')).toBe('{}');
-    expect(() => writeConfigLayer(file, { routing: { mode: 'sideways' } })).toThrow(
+    expect(() => writeConfigLayer(file, { routing: { fallback: 'sideways' } })).toThrow(
       'invalid config',
     );
   });

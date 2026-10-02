@@ -120,6 +120,7 @@ function setup(local: Script, remote: Script, config: object = {}) {
           local: { provider: 'lp', model: 'small', contextWindow: 8_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
+        routing: { start: ['local'], escalate: [['remote']] },
         privacy: { localOnlyPaths: ['secrets/'] },
         ...config,
       }),

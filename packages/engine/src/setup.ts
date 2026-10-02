@@ -17,6 +17,7 @@ import {
   defaultConfig,
   parseJsonc,
   referenceProblem,
+  removedKeyProblem,
   SwitchbackConfig,
 } from './config.ts';
 
@@ -63,8 +64,8 @@ export interface LocalAnswer {
   contextWindow?: number;
   apiKeyEnv?: string;
   /**
-   * `chain` (default): part of `routing.local`, in order. `escalation`: a
-   * bigger model escalations reach before remote (`routing.escalation.via`).
+   * `chain` (default): part of `routing.start`, in order. `escalation`: its
+   * own `routing.escalate` step, before the remote models.
    */
   role?: 'chain' | 'escalation';
 }
@@ -196,12 +197,15 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
         models[tierAlias] = entry(m);
   }
 
-  // Always explicit, so re-running setup replaces a previous mode and chains.
-  routing.mode = !a.locals.length ? 'remote-only' : !a.remotes.length ? 'local-only' : 'auto';
-  if (localAliases.length) routing.local = localAliases;
-  if (remoteAliases.length) routing.remote = remoteAliases;
-  // Always written, so re-running setup without one removes an old ladder.
-  (routing.escalation as Record<string, unknown>).via = viaAliases;
+  // Roles (ADR 0015): local models start, each escalation model is a step, and
+  // the remote providers are the last step (later ones its fallbacks). With no
+  // local model, turns start on the remote ones. Always written in full, so
+  // re-running setup replaces earlier roles.
+  routing.start = localAliases.length ? localAliases : remoteAliases;
+  routing.escalate = [
+    ...viaAliases.map((alias) => [alias]),
+    ...(localAliases.length && remoteAliases.length ? [remoteAliases] : []),
+  ];
   if (a.budget?.dailyUsd || a.budget?.monthlyUsd) {
     routing.budget = {
       ...(a.budget.dailyUsd ? { dailyUsd: a.budget.dailyUsd } : {}),
@@ -248,11 +252,24 @@ export function writeConfigLayer(file: string, layer: Record<string, unknown>): 
     backup = `${file}.bak`;
     copyFileSync(file, backup);
   }
+  // Writing routing replaces the keys role-based routing removed (ADR 0015),
+  // so re-running setup migrates an old file instead of failing on it.
+  if (layer.routing) {
+    const old = parseJsonc(text) as { routing?: Record<string, unknown> };
+    const paths: JSONPath[] = [];
+    for (const key of ['local', 'remote', 'mode'])
+      if (old.routing && key in old.routing) paths.push(['routing', key]);
+    if (old.routing?.fallback && typeof old.routing.fallback === 'object')
+      paths.push(['routing', 'fallback']);
+    const escalation = old.routing?.escalation as Record<string, unknown> | undefined;
+    if (escalation && 'via' in escalation) paths.push(['routing', 'escalation', 'via']);
+    for (const path of paths) text = applyEdits(text, modify(text, path, undefined, {}));
+  }
   const existing = parseJsonc(text) as Record<string, unknown>;
   const merged = deepMerge(existing, layer);
   const check = SwitchbackConfig.safeParse(deepMerge(defaultConfig(), merged));
   const problem = check.success
-    ? referenceProblem(check.data)
+    ? (removedKeyProblem(merged) ?? referenceProblem(check.data))
     : check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
   if (problem) throw new Error(`setup produced an invalid config: ${problem}`);
   for (const [path, value] of leaves(layer)) {

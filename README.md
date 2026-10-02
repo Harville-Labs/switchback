@@ -63,12 +63,11 @@ In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` s
 Every model call goes through the router, which picks the first matching rule:
 
 1. Your explicit choice for this turn (`/remote`, `--route local`)
-2. Global mode (`local-only`, `remote-only`)
-3. The agent's pin (`model: haiku`, `route: local`)
-4. Context overflow: the prompt won't fit the local model's window
-5. Stickiness: stay remote for a couple of turns after escalating
-6. Quality signals from the local model: repeated tool errors, malformed tool calls, loops, refusals, or failures. Escalates automatically, asks first, or does neither, per `routing.escalation.policy`.
-7. Default: local
+2. The agent's pin (`model: haiku`, `route: local`)
+3. Context overflow: the prompt won't fit the current model's window
+4. Stickiness: stay on the step an escalation reached for a couple of calls
+5. Quality signals: repeated tool errors, malformed tool calls, loops, refusals, or failures. Each escalation moves one step up `routing.escalate`, which can hold any models, local or remote. Escalates automatically, asks first for remote steps, or does neither, per `routing.escalation.policy`.
+6. Default: the `routing.start` model
 
 Budget and availability guards then apply. Over budget means staying local; a provider that's down means falling back to the other tier. Each decision appears in the UI with its reason. Details are in [docs/routing.md](docs/routing.md).
 

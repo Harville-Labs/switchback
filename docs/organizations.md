@@ -35,16 +35,16 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
       "acme-coder": { "provider": "acme-gpu", "model": "acme-coder-32b", "contextWindow": 65536 },
       "remote": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000 }
     },
-    // A user's own local model (alias "local") stays first; the company GPU takes
+    // A user's own local model (alias "local") starts; the company GPU takes
     // prompts too big for it, and everything when the user has no local model.
-    "routing": { "local": ["local", "acme-coder"] }
+    "routing": { "start": ["local", "acme-coder"], "escalate": [["remote"]] }
   },
   "enforced": {                                     // a config layer above everything; users can't override
     "permissions": { "bash": "ask" },
     "routing": { "escalation": { "policy": "ask" } }
   },
   "restrictions": {
-    "allowRemote": true,                            // false: remove all remote providers, route local-only
+    "allowRemote": true,                            // false: remove all remote providers; routing.allowRemote becomes false
     "allowedProviderTypes": ["openai-compatible", "openai"],
     "allowUserProviders": false,                    // only providers defined in this policy
     "allowUserMcpServers": false,                   // only MCP servers defined in this policy

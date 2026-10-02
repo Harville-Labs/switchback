@@ -32,7 +32,7 @@ function engine(script: Script, config: object, opts: Partial<EngineOptions> = {
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
-      routing: { mode: 'local-only' },
+      routing: { start: ['local'], allowRemote: false },
       ...config,
     }),
     providers: new Map<string, Provider>([['lp', lp]]),

@@ -38,7 +38,7 @@ export interface InitFlags {
   /** Local models in order of preference; `contextWindows` pairs with them by position. */
   localModels: string[];
   contextWindows: number[];
-  /** Bigger local models to escalate to before remote, in order (`routing.escalation.via`). */
+  /** Bigger local models to escalate to before remote, in order (`routing.escalate` steps). */
   localEscalationModels: string[];
   /** `remote`, or the name of a chosen local model. */
   reviewer?: string;

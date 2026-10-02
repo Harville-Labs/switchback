@@ -16,6 +16,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 const config = SwitchbackConfig.parse({
   providers: { lp: { type: 'mock', tier: 'local' } },
   models: { local: { provider: 'lp', model: 'm' } },
+  routing: { start: ['local'], escalate: [] },
 });
 
 function engine(workspaceRoot: string, store: FileSessionStore) {

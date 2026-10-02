@@ -18,3 +18,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0012](0012-switchback-managers-and-site-operators.md) | Switchback managers and site operators | Accepted (auth amended by 0013) |
 | [0013](0013-site-auth-with-better-auth.md) | Site authentication with Better Auth, and single sign-on per site | Accepted |
 | [0014](0014-open-core-licensing.md) | Apache-2.0 for Switchback, proprietary hosted sites | Accepted |
+| [0015](0015-role-based-routing.md) | Roles (start, escalate, review, subagents) filled by any model; local/remote is a model property | Accepted |
