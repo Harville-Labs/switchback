@@ -5,12 +5,20 @@
  */
 
 import { chmodSync, existsSync } from 'node:fs';
-import { connectDaemon, formatLadder, SwitchbackClient, spawnEngine } from '@switchback/client';
+import {
+  connectDaemon,
+  formatLadder,
+  formatReviewers,
+  formatSteps,
+  SwitchbackClient,
+  spawnEngine,
+} from '@switchback/client';
 import type {
   EngineEvent,
   InitializeResult,
   Message,
   RoutePreference,
+  SessionRoles,
   SessionSetRolesParams,
   SessionSummary,
 } from '@switchback/protocol';
@@ -23,7 +31,7 @@ import {
   installerShell,
   probeVersion,
 } from './engine-binary.ts';
-import type { HostToWebview, WebviewToHost } from './messages.ts';
+import type { HostToWebview, RoleName, WebviewToHost } from './messages.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
 const VERSION = '0.6.0';
@@ -193,6 +201,7 @@ class EngineConnection implements vscode.Disposable {
     this.updateStatus(0);
     this.broadcast({ type: 'ready', init: this.init, session: this.session, route: this.route });
     if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
+    await this.sendRoles();
   }
 
   /** Pick a saved session and show it in the chat. */
@@ -220,6 +229,7 @@ class EngineConnection implements vscode.Disposable {
     this.session = session;
     this.updateStatus(session.costUsd);
     this.broadcast({ type: 'history', session, messages });
+    await this.sendRoles();
   }
 
   async newSession(agent?: string) {
@@ -227,6 +237,7 @@ class EngineConnection implements vscode.Disposable {
     this.session = await this.client.request('session.create', agent ? { agent } : {});
     this.updateStatus(0);
     this.broadcast({ type: 'session', session: this.session });
+    await this.sendRoles();
   }
 
   setRoute(route: RoutePreference) {
@@ -275,6 +286,7 @@ class EngineConnection implements vscode.Disposable {
           route: this.route,
         });
       if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
+      await this.sendRoles();
       return;
     }
     if (!c || !this.session) return;
@@ -302,6 +314,12 @@ class EngineConnection implements vscode.Disposable {
         return;
       case 'newSession':
         await this.newSession(m.agent);
+        return;
+      case 'chooseRole':
+        await this.chooseRole(m.role);
+        return;
+      case 'chooseAgent':
+        await this.chooseAgent();
         return;
     }
   }
@@ -361,49 +379,55 @@ class EngineConnection implements vscode.Disposable {
     if (pick) this.remoteReview = pick.value;
   }
 
-  /** Change which model does what in this session (ADR 0015), optionally as the default. */
+  /** Change which model does what in this session (ADR 0015): pick a role, then its models. */
   async chooseModels() {
-    const client = this.client;
-    const session = this.session;
-    if (!client || !session) return;
-    const models = this.init?.models ?? [];
-    const roles = await client.request('session.roles', { sessionId: session.id });
-    const steps = (s: string[][]) => s.map((step) => step.join(' | ')).join(' → ');
+    const roles = await this.currentRoles();
+    if (!roles) return;
     const pick = await vscode.window.showQuickPick(
       [
         {
           label: 'Start with',
-          description: roles.start.join(' | ') || 'none',
-          value: 'start' as const,
+          description: formatSteps([roles.start]) || 'none',
+          role: 'start' as const,
         },
         {
           label: 'Escalate to',
-          description: steps(roles.escalate) || 'nothing',
-          value: 'escalate' as const,
+          description: formatSteps(roles.escalate) || 'nothing',
+          role: 'escalate' as const,
         },
-        {
-          label: 'Review edits',
-          description:
-            roles.review.mode === 'off'
-              ? 'off'
-              : steps(roles.review.models) || 'the escalation ladder',
-          value: 'review' as const,
-        },
+        { label: 'Review edits', description: formatReviewers(roles), role: 'review' as const },
         {
           label: 'Subagents use',
           description: roles.subagents ?? 'normal routing',
-          value: 'subagents' as const,
+          role: 'subagents' as const,
         },
         ...(roles.overridden.length
-          ? [{ label: 'Follow my config again', description: '', value: 'reset' as const }]
+          ? [{ label: 'Follow my config again', description: '', role: 'reset' as const }]
           : []),
       ],
       { title: 'Switchback: Models for This Session' },
     );
-    if (!pick) return;
+    if (pick) await this.chooseRole(pick.role);
+  }
+
+  private async currentRoles(): Promise<SessionRoles | undefined> {
+    if (!this.client || !this.session) return undefined;
+    return this.client.request('session.roles', { sessionId: this.session.id });
+  }
+
+  /**
+   * Change one role for this session with QuickPicks, then offer to save it
+   * as the default. Used by the command and by the chat view's role buttons.
+   */
+  async chooseRole(role: RoleName | 'reset') {
+    const client = this.client;
+    const session = this.session;
+    const roles = await this.currentRoles();
+    if (!client || !session || !roles) return;
+    const models = this.init?.models ?? [];
     let change: Omit<SessionSetRolesParams, 'sessionId'> | undefined;
-    if (pick.value === 'reset') change = { reset: true };
-    if (pick.value === 'start') {
+    if (role === 'reset') change = { reset: true };
+    if (role === 'start') {
       const start = await this.pickOrdered(
         'Start with (then backups, in order)',
         models,
@@ -412,17 +436,17 @@ class EngineConnection implements vscode.Disposable {
       );
       if (start?.length) change = { start };
     }
-    if (pick.value === 'escalate') {
+    if (role === 'escalate') {
       const ladder = await this.pickOrdered('Escalate to (in order)', models, roles.start, true);
       if (ladder) change = { escalate: ladder.map((a) => [a]) };
     }
-    if (pick.value === 'review') {
+    if (role === 'review') {
       const how = await vscode.window.showQuickPick(
         [
           { label: 'Off', value: 'off' as const },
           {
             label: 'The escalation ladder',
-            description: steps(roles.escalate),
+            description: formatSteps(roles.escalate),
             value: 'ladder' as const,
           },
           { label: 'Models I choose…', value: 'choose' as const },
@@ -436,9 +460,10 @@ class EngineConnection implements vscode.Disposable {
         if (reviewers?.length)
           change = { review: { mode: 'auto', models: reviewers.map((a) => [a]) } };
       }
-      if (change) this.remoteReview = undefined; // follow the session's review mode
+      // The session's review mode now decides, not this window's on/off override.
+      if (change) this.remoteReview = undefined;
     }
-    if (pick.value === 'subagents') {
+    if (role === 'subagents') {
       const sub = await vscode.window.showQuickPick(
         [
           { label: 'Normal routing', value: null },
@@ -467,6 +492,27 @@ class EngineConnection implements vscode.Disposable {
     } catch (err) {
       void vscode.window.showErrorMessage(`Switchback: ${(err as Error).message}`);
     }
+  }
+
+  /** Start a new session with an agent the user picks. */
+  async chooseAgent() {
+    const agents = this.init?.agents ?? [];
+    const pick = await vscode.window.showQuickPick(
+      agents.map((a) => ({
+        label: a.name,
+        description: a.route !== 'auto' ? a.route : (a.model ?? ''),
+        detail: a.description,
+      })),
+      { title: 'Switchback: New Session with Agent', matchOnDetail: true },
+    );
+    if (pick) await this.newSession(pick.label);
+  }
+
+  /** Tell the chat which models fill the session's roles (after any session change). */
+  private async sendRoles() {
+    this.ladder = undefined;
+    const roles = await this.currentRoles().catch(() => undefined);
+    if (roles) this.broadcast({ type: 'roles', roles });
   }
 
   /** Models picked one at a time, in order; undefined when cancelled. */
