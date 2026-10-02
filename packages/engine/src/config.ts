@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { type Price, ProviderConfig } from '@switchback/providers';
-import { RoutingConfig } from '@switchback/router';
+import { ModelChain, RoutingConfig } from '@switchback/router';
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
 import { McpServerConfig, McpServerName } from './mcp/config.ts';
@@ -86,15 +86,19 @@ export const SwitchbackConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
-  /** Draft locally, review with a stronger model (docs/review.md). */
+  /** Review of edits by another model (docs/review.md). */
   review: z
     .object({
-      /** `auto`: after a turn in which a local model edited files, `review.model` reviews the diff. */
+      /** `auto`: after a turn in which a model edited files, a reviewer checks the diff. */
       mode: z.enum(['off', 'auto']).default('off'),
-      /** Reviewer model alias; defaults to the first available remote model in role order. */
-      model: z.string().optional(),
-      /** Reviews per prompt: a `revise` sends findings back to the local model, then reviews again. */
-      maxRounds: z.number().int().min(1).max(5).default(2),
+      /**
+       * Reviewers in order, any models; each entry an alias or a chain of
+       * alternatives. The first reviews; if its findings still stand after a
+       * fix, the next takes over. Empty: the `routing.escalate` ladder.
+       */
+      models: z.array(ModelChain).default([]),
+      /** Reviews per prompt, across all reviewers. */
+      maxRounds: z.number().int().min(1).max(6).default(3),
     })
     .prefault({}),
   /**
@@ -309,7 +313,9 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
       ]),
     ),
     ['routing.classifier.model', routing.classifier?.model],
-    ['review.model', config.review.model],
+    ...config.review.models.flatMap((step, i) =>
+      step.map((a): [string, string] => [`review.models[${i}]`, a]),
+    ),
     ['subagents.model', config.subagents.model],
   ];
   for (const [key, alias] of roles)
@@ -323,6 +329,8 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
  * would drop them silently, which would quietly change how someone's turns route.
  */
 export function removedKeyProblem(layer: unknown): string | undefined {
+  const review = removedReviewKey(layer);
+  if (review) return review;
   const routing = (layer as { routing?: Record<string, unknown> } | undefined)?.routing;
   if (!routing || typeof routing !== 'object') return undefined;
   if ('local' in routing)
@@ -337,6 +345,14 @@ export function removedKeyProblem(layer: unknown): string | undefined {
   if (routing.fallback && typeof routing.fallback === 'object')
     return 'routing.fallback is now "nearest" (use the nearest other step that is up) or "none" (docs/routing.md)';
   return undefined;
+}
+
+/** `review.model` became a list of reviewers (ADR 0015). */
+function removedReviewKey(layer: unknown): string | undefined {
+  const review = (layer as { review?: Record<string, unknown> } | undefined)?.review;
+  return review && typeof review === 'object' && 'model' in review
+    ? 'review.model was replaced by review.models, the reviewers in order; for example "models": ["large"] (docs/review.md)'
+    : undefined;
 }
 
 export function deepMerge(

@@ -94,8 +94,12 @@ export function applyRestrictions(
     .filter((step) => step.length);
   if (routing.classifier && !kept(routing.classifier.model, 'routing.classifier'))
     delete routing.classifier;
-  const review = { ...config.review };
-  if (review.model && !kept(review.model, 'review.model')) delete review.model;
+  const review = {
+    ...config.review,
+    models: config.review.models
+      .map((step) => step.filter((a) => kept(a, 'review.models')))
+      .filter((step) => step.length),
+  };
   const subagents = { ...config.subagents };
   if (subagents.model && !kept(subagents.model, 'subagents.model')) delete subagents.model;
   const cap = (value: number | undefined, max: number | undefined, label: string) => {

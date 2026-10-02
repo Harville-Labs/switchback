@@ -1,14 +1,14 @@
-# Draft locally, review with a stronger model
+# Review with a stronger model
 
-An optional workflow: your local model writes the code, and a stronger model reviews what it changed: a remote one, or a bigger local one that costs nothing. When the reviewer finds a real problem, the findings go back to the local model to fix, and the fix is reviewed again.
+An optional workflow: one model writes the code, and others review what it changed. When a reviewer finds a real problem, the findings go back to the writing model to fix, and the fix is reviewed again. Reviewers are any models, local or remote, in order: a free local reviewer can check every change, and a stronger one steps in only when the first one's findings don't get fixed.
 
 Writing code with a remote model is expensive because every step resends the growing conversation. Reviewing is cheap: the reviewer sees one diff and answers with a short verdict. You get most of the stronger model's judgment for a fraction of its cost.
 
 ```jsonc
 "review": {
-  "mode": "auto",        // off (default) | auto
-  "model": "remote",     // optional; defaults to the first available remote model in role order
-  "maxRounds": 2         // reviews per prompt: review, fix, review again
+  "mode": "auto",                 // off (default) | auto
+  "models": ["large", "opus"],    // reviewers in order; default: the routing.escalate ladder
+  "maxRounds": 3                  // reviews per prompt, across all reviewers (1 to 6)
 }
 ```
 
@@ -16,33 +16,48 @@ Turn it on or off for a single prompt without changing config: `/review on|off|d
 
 ## What happens
 
-1. The turn runs as usual. Switchback notes every file a model edits with `edit` or `write`, including edits by subagents in the same checkout, and remembers each file's content before its first edit.
-2. If a **local** model edited anything, the reviewer gets the user's request, the model's closing summary, and a unified diff of the whole turn's changes (capped at 2,000 lines). No tools, no conversation history.
+1. The turn runs as usual. Switchback notes every file a model edits with `edit` or `write`, including edits by subagents in the same checkout, remembers each file's content before its first edit, and which models edited it.
+2. If anything was edited, the first reviewer gets the user's request, the model's closing summary, and a unified diff of the whole turn's changes (capped at 2,000 lines). No tools, no conversation history.
 3. The reviewer answers `approve` or `revise`, with a one-sentence summary and specific findings (`file:line`, severity `bug` / `risk` / `nit`, and what to do). A `revise` with only nits counts as an approve.
-4. On `revise`, the findings are added to the conversation as a message to the local model, which fixes them (or explains why it disagrees). The fixed diff, still measured from the files' original content, is reviewed again, up to `maxRounds` reviews. Findings from the last review are shown to you but not sent back.
+4. On `revise`, the findings are added to the conversation as a message to the writing model, which fixes them (or explains why it disagrees). The fixed diff, still measured from the files' original content, is reviewed again.
+5. **The review ladder.** Each reviewer gets one fix to satisfy it. If its findings still stand after that fix, the next reviewer in `review.models` takes over. Reviews stop at the first approve, or after `maxRounds`. Findings from the last review are shown to you but not sent back.
 
-Both clients show each review: `✓ Reviewed by claude-opus-5: approved`, or `↻ claude-opus-5 asked for changes` with the findings listed. The reviewer's call appears as a routing decision with rule `review`, and its cost is recorded under `review` in `switchback usage --by rule`.
+With `"models": ["large", "opus"]` and the default 3 rounds, a change that `large` approves costs nothing. One that `large` still rejects after a fix gets a third review from `opus`, which costs about a cent.
+
+`review.models` is a list like `routing.escalate`: each entry is a reviewer, or a chain of alternatives for the same place in the ladder (`[["opus", "sol"]]`: the first that's up). Left empty, it's the `routing.escalate` ladder itself, so the models a turn would escalate to are the ones that review it.
+
+Both clients show each review: `✓ Reviewed by claude-opus-5: approved`, or `↻ large asked for changes` with the findings listed. Each reviewer's call appears as a routing decision with rule `review`, and its cost is recorded under `review` in `switchback usage --by rule`.
+
+## Who reviews
+
+Each round, the first reviewer from the current place in the ladder that:
+
+- **didn't write the change.** A model never reviews its own work. If the start model and a reviewer are the same model, that reviewer is passed over.
+- **is up.**
+- **if remote, is allowed:** not with `routing.allowRemote: false`, an organization's remote switch, a spent budget, or a [private session](privacy.md). Local reviewers are free and always allowed, so private and offline sessions can still be reviewed.
+
+When no reviewer qualifies, you'll see `Review skipped:` with the reason (for example `opus wrote the change, and a model never reviews its own work`).
 
 ## When it doesn't run
 
-- No files changed, or only a remote model changed them (it doesn't review its own work).
+- No files changed, or no reviewer qualifies (above).
 - The turn didn't finish normally (cancelled, error, out of steps).
-- The reviewer is remote and something keeps remote calls off: `routing.allowRemote: false`, an organization's remote switch, a spent budget, or a [private session](privacy.md). You'll see `Review skipped:` with the reason.
-- `privacy.secrets: block` and the diff contains a secret. With the default `redact`, secrets in the diff are replaced with placeholders first.
+- `privacy.secrets: block` and the diff contains a secret, for a remote reviewer. With the default `redact`, secrets in the diff are replaced with placeholders first.
 
 A reviewer that fails or returns something unreadable is reported as skipped; the turn itself still succeeds.
 
-## A bigger local model as the reviewer
+## Setting it up
 
-`review.model` can name any model alias, including a local one. A large local model reviewing a small, fast one costs nothing and works with `routing.allowRemote: false` and in private sessions. `switchback init` offers it when you've added more than one local model, and `--reviewer <model name>` sets it unattended (`--reviewer remote` for the first remote model):
+`switchback init` asks whether to review edits automatically and with which models, and `--reviewer remote|<model name>` sets it unattended. Any alias works in `review.models`:
 
 ```jsonc
 "models": {
   "fast":  { "provider": "ollama", "model": "qwen3-coder:30b" },
-  "large": { "provider": "gpu-box", "model": "qwen3-coder-480b" }
+  "large": { "provider": "gpu-box", "model": "qwen3-coder-480b" },
+  "opus":  { "provider": "anthropic", "model": "claude-opus-5" }
 },
-"routing": { "start": ["fast"] },
-"review": { "mode": "auto", "model": "large" }
+"routing": { "start": ["fast"], "escalate": ["large", "opus"] },
+"review": { "mode": "auto" }      // reviewers: large, then opus
 ```
 
 ## Cost

@@ -8,7 +8,7 @@
 - [Agents and subagents](subagents.md): built-in agents, writing your own, Claude Code compatibility
 - [Permissions and safety](permissions.md)
 - [Privacy](privacy.md): files that never leave your machine, and secret redaction
-- [Draft locally, review with a stronger model](review.md): a stronger model reviews what the local model changed
+- [Review with a stronger model](review.md): a ladder of reviewers, local or remote, checks what a model changed
 - [Telemetry](telemetry.md): opt-in anonymous usage statistics, field by field
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
 - [Sites](sites.md): your company's site on switchback.harville.ai: seats, members, roles, policy, devices

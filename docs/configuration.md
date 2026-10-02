@@ -152,9 +152,9 @@ See [privacy.md](privacy.md) for what's detected and the limits.
 
 | Key | Default | |
 |---|---|---|
-| `mode` | `off` | `auto`: after a turn in which a local model edited files, another model reviews the diff and the local model fixes what it finds. A prompt's `review` flag overrides it |
-| `model` | the first available remote model in role order | Reviewer model alias; any model, local or remote |
-| `maxRounds` | 2 | Reviews per prompt (1 to 5) |
+| `mode` | `off` | `auto`: after a turn in which a model edited files, a reviewer checks the diff and the writing model fixes what it finds. A prompt's `review` flag overrides it |
+| `models` | the `routing.escalate` ladder | Reviewers in order, any models; each entry an alias or a chain of alternatives. When a reviewer's findings still stand after a fix, the next takes over |
+| `maxRounds` | 3 | Reviews per prompt, across all reviewers (1 to 6) |
 
 See [review.md](review.md).
 

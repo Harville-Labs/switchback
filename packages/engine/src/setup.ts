@@ -215,11 +215,11 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   let review: Record<string, unknown> | undefined;
   if (a.reviewer === 'remote') {
     if (!remoteAliases.length) throw new Error('a remote reviewer needs a remote provider');
-    review = { mode: 'auto' };
+    review = { mode: 'auto', models: [remoteAliases] };
   } else if (a.reviewer) {
     const alias = aliasOfLocal[a.reviewer.local];
     if (!alias) throw new Error(`no local model #${a.reviewer.local + 1} to review with`);
-    review = { mode: 'auto', model: alias };
+    review = { mode: 'auto', models: [alias] };
   }
   return { providers, models, routing, ...(review ? { review } : {}) };
 }
