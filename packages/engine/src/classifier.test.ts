@@ -27,7 +27,11 @@ describe('engine classifier', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  function setup(rating: string | (() => Promise<never>), classifier: object | null = {}) {
+  function setup(
+    rating: string | (() => Promise<never>),
+    classifier: object | null = {},
+    routing: object = {},
+  ) {
     const lp = new ScriptedProvider('lp', 'local', (req) =>
       req.system === CLASSIFIER_PROMPT
         ? { text: typeof rating === 'string' ? rating : '' }
@@ -44,7 +48,11 @@ describe('engine classifier', () => {
         yield* original(req);
       };
     }
-    const rp = new ScriptedProvider('rp', 'remote', [{ text: 'remote answer' }]);
+    const rp = new ScriptedProvider('rp', 'remote', (req) =>
+      req.system === CLASSIFIER_PROMPT
+        ? { text: typeof rating === 'string' ? rating : '' }
+        : { text: 'remote answer' },
+    );
     const engine = new Engine({
       workspaceRoot: root,
       config: SwitchbackConfig.parse({
@@ -53,9 +61,12 @@ describe('engine classifier', () => {
           local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: classifier
-          ? { classifier: { model: 'local', timeoutMs: 200, ...classifier } }
-          : {},
+        routing: {
+          start: ['local'],
+          escalate: [['remote']],
+          ...(classifier ? { classifier: { model: 'local', timeoutMs: 200, ...classifier } } : {}),
+          ...routing,
+        },
       }),
       providers: new Map<string, Provider>([
         ['lp', lp],
@@ -95,18 +106,22 @@ describe('engine classifier', () => {
     expect(firstRoute(events)).toMatchObject({ rule: 'default' });
   });
 
-  test('off unless configured; never runs on a remote model', async () => {
+  test('off unless configured; a remote classifier follows the remote rules', async () => {
     const off = setup('{"difficulty":"hard"}', null);
     await off.engine.runTurn(off.engine.createSession({}).id, 'x');
     expect(off.lp.requests.some((r) => r.system === CLASSIFIER_PROMPT)).toBe(false);
 
-    const remote = setup('{"difficulty":"hard"}', { model: 'remote' });
+    // Any model can classify (ADR 0015); a remote one is billed as remote...
+    const remote = setup('{"difficulty":"easy"}', { model: 'remote' });
     await remote.engine.runTurn(remote.engine.createSession({}).id, 'x');
-    expect(remote.rp.requests.some((r) => r.system === CLASSIFIER_PROMPT)).toBe(false);
+    expect(remote.rp.requests.some((r) => r.system === CLASSIFIER_PROMPT)).toBe(true);
     expect(
-      remote.events.some(
-        (e) => e.type === 'log' && /must be a configured local model/.test(e.message),
-      ),
-    ).toBe(true);
+      remote.engine.usage().byRule?.find((r) => r.key === 'classify')?.costUsd,
+    ).toBeGreaterThan(0);
+
+    // ...and never runs when remote models are turned off.
+    const off2 = setup('{"difficulty":"hard"}', { model: 'remote' }, { allowRemote: false });
+    await off2.engine.runTurn(off2.engine.createSession({}).id, 'x');
+    expect(off2.rp.requests).toHaveLength(0);
   });
 });

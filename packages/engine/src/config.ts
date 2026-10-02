@@ -80,6 +80,8 @@ export const SwitchbackConfig = z.object({
       maxDepth: z.number().int().positive().default(2),
       /** Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it. */
       budgetUsd: z.number().nonnegative().optional(),
+      /** Model alias for subagents whose agent doesn't pin a model or tier; else normal routing. */
+      model: z.string().optional(),
     })
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
@@ -89,7 +91,7 @@ export const SwitchbackConfig = z.object({
     .object({
       /** `auto`: after a turn in which a local model edited files, `review.model` reviews the diff. */
       mode: z.enum(['off', 'auto']).default('off'),
-      /** Reviewer model alias; defaults to the first available model in `routing.remote`. */
+      /** Reviewer model alias; defaults to the first available remote model in role order. */
       model: z.string().optional(),
       /** Reviews per prompt: a `revise` sends findings back to the local model, then reviews again. */
       maxRounds: z.number().int().min(1).max(5).default(2),
@@ -195,6 +197,11 @@ export function loadConfig(
   };
   let merged: Record<string, unknown> = defaultConfig();
   if (org) {
+    const removed = removedKeyProblem(org.defaults) ?? removedKeyProblem(org.enforced);
+    if (removed)
+      throw new ConfigError(
+        `${org.org.name}'s policy uses an old key; ask an administrator to update it: ${removed}`,
+      );
     merged = deepMerge(merged, org.defaults);
     noteMcp(org.defaults, false, 'organization policy');
   }
@@ -208,6 +215,8 @@ export function loadConfig(
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
     if (only) parsed = { [only]: parsed[only] ?? {} };
+    const removed = removedKeyProblem(parsed);
+    if (removed) throw new ConfigError(removed, file);
     // A repository may turn telemetry off for its contributors, never on.
     const t = parsed.telemetry as { enabled?: unknown } | undefined;
     if (project && t?.enabled === true) {
@@ -219,6 +228,8 @@ export function loadConfig(
     sources.push(file);
   }
   for (const layer of extra) {
+    const removed = removedKeyProblem(layer);
+    if (removed) throw new ConfigError(removed);
     merged = deepMerge(merged, layer);
     noteMcp(layer, false, 'command line');
   }
@@ -276,17 +287,55 @@ export function telemetryOptedOut(env: Record<string, string | undefined>): bool
   return off(env.DO_NOT_TRACK) || ['0', 'false', 'off'].includes(env.SWITCHBACK_TELEMETRY ?? '');
 }
 
+/** Every model alias in a routing role, in role order: start, then each escalation step. */
+export function roleAliases(routing: SwitchbackConfig['routing']): string[] {
+  return [...new Set([...routing.start, ...routing.escalate.flat()])];
+}
+
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */
 export function referenceProblem(config: SwitchbackConfig): string | undefined {
   for (const [alias, m] of Object.entries(config.models)) {
     if (!config.providers[m.provider])
       return `models.${alias} references unknown provider "${m.provider}"`;
   }
-  // A misspelled step would silently drop out of the ladder.
-  for (const alias of config.routing.escalation.via) {
-    if (!config.models[alias])
-      return `routing.escalation.via references unknown model "${alias}"; add it under models or remove it`;
-  }
+  // A misspelled alias would silently drop out of its role.
+  const { routing } = config;
+  const roles: [string, string | undefined][] = [
+    ...routing.start.map((a, i): [string, string] => [`routing.start[${i}]`, a]),
+    ...routing.escalate.flatMap((step, i) =>
+      step.map((a, j): [string, string] => [
+        `routing.escalate[${i}]${step.length > 1 ? `[${j}]` : ''}`,
+        a,
+      ]),
+    ),
+    ['routing.classifier.model', routing.classifier?.model],
+    ['review.model', config.review.model],
+    ['subagents.model', config.subagents.model],
+  ];
+  for (const [key, alias] of roles)
+    if (alias && !config.models[alias])
+      return `${key} references unknown model "${alias}"; add it under models or remove it`;
+  return undefined;
+}
+
+/**
+ * Keys removed by role-based routing (ADR 0015), with what replaced them. Zod
+ * would drop them silently, which would quietly change how someone's turns route.
+ */
+export function removedKeyProblem(layer: unknown): string | undefined {
+  const routing = (layer as { routing?: Record<string, unknown> } | undefined)?.routing;
+  if (!routing || typeof routing !== 'object') return undefined;
+  if ('local' in routing)
+    return 'routing.local was renamed routing.start: the models turns begin on (docs/routing.md)';
+  if ('remote' in routing)
+    return 'routing.remote was replaced by routing.escalate, an ordered ladder of any models; for example "escalate": [["remote"]] (docs/routing.md)';
+  if ('mode' in routing)
+    return 'routing.mode was removed: list the models you want in routing.start and routing.escalate, or set routing.allowRemote: false to keep remote models unused (docs/routing.md)';
+  const escalation = routing.escalation as Record<string, unknown> | undefined;
+  if (escalation && typeof escalation === 'object' && 'via' in escalation)
+    return 'routing.escalation.via was replaced by routing.escalate, which lists every step (docs/routing.md)';
+  if (routing.fallback && typeof routing.fallback === 'object')
+    return 'routing.fallback is now "nearest" (use the nearest other step that is up) or "none" (docs/routing.md)';
   return undefined;
 }
 

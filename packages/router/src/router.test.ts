@@ -3,38 +3,49 @@ import { RoutingConfig } from './config.ts';
 import { type ModelInfo, type RouteInput, Router } from './router.ts';
 import { SignalTracker } from './signals.ts';
 
-const LOCAL: ModelInfo = {
-  alias: 'local',
-  ref: { provider: 'ollama', model: 'qwen3-coder' },
-  tier: 'local',
-  contextWindow: 32_000,
-  available: true,
-};
-const REMOTE: ModelInfo = {
-  alias: 'remote',
-  ref: { provider: 'anthropic', model: 'claude-opus-5' },
-  tier: 'remote',
-  contextWindow: 1_000_000,
-  available: true,
-};
-const HAIKU: ModelInfo = {
-  ...REMOTE,
-  alias: 'haiku',
-  ref: { provider: 'anthropic', model: 'claude-haiku-4-5' },
+const model = (
+  alias: string,
+  tier: 'local' | 'remote',
+  contextWindow: number,
+  available = true,
+): ModelInfo => ({
+  alias,
+  ref: { provider: tier === 'local' ? 'ollama' : 'cloud', model: alias },
+  tier,
+  contextWindow,
+  available,
+});
+
+/** fast (local 32k) → large (local 128k) → opus (remote 1M); sonnet and haiku are spare remotes. */
+const MODELS: Record<string, ModelInfo> = {
+  fast: model('fast', 'local', 32_000),
+  large: model('large', 'local', 128_000),
+  opus: model('opus', 'remote', 1_000_000),
+  sonnet: model('sonnet', 'remote', 400_000),
+  haiku: model('haiku', 'remote', 200_000),
 };
 
-function router(config: unknown = {}, overrides: Partial<Record<string, ModelInfo>> = {}) {
-  const models: Record<string, ModelInfo> = { local: LOCAL, remote: REMOTE, haiku: HAIKU };
-  for (const [k, v] of Object.entries(overrides)) if (v) models[k] = v;
+const LADDER = { start: ['fast'], escalate: ['large', 'opus'] };
+
+function router(
+  config: Record<string, unknown> = LADDER,
+  overrides: Record<string, ModelInfo> = {},
+) {
+  const models = { ...MODELS, ...overrides };
   return new Router(RoutingConfig.parse(config), (alias) => models[alias]);
 }
+
+const signals = (extra: Partial<RouteInput['signals']> = {}) => ({
+  ...new SignalTracker(RoutingConfig.parse({}).escalation).snapshot(),
+  ...extra,
+});
 
 function input(overrides: Partial<RouteInput> = {}): RouteInput {
   return {
     preference: 'auto',
     agent: { name: 'build', route: 'auto' },
     estimatedInputTokens: 1_000,
-    signals: new SignalTracker(RoutingConfig.parse({}).escalation).snapshot(),
+    signals: signals(),
     spend: { todayUsd: 0, monthUsd: 0 },
     ...overrides,
   };
@@ -45,430 +56,51 @@ function routed(d: ReturnType<Router['decide']>) {
   return d;
 }
 
-describe('Router', () => {
-  test('routes local by default', () => {
+const stuck = signals({ consecutiveToolErrors: 3 });
+const on = (step: number, extra: Partial<RouteInput['signals']> = {}) =>
+  signals({ stickyTurns: 2, escalationStep: step, ...extra });
+
+describe('roles', () => {
+  test('turns begin on the start model', () => {
     const d = routed(router().decide(input()));
-    expect(d.model.alias).toBe('local');
-    expect(d.rule).toBe('default');
+    expect(d).toMatchObject({ rule: 'default', model: { alias: 'fast' }, step: 0 });
   });
 
-  test('user override beats agent pin and mode', () => {
-    const r = router({ mode: 'local-only' });
-    const d = routed(
-      r.decide(input({ preference: 'remote', agent: { name: 'x', route: 'local' } })),
-    );
-    expect(d.model.alias).toBe('remote');
-    expect(d.rule).toBe('user-override');
+  test('all remote: start and escalate across remote models', () => {
+    const r = router({ start: ['haiku'], escalate: ['opus'] });
+    expect(routed(r.decide(input())).model.alias).toBe('haiku');
+    const up = routed(r.decide(input({ signals: stuck })));
+    expect(up).toMatchObject({ rule: 'escalation', model: { alias: 'opus' }, step: 1 });
   });
 
-  test('agent can pin a model alias (Claude Code style model: haiku)', () => {
-    const d = routed(
-      router().decide(input({ agent: { name: 'explore', route: 'auto', model: 'haiku' } })),
-    );
-    expect(d.model.alias).toBe('haiku');
-    expect(d.rule).toBe('agent-pin');
-  });
-
-  test('escalates when the prompt will not fit the local context window', () => {
-    const d = routed(router().decide(input({ estimatedInputTokens: 30_000 })));
-    expect(d.model.alias).toBe('remote');
-    expect(d.rule).toBe('context-overflow');
-    expect(d.escalated).toBe(true);
-  });
-
-  test('escalates after consecutive tool errors', () => {
-    const cfg = RoutingConfig.parse({});
-    const t = new SignalTracker(cfg.escalation);
-    for (let i = 0; i < 3; i++) t.recordToolResult(false);
-    const d = routed(router().decide(input({ signals: t.snapshot() })));
-    expect(d.rule).toBe('escalation');
-    expect(d.reason).toContain('3 consecutive tool errors');
-  });
-
-  test('detects tool-call loops regardless of key order', () => {
-    const t = new SignalTracker(RoutingConfig.parse({}).escalation);
-    t.recordToolCall('read', { path: 'a', limit: 1 });
-    t.recordToolCall('read', { limit: 1, path: 'a' });
-    t.recordToolCall('read', { path: 'a', limit: 1 });
-    expect(t.snapshot().loopDetected).toBe(true);
-  });
-
-  test('ask policy asks instead of escalating, then honors approval', () => {
-    const t = new SignalTracker(RoutingConfig.parse({}).escalation);
-    t.recordLocalFailure();
-    const r = router({ escalation: { policy: 'ask' } });
-    expect(r.decide(input({ signals: t.snapshot() })).kind).toBe('ask');
-    const d = routed(r.decide(input({ signals: t.snapshot(), escalationApproved: true })));
-    expect(d.model.alias).toBe('remote');
-  });
-
-  test('off policy never escalates on quality signals', () => {
-    const t = new SignalTracker(RoutingConfig.parse({}).escalation);
-    t.recordLocalFailure();
-    const d = routed(
-      router({ escalation: { policy: 'off' } }).decide(input({ signals: t.snapshot() })),
-    );
-    expect(d.model.alias).toBe('local');
-  });
-
-  test('stays remote for stickyTurns after escalating, then returns local', () => {
-    const cfg = RoutingConfig.parse({ escalation: { stickyTurns: 2 } });
-    const t = new SignalTracker(cfg.escalation);
-    t.recordTurn(1, true);
-    const r = router({ escalation: { stickyTurns: 2 } });
-    expect(routed(r.decide(input({ signals: t.snapshot() }))).rule).toBe('sticky');
-    t.recordTurn(1, false);
-    t.recordTurn(1, false);
-    expect(routed(r.decide(input({ signals: t.snapshot() }))).model.alias).toBe('local');
-  });
-
-  test('budget exhaustion keeps escalations local', () => {
-    const d = routed(
-      router({ budget: { dailyUsd: 1 } }).decide(
-        input({ estimatedInputTokens: 30_000, spend: { todayUsd: 1.5, monthUsd: 1.5 } }),
-      ),
-    );
-    expect(d.model.alias).toBe('local');
-    expect(d.rule).toBe('budget');
-  });
-
-  test('budget block mode blocks instead', () => {
-    const d = router({ budget: { monthlyUsd: 10, onExceeded: 'block' } }).decide(
-      input({
-        preference: 'auto',
-        agent: { name: 'x', route: 'remote' },
-        spend: { todayUsd: 0, monthUsd: 10 },
-      }),
-    );
-    expect(d.kind).toBe('block');
-  });
-
-  test('explicit remote request ignores budget', () => {
-    const d = routed(
-      router({ budget: { dailyUsd: 1 } }).decide(
-        input({ preference: 'remote', spend: { todayUsd: 5, monthUsd: 5 } }),
-      ),
-    );
-    expect(d.model.alias).toBe('remote');
-  });
-
-  test('falls back to remote when local is down', () => {
-    const d = routed(router({}, { local: { ...LOCAL, available: false } }).decide(input()));
-    expect(d.model.alias).toBe('remote');
-    expect(d.rule).toBe('fallback');
-  });
-
-  test('falls back to local when remote is down', () => {
-    const d = routed(
-      router({}, { remote: { ...REMOTE, available: false } }).decide(
-        input({ preference: 'remote' }),
-      ),
-    );
-    expect(d.model.alias).toBe('local');
-  });
-
-  test('blocks when everything is down', () => {
-    const d = router(
-      {},
-      {
-        local: { ...LOCAL, available: false },
-        remote: { ...REMOTE, available: false },
-      },
-    ).decide(input());
-    expect(d.kind).toBe('block');
-  });
-
-  describe('with no local model configured', () => {
-    const remoteOnly = () =>
-      new Router(RoutingConfig.parse({}), (alias) => (alias === 'remote' ? REMOTE : undefined));
-
-    test('routes remote by default and says why', () => {
-      const d = routed(remoteOnly().decide(input()));
-      expect(d.model.alias).toBe('remote');
-      expect(d.reason).toContain('switchback init');
-    });
-
-    test('a local-pinned agent (explore) still runs instead of failing', () => {
-      const d = routed(remoteOnly().decide(input({ agent: { name: 'explore', route: 'local' } })));
-      expect(d.model.alias).toBe('remote');
-    });
-
-    test('an explicit local request is blocked with setup guidance', () => {
-      const d = remoteOnly().decide(input({ preference: 'local' }));
-      expect(d.kind).toBe('block');
-      expect(d.kind === 'block' && d.reason).toContain('switchback init');
-    });
-  });
-});
-
-describe('privacy', () => {
-  const privacy = { reason: 'read secrets/prod.env' };
-
-  test('keeps a private session local, even on an explicit remote request', () => {
-    const d = routed(router().decide(input({ preference: 'remote', privacy })));
-    expect(d.model.alias).toBe('local');
-    expect(d.rule).toBe('privacy');
-    expect(d.reason).toContain('secrets/prod.env');
-  });
-
-  test('beats remote-only mode, agent pins, and context overflow', () => {
-    for (const r of [
-      routed(router({ mode: 'remote-only' }).decide(input({ privacy }))),
-      routed(router().decide(input({ privacy, agent: { name: 'x', route: 'remote' } }))),
-      routed(router().decide(input({ privacy, estimatedInputTokens: 30_000 }))),
-    ]) {
-      expect(r.model.tier).toBe('local');
-      expect(r.rule).toBe('privacy');
-    }
-  });
-
-  test('does not ask to escalate a private session', () => {
-    const cfg = RoutingConfig.parse({ escalation: { policy: 'ask' } });
-    const t = new SignalTracker(cfg.escalation);
-    t.startUserTurn();
-    t.recordLocalFailure();
-    const d = routed(
-      router({ escalation: { policy: 'ask' } }).decide(input({ privacy, signals: t.snapshot() })),
-    );
-    expect(d.rule).toBe('privacy');
-    expect(d.reason).toContain('local model failed');
-  });
-
-  test('blocks rather than falling back to remote when local is down', () => {
-    const down = { ...LOCAL, available: false };
-    const d = router({}, { local: down }).decide(input({ privacy }));
-    expect(d.kind).toBe('block');
-    expect(d.rule).toBe('privacy');
-    expect(d.reason).toContain('no local model is available');
-  });
-
-  test('a session without private content routes normally', () => {
-    const d = routed(router().decide(input({ preference: 'remote' })));
-    expect(d.model.alias).toBe('remote');
-  });
-});
-
-describe('multiple models per tier', () => {
-  const LAPTOP: ModelInfo = {
-    alias: 'laptop',
-    ref: { provider: 'ollama', model: 'qwen3:8b' },
-    tier: 'local',
-    contextWindow: 8_000,
-    available: true,
-  };
-  const GPU: ModelInfo = {
-    alias: 'gpu',
-    ref: { provider: 'vllm', model: 'qwen3-coder-30b' },
-    tier: 'local',
-    contextWindow: 128_000,
-    available: true,
-  };
-  const OPENAI: ModelInfo = {
-    alias: 'sol',
-    ref: { provider: 'openai', model: 'gpt-6-sol' },
-    tier: 'remote',
-    contextWindow: 400_000,
-    available: true,
-  };
-  const chain = (overrides: Partial<Record<string, ModelInfo>> = {}, config: object = {}) =>
-    router(
-      { local: ['laptop', 'gpu'], remote: ['remote', 'sol'], ...config },
-      { laptop: LAPTOP, gpu: GPU, sol: OPENAI, ...overrides },
-    );
-
-  test('a single alias string still works', () => {
-    expect(RoutingConfig.parse({ local: 'laptop' }).local).toEqual(['laptop']);
-  });
-
-  test('uses the first local model when it fits', () => {
-    const d = routed(chain().decide(input()));
-    expect(d).toMatchObject({ rule: 'default', model: { alias: 'laptop' } });
-  });
-
-  test('a prompt too big for the first local model goes to a bigger local one, not remote', () => {
-    const d = routed(chain().decide(input({ estimatedInputTokens: 20_000 })));
-    expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'gpu' }, escalated: false });
-    expect(d.reason).toContain("exceeds laptop's window; using gpu");
-  });
-
-  test('escalates only when no local model fits', () => {
-    const d = routed(chain().decide(input({ estimatedInputTokens: 200_000 })));
-    expect(d).toMatchObject({ rule: 'context-overflow', model: { alias: 'remote' } });
-    expect(d.reason).toContain('largest local window (128000)');
-  });
-
-  test('a down local server falls back to the next local one before going remote', () => {
-    const d = routed(chain({ laptop: { ...LAPTOP, available: false } }).decide(input()));
-    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'gpu' } });
-  });
-
-  test('all local servers down: cross-tier fallback to the first reachable remote', () => {
-    const d = routed(
-      chain({
-        laptop: { ...LAPTOP, available: false },
-        gpu: { ...GPU, available: false },
-        remote: { ...REMOTE, available: false },
-      }).decide(input()),
-    );
-    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'sol' } });
-  });
-
-  test('remote chains fall back across providers', () => {
-    const d = routed(
-      chain({ remote: { ...REMOTE, available: false } }).decide(input({ preference: 'remote' })),
-    );
-    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'sol' } });
-    expect(d.reason).toContain('user requested remote');
-  });
-
-  test('aliases without a model are skipped', () => {
-    const d = routed(router({ local: ['missing', 'gpu'] }, { gpu: GPU }).decide(input()));
-    expect(d).toMatchObject({ rule: 'default', model: { alias: 'gpu' } });
-  });
-
-  test('local-only mode still prefers a local model that fits', () => {
-    const d = routed(
-      chain({}, { mode: 'local-only' }).decide(input({ estimatedInputTokens: 20_000 })),
-    );
-    expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'gpu' } });
-  });
-});
-
-test('a declined escalation stays local and says why', () => {
-  const signals = { ...input().signals, localTurnFailed: true };
-  const d = routed(
-    router({ escalation: { policy: 'ask' } }).decide(input({ signals, escalationDeclined: true })),
-  );
-  expect(d).toMatchObject({ rule: 'escalation-declined', model: { alias: 'local' } });
-});
-
-describe('refusal fallback', () => {
-  const SOL: ModelInfo = {
-    alias: 'sol',
-    ref: { provider: 'openai', model: 'gpt-6-sol' },
-    tier: 'remote',
-    contextWindow: 400_000,
-    available: true,
-  };
-  const r = () => router({ remote: ['remote', 'sol'] }, { sol: SOL });
-
-  test('retries on the next remote model and says who declined', () => {
-    const d = routed(r().decide(input({ refused: ['remote'], refusalRetry: true })));
-    expect(d).toMatchObject({ rule: 'refusal-fallback', model: { alias: 'sol' } });
-    expect(d.reason).toBe('remote declined the request; retrying on sol');
-  });
-
-  test('a model that refused is skipped for the rest of the turn', () => {
-    const signals = { ...input().signals, stickyTurns: 2, escalationStep: 1 };
-    const d = routed(r().decide(input({ refused: ['remote'], signals })));
-    expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'sol' } });
-  });
-
-  test('no other remote model: blocked with the reason', () => {
-    const d = r().decide(input({ refused: ['remote', 'sol'], refusalRetry: true }));
-    expect(d).toMatchObject({ kind: 'block', rule: 'refusal-fallback' });
-  });
-});
-
-test('local-only never falls back to remote, even when the local server is down', () => {
-  const d = router({ mode: 'local-only' }, { local: { ...LOCAL, available: false } }).decide(
-    input(),
-  );
-  expect(d).toMatchObject({ kind: 'block', rule: 'fallback' });
-});
-
-describe('classifier rule', () => {
-  const hard = { level: 'hard', reason: 'subtle race in the scheduler' } as const;
-  const cfg = (extra: object = {}) => ({ classifier: { model: 'local' }, ...extra });
-
-  test('a hard rating starts the turn remote, with the reason', () => {
-    const d = routed(router(cfg()).decide(input({ difficulty: hard })));
-    expect(d).toMatchObject({ rule: 'classifier', escalated: true, model: { alias: 'remote' } });
-    expect(d.reason).toBe('classifier rated the prompt hard: subtle race in the scheduler');
-  });
-
-  test('below escalateOn stays local; medium can be the bar', () => {
-    const medium = { level: 'medium', reason: '' } as const;
-    expect(routed(router(cfg()).decide(input({ difficulty: medium }))).rule).toBe('default');
+  test('all local: nothing remote is ever chosen', () => {
+    const r = router({ start: ['fast'], escalate: ['large'] });
+    expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
     expect(
-      routed(
-        router(cfg({ classifier: { model: 'local', escalateOn: 'medium' } })).decide(
-          input({ difficulty: medium }),
-        ),
-      ).rule,
-    ).toBe('classifier');
+      routed(r.decide(input({ signals: on(1, { consecutiveToolErrors: 3 }) }))).model.alias,
+    ).toBe('large');
   });
 
-  test('follows escalation.policy', () => {
-    expect(
-      router(cfg({ escalation: { policy: 'ask' } })).decide(input({ difficulty: hard })),
-    ).toMatchObject({ kind: 'ask', rule: 'classifier' });
-    expect(
-      routed(router(cfg({ escalation: { policy: 'off' } })).decide(input({ difficulty: hard })))
-        .rule,
-    ).toBe('default');
+  test('a step can be a chain of alternatives', () => {
+    const r = router(
+      { start: ['fast'], escalate: [['sonnet', 'opus']] },
+      { sonnet: model('sonnet', 'remote', 400_000, false) },
+    );
+    const d = routed(r.decide(input({ signals: stuck })));
+    expect(d).toMatchObject({ model: { alias: 'opus' }, step: 1, rule: 'fallback' });
+    expect(d.reason).toContain('sonnet is unavailable; using opus');
   });
 
-  test('ignored without a classifier configured, and never beats a user override', () => {
-    expect(routed(router().decide(input({ difficulty: hard }))).rule).toBe('default');
-    expect(
-      routed(router(cfg()).decide(input({ difficulty: hard, preference: 'local' }))).rule,
-    ).toBe('user-override');
+  test('with no start model, turns begin on the first step; with no models, blocked', () => {
+    const d = routed(router({ escalate: ['opus'] }).decide(input()));
+    expect(d).toMatchObject({ model: { alias: 'opus' }, step: 1 });
+    expect(router({}).decide(input())).toMatchObject({ kind: 'block', rule: 'default' });
   });
 });
 
-describe('agent budgets', () => {
-  const budget = (spentUsd: number) => ({ agent: 'reviewer', limitUsd: 0.5, spentUsd });
-  const remoteTurn = { signals: { ...input().signals, stickyTurns: 1, escalationStep: 1 } };
-
-  test('under budget: no effect', () => {
-    const d = routed(router().decide(input({ ...remoteTurn, invocationBudget: budget(0.2) })));
-    expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'remote' } });
-  });
-
-  test('spent: remote calls continue locally', () => {
-    const d = routed(router().decide(input({ ...remoteTurn, invocationBudget: budget(0.5) })));
-    expect(d).toMatchObject({ rule: 'agent-budget', model: { alias: 'local' } });
-    expect(d.reason).toBe(
-      'subagent "reviewer" spent $0.50 of its $0.50 budget; continuing locally',
-    );
-  });
-
-  test('spent with no local model: the subagent is stopped', () => {
-    const d = router({}, { local: { ...LOCAL, available: false } }).decide(
-      input({ ...remoteTurn, invocationBudget: budget(0.9) }),
-    );
-    expect(d).toMatchObject({ kind: 'block', rule: 'agent-budget' });
-  });
-
-  test('local calls are never limited by a budget', () => {
-    expect(routed(router().decide(input({ invocationBudget: budget(9) }))).rule).toBe('default');
-  });
-});
-
-describe('escalation ladder (escalation.via)', () => {
-  const LARGE: ModelInfo = {
-    alias: 'large',
-    ref: { provider: 'gpu-box', model: 'qwen3-coder-480b' },
-    tier: 'local',
-    contextWindow: 128_000,
-    available: true,
-  };
-  const ladder = (config: Record<string, unknown> = {}, large: ModelInfo = LARGE) =>
-    router(
-      { ...config, escalation: { via: ['large'], ...(config.escalation as object) } },
-      { large },
-    );
-  const stuck = { ...input().signals, consecutiveToolErrors: 3 };
-  const onLarge = (extra = {}) => ({
-    ...input().signals,
-    stickyTurns: 2,
-    escalationStep: 1,
-    ...extra,
-  });
-
-  test('a struggling local model escalates to the bigger local model first', () => {
-    const d = routed(ladder().decide(input({ signals: stuck })));
+describe('escalation ladder', () => {
+  test('one step at a time, with the reason', () => {
+    const d = routed(router().decide(input({ signals: stuck })));
     expect(d).toMatchObject({
       rule: 'escalation',
       model: { alias: 'large' },
@@ -478,85 +110,334 @@ describe('escalation ladder (escalation.via)', () => {
     expect(d.reason).toBe('3 consecutive tool errors; escalating to large (step 1 of 2)');
   });
 
-  test('stays on the step it reached, then climbs to remote if that model struggles too', () => {
-    const sticky = routed(ladder().decide(input({ signals: onLarge() })));
+  test('stays on the step it reached, then climbs if that model struggles too', () => {
+    const sticky = routed(router().decide(input({ signals: on(1) })));
     expect(sticky).toMatchObject({ rule: 'sticky', model: { alias: 'large' }, step: 1 });
     expect(sticky.reason).toBe('recently escalated to large (2 turns left)');
-    const up = routed(ladder().decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }) })));
-    expect(up).toMatchObject({ rule: 'escalation', model: { alias: 'remote' }, step: 2 });
+    const up = routed(router().decide(input({ signals: on(1, { consecutiveToolErrors: 3 }) })));
+    expect(up).toMatchObject({ rule: 'escalation', model: { alias: 'opus' }, step: 2 });
   });
 
-  test('ask policy: local steps never ask; the remote step does', () => {
-    const r = ladder({ escalation: { policy: 'ask' } });
+  test('every quality signal escalates', () => {
+    for (const s of [
+      { turnFailed: true },
+      { loopDetected: true },
+      { malformedToolCalls: 2 },
+      { consecutiveToolErrors: 3 },
+    ])
+      expect(routed(router().decide(input({ signals: signals(s) }))).rule).toBe('escalation');
+  });
+
+  test('ask: local steps never ask; a remote step does, then honors approval', () => {
+    const r = router({ ...LADDER, escalation: { policy: 'ask' } });
     expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
-    const d = r.decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }) }));
-    expect(d).toMatchObject({ kind: 'ask', target: { alias: 'remote' } });
-  });
-
-  test('off policy escalates nowhere on quality signals', () => {
-    const d = routed(ladder({ escalation: { policy: 'off' } }).decide(input({ signals: stuck })));
-    expect(d.model.alias).toBe('local');
-  });
-
-  test('local-only mode climbs through local models but never goes remote', () => {
-    const r = ladder({ mode: 'local-only' });
-    expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
-    const top = routed(r.decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }) })));
-    expect(top).toMatchObject({ model: { alias: 'large' }, rule: 'sticky' });
-  });
-
-  test('a private session can escalate to a local model, and stops there', () => {
-    const privacy = { reason: 'secrets/prod.env' };
-    const first = routed(ladder().decide(input({ signals: stuck, privacy })));
-    expect(first.model.alias).toBe('large');
-    const top = routed(
-      ladder().decide(input({ signals: onLarge({ consecutiveToolErrors: 3 }), privacy })),
+    const ask = r.decide(input({ signals: on(1, { consecutiveToolErrors: 3 }) }));
+    expect(ask).toMatchObject({ kind: 'ask', target: { alias: 'opus' } });
+    const ok = r.decide(
+      input({ signals: on(1, { consecutiveToolErrors: 3 }), escalationApproved: true }),
     );
-    expect(top.rule).toBe('privacy');
-    expect(top.model.tier).toBe('local');
+    expect(routed(ok).model.alias).toBe('opus');
   });
 
-  test('context overflow goes to the bigger local window before remote', () => {
-    const fitsLarge = routed(ladder().decide(input({ estimatedInputTokens: 60_000 })));
-    expect(fitsLarge).toMatchObject({
-      rule: 'context-overflow',
-      model: { alias: 'large' },
-      step: 1,
-    });
-    const tooBig = routed(ladder().decide(input({ estimatedInputTokens: 200_000 })));
-    expect(tooBig).toMatchObject({ rule: 'context-overflow', model: { alias: 'remote' }, step: 2 });
+  test('a declined escalation stays where it is and says so', () => {
+    const d = routed(router().decide(input({ signals: on(1), escalationDeclined: true })));
+    expect(d).toMatchObject({ rule: 'escalation-declined', model: { alias: 'large' } });
+    expect(d.reason).toBe('escalation was declined; staying on large');
   });
 
-  test('a step whose server is down is skipped', () => {
-    const d = routed(ladder({}, { ...LARGE, available: false }).decide(input({ signals: stuck })));
-    expect(d).toMatchObject({ model: { alias: 'remote' }, step: 2 });
-  });
-
-  test('a spent budget does not stop a local step', () => {
+  test('off: no escalation on quality signals at any step', () => {
     const d = routed(
-      ladder({ budget: { dailyUsd: 1 } }).decide(
-        input({ signals: stuck, spend: { todayUsd: 5, monthUsd: 5 } }),
+      router({ ...LADDER, escalation: { policy: 'off' } }).decide(input({ signals: stuck })),
+    );
+    expect(d.model.alias).toBe('fast');
+  });
+
+  test('a step that is down or too small is skipped', () => {
+    const down = routed(
+      router(LADDER, { large: model('large', 'local', 128_000, false) }).decide(
+        input({ signals: stuck }),
       ),
     );
-    expect(d).toMatchObject({ rule: 'escalation', model: { alias: 'large' } });
+    expect(down).toMatchObject({ model: { alias: 'opus' }, step: 2 });
+    const small = routed(router().decide(input({ signals: stuck, estimatedInputTokens: 150_000 })));
+    expect(small.model.alias).toBe('opus');
   });
 
-  test('the classifier climbs one step too', () => {
+  test('the classifier climbs one step', () => {
     const d = routed(
-      ladder({ classifier: { model: 'local' } }).decide(
+      router({ ...LADDER, classifier: { model: 'fast' } }).decide(
         input({ difficulty: { level: 'hard', reason: 'large refactor' } }),
       ),
     );
     expect(d).toMatchObject({ rule: 'classifier', model: { alias: 'large' }, step: 1 });
+    const easy = routed(
+      router({ ...LADDER, classifier: { model: 'fast' } }).decide(
+        input({ difficulty: { level: 'easy', reason: '' } }),
+      ),
+    );
+    expect(easy.model.alias).toBe('fast');
+  });
+});
+
+describe('context overflow', () => {
+  test('goes to the first step whose window fits', () => {
+    const d = routed(router().decide(input({ estimatedInputTokens: 60_000 })));
+    expect(d).toMatchObject({ rule: 'context-overflow', model: { alias: 'large' }, step: 1 });
+    const big = routed(router().decide(input({ estimatedInputTokens: 200_000 })));
+    expect(big).toMatchObject({ rule: 'context-overflow', model: { alias: 'opus' }, step: 2 });
   });
 
-  test('the tracker keeps the step for stickyTurns turns on it, then resets', () => {
+  test('when nothing fits, the largest window above is still the best chance', () => {
+    const d = routed(router().decide(input({ estimatedInputTokens: 5_000_000 })));
+    expect(d).toMatchObject({ rule: 'context-overflow', model: { alias: 'opus' } });
+  });
+
+  test('a start chain prefers a member that fits before escalating', () => {
+    const r = router({ start: ['fast', 'large'], escalate: ['opus'] });
+    const d = routed(r.decide(input({ estimatedInputTokens: 60_000 })));
+    expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'large' }, step: 0 });
+  });
+});
+
+describe('tier filters and pins', () => {
+  test('/local and /remote pick the first model of that tier in role order', () => {
+    expect(routed(router().decide(input({ preference: 'remote' })))).toMatchObject({
+      rule: 'user-override',
+      model: { alias: 'opus' },
+      step: 2,
+    });
+    const r = router({ start: ['haiku'], escalate: ['large', 'opus'] });
+    expect(routed(r.decide(input({ preference: 'local' }))).model.alias).toBe('large');
+  });
+
+  test('a tier with no model in any role is refused with a pointer to init', () => {
+    const d = router({ start: ['opus'] }).decide(input({ preference: 'local' }));
+    expect(d).toMatchObject({ kind: 'block', rule: 'user-override' });
+    expect((d as { reason: string }).reason).toContain('no local model is in routing.start');
+  });
+
+  test('a user override beats an agent pin', () => {
+    const d = routed(
+      router().decide(input({ preference: 'remote', agent: { name: 'x', route: 'local' } })),
+    );
+    expect(d.model.alias).toBe('opus');
+  });
+
+  test('an agent can pin any alias, or a tier', () => {
+    const alias = routed(
+      router().decide(input({ agent: { name: 'r', route: 'auto', model: 'haiku' } })),
+    );
+    expect(alias).toMatchObject({ rule: 'agent-pin', model: { alias: 'haiku' } });
+    const tier = routed(router().decide(input({ agent: { name: 'explore', route: 'local' } })));
+    expect(tier).toMatchObject({ rule: 'agent-pin', model: { alias: 'fast' } });
+    // A tier pin with no model of that tier routes normally.
+    const none = routed(
+      router({ start: ['opus'] }).decide(input({ agent: { name: 'explore', route: 'local' } })),
+    );
+    expect(none).toMatchObject({ rule: 'default', model: { alias: 'opus' } });
+  });
+});
+
+describe('remote off (allowRemote: false)', () => {
+  const r = router({ ...LADDER, allowRemote: false });
+
+  test('escalations skip remote steps', () => {
+    expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
+    const top = routed(r.decide(input({ signals: on(1, { consecutiveToolErrors: 3 }) })));
+    expect(top).toMatchObject({ rule: 'sticky', model: { alias: 'large' } });
+  });
+
+  test('an explicit remote request is refused; a remote pin runs locally', () => {
+    expect(r.decide(input({ preference: 'remote' }))).toMatchObject({
+      kind: 'block',
+      rule: 'remote-off',
+    });
+    const pinned = routed(r.decide(input({ agent: { name: 'a', route: 'auto', model: 'opus' } })));
+    expect(pinned).toMatchObject({ rule: 'remote-off', model: { tier: 'local' } });
+  });
+});
+
+describe('budgets', () => {
+  const spent = { todayUsd: 10, monthUsd: 10 };
+
+  test('a spent budget keeps a remote step local; local steps are never limited', () => {
+    const r = router({ ...LADDER, budget: { dailyUsd: 5 } });
+    const top = routed(
+      r.decide(input({ signals: on(1, { consecutiveToolErrors: 3 }), spend: spent })),
+    );
+    expect(top).toMatchObject({ rule: 'budget', model: { alias: 'large' } });
+    expect(routed(r.decide(input({ signals: stuck, spend: spent }))).model.alias).toBe('large');
+  });
+
+  test('block mode blocks instead', () => {
+    const r = router({ ...LADDER, budget: { dailyUsd: 5, onExceeded: 'block' } });
+    expect(r.decide(input({ signals: on(2), spend: spent }))).toMatchObject({
+      kind: 'block',
+      rule: 'budget',
+    });
+  });
+
+  test('an explicit remote request ignores the budget', () => {
+    const r = router({ ...LADDER, budget: { dailyUsd: 5 } });
+    expect(routed(r.decide(input({ preference: 'remote', spend: spent }))).model.alias).toBe(
+      'opus',
+    );
+  });
+});
+
+describe('outages', () => {
+  test('the start model down: the nearest step up', () => {
+    const r = router(LADDER, { fast: model('fast', 'local', 32_000, false) });
+    const d = routed(r.decide(input()));
+    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'large' }, step: 1 });
+  });
+
+  test('the top step down: back down the ladder', () => {
+    const r = router(LADDER, { opus: model('opus', 'remote', 1_000_000, false) });
+    const d = routed(r.decide(input({ preference: 'remote' })));
+    expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'large' } });
+  });
+
+  test('fallback: none stops instead', () => {
+    const r = router(
+      { ...LADDER, fallback: 'none' },
+      { fast: model('fast', 'local', 32_000, false) },
+    );
+    expect(r.decide(input())).toMatchObject({ kind: 'block', rule: 'fallback' });
+  });
+
+  test('everything down: blocked', () => {
+    const down = Object.fromEntries(
+      Object.values(MODELS).map((m) => [m.alias, { ...m, available: false }]),
+    );
+    expect(router(LADDER, down).decide(input())).toMatchObject({ kind: 'block', rule: 'fallback' });
+  });
+
+  test('remote off: an outage never falls back to a remote model', () => {
+    const r = router(
+      { start: ['fast'], escalate: ['opus'], allowRemote: false },
+      { fast: model('fast', 'local', 32_000, false) },
+    );
+    expect(r.decide(input())).toMatchObject({ kind: 'block', rule: 'fallback' });
+  });
+});
+
+describe('privacy', () => {
+  const privacy = { reason: 'secrets/prod.env' };
+
+  test('a private session stays local, even on an explicit remote request', () => {
+    const d = routed(router().decide(input({ preference: 'remote', privacy })));
+    expect(d).toMatchObject({ rule: 'privacy', model: { tier: 'local' } });
+    expect(d.reason).toContain('secrets/prod.env');
+  });
+
+  test('it can still climb through local steps, and stops there', () => {
+    expect(routed(router().decide(input({ signals: stuck, privacy }))).model.alias).toBe('large');
+    const top = routed(
+      router().decide(input({ signals: on(1, { consecutiveToolErrors: 3 }), privacy })),
+    );
+    expect(top).toMatchObject({ rule: 'privacy', model: { tier: 'local' } });
+  });
+
+  test('never asks to escalate a private session', () => {
+    const r = router({ start: ['fast'], escalate: ['opus'], escalation: { policy: 'ask' } });
+    const d = routed(r.decide(input({ signals: stuck, privacy })));
+    expect(d).toMatchObject({ rule: 'privacy', model: { alias: 'fast' } });
+  });
+
+  test('blocks rather than going remote when no local model is up', () => {
+    const r = router(LADDER, {
+      fast: model('fast', 'local', 32_000, false),
+      large: model('large', 'local', 128_000, false),
+    });
+    expect(r.decide(input({ privacy }))).toMatchObject({ kind: 'block', rule: 'privacy' });
+  });
+
+  test('a session without private content routes normally', () => {
+    expect(routed(router().decide(input({ preference: 'remote' }))).model.alias).toBe('opus');
+  });
+});
+
+describe('refusals', () => {
+  const r = router({ start: ['fast'], escalate: [['opus', 'sonnet'], 'haiku'] });
+
+  test('retry on another model of the same step, and say who declined', () => {
+    const d = routed(r.decide(input({ refused: ['opus'], refusalRetry: true })));
+    expect(d).toMatchObject({ rule: 'refusal-fallback', model: { alias: 'sonnet' }, step: 1 });
+    expect(d.reason).toBe('opus declined the request; retrying on sonnet');
+  });
+
+  test('with nobody left on that step, the next step up', () => {
+    const d = routed(r.decide(input({ refused: ['opus', 'sonnet'], refusalRetry: true })));
+    expect(d).toMatchObject({ model: { alias: 'haiku' }, step: 2 });
+  });
+
+  test('nobody left at all: blocked with the reason', () => {
+    const d = r.decide(input({ refused: ['opus', 'sonnet', 'haiku'], refusalRetry: true }));
+    expect(d).toMatchObject({ kind: 'block', rule: 'refusal-fallback' });
+  });
+
+  test('a model that refused is skipped for the rest of the turn', () => {
+    const d = routed(r.decide(input({ refused: ['opus'], signals: on(1) })));
+    expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'sonnet' } });
+  });
+});
+
+describe('agent budgets', () => {
+  const budget = (spentUsd: number) => ({ agent: 'reviewer', limitUsd: 0.5, spentUsd });
+  const onRemote = { signals: on(2) };
+
+  test('under budget: no effect', () => {
+    const d = routed(router().decide(input({ ...onRemote, invocationBudget: budget(0.2) })));
+    expect(d).toMatchObject({ rule: 'sticky', model: { alias: 'opus' } });
+  });
+
+  test('spent: remote calls continue on the nearest local model', () => {
+    const d = routed(router().decide(input({ ...onRemote, invocationBudget: budget(0.6) })));
+    expect(d).toMatchObject({ rule: 'agent-budget', model: { alias: 'large' } });
+    expect(d.reason).toContain('spent $0.60 of its $0.50 budget');
+  });
+
+  test('spent with no local model: the subagent is stopped', () => {
+    const d = router({ start: ['haiku'], escalate: ['opus'] }).decide(
+      input({ signals: on(1), invocationBudget: budget(0.6) }),
+    );
+    expect(d).toMatchObject({ kind: 'block', rule: 'agent-budget' });
+  });
+
+  test('local calls are never limited by a budget', () => {
+    expect(routed(router().decide(input({ invocationBudget: budget(5) }))).model.alias).toBe(
+      'fast',
+    );
+  });
+});
+
+describe('SignalTracker', () => {
+  test('keeps the step for stickyTurns calls on it, then resets', () => {
     const t = new SignalTracker(RoutingConfig.parse({}).escalation);
     t.recordTurn(1, true);
     expect(t.snapshot()).toMatchObject({ stickyTurns: 2, escalationStep: 1 });
-    t.recordTurn(0, false); // a turn elsewhere (a user override) doesn't count down
+    t.recordTurn(0, false); // a call elsewhere (a user override) doesn't count down
     t.recordTurn(1, false);
     t.recordTurn(1, false);
     expect(t.snapshot()).toMatchObject({ stickyTurns: 0, escalationStep: 0 });
+  });
+
+  test('detects tool-call loops regardless of key order', () => {
+    const t = new SignalTracker(RoutingConfig.parse({}).escalation);
+    t.recordToolCall('read', { a: 1, b: 2 });
+    t.recordToolCall('read', { b: 2, a: 1 });
+    t.recordToolCall('read', { a: 1, b: 2 });
+    expect(t.snapshot().loopDetected).toBe(true);
+  });
+
+  test('a failure counts until an escalation resets it; a new prompt keeps stickiness', () => {
+    const t = new SignalTracker(RoutingConfig.parse({}).escalation);
+    t.recordFailure();
+    expect(t.snapshot().turnFailed).toBe(true);
+    t.recordTurn(1, true);
+    expect(t.snapshot().turnFailed).toBe(false);
+    t.startUserTurn();
+    expect(t.snapshot().stickyTurns).toBe(2);
   });
 });

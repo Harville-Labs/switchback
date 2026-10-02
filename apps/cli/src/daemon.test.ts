@@ -66,7 +66,7 @@ writeFileSync(
       fake: { type: 'openai-compatible', baseUrl: `http://localhost:${model.port}/v1` },
     },
     models: { local: { provider: 'fake', model: 'fake', contextWindow: 32768 } },
-    routing: { mode: 'local-only' },
+    routing: { start: ['local'], allowRemote: false },
   }),
 );
 

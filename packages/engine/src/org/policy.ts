@@ -79,11 +79,25 @@ export function applyRestrictions(
 
   const routing = structuredClone(config.routing);
   if (!r.allowRemote) {
-    if (routing.mode !== 'local-only') notes.push('routing forced to local-only');
-    routing.mode = 'local-only';
-    routing.escalation.policy = 'off';
-    routing.fallback.onLocalUnavailable = 'fail';
+    if (routing.allowRemote) notes.push('remote models turned off');
+    routing.allowRemote = false;
   }
+  // Roles keep only models that survived; a step left empty is dropped.
+  const kept = (alias: string, role: string) => {
+    if (models[alias]) return true;
+    notes.push(`${role}: "${alias}" removed with its provider`);
+    return false;
+  };
+  routing.start = routing.start.filter((a) => kept(a, 'routing.start'));
+  routing.escalate = routing.escalate
+    .map((step) => step.filter((a) => kept(a, 'routing.escalate')))
+    .filter((step) => step.length);
+  if (routing.classifier && !kept(routing.classifier.model, 'routing.classifier'))
+    delete routing.classifier;
+  const review = { ...config.review };
+  if (review.model && !kept(review.model, 'review.model')) delete review.model;
+  const subagents = { ...config.subagents };
+  if (subagents.model && !kept(subagents.model, 'subagents.model')) delete subagents.model;
   const cap = (value: number | undefined, max: number | undefined, label: string) => {
     if (max === undefined) return value;
     if (value === undefined || value > max) {
@@ -99,5 +113,8 @@ export function applyRestrictions(
     ...(daily !== undefined ? { dailyUsd: daily } : {}),
     ...(monthly !== undefined ? { monthlyUsd: monthly } : {}),
   };
-  return { config: { ...config, providers, models, routing, mcpServers }, notes };
+  return {
+    config: { ...config, providers, models, routing, review, subagents, mcpServers },
+    notes,
+  };
 }

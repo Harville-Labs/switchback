@@ -14,7 +14,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { EngineEvent, StopReason } from '@switchback/protocol';
-import { CATALOG } from '@switchback/providers';
+import { CATALOG, tierOf } from '@switchback/providers';
 import type { SwitchbackConfig } from './config.ts';
 import type { LedgerEntry } from './ledger.ts';
 import { type DailyReport, TELEMETRY_SCHEMA } from './telemetry-schema.ts';
@@ -183,7 +183,11 @@ export function recordCrash(dataDir: string, err: unknown, now: Date): void {
 
 function features(config: SwitchbackConfig, organization: boolean): DailyReport['features'] {
   const tierCount = (tier: 'local' | 'remote') =>
-    config.routing[tier].filter((a) => config.models[a]).length;
+    [...new Set([...config.routing.start, ...config.routing.escalate.flat()])].filter((a) => {
+      const m = config.models[a];
+      const pc = m && config.providers[m.provider];
+      return pc && tierOf(pc) === tier;
+    }).length;
   return {
     localModels: tierCount('local'),
     remoteModels: tierCount('remote'),

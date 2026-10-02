@@ -36,10 +36,10 @@ The VS Code extension validates both files against the schema and offers autocom
 
 There are **no default providers or models**, local or remote. Switchback doesn't choose a vendor for you; `switchback init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `switchback` offers setup.
 
-If only one tier is configured:
+Models fill roles ([routing.md](routing.md)): `routing.start` is where turns begin and `routing.escalate` is the ladder above it. Any model can fill any role, so all-local, all-remote, and mixed setups are the same config with different models:
 
-- With no local model, `auto` routing sends turns remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing. `--route local`, `/local`, and `mode: local-only` are refused with a pointer to `switchback init`.
-- With no remote model, turns stay local and escalation is unavailable.
+- With no local model in a role, turns run remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing; `--route local` and `/local` are refused with a pointer to `switchback init`.
+- With no remote model in a role (or `routing.allowRemote: false`), nothing is ever billed; escalation still climbs through local steps.
 
 ## Several providers at once
 
@@ -59,13 +59,13 @@ Any number of providers can be configured together, including several local serv
     "sol":     { "provider": "openai", "model": "gpt-6-sol" },
     "ds":      { "provider": "deepseek", "model": "deepseek-v4-pro", "effort": "high" }
   },
-  "routing": { "local": ["laptop", "big"], "remote": ["sol", "ds"] }
+  "routing": { "start": ["laptop"], "escalate": ["big", ["sol", "ds"]] }
 }
 ```
 
-`switchback init` builds this for you: after the first local model it offers to add more (from any detected server), and after the first remote provider it offers fallbacks. Unattended, repeat `--local-model` and `--remote`. How the router picks within a list is in [routing.md](routing.md).
+Turns start on the laptop; an escalation goes to the GPU box first, then to OpenAI, with DeepSeek as the fallback if OpenAI is down. `switchback init` builds this for you. How the router picks is in [routing.md](routing.md).
 
-Models in `routing.local` are alternatives: the router uses the first that's up and fits. To make a bigger local model a step that escalations reach *before* going remote, list it in `routing.escalation.via` instead (see [Escalation ladder](routing.md#escalation-ladder)). Any alias can also be a reviewer (`review.model`, see [review.md](review.md)) or an agent's model (`model: big`), local or remote.
+A list inside a role is a chain of alternatives (the first that's up and fits); each entry of `escalate` is one step. Any alias can also be the reviewer (`review.model`, see [review.md](review.md)), the default for subagents (`subagents.model`), or an agent's model (`model: big`), local or remote.
 
 ## Keys
 
@@ -153,7 +153,7 @@ See [privacy.md](privacy.md) for what's detected and the limits.
 | Key | Default | |
 |---|---|---|
 | `mode` | `off` | `auto`: after a turn in which a local model edited files, another model reviews the diff and the local model fixes what it finds. A prompt's `review` flag overrides it |
-| `model` | first available in `routing.remote` | Reviewer model alias; may be a local model |
+| `model` | the first available remote model in role order | Reviewer model alias; any model, local or remote |
 | `maxRounds` | 2 | Reviews per prompt (1 to 5) |
 
 See [review.md](review.md).
@@ -174,6 +174,7 @@ See [review.md](review.md).
 | `subagents.maxDepth` | 2 | Maximum nesting |
 | `runtimes.<name>` | none | External agent runtimes agents can use with `runtime: <name>`. `type: "claude-agent-sdk"` with optional `model`, `maxTurns`, `executable`. See [subagents.md](subagents.md#external-runtimes) |
 | `subagents.budgetUsd` | none | Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it |
+| `subagents.model` | none | Model alias for subagents whose agent doesn't pin a model or tier; otherwise they route like any turn |
 | `maxStepsPerTurn` | 50 | Model calls per user prompt before stopping |
 | `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |
 | `compaction.threshold` | 0.7 | Fraction of the largest local context window (the remote window when there's no local model) that triggers it |

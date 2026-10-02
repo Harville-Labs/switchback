@@ -63,19 +63,33 @@ describe('config', () => {
   });
 });
 
-test('an unknown escalation step is a config error, not a silent gap in the ladder', () => {
+test('an unknown model in a role is a config error, not a silent gap', () => {
   mkdirSync(join(dir, '.switchback'), { recursive: true });
   writeFileSync(
     join(dir, '.switchback', 'config.json'),
     JSON.stringify({
       providers: { ollama: { type: 'openai-compatible', baseUrl: 'http://localhost:11434/v1' } },
       models: { local: { provider: 'ollama', model: 'small' } },
-      routing: { escalation: { via: ['larg'] } },
+      routing: { start: ['local'], escalate: ['larg'] },
     }),
   );
   expect(() => loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') })).toThrow(
-    'routing.escalation.via references unknown model "larg"',
+    'routing.escalate[0] references unknown model "larg"',
   );
+});
+
+test('keys removed by role-based routing say what replaced them', () => {
+  mkdirSync(join(dir, '.switchback'), { recursive: true });
+  for (const [routing, message] of [
+    [{ local: ['a'] }, 'routing.local was renamed routing.start'],
+    [{ remote: ['a'] }, 'routing.remote was replaced by routing.escalate'],
+    [{ mode: 'local-only' }, 'routing.allowRemote: false'],
+    [{ escalation: { via: ['a'] } }, 'routing.escalation.via was replaced'],
+    [{ fallback: { onLocalUnavailable: 'fail' } }, 'routing.fallback is now "nearest"'],
+  ] as const) {
+    writeFileSync(join(dir, '.switchback', 'config.json'), JSON.stringify({ routing }));
+    expect(() => loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') })).toThrow(message);
+  }
 });
 
 describe('agents', () => {

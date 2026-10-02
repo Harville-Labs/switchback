@@ -77,6 +77,7 @@ function setup(local: Script, remote: Script, config: object = {}) {
         local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
         remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
       },
+      routing: { start: ['local'], escalate: [['remote']] },
       permissions: { edit: 'allow' },
       review: { mode: 'auto' },
       ...config,
@@ -162,13 +163,13 @@ describe('draft locally, review with a stronger model', () => {
     expect(reviews(b.events)).toHaveLength(0);
   });
 
-  test('never remote in local-only mode or for a private session', async () => {
+  test('never remote when remote models are off or for a private session', async () => {
     const a = setup([edit('a - b', 'a + b'), { text: 'ok' }], [{ text: APPROVE }], {
-      routing: { mode: 'local-only' },
+      routing: { start: ['local'], escalate: [['remote']], allowRemote: false },
     });
     await a.engine.runTurn(a.engine.createSession({}).id, 'fix add');
     expect(reviews(a.events)).toMatchObject([
-      { verdict: 'skipped', summary: 'routing mode is local-only' },
+      { verdict: 'skipped', summary: 'remote models are turned off (routing.allowRemote)' },
     ]);
     expect(a.rp.requests).toHaveLength(0);
 
@@ -194,7 +195,7 @@ describe('draft locally, review with a stronger model', () => {
           reviewer: { provider: 'big', model: 'large-local', contextWindow: 128_000 },
         },
         permissions: { edit: 'allow' },
-        routing: { mode: 'local-only' },
+        routing: { start: ['local'], allowRemote: false },
         review: { mode: 'auto', model: 'reviewer' },
       }),
       providers: new Map([

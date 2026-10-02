@@ -31,21 +31,22 @@ const base = SwitchbackConfig.parse({
     remote: { provider: 'openai', model: 'gpt-6-sol' },
     haiku: { provider: 'deepseek', model: 'deepseek-flash' },
   },
-  routing: { budget: { dailyUsd: 50 } },
+  routing: { start: ['local'], escalate: [['remote']], budget: { dailyUsd: 50 } },
 });
 const policy = (p: Record<string, unknown>) =>
   OrgPolicy.parse({ version: 1, org: { id: 'acme', name: 'Acme' }, ...p });
 
 describe('restrictions', () => {
-  test('allowRemote: false strips remote providers and pins routing local', () => {
+  test('allowRemote: false strips remote providers, turns remote off, and prunes roles', () => {
     const { config, notes } = applyRestrictions(
       base,
       policy({ restrictions: { allowRemote: false } }),
     );
     expect(Object.keys(config.providers)).toEqual(['gpu']);
     expect(Object.keys(config.models)).toEqual(['local']);
-    expect(config.routing).toMatchObject({ mode: 'local-only', escalation: { policy: 'off' } });
+    expect(config.routing).toMatchObject({ allowRemote: false, start: ['local'], escalate: [] });
     expect(notes).toContain('provider "openai" removed: remote providers are disabled');
+    expect(notes).toContain('routing.escalate: "remote" removed with its provider');
   });
 
   test('provider type allowlist and org-only providers', () => {
@@ -135,6 +136,7 @@ describe('with an organization server', () => {
           local: { provider: 'gpu', model: 'coder' },
           remote: { provider: 'cloud', model: 'big' },
         },
+        routing: { start: ['local'], escalate: [['remote']] },
       },
     };
     const server = startDevOrgServer({ policy: () => current, autoApprove: true });

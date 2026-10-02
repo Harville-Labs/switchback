@@ -2,6 +2,8 @@
 
 Guide for AI coding agents (Claude Code, Switchback itself, Codex, Cursor, and others) and for the humans reviewing their work. Read this before changing anything.
 
+Harville Labs' org-wide standards ([Harville-Labs/agents](https://github.com/Harville-Labs/agents)) apply too; where they disagree, this file wins. Everything you need to work in this repository is here, so outside contributors don't need them.
+
 ## What this repo is
 
 Switchback is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
@@ -34,7 +36,7 @@ Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so yo
 | `packages/client` | Typed protocol client, child-process transport, shared view-model reducer | Import engine code |
 | `apps/cli` | `switchback` binary: TUI (Ink), `run`, `serve --stdio`, `doctor`, `usage` | Contain agent behavior |
 | `apps/vscode` | VS Code extension (host + webview) | Contain agent behavior |
-| `apps/site` | Hosted console for company sites (proprietary; see `apps/site/LICENSE`) | Be imported by any Apache-2.0 package |
+| `apps/site` | Hosted console for company sites (proprietary; see `apps/site/LICENSE`). Its own rules are in [apps/site/AGENTS.md](apps/site/AGENTS.md) | Be imported by any Apache-2.0 package |
 
 ## Invariants
 
