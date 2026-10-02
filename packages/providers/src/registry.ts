@@ -2,7 +2,7 @@ import type { Tier } from '@switchback/protocol';
 import { z } from 'zod';
 import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
-import { OpenAICompatibleProvider } from './openai-compatible.ts';
+import { flavorForUrl, OpenAICompatibleProvider } from './openai-compatible.ts';
 import { OpenAIResponsesProvider } from './openai-responses.ts';
 import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
 import type { ChatRequest, Provider } from './types.ts';
@@ -110,6 +110,7 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         id,
         baseUrl: config.baseUrl,
         tier: config.tier,
+        flavor: flavorForUrl(config.baseUrl),
         ...(config.tier === 'remote' ? { missingKeyHint: 'set providers.<id>.apiKey' } : {}),
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
         ...(config.headers ? { headers: config.headers } : {}),

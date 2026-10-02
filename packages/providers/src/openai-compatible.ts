@@ -6,8 +6,15 @@
  * - DeepSeek, flavor `deepseek`: thinking mode, and reasoning replayed to the
  *   same model on later turns (the API rejects tool-call histories without it)
  *
- * plus any other hosted OpenAI-compatible API (OpenRouter, Together, Groq,
- * Fireworks, ...) as `generic` with `tier: remote`.
+ * - OpenRouter, flavor `openrouter`: its `reasoning` parameter
+ *
+ * plus any other hosted OpenAI-compatible API (Together, Groq, Fireworks, ...)
+ * as `generic` with `tier: remote`.
+ *
+ * Gateways such as OpenRouter stream structured `reasoning_details` (Claude
+ * thinking signatures, Gemini thought signatures, encrypted OpenAI reasoning)
+ * and need them back unchanged on later tool-call turns. They're kept as the
+ * reasoning part's opaque payload and replayed only to the model that made them.
  */
 import type { ModelRef, Part, StopReason, Tier, Usage } from '@switchback/protocol';
 import OpenAI from 'openai';
@@ -21,7 +28,17 @@ import {
   ProviderError,
 } from './types.ts';
 
-export type ChatFlavor = 'generic' | 'openai' | 'deepseek';
+export type ChatFlavor = 'generic' | 'openai' | 'deepseek' | 'openrouter';
+
+/** The flavor for an OpenAI-compatible base URL that isn't one of the named providers. */
+export function flavorForUrl(baseUrl: string): ChatFlavor {
+  try {
+    const host = new URL(baseUrl).hostname;
+    return host === 'openrouter.ai' || host.endsWith('.openrouter.ai') ? 'openrouter' : 'generic';
+  } catch {
+    return 'generic';
+  }
+}
 
 export interface OpenAICompatibleOptions {
   id: string;
@@ -42,6 +59,7 @@ type WireMessage =
       role: 'assistant';
       content: string | null;
       reasoning_content?: string;
+      reasoning_details?: unknown[];
       tool_calls?: {
         id: string;
         type: 'function';
@@ -50,14 +68,22 @@ type WireMessage =
     }
   | { role: 'tool'; tool_call_id: string; content: string };
 
+/** Structured reasoning from a gateway, kept on `ReasoningPart.opaque`. */
+interface ReasoningOpaque {
+  reasoningDetails?: unknown[];
+}
+
 /**
- * Translate the neutral transcript. Reasoning is sent back only when
- * `replayReasoningFor` is given, and only reasoning that model produced.
+ * Translate the neutral transcript. Only reasoning that `model` produced is
+ * ever sent back: its `reasoning_details` always (gateways need them on tool-call
+ * turns), and its text as `reasoning_content` only when `replayText` is set
+ * (DeepSeek).
  */
 export function toWireMessages(
   system: string,
   messages: ChatRequest['messages'],
-  replayReasoningFor?: ModelRef,
+  model?: ModelRef,
+  replayText = false,
 ): WireMessage[] {
   const out: WireMessage[] = [];
   if (system) out.push({ role: 'system', content: system });
@@ -79,22 +105,24 @@ export function toWireMessages(
         .filter((p) => p.type === 'text')
         .map((p) => p.text)
         .join('');
-      const reasoning = replayReasoningFor
-        ? m.parts
-            .filter(
-              (p) =>
-                p.type === 'reasoning' &&
-                p.origin.provider === replayReasoningFor.provider &&
-                p.origin.model === replayReasoningFor.model,
-            )
-            .map((p) => (p.type === 'reasoning' ? p.text : ''))
-            .join('')
-        : '';
+      const own = m.parts.flatMap((p) =>
+        p.type === 'reasoning' &&
+        model &&
+        p.origin.provider === model.provider &&
+        p.origin.model === model.model
+          ? [p]
+          : [],
+      );
+      const reasoning = replayText ? own.map((p) => p.text).join('') : '';
+      const details = own.flatMap(
+        (p) => (p.opaque as ReasoningOpaque | undefined)?.reasoningDetails ?? [],
+      );
       const calls = m.parts.filter((p) => p.type === 'tool_call');
       out.push({
         role: 'assistant',
         content: text || null,
         ...(reasoning ? { reasoning_content: reasoning } : {}),
+        ...(details.length ? { reasoning_details: details } : {}),
         ...(calls.length
           ? {
               tool_calls: calls.map((c) => ({
@@ -134,6 +162,8 @@ export function effortParams(
     return effort === 'none'
       ? {}
       : { reasoning_effort: DEEPSEEK_EFFORT[effort], thinking: { type: 'enabled' } };
+  // OpenRouter's unified parameter, which it translates for each upstream model.
+  if (flavor === 'openrouter') return { reasoning: { effort } };
   if (flavor === 'generic') {
     if (effort === 'none')
       return { reasoning_effort: 'none', chat_template_kwargs: { enable_thinking: false } };
@@ -172,10 +202,49 @@ const STOP_MAP: Record<string, StopReason> = {
   content_filter: 'refusal',
 };
 
+/**
+ * Error codes that mean "try again or elsewhere" when a gateway reports a
+ * failure inside an already-successful (HTTP 200) stream.
+ */
+const RETRYABLE_STREAM_CODES = new Set(['server_error', 'rate_limit_exceeded', 'timeout']);
+
+/** Merge streamed `reasoning_details` fragments: same type and index continue one detail. */
+export function appendReasoningDetails(into: Record<string, unknown>[], chunk: unknown[]): void {
+  for (const raw of chunk) {
+    if (!raw || typeof raw !== 'object') continue;
+    const d = raw as Record<string, unknown>;
+    const last = into.at(-1);
+    if (last && d.index !== undefined && last.index === d.index && last.type === d.type) {
+      for (const key of ['text', 'summary', 'data'] as const)
+        if (typeof d[key] === 'string') last[key] = `${(last[key] as string) ?? ''}${d[key]}`;
+      for (const [k, v] of Object.entries(d))
+        if (!['text', 'summary', 'data'].includes(k) && v !== undefined && v !== null) last[k] = v;
+    } else {
+      into.push({ ...d });
+    }
+  }
+}
+
 /** Retryable: connection failures, timeouts, rate limits, and server errors. */
 function toProviderError(err: unknown, id: string): ProviderError {
   if (err instanceof OpenAI.APIConnectionError)
     return new ProviderError(`${id} is unreachable: ${err.message}`, id, true, { cause: err });
+  if (err instanceof OpenAI.APIError && err.status === undefined) {
+    // An error event inside a 200 stream (OpenRouter and other gateways).
+    const code = (err.error as { code?: unknown } | undefined)?.code;
+    const retryable =
+      typeof code === 'number'
+        ? code === 408 || code === 429 || code >= 500
+        : RETRYABLE_STREAM_CODES.has(String(code));
+    return new ProviderError(
+      `${id} failed mid-stream: ${err.message.slice(0, 500)}`,
+      id,
+      retryable,
+      {
+        cause: err,
+      },
+    );
+  }
   if (err instanceof OpenAI.APIError) {
     const status = err.status ?? 0;
     return new ProviderError(
@@ -192,6 +261,8 @@ function toProviderError(err: unknown, id: string): ProviderError {
 type Delta = OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta & {
   reasoning_content?: string | null;
   reasoning?: string | null;
+  /** OpenRouter's structured reasoning, needed back on later tool-call turns. */
+  reasoning_details?: unknown[] | null;
 };
 
 export class OpenAICompatibleProvider implements Provider {
@@ -320,11 +391,7 @@ export class OpenAICompatibleProvider implements Provider {
         ? { max_completion_tokens: request.maxTokens }
         : { max_tokens: request.maxTokens }),
       ...effortParams(flavor, effort),
-      messages: toWireMessages(
-        request.system,
-        request.messages,
-        flavor === 'deepseek' ? origin : undefined,
-      ),
+      messages: toWireMessages(request.system, request.messages, origin, flavor === 'deepseek'),
       ...(request.tools.length
         ? {
             tools: request.tools.map((t) => ({
@@ -337,6 +404,7 @@ export class OpenAICompatibleProvider implements Provider {
 
     let text = '';
     let reasoningText = '';
+    const reasoningDetails: Record<string, unknown>[] = [];
     const calls = new Map<number, { id: string; name: string; args: string }>();
     let usage: Usage = { inputTokens: 0, outputTokens: 0 };
     let finish: string | undefined;
@@ -355,6 +423,8 @@ export class OpenAICompatibleProvider implements Provider {
           reasoningText += reasoning;
           yield { type: 'reasoning.delta', text: reasoning };
         }
+        if (delta.reasoning_details?.length)
+          appendReasoningDetails(reasoningDetails, delta.reasoning_details);
         if (delta.content) {
           text += delta.content;
           yield { type: 'text.delta', text: delta.content };
@@ -373,9 +443,21 @@ export class OpenAICompatibleProvider implements Provider {
       throw toProviderError(err, this.id);
     }
 
+    if (finish === 'error')
+      // A gateway ended the stream on an upstream failure without an error payload.
+      throw new ProviderError(`${this.id} ended the response with an error`, this.id, true);
+
     const parts: Part[] = [];
-    // Kept in the transcript with its origin; only DeepSeek gets it back.
-    if (reasoningText) parts.push({ type: 'reasoning', text: reasoningText, origin });
+    // Kept in the transcript with its origin; replayed only to this model.
+    if (reasoningText || reasoningDetails.length)
+      parts.push({
+        type: 'reasoning',
+        text: reasoningText,
+        origin,
+        ...(reasoningDetails.length
+          ? { opaque: { reasoningDetails } satisfies ReasoningOpaque }
+          : {}),
+      });
     if (text) parts.push({ type: 'text', text });
     for (const [index, call] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
       let input: unknown;

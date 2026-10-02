@@ -137,12 +137,16 @@ Both use the same Claude adapter as the first-party API, so thinking replay, cac
 }
 ```
 
+OpenRouter (a base URL on `openrouter.ai`) gets two things other compatible APIs don't. `effort` is sent as its `reasoning: { effort }` parameter, which OpenRouter translates for each upstream model. Its structured `reasoning_details` (Claude thinking signatures, Gemini thought signatures, encrypted OpenAI reasoning) are kept and sent back to the same model on tool-call turns, which those models need to continue after a tool result. Any other compatible API that streams `reasoning_details` is handled the same way.
+
+Gateways report upstream failures inside an already-successful stream. Server-side failures, like a provider disconnecting or a rate limit, count as retryable, so the router falls back to the next model in the chain; client errors don't.
+
 ### Behavior common to every remote
 
 - Streaming output and tool calls, normalized into one transcript format, so a session can move between providers mid-turn.
-- Reasoning is kept in the transcript with the model that produced it and is only ever sent back to that model (Claude thinking signatures, DeepSeek `reasoning_content`).
+- Reasoning is kept in the transcript with the model that produced it and is only ever sent back to that model (Claude thinking signatures, DeepSeek `reasoning_content`, OpenRouter `reasoning_details`).
 - Prompt caching: Claude gets a top-level `cache_control` breakpoint; OpenAI and DeepSeek cache automatically. The engine keeps the system prompt and tool list byte-stable to make all three effective.
-- `effort` maps to each provider's control: `output_config.effort` (Claude), `reasoning_effort` (OpenAI), thinking plus `reasoning_effort` (DeepSeek).
+- `effort` maps to each provider's control: `output_config.effort` (Claude), `reasoning_effort` (OpenAI), thinking plus `reasoning_effort` (DeepSeek), `reasoning.effort` (OpenRouter).
 - Rate limits, 5xx errors, and connection failures are retryable, so the router can fall back.
 - The engine validates every tool input against its schema and never runs tools from a response cut off by `max_tokens` or a refusal.
 
