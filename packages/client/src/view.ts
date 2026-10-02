@@ -5,11 +5,13 @@
  */
 import type {
   EngineEvent,
+  InitializeResult,
   McpServerInfo,
   Message,
   ModelRef,
   PermissionDecision,
   ReviewIssue,
+  SessionRoles,
   SessionSummary,
   Tier,
   UsageReport,
@@ -126,6 +128,10 @@ export interface ViewState {
   /** Saved versus running this session all-remote (this session only, not its subagents). */
   savingsUsd: number;
   lastTier?: Tier;
+  /** Where the last call ran on the escalation ladder (`step` 0 is the start model). */
+  ladder?: { step: number; steps: number; model: string; stickyTurns?: number };
+  /** The session's roles, once they're known (`session.roles`) or changed. */
+  roles?: SessionRoles;
   /** Why the session is pinned local for privacy; set once and never cleared. */
   private?: string;
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
@@ -380,7 +386,23 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         rule: event.rule,
         reason: event.reason,
       });
-      return { ...state, items, lastTier: event.tier };
+      return {
+        ...state,
+        items,
+        lastTier: event.tier,
+        ...(event.step !== undefined
+          ? {
+              ladder: {
+                step: event.step,
+                steps: event.steps ?? 0,
+                model: event.model.model,
+                ...(event.stickyTurns !== undefined ? { stickyTurns: event.stickyTurns } : {}),
+              },
+            }
+          : {}),
+      };
+    case 'roles.updated':
+      return { ...state, roles: event.roles };
     case 'text.delta':
     case 'reasoning.delta': {
       const target =
@@ -675,4 +697,54 @@ export function formatMcpServers(servers: McpServerInfo[]): string {
       return `  ${icon} ${s.name}: ${s.state}${s.state === 'connected' ? `, ${s.tools} tools` : ''}${s.error ? ` (${s.error})` : ''}`;
     })
     .join('\n');
+}
+
+type ModelSummary = InitializeResult['models'][number];
+
+/** One model for people: `large (qwen3-coder-480b, local)`. */
+function modelLabel(alias: string, models: ModelSummary[]): string {
+  const m = models.find((x) => x.alias === alias);
+  return m ? `${alias} (${m.ref.model}, ${m.tier})` : `${alias} (not configured)`;
+}
+
+/** A session's roles for people, marking what the session changed (ADR 0015). */
+export function formatRoles(roles: SessionRoles, models: ModelSummary[]): string {
+  const steps = (s: string[][]) =>
+    s.map((step) => step.map((a) => modelLabel(a, models)).join(' | '));
+  const mark = (k: SessionRoles['overridden'][number]) =>
+    roles.overridden.includes(k) ? '  (this session)' : '';
+  const reviewers =
+    roles.review.mode === 'off'
+      ? 'off'
+      : roles.review.models.length
+        ? steps(roles.review.models).join(' → ')
+        : `the escalation ladder${roles.escalate.length ? '' : ' (empty: nobody reviews)'}`;
+  return [
+    `start      ${roles.start.map((a) => modelLabel(a, models)).join(' | ') || '(none)'}${mark('start')}`,
+    `escalate   ${steps(roles.escalate).join(' → ') || '(nothing)'}${mark('escalate')}`,
+    `review     ${reviewers}${mark('review')}`,
+    `subagents  ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
+  ].join('\n');
+}
+
+/** Where the session is on the escalation ladder, for a status line; empty at the start model. */
+export function formatLadder(ladder: ViewState['ladder']): string {
+  if (!ladder || ladder.step === 0) return '';
+  const sticky = ladder.stickyTurns ? `, ${ladder.stickyTurns} more` : '';
+  return `step ${ladder.step}/${ladder.steps} ${ladder.model}${sticky}`;
+}
+
+/** Everything configured, with its tier and the roles it fills. */
+export function formatModels(models: ModelSummary[], roles?: SessionRoles): string {
+  const where = (alias: string) => {
+    if (!roles) return '';
+    const parts = [
+      roles.start.includes(alias) ? 'start' : '',
+      ...roles.escalate.flatMap((step, i) => (step.includes(alias) ? [`step ${i + 1}`] : [])),
+      roles.review.models.some((s) => s.includes(alias)) ? 'reviews' : '',
+      roles.subagents === alias ? 'subagents' : '',
+    ].filter(Boolean);
+    return parts.length ? `  · ${parts.join(', ')}` : '';
+  };
+  return models.map((m) => `${m.alias}  ${m.ref.model} (${m.tier})${where(m.alias)}`).join('\n');
 }

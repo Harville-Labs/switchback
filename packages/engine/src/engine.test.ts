@@ -932,3 +932,90 @@ describe('protocol round-trip', () => {
     expect(retired).toEqual(['retired']);
   });
 });
+
+describe('session roles', () => {
+  test('a session can change its roles; others keep the config', async () => {
+    const { engine, rp, events } = setup(
+      [{ text: 'local' }, { text: 'local again' }],
+      [{ text: 'remote' }],
+    );
+    const a = engine.createSession({});
+    const b = engine.createSession({});
+    const roles = engine.setRoles({ sessionId: a.id, start: ['remote'] });
+    expect(roles).toMatchObject({
+      start: ['remote'],
+      escalate: [['remote']],
+      overridden: ['start'],
+    });
+    expect(events.find((e) => e.type === 'roles.updated')).toMatchObject({ sessionId: a.id });
+    expect((await engine.runTurn(a.id, 'hi')).text).toBe('remote');
+    expect((await engine.runTurn(b.id, 'hi')).text).toBe('local');
+    expect(rp.requests).toHaveLength(1);
+    // Reset follows the config again.
+    expect(engine.setRoles({ sessionId: a.id, reset: true }).overridden).toEqual([]);
+    expect((await engine.runTurn(a.id, 'again')).text).toBe('local again');
+  });
+
+  test('route events say where the session is on the ladder', async () => {
+    const { engine, events } = setup([{ text: 'ok' }], []);
+    await engine.runTurn(engine.createSession({}).id, 'hi');
+    expect(events.find((e) => e.type === 'route.decided')).toMatchObject({ step: 0, steps: 1 });
+  });
+
+  test('unknown models are refused, and an organization can lock a role', () => {
+    const { engine } = setup([], []);
+    const s = engine.createSession({});
+    expect(() => engine.setRoles({ sessionId: s.id, start: ['ghost'] })).toThrow(
+      '"ghost" is not a configured model',
+    );
+    const org = setup([], [], {
+      org: {
+        id: 'acme',
+        name: 'Acme',
+        version: '1',
+        notes: [],
+        enforcedKeys: ['routing.escalate'],
+        remoteDisabled: false,
+      },
+    });
+    const o = org.engine.createSession({});
+    expect(() => org.engine.setRoles({ sessionId: o.id, escalate: [['local']] })).toThrow(
+      "Acme's policy sets routing.escalate",
+    );
+    expect(org.engine.setRoles({ sessionId: o.id, start: ['remote'] }).start).toEqual(['remote']);
+  });
+
+  test('save writes the roles to the user config as the default', () => {
+    const file = join(root, 'user-config.json');
+    const { engine } = setup([], [], { userConfigFile: file });
+    const s = engine.createSession({});
+    const r = engine.setRoles({
+      sessionId: s.id,
+      escalate: [['remote']],
+      review: { mode: 'auto', models: [['remote']] },
+      save: true,
+    });
+    expect(r.savedTo).toBe(file);
+    const saved = JSON.parse(readFileSync(file, 'utf8'));
+    expect(saved.routing).toEqual({ start: ['local'], escalate: [['remote']] });
+    expect(saved.review).toEqual({ mode: 'auto', models: [['remote']] });
+  });
+
+  test('over the protocol', async () => {
+    const { engine } = setup([], []);
+    const [serverSide, clientSide] = createTransportPair();
+    serve(engine, serverSide);
+    const client = new SwitchbackClient(clientSide);
+    await client.initialize({ name: 'test', version: '0' }, root);
+    const session = await client.request('session.create', {});
+    expect(await client.request('session.roles', { sessionId: session.id })).toMatchObject({
+      start: ['local'],
+      overridden: [],
+    });
+    const changed = await client.request('session.setRoles', {
+      sessionId: session.id,
+      subagents: 'local',
+    });
+    expect(changed).toMatchObject({ subagents: 'local', overridden: ['subagents'] });
+  });
+});

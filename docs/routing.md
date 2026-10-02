@@ -76,6 +76,10 @@ Then five guards run on the target. They only ever act on remote models; a local
 
 `switchback init` asks for your models first, then which model does what, with defaults filled in: the first local model starts, other local models come next on the ladder, then hosted models from cheapest to most expensive. Unattended, `--start`, `--escalate` (repeat for each step; commas for alternatives), `--reviewers`, and `--subagent-model` set the roles by model ID or alias. `switchback doctor` shows the roles, each model's tier, and its context window.
 
+## Changing roles during a session
+
+A session can change its own roles without touching any file: `/start`, `/escalate`, `/review with`, and `/subagent-model` in the TUI ([clients/tui.md](clients/tui.md)), or **Choose Models for This Session** in VS Code. Changes apply to that session and its subagents, show as `(this session)` in `/roles`, and are shared with every client attached to the session. Add `--save` (or **Save as Default**) to write them to your user config as the default for new sessions. Keys an organization enforces through its policy can't be changed. The protocol methods are `session.roles` and `session.setRoles` ([protocol.md](protocol.md)).
+
 ## Pre-routing classifier
 
 Escalation is normally reactive: the start model has to struggle first. The optional classifier lets obviously hard prompts start one step up. Before the first call of a turn, a small model rates the prompt `easy`, `medium`, or `hard` with a short reason, and the router's `classifier` rule escalates ratings at or above `escalateOn`.

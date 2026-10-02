@@ -46,6 +46,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, and error |
 | `usage.get` | `period?`: `today` \| `week` \| `month` (default); or `sessionId?` for one session and its subagents over their whole life (the receipt) | Spend, savings, the `referenceModel` savings are measured against, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
+| `session.roles` | `{ sessionId }` | `SessionRoles`: `start`, `escalate`, `review` (`mode`, `models`), `subagents`, and which of them the session changed (`overridden`) |
+| `session.setRoles` | `{ sessionId, start?, escalate?, review?, subagents?, save?, reset? }` | `SessionRoles` plus `savedTo` when `save` wrote the user config. Changes apply to the session and its subagents; `reset` drops them first; keys an organization enforces are refused. Emits `roles.updated` |
 | `daemon.retire` | `{ token }` | `{ retired, reason? }`. Asks a shared daemon to exit so a newer Switchback can take over. Accepted before `initialize`, so it works across protocol versions. Refused while other clients are attached or a turn is running. |
 
 ## Events
@@ -55,7 +57,8 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `type` | Meaning |
 |---|---|
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
-| `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step |
+| `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step; `step`/`steps` (where the model is on the escalation ladder) and `stickyTurns` |
+| `roles.updated` | A session's roles changed (`session.setRoles`), so every attached client can show them |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local |
 | `review.completed` | A review of the turn's local edits: `verdict` (`approve`, `revise`, or `skipped` with the reason in `summary`), `issues` (`file`, `line`, `severity`, `comment`), the reviewer `model`, and `round` |

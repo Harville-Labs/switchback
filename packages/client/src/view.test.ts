@@ -3,7 +3,10 @@ import type { EngineEvent, Message, SessionSummary, UsageReport } from '@switchb
 import {
   childView,
   estimateLabel,
+  formatLadder,
+  formatModels,
   formatReceipt,
+  formatRoles,
   formatUsage,
   fromTranscript,
   initialView,
@@ -332,5 +335,56 @@ describe('subagent tree', () => {
   test('prompts from any depth surface at the top, labeled by agent', () => {
     expect(view.escalations).toEqual([{ requestId: 'e1', reason: 'general: stuck', target: ref }]);
     expect(childView(view, 'g1')?.escalations).toEqual([]);
+  });
+});
+
+describe('roles and the ladder', () => {
+  const models = [
+    { alias: 'fast', ref: { provider: 'ollama', model: 'qwen3:8b' }, tier: 'local' as const },
+    { alias: 'large', ref: { provider: 'gpu', model: 'qwen3-coder-480b' }, tier: 'local' as const },
+    {
+      alias: 'opus',
+      ref: { provider: 'anthropic', model: 'claude-opus-5' },
+      tier: 'remote' as const,
+    },
+  ];
+  const roles = {
+    start: ['fast'],
+    escalate: [['large'], ['opus']],
+    review: { mode: 'auto' as const, models: [] },
+    overridden: ['escalate' as const],
+  };
+
+  test('route events carry ladder position into the view; roles.updated is kept', () => {
+    let v = initialView('s');
+    v = reduce(v, {
+      type: 'route.decided',
+      sessionId: 's',
+      turnId: 't',
+      tier: 'local',
+      model: { provider: 'gpu', model: 'qwen3-coder-480b' },
+      rule: 'sticky',
+      reason: 'recently escalated',
+      step: 1,
+      steps: 2,
+      stickyTurns: 1,
+    });
+    expect(v.ladder).toEqual({ step: 1, steps: 2, model: 'qwen3-coder-480b', stickyTurns: 1 });
+    expect(formatLadder(v.ladder)).toBe('step 1/2 qwen3-coder-480b, 1 more');
+    expect(formatLadder({ step: 0, steps: 2, model: 'x' })).toBe('');
+    v = reduce(v, { type: 'roles.updated', sessionId: 's', roles });
+    expect(v.roles).toEqual(roles);
+  });
+
+  test('roles and models read clearly, marking session changes', () => {
+    expect(formatRoles(roles, models)).toBe(
+      [
+        'start      fast (qwen3:8b, local)',
+        'escalate   large (qwen3-coder-480b, local) → opus (claude-opus-5, remote)  (this session)',
+        'review     the escalation ladder',
+        'subagents  normal routing',
+      ].join('\n'),
+    );
+    expect(formatModels(models, roles)).toContain('opus  claude-opus-5 (remote)  · step 2');
   });
 });

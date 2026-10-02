@@ -20,6 +20,8 @@ import {
   type RoutePreference,
   RpcError,
   type SessionGetResult,
+  type SessionRoles,
+  type SessionSetRolesParams,
   type SessionSummary,
   type StopReason,
   type TextPart,
@@ -76,6 +78,7 @@ import {
 import { ClaudeAgentSdkRuntime } from './runtimes/claude-agent-sdk.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
 import { Semaphore } from './semaphore.ts';
+import { writeConfigLayer } from './setup.ts';
 import {
   FileSessionStore,
   MemorySessionStore,
@@ -112,6 +115,8 @@ export interface EngineOptions {
   /** Override provider construction (tests, embedding). Keyed by provider id. */
   providers?: Map<string, Provider>;
   store?: SessionStore;
+  /** Where saving a session's roles writes; default: the user config. */
+  userConfigFile?: string;
   ledgerFile?: string;
   agents?: Map<string, AgentDefinition>;
   /** External agent runtimes by name, overriding `runtimes` in config (tests, embedding). */
@@ -158,12 +163,18 @@ interface LiveSession {
   /**
    * Files edited during the current top-level turn (by this session or its
    * subagents in the same checkout), keyed by absolute path: content before
-   * the first edit, and whether a local model edited it. For review.
+   * the first edit, and which models (aliases) edited it. For review.
    */
-  /** Files edited this turn, their content before, and which models (aliases) edited them. */
   turnEdits?: Map<string, { path: string; before: string | undefined; writers: Set<string> }>;
   /** Why the session holds private content and must stay local; never cleared. */
   private?: string;
+  /** Roles this session changed (`session.setRoles`); its subagents follow them. */
+  roles?: {
+    start?: string[];
+    escalate?: string[][];
+    review?: { mode?: 'off' | 'auto'; models?: string[][] };
+    subagents?: string | null;
+  };
   /** Secrets redacted from the last remote request, to report only new ones. */
   redacted?: number;
 }
@@ -417,6 +428,113 @@ export class Engine {
     return { session: this.summary(s), messages: s.messages };
   }
 
+  /** A session's effective roles: its own changes over the config. */
+  roles(sessionId: string): SessionRoles {
+    return this.rolesOf(this.live(sessionId));
+  }
+
+  /**
+   * Change a session's roles (ADR 0015). With `save`, write them to the user
+   * config as the default for new sessions. Keys an organization enforces
+   * can't be changed.
+   */
+  setRoles(params: SessionSetRolesParams): SessionRoles & { savedTo?: string } {
+    const s = this.top(this.live(params.sessionId));
+    const { models } = this.options.config;
+    const named = [
+      ...(params.start ?? []),
+      ...(params.escalate?.flat() ?? []),
+      ...(params.review?.models?.flat() ?? []),
+      ...(params.subagents ? [params.subagents] : []),
+    ];
+    const unknown = named.find((a) => !models[a]);
+    if (unknown)
+      throw new RpcError(
+        ErrorCode.InvalidParams,
+        `"${unknown}" is not a configured model (${Object.keys(models).join(', ')})`,
+      );
+    const org = this.options.org;
+    const locked = [
+      ['start', 'routing.start'],
+      ['escalate', 'routing.escalate'],
+      ['review', 'review.'],
+      ['subagents', 'subagents.model'],
+    ].find(
+      ([param, key]) =>
+        params[param as keyof SessionSetRolesParams] !== undefined &&
+        org?.enforcedKeys.some((k) => k.startsWith(key as string)),
+    );
+    if (locked && org)
+      throw new RpcError(
+        ErrorCode.InvalidParams,
+        `${org.name}'s policy sets ${locked[1]?.replace(/\.$/, '')}; it can't be changed here`,
+      );
+    const roles = params.reset ? {} : { ...s.roles };
+    if (params.start) roles.start = params.start;
+    if (params.escalate) roles.escalate = params.escalate;
+    if (params.review) roles.review = { ...roles.review, ...params.review };
+    if (params.subagents !== undefined) roles.subagents = params.subagents;
+    s.roles = roles;
+    const result = this.rolesOf(s);
+    let savedTo: string | undefined;
+    if (params.save) {
+      const file = this.options.userConfigFile ?? switchbackPaths().configFile;
+      writeConfigLayer(
+        file,
+        {
+          routing: { start: result.start, escalate: result.escalate },
+          review: result.review,
+          ...(result.subagents ? { subagents: { model: result.subagents } } : {}),
+          // Checked above against the merged config; the models may live in another file.
+        },
+        { references: false },
+      );
+      savedTo = file;
+    }
+    this.emit({ type: 'roles.updated', ...this.scope(s), roles: result });
+    return { ...result, ...(savedTo ? { savedTo } : {}) };
+  }
+
+  /** The top-level session of a subagent (or the session itself). */
+  private top(s: LiveSession): LiveSession {
+    let top = s;
+    while (top.header.parentId) {
+      const parent = this.sessions.get(top.header.parentId);
+      if (!parent) break;
+      top = parent;
+    }
+    return top;
+  }
+
+  private rolesOf(s: LiveSession): SessionRoles {
+    const { routing, review, subagents } = this.options.config;
+    const own = this.top(s).roles ?? {};
+    const sub = own.subagents === null ? undefined : (own.subagents ?? subagents.model);
+    return {
+      start: own.start ?? routing.start,
+      escalate: own.escalate ?? routing.escalate,
+      review: {
+        mode: own.review?.mode ?? review.mode,
+        models: own.review?.models ?? review.models,
+      },
+      ...(sub ? { subagents: sub } : {}),
+      overridden: (['start', 'escalate', 'review', 'subagents'] as const).filter(
+        (k) => own[k] !== undefined,
+      ),
+    };
+  }
+
+  /** The router for a session: the config's, or one with the session's own roles. */
+  private routerFor(s: LiveSession): Router {
+    const own = this.top(s).roles;
+    if (!own?.start && !own?.escalate) return this.router;
+    const roles = this.rolesOf(s);
+    return new Router(
+      { ...this.options.config.routing, start: roles.start, escalate: roles.escalate },
+      (alias) => this.modelInfo(alias),
+    );
+  }
+
   /** Start a turn and return immediately; progress arrives as events. */
   prompt(params: {
     sessionId: string;
@@ -504,7 +622,7 @@ export class Engine {
         if (session.inbox.length)
           stopReason = await this.loop(session, route, turnId, controller.signal);
       }
-      const review = options.review ?? this.options.config.review.mode === 'auto';
+      const review = options.review ?? this.rolesOf(session).review.mode === 'auto';
       if (review && session.depth === 0 && stopReason === 'end_turn' && text)
         stopReason = await this.reviewTurn(session, text, route, turnId, controller.signal);
     } catch (err) {
@@ -671,7 +789,9 @@ export class Engine {
       }
 
       const inputTokens = await this.countPrompt(s, specsJson, signal);
-      const decision = this.router.decide({
+      const router = this.routerFor(s);
+      const signals = s.signals.snapshot();
+      const decision = router.decide({
         preference,
         escalationDeclined: forceLocal,
         refused,
@@ -685,7 +805,7 @@ export class Engine {
           ...this.pinnedModel(s, agent),
         },
         estimatedInputTokens: inputTokens,
-        signals: s.signals.snapshot(),
+        signals,
         spend: this.ledger.spend(),
         escalationApproved,
       });
@@ -740,6 +860,10 @@ export class Engine {
         rule,
         reason,
         inputTokens,
+        step: decision.step,
+        steps: this.rolesOf(s).escalate.length,
+        ...(decision.step > 0 && !escalated ? { stickyTurns: signals.stickyTurns } : {}),
+        ...(escalated ? { stickyTurns: this.options.config.routing.escalation.stickyTurns } : {}),
       });
       const provider = this.providers.get(model.ref.provider);
       if (!provider) throw new Error(`provider "${model.ref.provider}" is not configured`);
@@ -882,7 +1006,12 @@ export class Engine {
     if (agent.model || agent.route !== 'auto' || s.signals.snapshot().stickyTurns > 0)
       return undefined;
     // Nothing to escalate to.
-    if (!routing.escalate.flat().some((a) => this.options.config.models[a])) return undefined;
+    if (
+      !this.rolesOf(s)
+        .escalate.flat()
+        .some((a) => this.options.config.models[a])
+    )
+      return undefined;
     const model = this.modelInfo(c.model);
     if (!model) {
       this.notify('warn', `routing.classifier.model "${c.model}" is not a configured model`);
@@ -976,7 +1105,7 @@ export class Engine {
     signal: AbortSignal,
   ): Promise<StopReason> {
     const rounds = this.options.config.review.maxRounds;
-    const ladder = this.reviewLadder();
+    const ladder = this.reviewLadder(s);
     let stopReason: StopReason = 'end_turn';
     let at = 0;
     let revisedBy = -1;
@@ -1037,10 +1166,10 @@ export class Engine {
     return stopReason;
   }
 
-  /** Reviewers in order: `review.models`, else the escalation ladder. */
-  private reviewLadder(): string[][] {
-    const { review, routing } = this.options.config;
-    return review.models.length ? review.models : routing.escalate;
+  /** Reviewers in order: `review.models`, else the escalation ladder (the session's own, if changed). */
+  private reviewLadder(s: LiveSession): string[][] {
+    const roles = this.rolesOf(s);
+    return roles.review.models.length ? roles.review.models : roles.escalate;
   }
 
   /**
@@ -1101,10 +1230,10 @@ export class Engine {
     return { skip: why ?? 'no reviewer is available' };
   }
 
-  /** The agent's own model pin; for a subagent without one, `subagents.model`. */
+  /** The agent's own model pin; for a subagent without one, the subagent model. */
   private pinnedModel(s: LiveSession, agent: AgentDefinition): { model?: string } {
     if (agent.model) return { model: agent.model };
-    const fallback = this.options.config.subagents.model;
+    const fallback = this.rolesOf(s).subagents;
     return s.depth > 0 && agent.route === 'auto' && fallback ? { model: fallback } : {};
   }
 
