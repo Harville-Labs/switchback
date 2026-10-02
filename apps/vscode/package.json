@@ -91,6 +91,11 @@
         "category": "Switchback"
       },
       {
+        "command": "switchback.chooseModels",
+        "title": "Choose Models for This Session…",
+        "category": "Switchback"
+      },
+      {
         "command": "switchback.showReceipt",
         "title": "Show Session Receipt (Cost vs. All-Remote)",
         "category": "Switchback"

@@ -43,7 +43,15 @@ Retries live in src/http/client.ts:88 ...
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
-| `/review on\|off\|default` | Review of local edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
+| `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
+| `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
+| `/models` | Every configured model, its tier, and the roles it fills |
+| `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
+| `/start <model...>` | Where turns start (more models are backups for when it's down or too small) |
+| `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
+| `/subagent-model <model>\|none` | Default model for subagents |
+
+Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder: `step 1/2 qwen3-coder-480b, 2 more`.
 | `/copy [n]` | Copy the last reply, or its `n`th code block, to the clipboard as raw text (no wrapping or indentation from the terminal rendering). Works over SSH in terminals that support OSC 52 |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/help`, `/exit` | |

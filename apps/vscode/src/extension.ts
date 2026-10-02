@@ -5,12 +5,13 @@
  */
 
 import { chmodSync, existsSync } from 'node:fs';
-import { connectDaemon, SwitchbackClient, spawnEngine } from '@switchback/client';
+import { connectDaemon, formatLadder, SwitchbackClient, spawnEngine } from '@switchback/client';
 import type {
   EngineEvent,
   InitializeResult,
   Message,
   RoutePreference,
+  SessionSetRolesParams,
   SessionSummary,
 } from '@switchback/protocol';
 import * as vscode from 'vscode';
@@ -157,6 +158,18 @@ class EngineConnection implements vscode.Disposable {
       this.broadcast({ type: 'event', event });
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
+      if (event.type === 'route.decided' && event.sessionId === this.session?.id) {
+        this.ladder =
+          event.step !== undefined
+            ? {
+                step: event.step,
+                steps: event.steps ?? 0,
+                model: event.model.model,
+                ...(event.stickyTurns !== undefined ? { stickyTurns: event.stickyTurns } : {}),
+              }
+            : undefined;
+        this.updateStatus();
+      }
       if (event.type === 'log') this.log.appendLine(`[${event.level}] ${event.message}`);
       if (
         event.type === 'permission.requested' &&
@@ -295,12 +308,15 @@ class EngineConnection implements vscode.Disposable {
 
   private lastCost = 0;
   private lastTier: string | undefined;
+  /** Where the session's last call ran on the escalation ladder. */
+  private ladder: Parameters<typeof formatLadder>[0];
   private updateStatus(cost?: number, tier?: string) {
     if (cost !== undefined) this.lastCost = cost;
     if (tier) this.lastTier = tier;
     const icon = this.lastTier === 'remote' ? '$(cloud)' : '$(home)';
+    const ladder = formatLadder(this.ladder);
     this.setStatus(
-      `${icon} ${this.route} · $${this.lastCost.toFixed(3)}`,
+      `${icon} ${this.route}${ladder ? ` · ${ladder}` : ''} · $${this.lastCost.toFixed(3)}`,
       'Switchback: click to change routing',
     );
   }
@@ -331,7 +347,7 @@ class EngineConnection implements vscode.Disposable {
           label: 'On',
           value: true,
           detail:
-            'After a local model edits files, a remote model reviews the diff; the local model fixes what it finds.',
+            'After a model edits files, a reviewer checks the diff; the model fixes what it finds. Choose reviewers with "Choose Models for This Session".',
         },
         { label: 'Off', value: false, detail: 'No reviews in this window.' },
         {
@@ -343,6 +359,147 @@ class EngineConnection implements vscode.Disposable {
       { title: 'Switchback: Review of Local Edits' },
     );
     if (pick) this.remoteReview = pick.value;
+  }
+
+  /** Change which model does what in this session (ADR 0015), optionally as the default. */
+  async chooseModels() {
+    const client = this.client;
+    const session = this.session;
+    if (!client || !session) return;
+    const models = this.init?.models ?? [];
+    const roles = await client.request('session.roles', { sessionId: session.id });
+    const steps = (s: string[][]) => s.map((step) => step.join(' | ')).join(' → ');
+    const pick = await vscode.window.showQuickPick(
+      [
+        {
+          label: 'Start with',
+          description: roles.start.join(' | ') || 'none',
+          value: 'start' as const,
+        },
+        {
+          label: 'Escalate to',
+          description: steps(roles.escalate) || 'nothing',
+          value: 'escalate' as const,
+        },
+        {
+          label: 'Review edits',
+          description:
+            roles.review.mode === 'off'
+              ? 'off'
+              : steps(roles.review.models) || 'the escalation ladder',
+          value: 'review' as const,
+        },
+        {
+          label: 'Subagents use',
+          description: roles.subagents ?? 'normal routing',
+          value: 'subagents' as const,
+        },
+        ...(roles.overridden.length
+          ? [{ label: 'Follow my config again', description: '', value: 'reset' as const }]
+          : []),
+      ],
+      { title: 'Switchback: Models for This Session' },
+    );
+    if (!pick) return;
+    let change: Omit<SessionSetRolesParams, 'sessionId'> | undefined;
+    if (pick.value === 'reset') change = { reset: true };
+    if (pick.value === 'start') {
+      const start = await this.pickOrdered(
+        'Start with (then backups, in order)',
+        models,
+        [],
+        false,
+      );
+      if (start?.length) change = { start };
+    }
+    if (pick.value === 'escalate') {
+      const ladder = await this.pickOrdered('Escalate to (in order)', models, roles.start, true);
+      if (ladder) change = { escalate: ladder.map((a) => [a]) };
+    }
+    if (pick.value === 'review') {
+      const how = await vscode.window.showQuickPick(
+        [
+          { label: 'Off', value: 'off' as const },
+          {
+            label: 'The escalation ladder',
+            description: steps(roles.escalate),
+            value: 'ladder' as const,
+          },
+          { label: 'Models I choose…', value: 'choose' as const },
+        ],
+        { title: 'Switchback: Review Edits' },
+      );
+      if (how?.value === 'off') change = { review: { mode: 'off' } };
+      if (how?.value === 'ladder') change = { review: { mode: 'auto', models: [] } };
+      if (how?.value === 'choose') {
+        const reviewers = await this.pickOrdered('Reviewers (in order)', models, [], false);
+        if (reviewers?.length)
+          change = { review: { mode: 'auto', models: reviewers.map((a) => [a]) } };
+      }
+      if (change) this.remoteReview = undefined; // follow the session's review mode
+    }
+    if (pick.value === 'subagents') {
+      const sub = await vscode.window.showQuickPick(
+        [
+          { label: 'Normal routing', value: null },
+          ...models.map((m) => ({
+            label: m.alias,
+            description: `${m.ref.model} · ${m.tier}`,
+            value: m.alias,
+          })),
+        ],
+        { title: 'Switchback: Subagent Model' },
+      );
+      if (sub) change = { subagents: sub.value };
+    }
+    if (!change) return;
+    try {
+      await client.request('session.setRoles', { sessionId: session.id, ...change });
+      if (change.reset) return;
+      const save = await vscode.window.showInformationMessage(
+        'Changed for this session.',
+        'Save as Default',
+      );
+      if (save) {
+        const r = await client.request('session.setRoles', { sessionId: session.id, save: true });
+        void vscode.window.showInformationMessage(`Saved as your default in ${r.savedTo}.`);
+      }
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Switchback: ${(err as Error).message}`);
+    }
+  }
+
+  /** Models picked one at a time, in order; undefined when cancelled. */
+  private async pickOrdered(
+    title: string,
+    models: InitializeResult['models'],
+    exclude: string[],
+    allowNone: boolean,
+  ): Promise<string[] | undefined> {
+    const chosen: string[] = [];
+    for (;;) {
+      const items = [
+        ...models
+          .filter((m) => !chosen.includes(m.alias) && !exclude.includes(m.alias))
+          .map((m) => ({ label: m.alias, description: `${m.ref.model} · ${m.tier}`, done: false })),
+        ...(chosen.length || allowNone
+          ? [
+              {
+                label: chosen.length ? '$(check) Done' : '$(close) None',
+                description: '',
+                done: true,
+              },
+            ]
+          : []),
+      ];
+      const pick = await vscode.window.showQuickPick(items, {
+        title: `Switchback: ${title}`,
+        placeHolder: chosen.length ? `So far: ${chosen.join(' → ')}. Next?` : 'First?',
+      });
+      if (!pick) return undefined;
+      if (pick.done) return chosen;
+      chosen.push(pick.label);
+    }
   }
 
   async receipt() {
@@ -540,6 +697,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     vscode.commands.registerCommand('switchback.cancel', () => engine?.handle({ type: 'cancel' })),
     vscode.commands.registerCommand('switchback.showUsage', () => engine?.usage()),
     vscode.commands.registerCommand('switchback.setReview', () => engine?.chooseReview()),
+    vscode.commands.registerCommand('switchback.chooseModels', () => engine?.chooseModels()),
     vscode.commands.registerCommand('switchback.showReceipt', () =>
       engine?.receipt().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),

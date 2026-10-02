@@ -39,6 +39,40 @@ export interface DaemonRetireResult {
   reason?: string;
 }
 
+/**
+ * Which models do what in a session (ADR 0015): where turns start, the
+ * escalation ladder, the reviewers (`models: []` means the ladder), and the
+ * default model for subagents. All by model alias.
+ */
+export interface SessionRoles {
+  start: string[];
+  escalate: string[][];
+  review: { mode: 'off' | 'auto'; models: string[][] };
+  subagents?: string;
+  /** Roles this session changed; the rest follow the config. */
+  overridden: ('start' | 'escalate' | 'review' | 'subagents')[];
+}
+
+export const SessionRolesParams = z.object({ sessionId: z.string() });
+export type SessionRolesParams = z.infer<typeof SessionRolesParams>;
+
+const Step = z.array(z.string().min(1)).min(1);
+export const SessionSetRolesParams = z.object({
+  sessionId: z.string(),
+  start: Step.optional(),
+  escalate: z.array(Step).optional(),
+  review: z
+    .object({ mode: z.enum(['off', 'auto']).optional(), models: z.array(Step).optional() })
+    .optional(),
+  /** `null` clears it: subagents route normally. */
+  subagents: z.string().min(1).nullable().optional(),
+  /** Also write the session's roles to the user config, as the default for new sessions. */
+  save: z.boolean().optional(),
+  /** Drop this session's changes and follow the config again (applied before the others). */
+  reset: z.boolean().optional(),
+});
+export type SessionSetRolesParams = z.infer<typeof SessionSetRolesParams>;
+
 export interface InitializeResult {
   protocolVersion: number;
   engineVersion: string;
@@ -220,6 +254,13 @@ export interface Methods {
   'mcp.list': { params: Record<string, never>; result: McpListResult };
   shutdown: { params: Record<string, never>; result: { ok: true } };
   'daemon.retire': { params: DaemonRetireParams; result: DaemonRetireResult };
+  /** A session's roles: config, plus what the session changed. */
+  'session.roles': { params: SessionRolesParams; result: SessionRoles };
+  /** Change a session's roles; optionally save them as the user's defaults. */
+  'session.setRoles': {
+    params: SessionSetRolesParams;
+    result: SessionRoles & { savedTo?: string };
+  };
 }
 
 export type MethodName = keyof Methods;
@@ -245,7 +286,13 @@ export type EngineEvent =
       reason: string;
       /** Prompt size the decision was based on (exact when the local server counted it). */
       inputTokens?: number;
+      /** Where the model is on the escalation ladder: 0 is `start`, `steps` the top. */
+      step?: number;
+      steps?: number;
+      /** Calls left before routing returns to `start` after an escalation. */
+      stickyTurns?: number;
     } & SessionScoped)
+  | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'text.delta'; turnId: string; text: string } & SessionScoped)
   | ({ type: 'reasoning.delta'; turnId: string; text: string } & SessionScoped)
   | ({

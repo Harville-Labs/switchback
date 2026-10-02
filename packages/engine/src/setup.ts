@@ -358,7 +358,18 @@ function leaves(layer: Record<string, unknown>, prefix: JSONPath = []): [JSONPat
  * result against the schema first. Edits are applied in place, so the user's
  * comments and formatting survive; the previous file is still kept as `.bak`.
  */
-export function writeConfigLayer(file: string, layer: Record<string, unknown>): WriteResult {
+export function writeConfigLayer(
+  file: string,
+  layer: Record<string, unknown>,
+  options: {
+    /**
+     * Check that aliases resolve within this file alone. Off when the caller
+     * already checked them against the merged config (models may live in
+     * another file, an org policy, or the project config).
+     */
+    references?: boolean;
+  } = {},
+): WriteResult {
   let text = '{}';
   let backup: string | undefined;
   if (existsSync(file)) {
@@ -383,7 +394,8 @@ export function writeConfigLayer(file: string, layer: Record<string, unknown>): 
   const merged = deepMerge(existing, layer);
   const check = SwitchbackConfig.safeParse(deepMerge(defaultConfig(), merged));
   const problem = check.success
-    ? (removedKeyProblem(merged) ?? referenceProblem(check.data))
+    ? (removedKeyProblem(merged) ??
+      (options.references === false ? undefined : referenceProblem(check.data)))
     : check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
   if (problem) throw new Error(`setup produced an invalid config: ${problem}`);
   for (const [path, value] of leaves(layer)) {

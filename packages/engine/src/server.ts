@@ -23,6 +23,8 @@ import {
   SessionCreateParams,
   SessionGetParams,
   SessionPromptParams,
+  SessionRolesParams,
+  SessionSetRolesParams,
   type Transport,
   UsageGetParams,
 } from '@switchback/protocol';
@@ -100,6 +102,10 @@ export function serve(
         return engine.getSession(parse(SessionGetParams, req.params).sessionId);
       case 'session.prompt':
         return engine.prompt(parse(SessionPromptParams, req.params));
+      case 'session.roles':
+        return engine.roles(parse(SessionRolesParams, req.params).sessionId);
+      case 'session.setRoles':
+        return engine.setRoles(parse(SessionSetRolesParams, req.params));
       case 'session.compact':
         return engine.compactSession(parse(SessionCompactParams, req.params).sessionId);
       case 'session.cancel':

@@ -4,8 +4,11 @@ import {
   childView,
   describeSession,
   estimateLabel,
+  formatLadder,
   formatMcpServers,
+  formatModels,
   formatReceipt,
+  formatRoles,
   formatUsage,
   fromTranscript,
   initialView,
@@ -22,6 +25,7 @@ import {
 import type {
   InitializeResult,
   RoutePreference,
+  SessionSetRolesParams,
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
@@ -54,7 +58,14 @@ const HELP = `Commands
   /usage [rule|agent|model] this week's spend, savings, and why
   /receipt                 this session's cost vs. running it all-remote
   /copy [n]                copy the last reply, or its nth code block, to the clipboard
-  /review on|off|default   review of local edits (default: review.mode)
+  /review on|off|default   review of edits for the next prompts (default: review.mode)
+  /review ladder | with <model...>   who reviews: the escalation ladder, or models in order
+  /models                  configured models, their tier, and the roles they fill
+  /roles [reset]           which model does what in this session; reset follows config
+  /start <model...>        where turns start (more models are backups)
+  /escalate <step...>|none the escalation ladder; a step is a model, or a,b alternatives
+  /subagent-model <model>|none   default model for subagents
+                           add --save to any role command to make it your default
   /mcp                     MCP servers and their tools
   /compact                 summarize earlier messages now (also automatic)
   /exit                    quit
@@ -167,6 +178,26 @@ export function App({
     setView((v) => addInfo(v, text));
   };
 
+  /** Role command arguments without the --save flag. */
+  const rest = (args: string[]) => args.filter((a) => a && a !== '--save');
+  const saving = (args: string[]) => args.includes('--save');
+  const changeRoles = async (
+    change: Omit<SessionSetRolesParams, 'sessionId'>,
+    what: string,
+  ): Promise<void> => {
+    try {
+      const r = await client.request('session.setRoles', { sessionId: session.id, ...change });
+      const where = r.savedTo
+        ? `Saved as your default in ${r.savedTo}.`
+        : 'This session only; add --save to make it your default.';
+      setView((v) =>
+        addInfo({ ...v, roles: r }, `${what}\n${formatRoles(r, init.models)}\n${where}`),
+      );
+    } catch (err) {
+      setView((v) => addInfo(v, `roles: ${(err as Error).message}`));
+    }
+  };
+
   const submit = async (raw: string) => {
     const text = raw.trim();
     if (!text) return;
@@ -180,10 +211,65 @@ export function App({
           setRoute(cmd);
           setView((v) => addInfo(v, `routing: ${cmd}`));
           return;
+        case 'models': {
+          const roles = await client.request('session.roles', { sessionId: session.id });
+          setView((v) => addInfo({ ...v, roles }, formatModels(init.models, roles)));
+          return;
+        }
+        case 'roles': {
+          if (args[0] === 'reset')
+            return changeRoles({ reset: true }, 'Roles follow your config again.');
+          const roles = await client.request('session.roles', { sessionId: session.id });
+          setView((v) => addInfo({ ...v, roles }, formatRoles(roles, init.models)));
+          return;
+        }
+        case 'start': {
+          const models = rest(args);
+          if (!models.length) {
+            setView((v) => addInfo(v, 'usage: /start <model> [backup...] [--save]'));
+            return;
+          }
+          return changeRoles(
+            { start: models, save: saving(args) },
+            'Turns start on the new model.',
+          );
+        }
+        case 'escalate': {
+          const steps = rest(args);
+          if (!steps.length) {
+            setView((v) => addInfo(v, 'usage: /escalate <model|a,b> ... | none [--save]'));
+            return;
+          }
+          const escalate = steps[0] === 'none' ? [] : steps.map((step) => step.split(','));
+          return changeRoles({ escalate, save: saving(args) }, 'New escalation ladder.');
+        }
+        case 'subagent-model': {
+          const [model] = rest(args);
+          if (!model) {
+            setView((v) => addInfo(v, 'usage: /subagent-model <model>|none [--save]'));
+            return;
+          }
+          return changeRoles(
+            { subagents: model === 'none' ? null : model, save: saving(args) },
+            'Subagent model changed.',
+          );
+        }
         case 'review': {
+          if (args[0] === 'ladder' || args[0] === 'with') {
+            const models = args[0] === 'ladder' ? [] : rest(args.slice(1)).map((m) => [m]);
+            if (args[0] === 'with' && !models.length) {
+              setView((v) => addInfo(v, 'usage: /review with <model> [next...] [--save]'));
+              return;
+            }
+            setReview(true);
+            return changeRoles(
+              { review: { mode: 'auto', models }, save: saving(args) },
+              'Review is on with the new reviewers.',
+            );
+          }
           const next = args[0] === 'on' ? true : args[0] === 'off' ? false : undefined;
           if (args[0] && args[0] !== 'default' && next === undefined) {
-            setView((v) => addInfo(v, 'usage: /review on|off|default'));
+            setView((v) => addInfo(v, 'usage: /review on|off|default|ladder|with <model...>'));
             return;
           }
           setReview(next);
@@ -193,7 +279,7 @@ export function App({
               next === undefined
                 ? 'review: following review.mode in config'
                 : next
-                  ? 'review: on. After a local model edits files, a remote model reviews the diff and the local model fixes what it finds.'
+                  ? 'review: on. After a model edits files, a reviewer checks the diff and the model fixes what it finds (/roles shows who reviews).'
                   : 'review: off',
             ),
           );
@@ -456,6 +542,7 @@ function StatusBar({
         {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
         {tier ? ' · last ' : ''}
         {tier ? <Text color={tier === 'local' ? 'green' : 'yellow'}>{tier}</Text> : null}
+        {formatLadder(view.ladder) ? ` · ${formatLadder(view.ladder)}` : ''}
         {view.private ? <Text color="cyan"> · 🔒 local only</Text> : null}
       </Text>
       <Text dimColor>
