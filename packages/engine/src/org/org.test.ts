@@ -122,6 +122,39 @@ describe('layering', () => {
     expect(config.permissions).toMatchObject({ edit: 'allow', bash: 'deny' }); // enforced wins
     expect(org?.enforcedKeys).toEqual(['permissions.bash']);
   });
+
+  const gpuPolicy = policy({
+    defaults: {
+      providers: { gpu: { type: 'openai-compatible', baseUrl: 'http://gpu.acme.internal/v1' } },
+      models: { 'acme-coder': { provider: 'gpu', model: 'acme-coder' } },
+      routing: { start: ['local', 'acme-coder'] },
+    },
+  });
+
+  test("a policy's role may name a model only some members have", () => {
+    const without = loadConfig(home, env, [], gpuPolicy);
+    expect(without.config.routing.start).toEqual(['acme-coder']);
+    expect(without.org?.notes).toContain(
+      'routing.start: "local" skipped; no model has that alias here',
+    );
+    writeFileSync(
+      join(home, 'config.json'),
+      JSON.stringify({
+        providers: { ollama: { type: 'openai-compatible', baseUrl: 'http://localhost:11434/v1' } },
+        models: { local: { provider: 'ollama', model: 'qwen' } },
+      }),
+    );
+    const withLocal = loadConfig(home, env, [], gpuPolicy);
+    expect(withLocal.config.routing.start).toEqual(['local', 'acme-coder']);
+    expect(withLocal.org?.notes).toEqual([]);
+  });
+
+  test("the member's own misspelled role alias is still an error", () => {
+    writeFileSync(join(home, 'config.json'), JSON.stringify({ routing: { start: ['acme-codr'] } }));
+    expect(() => loadConfig(home, env, [], gpuPolicy)).toThrow(
+      'routing.start[0] references unknown model "acme-codr"',
+    );
+  });
 });
 
 describe('with an organization server', () => {

@@ -37,6 +37,63 @@ export function leafPaths(layer: Record<string, unknown>, prefix = ''): string[]
   );
 }
 
+/** The config's roles with only the aliases `keep` accepts; a step left empty is dropped. */
+function filterRoles(
+  config: SwitchbackConfig,
+  keep: (alias: string, role: string) => boolean,
+): Pick<SwitchbackConfig, 'routing' | 'review' | 'subagents'> {
+  const routing = structuredClone(config.routing);
+  routing.start = routing.start.filter((a) => keep(a, 'routing.start'));
+  routing.escalate = routing.escalate
+    .map((step) => step.filter((a) => keep(a, 'routing.escalate')))
+    .filter((step) => step.length);
+  if (routing.classifier && !keep(routing.classifier.model, 'routing.classifier'))
+    delete routing.classifier;
+  const review = {
+    ...config.review,
+    models: config.review.models
+      .map((step) => step.filter((a) => keep(a, 'review.models')))
+      .filter((step) => step.length),
+  };
+  const subagents = { ...config.subagents };
+  if (subagents.model && !keep(subagents.model, 'subagents.model')) delete subagents.model;
+  return { routing, review, subagents };
+}
+
+/** Every model alias a config layer names in a role. */
+function roleAliases(layer: Record<string, unknown>): Set<string> {
+  const routing = (layer.routing ?? {}) as Record<string, unknown>;
+  const review = (layer.review ?? {}) as Record<string, unknown>;
+  const subagents = (layer.subagents ?? {}) as Record<string, unknown>;
+  const classifier = (routing.classifier ?? {}) as Record<string, unknown>;
+  return new Set(
+    [routing.start, routing.escalate, review.models, classifier.model, subagents.model]
+      .flat(2)
+      .filter((a): a is string => typeof a === 'string'),
+  );
+}
+
+/**
+ * Drop role aliases the policy names that no layer defines. A policy is written
+ * once for every member, so it may offer a model only some of them have, such
+ * as their own `local` (`"start": ["local", "acme-gpu"]`); members without it
+ * use the rest of the chain. Aliases only the user names are left for config
+ * validation, so the user's own typos are still reported.
+ */
+export function dropMissingPolicyAliases(
+  config: SwitchbackConfig,
+  policy: OrgPolicy,
+): { config: SwitchbackConfig; notes: string[] } {
+  const offered = new Set([...roleAliases(policy.defaults), ...roleAliases(policy.enforced)]);
+  const notes: string[] = [];
+  const roles = filterRoles(config, (alias, role) => {
+    if (config.models[alias] || !offered.has(alias)) return true;
+    notes.push(`${role}: "${alias}" skipped; no model has that alias here`);
+    return false;
+  });
+  return { config: { ...config, ...roles }, notes };
+}
+
 /** Apply restrictions to an already-merged config. Returns a new config and notes. */
 export function applyRestrictions(
   config: SwitchbackConfig,
@@ -77,31 +134,16 @@ export function applyRestrictions(
       notes.push(`MCP server "${name}" removed: only organization-defined MCP servers are allowed`);
   }
 
-  const routing = structuredClone(config.routing);
+  // Roles keep only models that survived.
+  const { routing, review, subagents } = filterRoles(config, (alias, role) => {
+    if (models[alias]) return true;
+    notes.push(`${role}: "${alias}" removed with its provider`);
+    return false;
+  });
   if (!r.allowRemote) {
     if (routing.allowRemote) notes.push('remote models turned off');
     routing.allowRemote = false;
   }
-  // Roles keep only models that survived; a step left empty is dropped.
-  const kept = (alias: string, role: string) => {
-    if (models[alias]) return true;
-    notes.push(`${role}: "${alias}" removed with its provider`);
-    return false;
-  };
-  routing.start = routing.start.filter((a) => kept(a, 'routing.start'));
-  routing.escalate = routing.escalate
-    .map((step) => step.filter((a) => kept(a, 'routing.escalate')))
-    .filter((step) => step.length);
-  if (routing.classifier && !kept(routing.classifier.model, 'routing.classifier'))
-    delete routing.classifier;
-  const review = {
-    ...config.review,
-    models: config.review.models
-      .map((step) => step.filter((a) => kept(a, 'review.models')))
-      .filter((step) => step.length),
-  };
-  const subagents = { ...config.subagents };
-  if (subagents.model && !kept(subagents.model, 'subagents.model')) delete subagents.model;
   const cap = (value: number | undefined, max: number | undefined, label: string) => {
     if (max === undefined) return value;
     if (value === undefined || value > max) {
