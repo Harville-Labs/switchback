@@ -33,6 +33,14 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     out(
       `  ${status.ok ? '✓' : '✗'} ${id} (${pc.type}, ${tierOf(pc)}): ${status.detail}${status.latencyMs !== undefined ? ` [${status.latencyMs}ms]` : ''}`,
     );
+    // Local servers list exactly what they serve; hosted catalogs use other names and aliases.
+    if (!status.models || tierOf(pc) !== 'local') continue;
+    out(`    serves ${status.models.join(', ') || 'no models'}`);
+    for (const [alias, m] of Object.entries(config.models)) {
+      if (m.provider !== id || status.models.includes(m.model)) continue;
+      problems++;
+      out(`    ✗ models.${alias}: ${id} doesn't serve "${m.model}"`);
+    }
   }
 
   out('\nRouting');

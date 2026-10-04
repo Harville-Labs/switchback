@@ -23,7 +23,7 @@ Any server exposing `/v1/chat/completions` with SSE streaming and function calli
 Choosing a local model:
 
 - It must support **tool calling** through the chat completions API. Models without it will trip the malformed-tool-call signal and escalate constantly.
-- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `switchback init` reads the effective value from each server, and if you leave `contextWindow` out the engine asks the server at runtime (`doctor` shows the value and where it came from).
+- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `switchback init` reads the effective value from each server, and if you leave `contextWindow` out the engine asks the server at runtime (`doctor` shows the value and where it came from). `doctor` also lists the models each local server serves and flags a configured `model` it doesn't.
 - Reasoning output (`reasoning_content` / `reasoning`) is shown in the UI but never sent back to the server.
 
 Health is checked with `GET {baseUrl}/models` (2-second timeout, cached for 30 seconds). If it fails, routing falls back to remote.

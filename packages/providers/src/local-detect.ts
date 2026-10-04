@@ -41,7 +41,14 @@ export const OLLAMA_DEFAULT_CONTEXT = 4096;
 
 type Fetch = typeof fetch;
 
-async function getJson(fetchImpl: Fetch, url: string, init?: RequestInit): Promise<unknown> {
+/** Credentials and extra headers for servers that require them (`--api-key`). */
+type ServerHeaders = Record<string, string>;
+
+async function getJson(
+  fetchImpl: Fetch,
+  url: string,
+  init?: RequestInit & { headers?: ServerHeaders },
+): Promise<unknown> {
   const res = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(1500) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
@@ -51,15 +58,18 @@ async function detectOllama(
   fetchImpl: Fetch,
   origin: string,
   env: Record<string, string | undefined>,
+  headers: ServerHeaders = {},
 ): Promise<DetectedServer> {
-  const tags = (await getJson(fetchImpl, `${origin}/api/tags`)) as { models?: { name: string }[] };
+  const tags = (await getJson(fetchImpl, `${origin}/api/tags`, { headers })) as {
+    models?: { name: string }[];
+  };
   const envCtx = Number(env.OLLAMA_CONTEXT_LENGTH) || undefined;
   const models = await Promise.all(
     (tags.models ?? []).slice(0, 30).map(async ({ name }): Promise<DetectedModel> => {
       try {
         const show = (await getJson(fetchImpl, `${origin}/api/show`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { ...headers, 'content-type': 'application/json' },
           body: JSON.stringify({ model: name }),
         })) as {
           capabilities?: string[];
@@ -107,8 +117,9 @@ async function detectOpenAICompatible(
   kind: LocalServerKind,
   label: string,
   origin: string,
+  headers: ServerHeaders = {},
 ): Promise<DetectedServer> {
-  const list = (await getJson(fetchImpl, `${origin}/v1/models`)) as {
+  const list = (await getJson(fetchImpl, `${origin}/v1/models`, { headers })) as {
     data?: { id: string; max_model_len?: number }[];
   };
   const models: DetectedModel[] = (list.data ?? []).map((m) => ({
@@ -120,7 +131,7 @@ async function detectOpenAICompatible(
   // Server-specific endpoints are tried whatever the port suggests; unknown ones just 404.
   // LM Studio's REST API reports loaded and maximum context per model.
   try {
-    const rich = (await getJson(fetchImpl, `${origin}/api/v0/models`)) as {
+    const rich = (await getJson(fetchImpl, `${origin}/api/v0/models`, { headers })) as {
       data?: {
         id: string;
         type?: string;
@@ -143,7 +154,7 @@ async function detectOpenAICompatible(
     // Older LM Studio: fall back to the OpenAI listing.
   }
   try {
-    const props = (await getJson(fetchImpl, `${origin}/props`)) as {
+    const props = (await getJson(fetchImpl, `${origin}/props`, { headers })) as {
       n_ctx?: number;
       default_generation_settings?: { n_ctx?: number };
     };
@@ -192,14 +203,19 @@ export async function detectLocalServers(
 export async function probeContextWindow(
   baseUrl: string,
   model: string,
-  options: { fetch?: Fetch; env?: Record<string, string | undefined> } = {},
+  options: {
+    fetch?: Fetch;
+    env?: Record<string, string | undefined>;
+    headers?: ServerHeaders;
+  } = {},
 ): Promise<{ contextWindow: number; source: string } | undefined> {
   const fetchImpl = options.fetch ?? fetch;
   const env = options.env ?? process.env;
+  const headers = options.headers ?? {};
   const origin = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
   const attempts = [
-    () => detectOllama(fetchImpl, origin, env),
-    () => detectOpenAICompatible(fetchImpl, 'openai-compatible', origin, origin),
+    () => detectOllama(fetchImpl, origin, env, headers),
+    () => detectOpenAICompatible(fetchImpl, 'openai-compatible', origin, origin, headers),
   ];
   for (const attempt of attempts) {
     try {

@@ -305,7 +305,7 @@ export class OpenAICompatibleProvider implements Provider {
     }
     const started = performance.now();
     try {
-      await this.client.models.list({
+      const page = await this.client.models.list({
         maxRetries: 0,
         timeout: 2000,
         ...(signal ? { signal } : {}),
@@ -314,6 +314,7 @@ export class OpenAICompatibleProvider implements Provider {
         ok: true,
         detail: `reachable at ${this.baseUrl}`,
         latencyMs: Math.round(performance.now() - started),
+        models: page.data.map((m) => m.id),
       };
     } catch (err) {
       const latencyMs = Math.round(performance.now() - started);
@@ -323,11 +324,21 @@ export class OpenAICompatibleProvider implements Provider {
     }
   }
 
+  /** What every request to this server carries: configured headers, then the key. */
+  private authHeaders(): Record<string, string> {
+    return {
+      ...this.options.headers,
+      ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
+    };
+  }
+
   async contextWindow(model: string) {
     // Local servers can say what they load; hosted APIs are configured from the catalog.
     if (this.tier === 'remote') return undefined;
     return probeContextWindow(this.baseUrl, model, {
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+      // Servers started with an API key refuse even their info endpoints without it.
+      headers: this.authHeaders(),
     });
   }
 
@@ -349,10 +360,7 @@ export class OpenAICompatibleProvider implements Provider {
       try {
         const res = await (this.options.fetch ?? fetch)(`${root}/tokenize`, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
-          },
+          headers: { ...this.authHeaders(), 'content-type': 'application/json' },
           body: JSON.stringify(shapes[dialect]),
           signal: signal ?? AbortSignal.timeout(3000),
         });

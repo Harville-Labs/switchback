@@ -206,6 +206,8 @@ const HEALTH_TTL_OK_MS = 30_000;
 /** Assumed when neither config nor server says; small on purpose so we escalate rather than truncate. */
 const UNKNOWN_LOCAL_CONTEXT = 8_192;
 const UNKNOWN_REMOTE_CONTEXT = 200_000;
+/** Output never clamped below this; a prompt that leaves less is compaction's problem. */
+const MIN_OUTPUT_TOKENS = 1_024;
 const HEALTH_TTL_FAIL_MS = 5_000;
 
 /** The model whose prices define "saved": the first remote model in role order. */
@@ -900,7 +902,7 @@ export class Engine {
           system: outbound.system,
           messages: outbound.messages,
           tools: specs,
-          maxTokens: modelConfig?.maxOutputTokens ?? 16_000,
+          maxTokens: this.outputBudget(model.alias, inputTokens),
           ...(modelConfig?.effort ? { effort: modelConfig.effort } : {}),
           signal,
         })) {
@@ -2314,6 +2316,21 @@ export class Engine {
     return m && this.tierOfProvider(m.provider) === 'local'
       ? UNKNOWN_LOCAL_CONTEXT
       : UNKNOWN_REMOTE_CONTEXT;
+  }
+
+  /**
+   * `maxOutputTokens`, lowered to what the model's known window has left after
+   * the prompt. vLLM rejects a request whose prompt plus `max_tokens` exceeds
+   * its window, so the 16k default would fail every call to a small one. The
+   * prompt count may be an estimate, hence the margin.
+   */
+  private outputBudget(alias: string, inputTokens: number): number {
+    const m = this.options.config.models[alias];
+    const configured = m?.maxOutputTokens ?? 16_000;
+    const window = m?.contextWindow ?? this.detectedContext.get(alias);
+    if (!window) return configured;
+    const room = window - Math.ceil(inputTokens * 1.05) - 64;
+    return Math.max(MIN_OUTPUT_TOKENS, Math.min(configured, room));
   }
 
   /** Ask servers for the context window of models whose config leaves it out (once each). */

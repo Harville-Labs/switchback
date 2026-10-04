@@ -138,6 +138,36 @@ describe('openai-compatible', () => {
       input: { __malformed: '{bad' },
     });
   });
+
+  test('asks a keyed server for its models and context window with the key', async () => {
+    // llama.cpp with --api-key refuses even /props and /v1/models without it.
+    const keyed = (async (input: string | URL | Request, init?: RequestInit) => {
+      const auth =
+        input instanceof Request
+          ? input.headers.get('authorization')
+          : new Headers(init?.headers).get('authorization');
+      if (auth !== 'Bearer sk-test')
+        return Response.json({ error: 'Invalid API Key' }, { status: 401 });
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.endsWith('/v1/models'))
+        return Response.json({ data: [{ id: 'm', object: 'model' }] });
+      if (url.endsWith('/props'))
+        return Response.json({ default_generation_settings: { n_ctx: 8192 } });
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+    const p = new OpenAICompatibleProvider({
+      id: 'gpu',
+      baseUrl: 'http://gpu:8080/v1',
+      tier: 'local',
+      apiKey: 'sk-test',
+      fetch: keyed,
+    });
+    expect(await p.contextWindow('m')).toEqual({
+      contextWindow: 8192,
+      source: 'llama.cpp /props n_ctx',
+    });
+    expect((await p.health()).models).toEqual(['m']);
+  });
 });
 
 describe('pricing', () => {

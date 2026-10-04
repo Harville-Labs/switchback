@@ -42,6 +42,8 @@ export interface HealthStatus {
   ok: boolean;
   detail: string;
   latencyMs?: number;
+  /** Model IDs the server lists, when the health check fetched them. */
+  models?: string[];
 }
 
 export interface Provider {
