@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message } from '@switchback/protocol';
 import { toAnthropicMessages } from './anthropic.ts';
+import { parseModelList } from './model-list.ts';
 import { OpenAICompatibleProvider, toWireMessages } from './openai-compatible.ts';
 import { costUsd, priceFor } from './pricing.ts';
+import { azureOpenAIBaseUrl, createProvider, ProviderConfig } from './registry.ts';
 import type { ChatEvent } from './types.ts';
 
 const HISTORY: Message[] = [
@@ -182,5 +184,78 @@ describe('pricing', () => {
       { input: 5, output: 25, cacheRead: 0.5 },
     );
     expect(cost).toBeCloseTo(30.5);
+  });
+});
+
+describe('model listings', () => {
+  test("reads each vendor's context field, OpenRouter prices, and tool support", () => {
+    const models = parseModelList({
+      data: [
+        { id: 'vllm-model', max_model_len: 32768 },
+        {
+          id: 'qwen/qwen3-coder',
+          context_length: 262144,
+          top_provider: { max_completion_tokens: 65536 },
+          pricing: { prompt: '0.0000004', completion: '0.0000016', input_cache_read: '0.00000004' },
+          supported_parameters: ['tools', 'temperature'],
+        },
+        { id: 'llama-3.3-70b-versatile', context_window: 131072 },
+        { id: 'openrouter/auto', pricing: { prompt: '-1', completion: '-1' } },
+        { id: 'embed', supported_parameters: ['temperature'] },
+        { object: 'model' },
+      ],
+    });
+    expect(models).toEqual([
+      { id: 'vllm-model', contextWindow: 32768, contextSource: '/models max_model_len' },
+      {
+        id: 'qwen/qwen3-coder',
+        contextWindow: 262144,
+        contextSource: '/models context_length',
+        maxOutputTokens: 65536,
+        price: { input: 0.4, output: 1.6, cacheRead: 0.04 },
+        tools: true,
+      },
+      {
+        id: 'llama-3.3-70b-versatile',
+        contextWindow: 131072,
+        contextSource: '/models context_window',
+      },
+      { id: 'openrouter/auto' },
+      { id: 'embed', tools: false },
+    ]);
+    expect(parseModelList({ error: 'nope' })).toEqual([]);
+  });
+
+  test("a hosted OpenAI-compatible API's context window comes from its listing", async () => {
+    const listing = (async (input: string | URL | Request) => {
+      expect(String(input instanceof Request ? input.url : input)).toBe(
+        'https://openrouter.ai/api/v1/models',
+      );
+      return Response.json({ data: [{ id: 'qwen/qwen3-coder', context_length: 262144 }] });
+    }) as typeof fetch;
+    const p = new OpenAICompatibleProvider({
+      id: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      tier: 'remote',
+      apiKey: 'k',
+      fetch: listing,
+    });
+    expect(await p.contextWindow('qwen/qwen3-coder')).toEqual({
+      contextWindow: 262144,
+      source: '/models context_length',
+    });
+    expect(await p.contextWindow('missing')).toBeUndefined();
+  });
+
+  test('Azure OpenAI uses the v1 endpoint of the resource', () => {
+    expect(azureOpenAIBaseUrl({ resource: 'acme' })).toBe(
+      'https://acme.openai.azure.com/openai/v1',
+    );
+    expect(azureOpenAIBaseUrl({ baseUrl: 'https://acme.services.ai.azure.com/openai/v1' })).toBe(
+      'https://acme.services.ai.azure.com/openai/v1',
+    );
+    expect(
+      createProvider('az', ProviderConfig.parse({ type: 'azure-openai', resource: 'acme' })).tier,
+    ).toBe('remote');
   });
 });

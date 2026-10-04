@@ -15,6 +15,7 @@ const PROVIDER_TYPES = [
   'vertex',
   'anthropic-aws',
   'foundry',
+  'azure-openai',
   'gemini',
   'mock',
 ] as const satisfies readonly ProviderConfig['type'][];

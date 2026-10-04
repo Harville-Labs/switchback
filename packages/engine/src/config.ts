@@ -305,6 +305,10 @@ export function telemetryOptedOut(env: Record<string, string | undefined>): bool
 
 /** Cross-field checks the schema can't express. Returns a message, or undefined when valid. */
 export function referenceProblem(config: SwitchbackConfig): string | undefined {
+  for (const [id, pc] of Object.entries(config.providers)) {
+    if (pc.type === 'azure-openai' && !pc.resource && !pc.baseUrl)
+      return `providers.${id} needs "resource" (your Azure OpenAI resource name) or "baseUrl"`;
+  }
   for (const [alias, m] of Object.entries(config.models)) {
     if (!config.providers[m.provider])
       return `models.${alias} references unknown provider "${m.provider}"`;

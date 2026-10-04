@@ -75,6 +75,20 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     baseUrl: z.url().optional(),
   }),
   z.object({
+    /**
+     * Azure OpenAI's v1 API, which takes the OpenAI client as is. Models are
+     * deployment names.
+     */
+    type: z.literal('azure-openai'),
+    /** Resource name (`https://<resource>.openai.azure.com/openai/v1`); or set `baseUrl`. */
+    resource: z.string().optional(),
+    baseUrl: z.url().optional(),
+    /** Defaults to $AZURE_OPENAI_API_KEY. */
+    apiKey: Secret.optional(),
+    /** Microsoft recommends the Responses API for Azure OpenAI models. */
+    api: z.enum(['chat', 'responses']).default('responses'),
+  }),
+  z.object({
     /** Google Gemini: the Gemini API with a key, or Vertex AI with `project` and `location`. */
     type: z.literal('gemini'),
     /** Defaults to $GEMINI_API_KEY (or $GOOGLE_API_KEY). */
@@ -96,12 +110,43 @@ export function tierOf(config: ProviderConfig): Tier {
 /** Credential env var for each hosted provider type, for setup and diagnostics. */
 export const CREDENTIAL_ENV: Partial<Record<ProviderConfig['type'], string>> = {
   openai: 'OPENAI_API_KEY',
+  'azure-openai': 'AZURE_OPENAI_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
 };
 
 const NO_THINKING = ['claude-haiku-4-5', 'anthropic.claude-haiku-4-5'];
+
+/** The v1 endpoint for an `azure-openai` provider; config validation requires one of the two. */
+export function azureOpenAIBaseUrl(config: { resource?: string; baseUrl?: string }): string {
+  if (config.baseUrl) return config.baseUrl;
+  if (!config.resource) throw new Error('azure-openai needs `resource` or `baseUrl`');
+  return `https://${config.resource}.openai.azure.com/openai/v1`;
+}
+
+/** OpenAI and APIs that take the OpenAI client unchanged (Azure OpenAI's v1 API). */
+function openAIFamily(
+  id: string,
+  o: {
+    baseUrl: string;
+    api: 'chat' | 'responses';
+    apiKey: string | undefined;
+    missingKeyHint: string;
+    headers?: Record<string, string>;
+  },
+): Provider {
+  const common = {
+    id,
+    baseUrl: o.baseUrl,
+    missingKeyHint: o.missingKeyHint,
+    ...(o.apiKey ? { apiKey: o.apiKey } : {}),
+    ...(o.headers ? { headers: o.headers } : {}),
+  };
+  return o.api === 'responses'
+    ? new OpenAIResponsesProvider(common)
+    : new OpenAICompatibleProvider({ ...common, tier: 'remote', flavor: 'openai' });
+}
 
 export function createProvider(id: string, config: ProviderConfig): Provider {
   switch (config.type) {
@@ -111,32 +156,25 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         baseUrl: config.baseUrl,
         tier: config.tier,
         flavor: flavorForUrl(config.baseUrl),
-        ...(config.tier === 'remote' ? { missingKeyHint: 'set providers.<id>.apiKey' } : {}),
+        ...(config.tier === 'remote' ? { missingKeyHint: `set providers.${id}.apiKey` } : {}),
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
         ...(config.headers ? { headers: config.headers } : {}),
       });
-    case 'openai': {
-      const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
-      if (config.api === 'responses')
-        return new OpenAIResponsesProvider({
-          id,
-          baseUrl: config.baseUrl,
-          missingKeyHint: 'set OPENAI_API_KEY or providers.<id>.apiKey',
-          ...(apiKey ? { apiKey } : {}),
-          ...(config.organization
-            ? { headers: { 'OpenAI-Organization': config.organization } }
-            : {}),
-        });
-      return new OpenAICompatibleProvider({
-        id,
+    case 'openai':
+      return openAIFamily(id, {
         baseUrl: config.baseUrl,
-        tier: 'remote',
-        flavor: 'openai',
-        missingKeyHint: 'set OPENAI_API_KEY or providers.<id>.apiKey',
-        ...(apiKey ? { apiKey } : {}),
+        api: config.api,
+        apiKey: config.apiKey || process.env.OPENAI_API_KEY,
+        missingKeyHint: `set OPENAI_API_KEY or providers.${id}.apiKey`,
         ...(config.organization ? { headers: { 'OpenAI-Organization': config.organization } } : {}),
       });
-    }
+    case 'azure-openai':
+      return openAIFamily(id, {
+        baseUrl: azureOpenAIBaseUrl(config),
+        api: config.api,
+        apiKey: config.apiKey || process.env.AZURE_OPENAI_API_KEY,
+        missingKeyHint: `set AZURE_OPENAI_API_KEY or providers.${id}.apiKey`,
+      });
     case 'deepseek': {
       const apiKey = config.apiKey || process.env.DEEPSEEK_API_KEY;
       return new OpenAICompatibleProvider({
@@ -144,7 +182,7 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         baseUrl: config.baseUrl,
         tier: 'remote',
         flavor: 'deepseek',
-        missingKeyHint: 'set DEEPSEEK_API_KEY or providers.<id>.apiKey',
+        missingKeyHint: `set DEEPSEEK_API_KEY or providers.${id}.apiKey`,
         ...(apiKey ? { apiKey } : {}),
       });
     }

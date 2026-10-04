@@ -13,6 +13,7 @@ import {
   defaultRoles,
   detectLocalServers,
   type LocalAnswer,
+  OPENROUTER_BASE_URL,
   type PlannedModel,
   parseJsonc,
   planModels,
@@ -32,6 +33,7 @@ import {
   CREDENTIAL_ENV,
   type HostedProviderKind,
   hasAnthropicCredentials,
+  listModels,
 } from '@switchback/providers';
 import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 import { doctor } from './doctor.ts';
@@ -67,8 +69,10 @@ export interface InitFlags {
   projectId?: string;
   /** Claude Platform on AWS. */
   workspaceId?: string;
-  /** Microsoft Foundry resource name. */
+  /** Microsoft Foundry or Azure OpenAI resource name. */
   resource?: string;
+  /** Azure OpenAI deployment name. */
+  deployment?: string;
   policy?: 'auto' | 'ask' | 'off';
   dailyBudget?: number;
   monthlyBudget?: number;
@@ -598,6 +602,12 @@ function credentialHint(kind: RemoteKind): string {
         : 'needs ANTHROPIC_FOUNDRY_API_KEY';
     case 'vertex':
       return 'gcloud application-default credentials';
+    case 'azure-openai':
+      return process.env.AZURE_OPENAI_API_KEY
+        ? 'credentials found'
+        : 'needs AZURE_OPENAI_API_KEY and a deployment';
+    case 'openrouter':
+      return process.env.OPENROUTER_API_KEY ? 'credentials found' : 'needs OPENROUTER_API_KEY';
     case 'openai-compatible':
       return 'base URL and API key';
   }
@@ -643,25 +653,60 @@ async function chooseRemote(
 ): Promise<RemoteAnswer> {
   const env = process.env;
 
-  if (kind === 'openai-compatible') {
+  if (kind === 'openai-compatible' || kind === 'openrouter') {
     const baseUrl =
-      flags.remoteUrl ??
-      (p ? await p.text('API base URL (e.g. https://openrouter.ai/api/v1)') : undefined);
-    const model = modelFlag ?? (p ? await p.text('Model ID') : undefined);
-    if (!baseUrl || !model)
-      throw new SetupError('--remote-url and --remote-model are required for openai-compatible');
+      kind === 'openrouter'
+        ? OPENROUTER_BASE_URL
+        : (flags.remoteUrl ??
+          (p ? await p.text('API base URL (e.g. https://api.together.xyz/v1)') : undefined));
+    if (!baseUrl) throw new SetupError('--remote-url is required for openai-compatible');
     const apiKeyEnv =
       flags.remoteKeyEnv ??
-      (p ? await p.text('Environment variable holding the API key') : undefined);
+      (kind === 'openrouter'
+        ? 'OPENROUTER_API_KEY'
+        : p
+          ? await p.text('Environment variable holding the API key')
+          : undefined);
+    // Most endpoints list their models; some also give context lengths and prices.
+    const listed = await listModels(baseUrl, {
+      ...(apiKeyEnv && env[apiKeyEnv] ? { apiKey: env[apiKeyEnv] } : {}),
+    }).catch((err: Error) => {
+      if (p) console.log(dim(`  Couldn't list models (${err.message}); enter one by hand.`));
+      return [];
+    });
+    const model =
+      modelFlag ??
+      (p
+        ? await p.text(
+            listed.length
+              ? `Model ID (${listed.length} available, e.g. ${listed[0]?.id})`
+              : 'Model ID',
+          )
+        : undefined);
+    if (!model) throw new SetupError(`--remote-model is required for ${kind}`);
+    const found = listed.find((m) => m.id === model);
+    if (listed.length && !found)
+      console.log(
+        yellow(`  ${model} isn't in ${new URL(baseUrl).host}'s model list; check the ID.`),
+      );
+    if (found?.tools === false)
+      console.log(yellow(`  ${model} doesn't take tools there, so it can't edit or run anything.`));
     const contextWindow =
+      found?.contextWindow ??
       flags.remoteContextWindow ??
       (p ? await p.number('Context window (tokens)', 128_000) : undefined) ??
       128_000;
+    if (found?.price && p)
+      console.log(
+        dim(`  $${found.price.input} / $${found.price.output} per M tokens, from the model list`),
+      );
     return {
       kind,
       baseUrl: baseUrl.replace(/\/+$/, ''),
       model,
       contextWindow,
+      ...(found?.maxOutputTokens ? { maxOutputTokens: found.maxOutputTokens } : {}),
+      ...(found?.price ? { price: found.price } : {}),
       ...(apiKeyEnv ? { apiKeyEnv } : {}),
     };
   }
@@ -737,6 +782,19 @@ async function chooseRemote(
           ? await p.text('AWS profile (leave empty for the default chain)', env.AWS_PROFILE)
           : env.AWS_PROFILE);
       return { kind, model, region, workspaceId, ...(profile ? { profile } : {}) };
+    }
+    case 'azure-openai': {
+      const resource =
+        flags.resource ?? (p ? await p.text('Azure OpenAI resource name') : undefined);
+      if (!resource) throw new SetupError('Azure OpenAI needs --resource');
+      const deployment = flags.deployment ?? (p ? await p.text('Deployment name', model) : model);
+      if (p)
+        console.log(
+          dim(
+            '  Prices are OpenAI list prices; Azure billing can differ, so set models.<alias>.price if it does.',
+          ),
+        );
+      return { kind, model, deployment: deployment || model, resource };
     }
     case 'foundry': {
       const resource =

@@ -3,7 +3,7 @@
 ## Using Switchback
 
 - [Configuration](configuration.md): every config key, file locations, environment variables
-- [Providers](providers.md): local servers, OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, any OpenAI-compatible API
+- [Providers](providers.md): local servers (Ollama, llama.cpp, vLLM, LM Studio, SGLang, KoboldCpp, Jan, TGI), OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, any OpenAI-compatible API
 - [Routing and escalation](routing.md): how local vs. remote is decided, budgets, tuning
 - [Agents and subagents](subagents.md): built-in agents, writing your own, Claude Code compatibility
 - [Permissions and safety](permissions.md)

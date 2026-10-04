@@ -198,6 +198,78 @@ describe('buildSetupConfig', () => {
     });
   });
 
+  test("Azure OpenAI: requests name the deployment, with the catalog model's limits and price", () => {
+    const parsed = SwitchbackConfig.parse(
+      buildSetupConfig({
+        locals: [],
+        remotes: [
+          { kind: 'azure-openai', model: 'gpt-6-sol', deployment: 'prod-gpt', resource: 'acme' },
+        ],
+        escalationPolicy: 'auto',
+      }),
+    );
+    expect(parsed.providers['azure-openai']).toMatchObject({
+      type: 'azure-openai',
+      resource: 'acme',
+      api: 'responses',
+    });
+    const m = parsed.models['gpt-6-sol'];
+    expect(m).toMatchObject({ provider: 'azure-openai', model: 'prod-gpt' });
+    expect(m?.price?.input).toBeGreaterThan(0);
+    expect(m?.contextWindow).toBeGreaterThan(0);
+    // No size aliases: they'd name deployments nobody created.
+    expect(parsed.models.opus).toBeUndefined();
+  });
+
+  test('OpenRouter: what its model list says is written out', () => {
+    const parsed = SwitchbackConfig.parse(
+      buildSetupConfig({
+        locals: [],
+        remotes: [
+          {
+            kind: 'openrouter',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            model: 'qwen/qwen3-coder',
+            apiKeyEnv: 'OPENROUTER_API_KEY',
+            contextWindow: 262144,
+            maxOutputTokens: 65536,
+            price: { input: 0.4, output: 1.6 },
+          },
+        ],
+        escalationPolicy: 'auto',
+      }),
+    );
+    expect(parsed.providers.openrouter).toMatchObject({
+      type: 'openai-compatible',
+      tier: 'remote',
+      baseUrl: 'https://openrouter.ai/api/v1',
+    });
+    expect(parsed.models['qwen3-coder']).toMatchObject({
+      contextWindow: 262144,
+      maxOutputTokens: 65536,
+      price: { input: 0.4, output: 1.6 },
+    });
+    expect(
+      planModels({
+        locals: [],
+        remotes: [
+          {
+            kind: 'openrouter',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            model: 'x/y',
+            price: { input: 2, output: 3 },
+          },
+        ],
+      })[0],
+    ).toMatchObject({ where: 'OpenRouter', inputPrice: 2 });
+  });
+
+  test('azure-openai without a resource or URL is a config error', () => {
+    expect(
+      referenceProblem(SwitchbackConfig.parse({ providers: { az: { type: 'azure-openai' } } })),
+    ).toContain('providers.az needs "resource"');
+  });
+
   test('default roles: first local starts, other locals next, hosted cheapest first', () => {
     const plan = planModels({
       locals: [local, { ...local, baseUrl: 'http://gpu:8000/v1', model: 'big' }],
@@ -392,6 +464,24 @@ describe('writeConfigLayer', () => {
 });
 
 describe('probeContextWindow', () => {
+  test('TGI and KoboldCpp report their limits on their own endpoints', async () => {
+    const tgi = fakeFetch({
+      'http://box:8080/v1/models': { data: [{ id: 'tgi' }] },
+      'http://box:8080/info': { model_id: 'org/model', max_total_tokens: 32768 },
+    });
+    expect(await probeContextWindow('http://box:8080/v1', 'tgi', { fetch: tgi })).toEqual({
+      contextWindow: 32768,
+      source: 'TGI /info max_total_tokens',
+    });
+    const kobold = fakeFetch({
+      'http://box:5001/v1/models': { data: [{ id: 'koboldcpp/model' }] },
+      'http://box:5001/api/extra/true_max_context_length': { value: 12288 },
+    });
+    expect(
+      await probeContextWindow('http://box:5001/v1', 'koboldcpp/model', { fetch: kobold }),
+    ).toEqual({ contextWindow: 12288, source: 'KoboldCpp true_max_context_length' });
+  });
+
   test('identifies the server and reports where the number came from', async () => {
     const llama = fakeFetch({
       'http://gpu:8080/v1/models': { data: [{ id: 'default' }] },

@@ -6,7 +6,7 @@ Harville Labs' org-wide standards ([Harville-Labs/agents](https://github.com/Har
 
 ## What this repo is
 
-Switchback is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
+Switchback is a local-first coding agent. Most turns run on a local model; the router escalates the hard ones to a remote provider the user chooses: OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, or any OpenAI-compatible API. It ships as a terminal UI and a VS Code extension, both thin clients of one engine.
 
 Design docs live in [docs/](docs/README.md). Start with [docs/architecture.md](docs/architecture.md).
 

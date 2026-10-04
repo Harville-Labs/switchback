@@ -2,6 +2,7 @@ export * from './anthropic.ts';
 export * from './catalog.ts';
 export * from './gemini.ts';
 export * from './local-detect.ts';
+export * from './model-list.ts';
 export * from './openai-compatible.ts';
 export * from './openai-responses.ts';
 export * from './pricing.ts';

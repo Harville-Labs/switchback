@@ -150,7 +150,7 @@ describe('hosted providers', () => {
       }).health();
       expect(health).toEqual({
         ok: false,
-        detail: 'no API key (set OPENAI_API_KEY or providers.<id>.apiKey)',
+        detail: 'no API key (set OPENAI_API_KEY or providers.openai.apiKey)',
       });
     } finally {
       if (saved !== undefined) process.env.OPENAI_API_KEY = saved;

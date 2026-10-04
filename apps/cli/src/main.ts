@@ -54,17 +54,20 @@ init options (all optional; prompts cover anything not given)
   --subagent-model <m>     Default model for subagents
   --no-local               Remote only
   --remote <r>             anthropic | openai | deepseek | gemini | bedrock | vertex |
-                           anthropic-aws | foundry | openai-compatible | none.
+                           anthropic-aws | foundry | azure-openai | openrouter |
+                           openai-compatible | none.
                            Repeat for fallbacks
   --remote-model <m>       Model ID per --remote, in order (see \`switchback init\`)
   --remote-url <url>       openai-compatible: API base URL
-  --remote-key-env <var>   openai-compatible: env var holding the API key
-  --remote-context-window <n>  openai-compatible: context window
+  --remote-key-env <var>   openai-compatible, openrouter: env var holding the API key
+  --remote-context-window <n>  openai-compatible: context window, when its model
+                           listing doesn't say
   --region <r>             Bedrock or Vertex region
   --profile <p>            AWS profile (Bedrock)
   --project-id <id>        GCP project (Vertex)
   --workspace-id <id>      Claude workspace (Claude Platform on AWS)
-  --resource <name>        Foundry resource (Microsoft Foundry)
+  --resource <name>        Resource name (Microsoft Foundry, Azure OpenAI)
+  --deployment <name>      Azure OpenAI deployment, per --remote-model (default: the model ID)
   --policy <p>             Escalation: auto | ask | off
   --telemetry <on|off>     Anonymous usage statistics (default: off; always your user config)
   --daily-budget <usd>     --monthly-budget <usd>
@@ -149,6 +152,7 @@ async function main(argv: string[]): Promise<number> {
       'project-id': { type: 'string' },
       'workspace-id': { type: 'string' },
       resource: { type: 'string' },
+      deployment: { type: 'string' },
       policy: { type: 'string' },
       'daily-budget': { type: 'string' },
       'monthly-budget': { type: 'string' },
@@ -244,6 +248,7 @@ async function main(argv: string[]): Promise<number> {
         ...(values['project-id'] ? { projectId: values['project-id'] } : {}),
         ...(values['workspace-id'] ? { workspaceId: values['workspace-id'] } : {}),
         ...(values.resource ? { resource: values.resource } : {}),
+        ...(values.deployment ? { deployment: values.deployment } : {}),
         ...(policy ? { policy } : {}),
         ...(dailyBudget ? { dailyBudget } : {}),
         ...(monthlyBudget ? { monthlyBudget } : {}),

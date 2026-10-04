@@ -19,6 +19,7 @@
 import type { ModelRef, Part, StopReason, Tier, Usage } from '@switchback/protocol';
 import OpenAI from 'openai';
 import { probeContextWindow } from './local-detect.ts';
+import { listModels } from './model-list.ts';
 import {
   type ChatEvent,
   type ChatRequest,
@@ -333,8 +334,18 @@ export class OpenAICompatibleProvider implements Provider {
   }
 
   async contextWindow(model: string) {
-    // Local servers can say what they load; hosted APIs are configured from the catalog.
-    if (this.tier === 'remote') return undefined;
+    // Hosted APIs may list context lengths (OpenRouter, Together, Groq); only ask the listing.
+    if (this.tier === 'remote') {
+      const found = (
+        await listModels(this.baseUrl, {
+          headers: this.authHeaders(),
+          ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+        })
+      ).find((m) => m.id === model);
+      return found?.contextWindow
+        ? { contextWindow: found.contextWindow, source: found.contextSource ?? this.baseUrl }
+        : undefined;
+    }
     return probeContextWindow(this.baseUrl, model, {
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
       // Servers started with an API key refuse even their info endpoints without it.
