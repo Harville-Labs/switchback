@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EngineEvent } from '@switchback/protocol';
-import { type Provider, ScriptedProvider } from '@switchback/providers';
-import { CLASSIFIER_PROMPT, parseDifficulty } from './classifier.ts';
+import { type Provider, type RateRequest, ScriptedProvider } from '@switchback/providers';
+import { CLASSIFIER_PROMPT, DIFFICULTY_RUBRIC, parseDifficulty } from './classifier.ts';
 import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 
@@ -123,5 +123,61 @@ describe('engine classifier', () => {
     const off2 = setup('{"difficulty":"hard"}', { model: 'remote' }, { allowRemote: false });
     await off2.engine.runTurn(off2.engine.createSession({}).id, 'x');
     expect(off2.rp.requests).toHaveLength(0);
+  });
+
+  test('a decision model (Jev) rates on the rubric, priced and never chatted with', async () => {
+    const asked: RateRequest[] = [];
+    const jev: Provider = {
+      id: 'typesafe',
+      tier: 'remote',
+      decisionOnly: true,
+      health: async () => ({ ok: true, detail: 'ok' }),
+      // biome-ignore lint/correctness/useYield: a decision model can't chat.
+      async *stream() {
+        throw new Error('chatted with a decision model');
+      },
+      rate: async (req) => {
+        asked.push(req);
+        return {
+          level: 2,
+          score: 1.7,
+          confidence: 0.6,
+          usage: { inputTokens: 1_000_000, outputTokens: 1 },
+        };
+      },
+    };
+    const lp = new ScriptedProvider('lp', 'local', () => ({ text: 'local answer' }));
+    const rp = new ScriptedProvider('rp', 'remote', () => ({ text: 'remote answer' }));
+    const engine = new Engine({
+      workspaceRoot: root,
+      config: SwitchbackConfig.parse({
+        providers: {
+          lp: { type: 'mock', tier: 'local' },
+          rp: { type: 'mock', tier: 'remote' },
+          typesafe: { type: 'typesafe', apiKey: 'k' },
+        },
+        models: {
+          local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
+          remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
+          jev: { provider: 'typesafe', model: 'jev-latest' },
+        },
+        routing: { start: ['local'], escalate: [['remote']], classifier: { model: 'jev' } },
+      }),
+      providers: new Map<string, Provider>([
+        ['lp', lp],
+        ['rp', rp],
+        ['typesafe', jev],
+      ]),
+    });
+    const events: EngineEvent[] = [];
+    engine.subscribe((e) => events.push(e));
+    const r = await engine.runTurn(engine.createSession({}).id, 'migrate the ORM');
+    expect(r.text).toBe('remote answer');
+    expect(firstRoute(events)).toMatchObject({ rule: 'classifier', tier: 'remote' });
+    expect(asked[0]).toMatchObject({ model: 'jev-latest', text: 'migrate the ORM' });
+    expect(asked[0]?.levels).toEqual(DIFFICULTY_RUBRIC.levels);
+    // A million input tokens at Jev's list price.
+    const classify = engine.usage('today').byRule?.find((row) => row.key === 'classify');
+    expect(classify?.costUsd).toBeCloseTo(0.042, 6);
   });
 });

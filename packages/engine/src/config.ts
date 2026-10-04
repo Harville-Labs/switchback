@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
-import { type Price, ProviderConfig, tierOf } from '@switchback/providers';
+import { isDecisionOnly, type Price, ProviderConfig, tierOf } from '@switchback/providers';
 import { ModelChain, RoutingConfig } from '@switchback/router';
 
 export { roleAliases } from '@switchback/router';
@@ -329,9 +329,14 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
     ),
     ['subagents.model', config.subagents.model],
   ];
-  for (const [key, alias] of roles)
-    if (alias && !config.models[alias])
-      return `${key} references unknown model "${alias}"; add it under models or remove it`;
+  for (const [key, alias] of roles) {
+    if (!alias) continue;
+    const m = config.models[alias];
+    if (!m) return `${key} references unknown model "${alias}"; add it under models or remove it`;
+    const pc = config.providers[m.provider];
+    if (pc && isDecisionOnly(pc) && key !== 'routing.classifier.model')
+      return `${key}: "${alias}" is a decision model (${pc.type}), which can only be routing.classifier.model`;
+  }
   return undefined;
 }
 

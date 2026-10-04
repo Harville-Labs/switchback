@@ -47,6 +47,12 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   const r = config.routing;
   for (const line of formatRoles(configRoles(config), modelSummaries(config)).split('\n'))
     out(`  ${line}`);
+  if (r.classifier) {
+    const c = config.models[r.classifier.model];
+    out(
+      `  classifier ${r.classifier.model}${c ? ` (${c.model}, ${tierOfModel(config, r.classifier.model)})` : ''}; escalates ${r.classifier.escalateOn} prompts`,
+    );
+  }
   if (!r.allowRemote) out('  remote models are turned off (routing.allowRemote: false)');
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,

@@ -19,6 +19,19 @@ Reply with only a JSON object: {"difficulty": "easy" | "medium" | "hard", "reaso
 
 const MAX_PROMPT_CHARS = 4_000;
 
+/** The same rating as a rubric, for decision models that answer typed questions (Jev). */
+export const DIFFICULTY_RUBRIC = {
+  instructions:
+    'This is a request to a coding agent that runs on a small local model and can hand hard work to a stronger hosted model. How hard is the request for the small model?',
+  levels: [
+    'Easy: questions about the code, finding things, explanations, small single-file edits, renames, running commands or tests, simple scripts.',
+    'Medium: ordinary features or bug fixes touching a few files.',
+    'Hard: subtle bugs (concurrency, memory, security, numerical), large refactors or migrations across many files, architecture and design work, performance work that needs deep analysis, complex algorithms.',
+  ],
+} as const;
+
+const LEVELS = ['easy', 'medium', 'hard'] as const;
+
 /** Pull a rating out of a small model's reply, tolerating chatter around the JSON. */
 export function parseDifficulty(text: string): Difficulty | undefined {
   const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, '');
@@ -52,6 +65,27 @@ export async function classifyPrompt(
   const started = performance.now();
   const timeout = AbortSignal.timeout(options.timeoutMs);
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  if (provider.rate) {
+    try {
+      const r = await provider.rate({
+        model,
+        ...DIFFICULTY_RUBRIC,
+        text: prompt.slice(0, MAX_PROMPT_CHARS),
+        signal,
+        timeoutMs: options.timeoutMs,
+      });
+      return {
+        difficulty: {
+          level: LEVELS[r.level] ?? 'medium',
+          reason: `score ${r.score.toFixed(2)} of 2, confidence ${r.confidence.toFixed(2)}`,
+        },
+        usage: r.usage,
+        ms: performance.now() - started,
+      };
+    } catch {
+      return { ms: performance.now() - started };
+    }
+  }
   try {
     let text = '';
     let usage: Usage | undefined;

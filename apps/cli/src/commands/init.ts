@@ -12,6 +12,7 @@ import {
   type DetectedServer,
   defaultRoles,
   detectLocalServers,
+  JEV,
   type LocalAnswer,
   OPENROUTER_BASE_URL,
   type PlannedModel,
@@ -73,6 +74,10 @@ export interface InitFlags {
   resource?: string;
   /** Azure OpenAI deployment name. */
   deployment?: string;
+  /** Azure OpenAI sign-in. */
+  azureAuth?: 'key' | 'entra';
+  /** `jev`, a model alias, or `off`. */
+  classifier?: string;
   policy?: 'auto' | 'ask' | 'off';
   dailyBudget?: number;
   monthlyBudget?: number;
@@ -171,6 +176,8 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
         ])
       : 'auto');
 
+  const classifier = await chooseClassifier(flags, p, plan, roles);
+
   let budget: SetupAnswers['budget'];
   if (flags.dailyBudget || flags.monthlyBudget) {
     budget = {
@@ -193,6 +200,7 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
     roles,
     escalationPolicy,
     ...(budget ? { budget } : {}),
+    ...(classifier ? { classifier } : {}),
   };
   const layer = buildSetupConfig(answers);
 
@@ -254,6 +262,34 @@ function resolveAlias(plan: PlannedModel[], ref: string, flag: string): string {
 }
 
 /** Which model does what: flags unattended, else defaults the user can change. */
+/** Optional pre-routing classifier: only useful when there's a ladder to start higher on. */
+async function chooseClassifier(
+  flags: InitFlags,
+  p: Prompter | undefined,
+  plan: PlannedModel[],
+  roles: Roles,
+): Promise<string | undefined> {
+  if (flags.classifier) return flags.classifier === 'off' ? undefined : flags.classifier;
+  if (!p || !roles.escalate.length) return undefined;
+  console.log(
+    dim(
+      '\nA classifier rates each prompt first, so obviously hard ones start one step up the ladder.',
+    ),
+  );
+  const choice = await p.select('Rate prompts before routing?', [
+    { label: 'No', value: '' },
+    {
+      label: 'TypeSafe Jev',
+      value: JEV,
+      hint: `hosted decision model, about 100 ms, $0.042 per M input tokens${process.env.TYPESAFE_API_KEY ? '' : '; needs TYPESAFE_API_KEY'}`,
+    },
+    ...plan
+      .filter((m) => m.tier === 'local')
+      .map((m) => ({ label: m.alias, value: m.alias, hint: `${m.model} · local, free` })),
+  ]);
+  return choice || undefined;
+}
+
 async function chooseRoles(
   flags: InitFlags,
   p: Prompter | undefined,
@@ -605,7 +641,7 @@ function credentialHint(kind: RemoteKind): string {
     case 'azure-openai':
       return process.env.AZURE_OPENAI_API_KEY
         ? 'credentials found'
-        : 'needs AZURE_OPENAI_API_KEY and a deployment';
+        : 'AZURE_OPENAI_API_KEY or Entra ID, and a deployment';
     case 'openrouter':
       return process.env.OPENROUTER_API_KEY ? 'credentials found' : 'needs OPENROUTER_API_KEY';
     case 'openai-compatible':
@@ -788,13 +824,37 @@ async function chooseRemote(
         flags.resource ?? (p ? await p.text('Azure OpenAI resource name') : undefined);
       if (!resource) throw new SetupError('Azure OpenAI needs --resource');
       const deployment = flags.deployment ?? (p ? await p.text('Deployment name', model) : model);
+      const auth =
+        flags.azureAuth ??
+        (p
+          ? await p.select('Sign in with', [
+              {
+                label: 'API key',
+                value: 'key' as const,
+                hint: env.AZURE_OPENAI_API_KEY
+                  ? 'AZURE_OPENAI_API_KEY found'
+                  : 'AZURE_OPENAI_API_KEY',
+              },
+              {
+                label: 'Microsoft Entra ID',
+                value: 'entra' as const,
+                hint: 'az login, managed identity, or AZURE_CLIENT_* variables',
+              },
+            ])
+          : 'key');
       if (p)
         console.log(
           dim(
             '  Prices are OpenAI list prices; Azure billing can differ, so set models.<alias>.price if it does.',
           ),
         );
-      return { kind, model, deployment: deployment || model, resource };
+      return {
+        kind,
+        model,
+        deployment: deployment || model,
+        resource,
+        ...(auth === 'entra' ? { auth } : {}),
+      };
     }
     case 'foundry': {
       const resource =

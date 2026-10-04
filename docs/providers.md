@@ -50,7 +50,7 @@ Switchback treats hosted providers equally. None is a default: `switchback init`
 |---|---|---|
 | `anthropic` | Claude Opus 5, Sonnet 5, Haiku 4.5 | `ANTHROPIC_API_KEY`, `ant auth login`, or `apiKey` |
 | `openai` | GPT-6 Astra, Sol, Luna | `OPENAI_API_KEY` or `apiKey` |
-| `azure-openai` | The OpenAI models, by your deployment names | `AZURE_OPENAI_API_KEY` or `apiKey` |
+| `azure-openai` | The OpenAI models, by your deployment names | `AZURE_OPENAI_API_KEY`, `apiKey`, or Microsoft Entra ID |
 | `deepseek` | DeepSeek V4 Pro, V4.1 Flash | `DEEPSEEK_API_KEY` or `apiKey` |
 | `gemini` | Gemini 3.1 Pro, 3.8 Flash, 2.5 Flash | `GEMINI_API_KEY`, or Vertex AI credentials |
 | `bedrock` | Claude models on AWS | AWS credential chain |
@@ -92,9 +92,11 @@ Set `"api": "responses"` to use the Responses API instead. It keeps the model's 
 }
 ```
 
-Azure OpenAI's [v1 API](https://learn.microsoft.com/azure/ai-foundry/openai/api-version-lifecycle) takes the OpenAI client unchanged, so this uses the same adapters as `openai`, against `https://<resource>.openai.azure.com/openai/v1` (or `baseUrl`, for example a `services.ai.azure.com` endpoint). No `api-version` is needed. `model` is your **deployment name**, not the model ID. It uses the Responses API by default, as Microsoft recommends; set `"api": "chat"` for Chat Completions (for example, a non-OpenAI model deployed on Azure). The key comes from `apiKey` or `AZURE_OPENAI_API_KEY`; Microsoft Entra ID tokens aren't supported yet.
+Azure OpenAI's [v1 API](https://learn.microsoft.com/azure/ai-foundry/openai/api-version-lifecycle) takes the OpenAI client unchanged, so this uses the same adapters as `openai`, against `https://<resource>.openai.azure.com/openai/v1` (or `baseUrl`, for example a `services.ai.azure.com` endpoint). No `api-version` is needed. `model` is your **deployment name**, not the model ID. It uses the Responses API by default, as Microsoft recommends; set `"api": "chat"` for Chat Completions (for example, a non-OpenAI model deployed on Azure). The key comes from `apiKey` or `AZURE_OPENAI_API_KEY`.
 
-`switchback init` asks for the resource, the model, and its deployment name, and writes the model's context window, output limit, and OpenAI list price, because the deployment name usually doesn't match a catalog ID. Azure billing can differ from OpenAI's list prices; change `price` if yours does.
+For Microsoft Entra ID instead of a key, set `"auth": "entra"`. Tokens come from Azure's standard credential chain (`DefaultAzureCredential` in `@azure/identity`): `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` (or a certificate), workload identity, a managed identity, or your `az login`. Your identity needs the **Cognitive Services OpenAI User** role on the resource. Tokens are requested for `https://ai.azure.com/.default`, cached, and refreshed before they expire. The library loads only when a provider uses Entra ID.
+
+`switchback init` asks for the resource, the model, its deployment name, and how to sign in (`--azure-auth key|entra` unattended), and writes the model's context window, output limit, and OpenAI list price, because the deployment name usually doesn't match a catalog ID. Azure billing can differ from OpenAI's list prices; change `price` if yours does.
 
 ### DeepSeek
 
@@ -175,6 +177,18 @@ OpenRouter (a base URL on `openrouter.ai`) gets two things other compatible APIs
 
 Gateways report upstream failures inside an already-successful stream. Server-side failures, like a provider disconnecting or a rate limit, count as retryable, so the router falls back to the next model in the chain; client errors don't.
 
+### TypeSafe Jev (the routing classifier)
+
+```jsonc
+"providers": { "typesafe": { "type": "typesafe" } },
+"models": { "jev": { "provider": "typesafe", "model": "jev-latest" } },
+"routing": { "classifier": { "model": "jev" } }
+```
+
+[Jev](https://docs.typesafe.ai) is TypeSafe AI's decision model: it answers typed questions about text with calibrated values instead of prose, in about 100 ms. It can't hold a conversation, so it can only be the router's [classifier](routing.md#pre-routing-classifier); config naming it in any other role is an error. Switchback asks it a Score question with three levels (easy, medium, hard, described as in the chat classifier's prompt) and rounds the probability-weighted score to a level.
+
+It uses TypeSafe's SDK (`@typesafe-ai/sdk`). The key comes from `apiKey` or `TYPESAFE_API_KEY`. List price is $0.042 per million input tokens, output free (checked 2026-10-04), and each rating is recorded under the `classify` rule. Jev is hosted, so it follows the remote rules: it never sees a private session or runs with `allowRemote: false`. Servers that speak the same API, such as [OpenJev](https://github.com/razorback16/openjev) or [LocalJev](https://github.com/githubnext/localjev), work with `baseUrl` and `"tier": "local"`. `switchback init` offers it when there's an escalation ladder (`--classifier jev` unattended).
+
 ### Behavior common to every remote
 
 - Streaming output and tool calls, normalized into one transcript format, so a session can move between providers mid-turn.
@@ -190,4 +204,4 @@ Gateways report upstream failures inside an already-successful stream. Server-si
 
 ## Adding a provider
 
-See "Add a provider" in [AGENTS.md](../AGENTS.md). Candidates on the roadmap: MLX, and Microsoft Entra ID sign-in for Azure OpenAI. A new provider must get the same treatment as the existing ones: a catalog entry, setup support, pricing, and tests ([ADR 0006](adr/0006-provider-neutrality.md)).
+See "Add a provider" in [AGENTS.md](../AGENTS.md). Candidates on the roadmap: MLX. A new provider must get the same treatment as the existing ones: a catalog entry, setup support, pricing, and tests ([ADR 0006](adr/0006-provider-neutrality.md)).

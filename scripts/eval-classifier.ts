@@ -2,6 +2,7 @@
  * Evaluate the pre-routing classifier on the labeled prompt set.
  *
  *   bun scripts/eval-classifier.ts --base-url http://localhost:11434/v1 --model qwen3:1.7b
+ *   TYPESAFE_API_KEY=... bun scripts/eval-classifier.ts --typesafe --model jev-latest
  *
  * Reports precision and recall for "hard" (the prompts it would escalate),
  * accuracy, unparseable replies, and latency. Writes a Markdown table to
@@ -11,11 +12,13 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { classifyPrompt } from '@switchback/engine';
-import { OpenAICompatibleProvider } from '@switchback/providers';
+import { OpenAICompatibleProvider, TypeSafeProvider } from '@switchback/providers';
 
 const { values } = parseArgs({
   options: {
-    'base-url': { type: 'string', default: 'http://localhost:11434/v1' },
+    'base-url': { type: 'string' },
+    /** A System One server (TypeSafe Jev, or OpenJev at --base-url) instead of a chat model. */
+    typesafe: { type: 'boolean', default: false },
     model: { type: 'string' },
     'timeout-ms': { type: 'string', default: '10000' },
     'escalate-on': { type: 'string', default: 'hard' },
@@ -31,11 +34,18 @@ const rows = readFileSync(join(import.meta.dir, '../tests/classifier/labeled.jso
   .filter(Boolean)
   .map((l) => JSON.parse(l) as { prompt: string; label: 'easy' | 'hard' });
 
-const provider = new OpenAICompatibleProvider({
-  id: 'eval',
-  baseUrl: values['base-url'] ?? '',
-  tier: 'local',
-});
+const provider = values.typesafe
+  ? new TypeSafeProvider({
+      id: 'eval',
+      tier: 'remote',
+      ...(values['base-url'] ? { baseUrl: values['base-url'] } : {}),
+      ...(process.env.TYPESAFE_API_KEY ? { apiKey: process.env.TYPESAFE_API_KEY } : {}),
+    })
+  : new OpenAICompatibleProvider({
+      id: 'eval',
+      baseUrl: values['base-url'] ?? 'http://localhost:11434/v1',
+      tier: 'local',
+    });
 const rank = { easy: 0, medium: 1, hard: 2 } as const;
 const bar = values['escalate-on'] === 'medium' ? 1 : 2;
 
