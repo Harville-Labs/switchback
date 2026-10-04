@@ -55,7 +55,9 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
 }
 ```
 
-`defaults` and `enforced` accept anything from [configuration.md](configuration.md). `{env:NAME}` references resolve on the user's machine.
+`defaults` and `enforced` accept anything from [configuration.md](configuration.md). `{env:NAME}` references resolve on the user's machine, so a policy can name the variable holding a key (`"apiKey": "{env:ACME_GPU_KEY}"`) without the key itself.
+
+A role in the policy may name a model only some members define, such as their own `local`. Members without it skip that alias (`switchback whoami` says so) and use the rest of the chain. A misspelled alias in a member's own config is still an error.
 
 ### How it's applied
 

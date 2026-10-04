@@ -16,7 +16,13 @@ import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'j
 import { z } from 'zod';
 import { McpServerConfig, McpServerName } from './mcp/config.ts';
 import { isTrusted } from './mcp/trust.ts';
-import { applyRestrictions, leafPaths, type OrgPolicy, type OrgStatus } from './org/policy.ts';
+import {
+  applyRestrictions,
+  dropMissingPolicyAliases,
+  leafPaths,
+  type OrgPolicy,
+  type OrgStatus,
+} from './org/policy.ts';
 import { readCachedPolicy } from './org/store.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
@@ -269,6 +275,8 @@ export function loadConfig(
   // The environment's opt-out beats every config file, including an org's.
   if (telemetryOptedOut(env))
     config = { ...config, telemetry: { ...config.telemetry, enabled: false } };
+  let skipped: string[] = [];
+  if (org) ({ config, notes: skipped } = dropMissingPolicyAliases(config, org));
   const problem = referenceProblem(config);
   if (problem) throw new ConfigError(problem, sources.at(-1));
   let orgStatus: OrgStatus | undefined;
@@ -279,7 +287,7 @@ export function loadConfig(
       id: org.org.id,
       name: org.org.name,
       version: org.version,
-      notes: restricted.notes,
+      notes: [...skipped, ...restricted.notes],
       enforcedKeys: leafPaths(org.enforced),
       remoteDisabled: !org.restrictions.allowRemote,
     };
