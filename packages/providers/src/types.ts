@@ -38,6 +38,12 @@ export type ChatEvent =
       model?: string;
     };
 
+/**
+ * A fixed key, or a function returning a current token (Microsoft Entra ID).
+ * The OpenAI SDK calls the function before each request.
+ */
+export type ApiKeySource = string | (() => Promise<string>);
+
 export interface HealthStatus {
   ok: boolean;
   detail: string;

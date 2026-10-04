@@ -247,6 +247,25 @@ describe('model listings', () => {
     expect(await p.contextWindow('missing')).toBeUndefined();
   });
 
+  test('a token function is asked for a current token on each request', async () => {
+    let issued = 0;
+    const seen: (string | null)[] = [];
+    const listing = (async (input: string | URL | Request, init?: RequestInit) => {
+      seen.push(new Headers(init?.headers).get('authorization'));
+      return Response.json({ data: [{ id: 'm', context_length: 8192 }] });
+    }) as typeof fetch;
+    const p = new OpenAICompatibleProvider({
+      id: 'azure',
+      baseUrl: 'https://acme.openai.azure.com/openai/v1',
+      tier: 'remote',
+      apiKey: async () => `token-${++issued}`,
+      fetch: listing,
+    });
+    await p.contextWindow('m');
+    await p.contextWindow('m');
+    expect(seen).toEqual(['Bearer token-1', 'Bearer token-2']);
+  });
+
   test('Azure OpenAI uses the v1 endpoint of the resource', () => {
     expect(azureOpenAIBaseUrl({ resource: 'acme' })).toBe(
       'https://acme.openai.azure.com/openai/v1',

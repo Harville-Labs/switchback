@@ -21,6 +21,7 @@ import OpenAI from 'openai';
 import { probeContextWindow } from './local-detect.ts';
 import { listModels } from './model-list.ts';
 import {
+  type ApiKeySource,
   type ChatEvent,
   type ChatRequest,
   type Effort,
@@ -44,7 +45,7 @@ export function flavorForUrl(baseUrl: string): ChatFlavor {
 export interface OpenAICompatibleOptions {
   id: string;
   baseUrl: string;
-  apiKey?: string;
+  apiKey?: ApiKeySource;
   tier: Tier;
   flavor?: ChatFlavor;
   /** Shown when a hosted provider has no key, e.g. "set OPENAI_API_KEY". */
@@ -326,11 +327,10 @@ export class OpenAICompatibleProvider implements Provider {
   }
 
   /** What every request to this server carries: configured headers, then the key. */
-  private authHeaders(): Record<string, string> {
-    return {
-      ...this.options.headers,
-      ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
-    };
+  private async authHeaders(): Promise<Record<string, string>> {
+    const k = this.options.apiKey;
+    const key = typeof k === 'function' ? await k() : k;
+    return { ...this.options.headers, ...(key ? { authorization: `Bearer ${key}` } : {}) };
   }
 
   async contextWindow(model: string) {
@@ -338,7 +338,7 @@ export class OpenAICompatibleProvider implements Provider {
     if (this.tier === 'remote') {
       const found = (
         await listModels(this.baseUrl, {
-          headers: this.authHeaders(),
+          headers: await this.authHeaders(),
           ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
         })
       ).find((m) => m.id === model);
@@ -349,7 +349,7 @@ export class OpenAICompatibleProvider implements Provider {
     return probeContextWindow(this.baseUrl, model, {
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
       // Servers started with an API key refuse even their info endpoints without it.
-      headers: this.authHeaders(),
+      headers: await this.authHeaders(),
     });
   }
 
@@ -371,7 +371,7 @@ export class OpenAICompatibleProvider implements Provider {
       try {
         const res = await (this.options.fetch ?? fetch)(`${root}/tokenize`, {
           method: 'POST',
-          headers: { ...this.authHeaders(), 'content-type': 'application/json' },
+          headers: { ...(await this.authHeaders()), 'content-type': 'application/json' },
           body: JSON.stringify(shapes[dialect]),
           signal: signal ?? AbortSignal.timeout(3000),
         });
