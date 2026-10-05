@@ -3,11 +3,18 @@
  * (`@switchback/client`), so both clients show identical session state.
  */
 import {
+  commandQuery,
+  commandsFor,
+  matchCommands,
+  type SlashCommand,
+} from '@switchback/client/commands';
+import {
   addInfo,
   addUserPrompt,
   estimateLabel,
   formatReviewers,
   formatSteps,
+  formatSubagents,
   formatUsage,
   fromTranscript,
   initialView,
@@ -20,7 +27,9 @@ import {
 import type { RoutePreference, SessionRoles } from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
+import { renderMenu } from './menu.ts';
 import { esc, renderDiff, renderItem as renderViewItem } from './render.ts';
+import { STYLES } from './styles.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
 const vscode = acquireVsCodeApi();
@@ -28,79 +37,40 @@ const vscode = acquireVsCodeApi();
 let view: ViewState = initialView('');
 let route: RoutePreference = 'auto';
 let connected = false;
-let agents: string[] = [];
 let agent = '';
 /** Kept outside `view`, which is rebuilt when the session changes. */
 let roles: SessionRoles | undefined;
 
+const ICONS = {
+  // The product mark: a path that doubles back on itself.
+  mark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20h9a3 3 0 0 0 0-6H10a3 3 0 0 1 0-6h9"/><circle cx="5" cy="20" r="1.5" fill="currentColor"/><circle cx="19" cy="8" r="1.5" fill="currentColor"/></svg>',
+  slash:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="1.5" y="1.5" width="13" height="13" rx="3"/><path d="M9.5 4.5l-3 7"/></svg>',
+  send: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5"/></svg>',
+  stop: '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>',
+};
+
 const app = document.getElementById('app') as HTMLDivElement;
 app.innerHTML = `
-<style>
-  body { padding: 0; font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); }
-  #app { display: flex; flex-direction: column; height: 100vh; }
-  #log { flex: 1; overflow-y: auto; padding: 8px 10px; }
-  .user { margin-top: 12px; font-weight: 600; color: var(--vscode-textLink-foreground); white-space: pre-wrap; }
-  .assistant { white-space: pre-wrap; margin: 4px 0; line-height: 1.45; }
-  .assistant.md { white-space: normal; }
-  .md p { margin: 4px 0; } .md ul, .md ol { margin: 4px 0; padding-left: 20px; }
-  .md code { font-family: var(--vscode-editor-font-family); background: var(--vscode-textCodeBlock-background); padding: 0 3px; border-radius: 3px; }
-  .md table { border-collapse: collapse; } .md td, .md th { border: 1px solid var(--vscode-panel-border); padding: 2px 6px; }
-  .md a { color: var(--vscode-textLink-foreground); }
-  .code { border: 1px solid var(--vscode-panel-border); border-radius: 4px; margin: 6px 0; }
-  .code-bar { display: flex; justify-content: space-between; padding: 2px 6px; font-size: .8em; opacity: .8; border-bottom: 1px solid var(--vscode-panel-border); }
-  .code pre { margin: 0; padding: 6px; overflow-x: auto; } .code pre code { background: none; padding: 0; }
-  button.link { background: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
-  .reasoning { opacity: .6; font-style: italic; white-space: pre-wrap; }
-  .route { font-size: .85em; opacity: .75; margin: 2px 0; }
-  .route.local::before { content: "⌂ "; } .route.remote::before { content: "☁ "; }
-  .route.remote { color: var(--vscode-charts-yellow); } .route.local { color: var(--vscode-charts-green); }
-  .tool, .subagent { font-family: var(--vscode-editor-font-family); font-size: .9em; margin: 2px 0; }
-  details.subagent > summary { cursor: pointer; list-style: none; }
-  details.subagent > summary::-webkit-details-marker { display: none; }
-  details.subagent > .children { margin: 2px 0 6px 14px; padding-left: 8px; border-left: 1px solid var(--vscode-panel-border); }
-  .ok { color: var(--vscode-charts-green); } .error { color: var(--vscode-errorForeground); } .running { color: var(--vscode-charts-yellow); }
-  .detail { opacity: .7; margin-left: 1.4em; white-space: pre-wrap; }
-  .info { opacity: .7; white-space: pre-wrap; font-family: var(--vscode-editor-font-family); }
-  .prompt { border: 1px solid var(--vscode-focusBorder); border-radius: 4px; padding: 8px; margin: 6px 10px; }
-  .prompt button { margin: 6px 6px 0 0; }
-  .prompt .estimate { color: var(--vscode-charts-yellow); }
-  .tool .private { color: var(--vscode-charts-blue); font-size: 0.9em; }
-  .review { margin: 4px 0; }
-  .review.skipped { opacity: .7; }
-  .review ul { margin: 2px 0 2px 1.4em; padding: 0; }
-  .review li.bug { color: var(--vscode-errorForeground); }
-  .review li.nit { opacity: .7; }
-  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
-  .chip { font-size: .8em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--vscode-panel-border); background: transparent; color: var(--vscode-foreground); opacity: .7; }
-  .chip.on { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); border-color: transparent; opacity: 1; }
-  .diff { font-family: var(--vscode-editor-font-family); font-size: .85em; max-height: 45vh; overflow: auto; margin: 6px 0; white-space: pre; border: 1px solid var(--vscode-panel-border); }
-  .diff .add { background: var(--vscode-diffEditor-insertedLineBackground, rgba(0,160,0,.15)); }
-  .diff .del { background: var(--vscode-diffEditor-removedLineBackground, rgba(200,0,0,.15)); }
-  .diff .hunk { color: var(--vscode-textLink-foreground); opacity: .8; }
-  footer { border-top: 1px solid var(--vscode-panel-border); padding: 6px 10px; }
-  textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 56px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); padding: 6px; font: inherit; }
-  .bar { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: .85em; opacity: .85; gap: 6px; }
-  button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 3px 10px; border-radius: 2px; cursor: pointer; }
-  button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 6px; font-size: .85em; }
-  .segmented { display: inline-flex; border: 1px solid var(--vscode-panel-border); border-radius: 3px; overflow: hidden; }
-  .segmented button { background: transparent; color: var(--vscode-foreground); border-radius: 0; padding: 2px 8px; opacity: .75; }
-  .segmented button.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); opacity: 1; }
-  .pill { background: transparent; color: var(--vscode-foreground); border: 1px solid var(--vscode-panel-border); border-radius: 10px; padding: 1px 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pill:hover, .segmented button:hover { border-color: var(--vscode-focusBorder); opacity: 1; }
-  .pill .k { opacity: .65; }
-  .pill .here { font-weight: 600; color: var(--vscode-charts-yellow); }
-</style>
+<style>${STYLES}</style>
 <div id="log"></div>
 <div id="prompts"></div>
 <footer>
-  <div id="controls" class="controls"></div>
-  <div id="chips" class="chips"></div>
-  <textarea id="input" placeholder="Ask anything (Enter to send, Shift+Enter for a newline)"></textarea>
-  <div class="bar">
-    <span id="status"></span>
-    <span><button id="cancel" class="secondary" hidden>Cancel</button><button id="send">Send</button></span>
+  <div class="composer">
+    <div id="menu" class="menu" role="listbox" aria-label="Commands" hidden></div>
+    <div id="chips" class="chips"></div>
+    <textarea id="input" rows="1" aria-label="Message" placeholder="Ask anything, / for commands"></textarea>
+    <div class="toolbar">
+      <div class="side">
+        <button id="slash" class="icon" title="Commands (/)" aria-label="Commands" aria-haspopup="listbox">${ICONS.slash}</button>
+      </div>
+      <div class="side">
+        <span id="status"></span>
+        <button id="send" class="send" title="Send (Enter)" aria-label="Send">${ICONS.send}</button>
+      </div>
+    </div>
   </div>
+  <div id="controls" class="controls"></div>
 </footer>`;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -109,28 +79,39 @@ const prompts = $<HTMLDivElement>('prompts');
 const input = $<HTMLTextAreaElement>('input');
 const controls = $<HTMLDivElement>('controls');
 const statusEl = $<HTMLSpanElement>('status');
-const cancelBtn = $<HTMLButtonElement>('cancel');
+const sendBtn = $<HTMLButtonElement>('send');
+const menu = $<HTMLDivElement>('menu');
+const slashBtn = $<HTMLButtonElement>('slash');
 
 /** Subagent sections the user opened; kept across re-renders. */
 const expanded = new Set<string>();
 const renderItem = (item: ViewItem, ctx: ViewState = view) => renderViewItem(item, ctx, expanded);
 
+const WELCOME = `<div class="welcome">${ICONS.mark}<h1>Switchback</h1><p>Runs on your local model and escalates to a hosted one only when a turn needs it.</p><div class="keys"><span><kbd>/</kbd> commands</span><span><kbd>Enter</kbd> send</span><span><kbd>Shift</kbd>+<kbd>Enter</kbd> new line</span></div></div>`;
+
 function render() {
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  log.innerHTML = view.items.map((i) => renderItem(i)).join('');
+  // Until the first prompt the session only has notices, so lead with the welcome.
+  const fresh = !view.items.some((i) => i.kind !== 'info');
+  log.innerHTML = (fresh ? WELCOME : '') + view.items.map((i) => renderItem(i)).join('');
   if (nearBottom) log.scrollTop = log.scrollHeight;
 
   const perm = view.permissions[0];
   const escl = view.escalations[0];
   prompts.innerHTML = perm
-    ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${perm.preview ? renderDiff(perm.preview) : '<br>'}<button data-perm="allow_once">Allow once</button><button data-perm="allow_always" class="secondary">Always this session</button><button data-perm="deny" class="secondary">Deny</button></div>`
+    ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${perm.preview ? renderDiff(perm.preview) : ''}<div class="actions"><button class="btn" data-perm="allow_once">Allow once</button><button class="btn secondary" data-perm="allow_always">Always this session</button><button class="btn secondary" data-perm="deny">Deny</button></div></div>`
     : escl
-      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<br><button data-esc="1">Escalate</button><button data-esc="0" class="secondary">Stay on the current model</button></div>`
+      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<div class="actions"><button class="btn" data-esc="1">Escalate</button><button class="btn secondary" data-esc="0">Stay on the current model</button></div></div>`
       : '';
-  cancelBtn.hidden = !view.running;
+
+  // One button: send while idle, stop while a turn runs.
+  sendBtn.innerHTML = view.running ? ICONS.stop : ICONS.send;
+  sendBtn.title = view.running ? 'Stop (cancel the running turn)' : 'Send (Enter)';
+  sendBtn.setAttribute('aria-label', view.running ? 'Stop' : 'Send');
+  sendBtn.disabled = !connected;
   renderControls();
   statusEl.textContent = connected
-    ? `${view.private ? '🔒 local only · ' : ''}${view.lastTier ?? ''} $${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
+    ? `${view.private ? '🔒 local only · ' : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
     : 'disconnected';
 }
 
@@ -179,13 +160,17 @@ function renderControls() {
   controls.innerHTML = parts.join('');
 }
 
+function setRoute(r: RoutePreference) {
+  route = r;
+  vscode.postMessage({ type: 'setRoute', route: r });
+}
+
 controls.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest('button');
   if (!btn) return;
   const r = btn.dataset.route as RoutePreference | undefined;
   if (r) {
-    route = r;
-    vscode.postMessage({ type: 'setRoute', route: r });
+    setRoute(r);
     render();
   } else if (btn.hasAttribute('data-agent')) vscode.postMessage({ type: 'chooseAgent' });
   else if (btn.dataset.role)
@@ -277,12 +262,140 @@ chips.addEventListener('click', (e) => {
   renderChips();
 });
 
-function send() {
-  const text = input.value.trim();
-  if (!text || view.running || !connected) return;
+// Slash command menu: opened by the / button or by typing / at the start of
+// the input, filtered as the command name is typed.
+let menuItems: SlashCommand[] = [];
+let menuActive = 0;
+
+function openMenu(query: string) {
+  menuItems = matchCommands(query, 'vscode');
+  menuActive = Math.min(menuActive, Math.max(0, menuItems.length - 1));
+  menu.innerHTML = renderMenu(menuItems, menuActive);
+  menu.hidden = false;
+  slashBtn.classList.add('on');
+  menu.querySelector('.menu-item.active')?.scrollIntoView?.({ block: 'nearest' });
+}
+
+function closeMenu() {
+  menu.hidden = true;
+  menuActive = 0;
+  slashBtn.classList.remove('on');
+}
+
+/** Keep the menu in step with the input: open while it's a bare `/name`. */
+function syncMenu() {
+  const query = commandQuery(input.value);
+  if (query !== undefined) openMenu(query);
+  else if (!menu.hidden) closeMenu();
+}
+
+function pickCommand(c: SlashCommand) {
+  closeMenu();
   input.value = '';
-  if (text.startsWith('/agent ')) {
-    vscode.postMessage({ type: 'newSession', agent: text.slice(7).trim() });
+  autosize();
+  runCommand(c.name, []);
+  input.focus();
+}
+
+// Keep focus in the input, so its blur doesn't close the menu this click toggles.
+slashBtn.addEventListener('mousedown', (e) => e.preventDefault());
+slashBtn.addEventListener('click', () => {
+  if (!menu.hidden) {
+    closeMenu();
+    input.focus();
+    return;
+  }
+  // Like typing it: start a command unless the input already has one.
+  if (!input.value.startsWith('/')) input.value = '/';
+  autosize();
+  input.focus();
+  syncMenu();
+});
+
+// mousedown, not click, so the textarea keeps focus.
+menu.addEventListener('mousedown', (e) => {
+  const row = (e.target as HTMLElement).closest<HTMLElement>('.menu-item');
+  if (!row) return;
+  e.preventDefault();
+  const c = menuItems[Number(row.dataset.i)];
+  if (c) pickCommand(c);
+});
+
+menu.addEventListener('mousemove', (e) => {
+  const row = (e.target as HTMLElement).closest<HTMLElement>('.menu-item');
+  const i = Number(row?.dataset.i);
+  if (!row || i === menuActive) return;
+  menuActive = i;
+  for (const el of menu.querySelectorAll('.menu-item')) el.classList.toggle('active', el === row);
+});
+
+/** The last reply, or its nth code block, as the TUI's /copy does. */
+function copyFromLastReply(arg: string | undefined) {
+  const replies = log.querySelectorAll<HTMLElement>('.assistant');
+  const reply = replies[replies.length - 1];
+  if (!reply) return addNotice('Nothing to copy yet.');
+  if (!arg) {
+    vscode.postMessage({ type: 'copy', text: reply.innerText ?? reply.textContent ?? '' });
+    return;
+  }
+  const blocks = [...reply.querySelectorAll('.code code')].map((c) => c.textContent ?? '');
+  const n = Number(arg);
+  const block = blocks[n - 1];
+  if (block === undefined)
+    return addNotice(
+      blocks.length
+        ? `copy: the last reply has ${blocks.length} code block${blocks.length === 1 ? '' : 's'}`
+        : 'copy: the last reply has no code blocks; /copy copies all of it',
+    );
+  vscode.postMessage({ type: 'copy', text: block });
+}
+
+function addNotice(text: string) {
+  view = addInfo(view, text);
+  render();
+}
+
+/** Run a slash command: routing and view-only ones here, the rest in the host. */
+function runCommand(name: string, args: string[]) {
+  if (!commandsFor('vscode').some((c) => c.name === name)) {
+    addNotice(`unknown command /${name}; type / to see commands`);
+    return;
+  }
+  switch (name) {
+    case 'auto':
+    case 'local':
+    case 'remote':
+      setRoute(name);
+      addNotice(`routing: ${name}`);
+      return;
+    case 'help':
+      input.value = '/';
+      syncMenu();
+      return;
+    case 'subagents':
+      addNotice(formatSubagents(view, 'Expand a subagent in the chat to see what it did.'));
+      return;
+    case 'copy':
+      copyFromLastReply(args[0]);
+      return;
+    default:
+      vscode.postMessage({ type: 'command', name, args });
+  }
+}
+
+function send() {
+  if (view.running) {
+    vscode.postMessage({ type: 'cancel' });
+    return;
+  }
+  const text = input.value.trim();
+  if (!text || !connected) return;
+  input.value = '';
+  autosize();
+  closeMenu();
+  if (text.startsWith('/')) {
+    const [name = '', ...args] = text.slice(1).split(/\s+/);
+    runCommand(name, args);
     return;
   }
   const choice = {
@@ -303,9 +416,44 @@ function send() {
   render();
 }
 
-$<HTMLButtonElement>('send').addEventListener('click', send);
-cancelBtn.addEventListener('click', () => vscode.postMessage({ type: 'cancel' }));
+/** Grow the input with its content, up to the CSS max-height. */
+function autosize() {
+  input.style.height = 'auto';
+  input.style.height = `${input.scrollHeight}px`;
+}
+
+sendBtn.addEventListener('click', send);
+input.addEventListener('input', () => {
+  autosize();
+  syncMenu();
+});
+input.addEventListener('blur', () => closeMenu());
 input.addEventListener('keydown', (e) => {
+  if (!menu.hidden) {
+    const move = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+    if (move && menuItems.length) {
+      e.preventDefault();
+      menuActive = (menuActive + move + menuItems.length) % menuItems.length;
+      openMenu(commandQuery(input.value) ?? '');
+      return;
+    }
+    const c = menuItems[menuActive];
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+      e.preventDefault();
+      if (!c) return;
+      // Tab completes the name so arguments can follow; Enter runs it.
+      if (e.key === 'Tab') {
+        input.value = `/${c.name} `;
+        closeMenu();
+      } else pickCommand(c);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMenu();
+      return;
+    }
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     send();
@@ -319,12 +467,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       connected = true;
       route = m.route;
       agent = m.session.agent;
-      agents = m.init.agents.map((a) => a.name);
-      if (view.sessionId !== m.session.id)
-        view = addInfo(
-          initialView(m.session.id),
-          `agent ${m.session.agent} · agents: ${agents.join(', ')} · type /agent <name> to switch`,
-        );
+      if (view.sessionId !== m.session.id) view = initialView(m.session.id);
       break;
     case 'session':
       agent = m.session.agent;
@@ -346,6 +489,9 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
     case 'usage':
       view = addInfo(view, formatUsage(m.usage, 'rule'));
       break;
+    case 'info':
+      view = addInfo(view, m.text);
+      break;
     case 'history':
       agent = m.session.agent;
       view = addInfo(
@@ -355,6 +501,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       break;
     case 'prefill':
       input.value = m.text + input.value;
+      autosize();
       input.focus();
       break;
     case 'context':

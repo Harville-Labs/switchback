@@ -96,3 +96,68 @@ test('an escalation asks to escalate or stay, not "remote or local"', async () =
   expect($('#prompts').textContent).toContain('Escalate');
   expect($('#prompts').textContent).toContain('Stay on the current model');
 });
+
+const type = (text: string) => {
+  const input = $('#input') as HTMLTextAreaElement;
+  input.value = text;
+  input.dispatchEvent(new window.Event('input') as unknown as Event);
+};
+const key = (k: string) =>
+  $('#input').dispatchEvent(new window.KeyboardEvent('keydown', { key: k }) as unknown as Event);
+
+test('typing / opens the command menu and filters it by name', () => {
+  type('/');
+  expect($('#menu').hidden).toBe(false);
+  expect($('#menu').textContent).toContain('/compact');
+  // TUI-only commands aren't offered.
+  expect($('#menu').textContent).not.toContain('/exit');
+  type('/comp');
+  const rows = window.document.querySelectorAll('#menu .menu-item');
+  expect(rows[0]?.getAttribute('data-cmd')).toBe('compact');
+  type('/compact now');
+  expect($('#menu').hidden).toBe(true);
+});
+
+test('Enter runs the highlighted command; the host gets the ones it handles', () => {
+  type('/us');
+  key('Enter');
+  expect(posted.at(-1)).toEqual({ type: 'command', name: 'usage', args: [] });
+  expect($('#menu').hidden).toBe(true);
+  expect(($('#input') as HTMLTextAreaElement).value).toBe('');
+});
+
+test('arrow keys move the highlight and Tab completes the name for arguments', () => {
+  type('/re');
+  key('ArrowDown');
+  expect($('#menu .menu-item.active').getAttribute('data-cmd')).toBe('resume');
+  key('Tab');
+  expect(($('#input') as HTMLTextAreaElement).value).toBe('/resume ');
+  expect($('#menu').hidden).toBe(true);
+  key('Escape');
+});
+
+test('the / button toggles the menu; routing commands run in the webview', () => {
+  type('');
+  $('#slash').click();
+  expect($('#menu').hidden).toBe(false);
+  $('#slash').click();
+  expect($('#menu').hidden).toBe(true);
+
+  type('/remote');
+  key('Enter');
+  expect(posted.at(-1)).toEqual({ type: 'setRoute', route: 'remote' });
+  expect($('[data-route="remote"]').className).toBe('on');
+});
+
+test('typed commands pass their arguments; unknown ones say so', async () => {
+  type('/usage model');
+  key('Escape');
+  key('Enter');
+  expect(posted.at(-1)).toEqual({ type: 'command', name: 'usage', args: ['model'] });
+  type('/frobnicate');
+  key('Escape');
+  key('Enter');
+  expect($('#log').textContent).toContain('unknown command /frobnicate');
+  await send({ type: 'info', text: 'MCP servers\n  none' });
+  expect($('#log').textContent).toContain('MCP servers');
+});

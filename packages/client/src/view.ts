@@ -644,6 +644,17 @@ export function subagentList(
   );
 }
 
+/** The subagent tree as numbered lines, for `/subagents`; `hint` follows a non-empty list. */
+export function formatSubagents(state: ViewState, hint = ''): string {
+  const all = subagentList(state);
+  if (!all.length) return 'no subagents in this session yet';
+  const rows = all.map(
+    (x, i) =>
+      `${String(i + 1).padStart(2)}. ${'  '.repeat(x.depth)}${x.row.status === 'running' ? '◌' : x.row.status === 'ok' ? '✓' : '✗'} ${x.row.agent}: ${x.row.task} · ${x.row.toolCalls} tool calls`,
+  );
+  return [...rows, ...(hint ? [hint] : [])].join('\n');
+}
+
 /**
  * Plain-text drill-down of one session: its routes, tool calls, and report,
  * with nested subagents indented. Used by the TUI's `/subagent`.

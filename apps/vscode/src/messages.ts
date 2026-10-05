@@ -25,6 +25,8 @@ export type HostToWebview =
   | { type: 'history'; session: SessionSummary; messages: Message[] }
   /** Which models fill the session's roles; sent whenever the session changes. */
   | { type: 'roles'; roles: SessionRoles }
+  /** Output of a slash command the host ran, shown in the chat. */
+  | { type: 'info'; text: string }
   | { type: 'disconnected'; message: string };
 
 export type WebviewToHost =
@@ -41,6 +43,8 @@ export type WebviewToHost =
   | { type: 'openHistory' }
   /** Open the picker for one role (the chat's role buttons). */
   | { type: 'chooseRole'; role: RoleName | 'reset' }
-  | { type: 'chooseAgent' };
+  | { type: 'chooseAgent' }
+  /** A slash command the webview can't run itself (`name` is from `SLASH_COMMANDS`). */
+  | { type: 'command'; name: string; args: string[] };
 
 export type RoleName = 'start' | 'escalate' | 'review' | 'subagents';
