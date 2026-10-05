@@ -90,13 +90,13 @@ Escalation is normally reactive: the start model has to struggle first. The opti
 }
 ```
 
-- Off unless configured. `model` can be any alias; a small, fast, non-thinking local model keeps rating every prompt free. A remote classifier reads the prompt, so it follows the remote rules: never for a private session or with `allowRemote: false`, and its calls are billed.
+- Off unless configured. `model` can be any alias; a small, fast, non-thinking local model keeps rating every prompt free. A decision model such as [TypeSafe Jev](providers.md#typesafe-jev-the-routing-classifier) answers the same question as a three-level rubric and returns a calibrated score instead of parsed text; its reason shows the score and confidence. A remote classifier reads the prompt, so it follows the remote rules: never for a private session or with `allowRemote: false`, and its calls are billed.
 - It runs only when its answer could change anything: automatic routing, no agent pin, not already sticky, and an escalation step to go to.
 - A classifier that doesn't answer within `timeoutMs`, errors, or gives an unreadable answer is ignored for that turn.
 - It follows `escalation.policy`: `ask` prompts first, and `off` ignores the rating.
 - The rating call is recorded in the usage ledger as `classify`, and the escalated call as `classifier`, so `switchback usage --by rule` shows what each costs.
 
-`bun scripts/eval-classifier.ts --model <name>` measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The nightly live workflow runs it and posts the numbers in the job summary.
+`bun scripts/eval-classifier.ts --model <name>` (add `--typesafe` for Jev) measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The nightly live workflow runs it and posts the numbers in the job summary.
 
 ## Quality signals
 

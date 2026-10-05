@@ -148,7 +148,10 @@ export class GeminiProvider implements Provider {
   async health(): Promise<HealthStatus> {
     // Like the Claude providers: inferred from credentials, since a probe would cost money.
     if (!this.options.vertex && !this.options.apiKey)
-      return { ok: false, detail: 'no API key (set GEMINI_API_KEY or providers.<id>.apiKey)' };
+      return {
+        ok: false,
+        detail: `no API key (set GEMINI_API_KEY or providers.${this.id}.apiKey)`,
+      };
     return {
       ok: true,
       detail: this.options.vertex ? `Vertex AI ${this.options.vertex.location}` : 'API key set',

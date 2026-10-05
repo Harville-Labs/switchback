@@ -10,6 +10,7 @@ import {
   CATALOG,
   type CatalogModel,
   type HostedProviderKind,
+  type Price,
 } from '@switchback/providers';
 import { applyEdits, type JSONPath, modify } from 'jsonc-parser';
 import {
@@ -45,6 +46,8 @@ export const REMOTE_KINDS = [
   'vertex',
   'anthropic-aws',
   'foundry',
+  'azure-openai',
+  'openrouter',
   'openai-compatible',
 ] as const;
 export type RemoteKind = (typeof REMOTE_KINDS)[number];
@@ -53,9 +56,12 @@ export type RemoteKind = (typeof REMOTE_KINDS)[number];
 export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
   if (kind === 'bedrock' || kind === 'vertex' || kind === 'anthropic-aws' || kind === 'foundry')
     return 'anthropic';
-  if (kind === 'openai-compatible') return undefined;
+  if (kind === 'azure-openai') return 'openai';
+  if (kind === 'openai-compatible' || kind === 'openrouter') return undefined;
   return kind;
 }
+
+export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 export interface LocalAnswer {
   providerId: string;
@@ -72,12 +78,24 @@ export type RemoteAnswer =
   | { kind: 'vertex'; model: string; projectId: string; region: string }
   | { kind: 'anthropic-aws'; model: string; region: string; workspaceId: string; profile?: string }
   | { kind: 'foundry'; model: string; resource: string }
+  /** `model` is the catalog model; `deployment` is what Azure calls it. */
   | {
-      kind: 'openai-compatible';
+      kind: 'azure-openai';
+      model: string;
+      deployment: string;
+      resource: string;
+      /** Microsoft Entra ID tokens instead of an API key. */
+      auth?: 'entra';
+    }
+  | {
+      kind: 'openai-compatible' | 'openrouter';
       model: string;
       baseUrl: string;
       apiKeyEnv?: string;
-      contextWindow: number;
+      /** From the endpoint's model listing, or asked. */
+      contextWindow?: number;
+      maxOutputTokens?: number;
+      price?: Price;
     };
 
 /**
@@ -101,7 +119,15 @@ export interface SetupAnswers {
   roles?: Roles;
   escalationPolicy: 'auto' | 'ask' | 'off';
   budget?: { dailyUsd?: number; monthlyUsd?: number };
+  /**
+   * Rate prompts before routing (docs/routing.md): `jev` for TypeSafe Jev, or
+   * the alias of a chosen model.
+   */
+  classifier?: string;
 }
+
+/** Setup's name for TypeSafe Jev as the classifier. */
+export const JEV = 'jev';
 
 /** A model setup will configure, with the alias it gets. */
 export interface PlannedModel {
@@ -145,9 +171,11 @@ export const REMOTE_PROVIDERS: Record<RemoteKind, { name: string; detail?: strin
   vertex: { name: 'Google Vertex AI', detail: 'Claude' },
   'anthropic-aws': { name: 'Claude Platform on AWS', detail: 'Anthropic-operated, AWS billing' },
   foundry: { name: 'Microsoft Foundry', detail: 'Claude' },
+  'azure-openai': { name: 'Azure OpenAI', detail: 'GPT' },
+  openrouter: { name: 'OpenRouter', detail: 'hundreds of models, one key' },
   'openai-compatible': {
     name: 'OpenAI-compatible API',
-    detail: 'OpenRouter, Together, Groq, ...',
+    detail: 'Together, Groq, Fireworks, a gateway, ...',
   },
 };
 
@@ -171,15 +199,17 @@ export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): Planned
     taken.add(alias);
     const catalog = catalogFor(r.kind);
     const entry = catalog ? CATALOG[catalog].models.find((m) => m.id === r.model) : undefined;
-    const contextWindow = r.kind === 'openai-compatible' ? r.contextWindow : entry?.contextWindow;
+    const compat = r.kind === 'openai-compatible' || r.kind === 'openrouter';
+    const contextWindow = compat ? r.contextWindow : entry?.contextWindow;
+    const inputPrice = compat ? r.price?.input : entry?.price.input;
     plan.push({
       alias,
       tier: 'remote',
-      model: r.model,
+      model: r.kind === 'azure-openai' ? r.deployment : r.model,
       where:
         r.kind === 'openai-compatible' ? new URL(r.baseUrl).host : REMOTE_PROVIDERS[r.kind].name,
       ...(contextWindow ? { contextWindow } : {}),
-      ...(entry ? { inputPrice: entry.price.input } : {}),
+      ...(inputPrice !== undefined ? { inputPrice } : {}),
     });
   }
   return plan;
@@ -247,7 +277,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   let sizeAliasesFrom: HostedProviderKind | undefined;
   for (const [i, r] of a.remotes.entries()) {
     const alias = plan[a.locals.length + i]?.alias ?? aliasFor(r.model);
-    if (r.kind === 'openai-compatible') {
+    if (r.kind === 'openai-compatible' || r.kind === 'openrouter') {
       let id = hostedIds.get(`compat:${r.baseUrl}`);
       if (!id) {
         id = unique(new URL(r.baseUrl).hostname.split('.').at(-2) ?? 'remote', providers);
@@ -259,7 +289,13 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
           ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
         };
       }
-      models[alias] = { provider: id, model: r.model, contextWindow: r.contextWindow };
+      models[alias] = {
+        provider: id,
+        model: r.model,
+        ...(r.contextWindow ? { contextWindow: r.contextWindow } : {}),
+        ...(r.maxOutputTokens ? { maxOutputTokens: r.maxOutputTokens } : {}),
+        ...(r.price ? { price: r.price } : {}),
+      };
       continue;
     }
     const providerConfig =
@@ -276,7 +312,13 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
               }
             : r.kind === 'foundry'
               ? { type: 'foundry', resource: r.resource }
-              : { type: r.kind };
+              : r.kind === 'azure-openai'
+                ? {
+                    type: 'azure-openai',
+                    resource: r.resource,
+                    ...(r.auth ? { auth: r.auth } : {}),
+                  }
+                : { type: r.kind };
     // Several models from the same provider share one provider entry.
     const key = JSON.stringify(providerConfig);
     let id = hostedIds.get(key);
@@ -297,6 +339,22 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       ...(catalog === 'deepseek' ? { effort: 'high' } : {}),
     });
     const chosen = CATALOG[catalog].models.find((m) => m.id === r.model);
+    if (r.kind === 'azure-openai') {
+      // Requests name the deployment, so the catalog's list price is written out.
+      models[alias] = {
+        provider: id,
+        model: r.deployment,
+        ...(chosen
+          ? {
+              contextWindow: chosen.contextWindow,
+              maxOutputTokens: chosen.maxOutputTokens,
+              price: chosen.price,
+            }
+          : {}),
+      };
+      // Size aliases would need deployments nobody chose.
+      continue;
+    }
     models[alias] = chosen ? entry(chosen) : { provider: id, model: wire(r.model) };
     // Agent aliases (`model: opus|sonnet|haiku`) mean large/medium/small on the
     // first hosted provider chosen; they never replace a chosen model's alias.
@@ -318,6 +376,13 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   if (Array.isArray(roles.review))
     for (const step of roles.review) for (const alias of step) check(alias, 'review');
   if (roles.subagents) check(roles.subagents, 'subagents');
+  let classifier = a.classifier;
+  if (classifier === JEV) {
+    const id = unique('typesafe', providers);
+    providers[id] = { type: 'typesafe' };
+    classifier = unique(JEV, models);
+    models[classifier] = { provider: id, model: 'jev-latest' };
+  } else if (classifier) check(classifier, 'classifier');
 
   // Every role is written in full, so re-running setup replaces earlier choices.
   const routing: Record<string, unknown> = {
@@ -325,6 +390,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
     escalate: roles.escalate,
     escalation: { policy: a.escalationPolicy },
   };
+  if (classifier) routing.classifier = { model: classifier };
   if (a.budget?.dailyUsd || a.budget?.monthlyUsd) {
     routing.budget = {
       ...(a.budget.dailyUsd ? { dailyUsd: a.budget.dailyUsd } : {}),

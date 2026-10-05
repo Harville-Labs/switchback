@@ -5,7 +5,8 @@ import { GeminiProvider } from './gemini.ts';
 import { flavorForUrl, OpenAICompatibleProvider } from './openai-compatible.ts';
 import { OpenAIResponsesProvider } from './openai-responses.ts';
 import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
-import type { ChatRequest, Provider } from './types.ts';
+import type { ApiKeySource, ChatRequest, Provider } from './types.ts';
+import { TypeSafeProvider } from './typesafe.ts';
 
 /** `{env:NAME}` references are resolved at load time so secrets stay out of config files. */
 const Secret = z.string();
@@ -75,6 +76,34 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     baseUrl: z.url().optional(),
   }),
   z.object({
+    /**
+     * Azure OpenAI's v1 API, which takes the OpenAI client as is. Models are
+     * deployment names.
+     */
+    type: z.literal('azure-openai'),
+    /** Resource name (`https://<resource>.openai.azure.com/openai/v1`); or set `baseUrl`. */
+    resource: z.string().optional(),
+    baseUrl: z.url().optional(),
+    /** Defaults to $AZURE_OPENAI_API_KEY. */
+    apiKey: Secret.optional(),
+    /**
+     * `key`: an API key. `entra`: Microsoft Entra ID tokens from the Azure
+     * credential chain (environment, workload or managed identity, `az login`).
+     */
+    auth: z.enum(['key', 'entra']).default('key'),
+    /** Microsoft recommends the Responses API for Azure OpenAI models. */
+    api: z.enum(['chat', 'responses']).default('responses'),
+  }),
+  z.object({
+    /** TypeSafe's System One API (Jev): decision models for the routing classifier. */
+    type: z.literal('typesafe'),
+    /** Defaults to $TYPESAFE_API_KEY. */
+    apiKey: Secret.optional(),
+    /** A server with the same API (OpenJev, LocalJev); default TypeSafe's. */
+    baseUrl: z.url().optional(),
+    tier: z.enum(['local', 'remote']).default('remote'),
+  }),
+  z.object({
     /** Google Gemini: the Gemini API with a key, or Vertex AI with `project` and `location`. */
     type: z.literal('gemini'),
     /** Defaults to $GEMINI_API_KEY (or $GOOGLE_API_KEY). */
@@ -89,19 +118,86 @@ export const ProviderConfig = z.discriminatedUnion('type', [
 ]);
 export type ProviderConfig = z.infer<typeof ProviderConfig>;
 
+/** Providers that answer typed questions (the routing classifier) but can't chat. */
+export function isDecisionOnly(config: ProviderConfig): boolean {
+  return config.type === 'typesafe';
+}
+
 export function tierOf(config: ProviderConfig): Tier {
-  return config.type === 'openai-compatible' || config.type === 'mock' ? config.tier : 'remote';
+  return config.type === 'openai-compatible' || config.type === 'mock' || config.type === 'typesafe'
+    ? config.tier
+    : 'remote';
 }
 
 /** Credential env var for each hosted provider type, for setup and diagnostics. */
 export const CREDENTIAL_ENV: Partial<Record<ProviderConfig['type'], string>> = {
   openai: 'OPENAI_API_KEY',
+  'azure-openai': 'AZURE_OPENAI_API_KEY',
+  typesafe: 'TYPESAFE_API_KEY',
   deepseek: 'DEEPSEEK_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
 };
 
 const NO_THINKING = ['claude-haiku-4-5', 'anthropic.claude-haiku-4-5'];
+
+/** The token audience Azure OpenAI's v1 API documents for Entra ID. */
+export const AZURE_ENTRA_SCOPE = 'https://ai.azure.com/.default';
+
+/**
+ * A Microsoft Entra ID token function for the OpenAI SDK, which calls it before
+ * each request; the library caches tokens and refreshes them before they
+ * expire. `@azure/identity` is loaded on first use, so only Entra users pay for it.
+ */
+function entraToken(): () => Promise<string> {
+  let provider: Promise<() => Promise<string>> | undefined;
+  return async () => {
+    provider ??= import('@azure/identity').then(
+      ({ DefaultAzureCredential, getBearerTokenProvider }) =>
+        getBearerTokenProvider(new DefaultAzureCredential(), AZURE_ENTRA_SCOPE),
+    );
+    try {
+      return await (await provider)();
+    } catch (err) {
+      // The chain's own message runs to a paragraph per credential it tried.
+      const first = String((err as Error).message ?? err).split('\n')[0];
+      throw new Error(
+        `Microsoft Entra ID sign-in failed (${first}). Sign in with \`az login\`, set AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET, or run with a managed identity.`,
+        { cause: err },
+      );
+    }
+  };
+}
+
+/** The v1 endpoint for an `azure-openai` provider; config validation requires one of the two. */
+export function azureOpenAIBaseUrl(config: { resource?: string; baseUrl?: string }): string {
+  if (config.baseUrl) return config.baseUrl;
+  if (!config.resource) throw new Error('azure-openai needs `resource` or `baseUrl`');
+  return `https://${config.resource}.openai.azure.com/openai/v1`;
+}
+
+/** OpenAI and APIs that take the OpenAI client unchanged (Azure OpenAI's v1 API). */
+function openAIFamily(
+  id: string,
+  o: {
+    baseUrl: string;
+    api: 'chat' | 'responses';
+    apiKey: ApiKeySource | undefined;
+    missingKeyHint: string;
+    headers?: Record<string, string>;
+  },
+): Provider {
+  const common = {
+    id,
+    baseUrl: o.baseUrl,
+    missingKeyHint: o.missingKeyHint,
+    ...(o.apiKey ? { apiKey: o.apiKey } : {}),
+    ...(o.headers ? { headers: o.headers } : {}),
+  };
+  return o.api === 'responses'
+    ? new OpenAIResponsesProvider(common)
+    : new OpenAICompatibleProvider({ ...common, tier: 'remote', flavor: 'openai' });
+}
 
 export function createProvider(id: string, config: ProviderConfig): Provider {
   switch (config.type) {
@@ -111,30 +207,36 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         baseUrl: config.baseUrl,
         tier: config.tier,
         flavor: flavorForUrl(config.baseUrl),
-        ...(config.tier === 'remote' ? { missingKeyHint: 'set providers.<id>.apiKey' } : {}),
+        ...(config.tier === 'remote' ? { missingKeyHint: `set providers.${id}.apiKey` } : {}),
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
         ...(config.headers ? { headers: config.headers } : {}),
       });
-    case 'openai': {
-      const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
-      if (config.api === 'responses')
-        return new OpenAIResponsesProvider({
-          id,
-          baseUrl: config.baseUrl,
-          missingKeyHint: 'set OPENAI_API_KEY or providers.<id>.apiKey',
-          ...(apiKey ? { apiKey } : {}),
-          ...(config.organization
-            ? { headers: { 'OpenAI-Organization': config.organization } }
-            : {}),
-        });
-      return new OpenAICompatibleProvider({
-        id,
+    case 'openai':
+      return openAIFamily(id, {
         baseUrl: config.baseUrl,
-        tier: 'remote',
-        flavor: 'openai',
-        missingKeyHint: 'set OPENAI_API_KEY or providers.<id>.apiKey',
-        ...(apiKey ? { apiKey } : {}),
+        api: config.api,
+        apiKey: config.apiKey || process.env.OPENAI_API_KEY,
+        missingKeyHint: `set OPENAI_API_KEY or providers.${id}.apiKey`,
         ...(config.organization ? { headers: { 'OpenAI-Organization': config.organization } } : {}),
+      });
+    case 'azure-openai':
+      return openAIFamily(id, {
+        baseUrl: azureOpenAIBaseUrl(config),
+        api: config.api,
+        apiKey:
+          config.auth === 'entra'
+            ? entraToken()
+            : config.apiKey || process.env.AZURE_OPENAI_API_KEY,
+        missingKeyHint: `set AZURE_OPENAI_API_KEY, providers.${id}.apiKey, or "auth": "entra"`,
+      });
+    case 'typesafe': {
+      const apiKey = config.apiKey || process.env.TYPESAFE_API_KEY;
+      return new TypeSafeProvider({
+        id,
+        tier: config.tier,
+        ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+        ...(apiKey ? { apiKey } : {}),
+        missingKeyHint: `set TYPESAFE_API_KEY or providers.${id}.apiKey`,
       });
     }
     case 'deepseek': {
@@ -144,7 +246,7 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         baseUrl: config.baseUrl,
         tier: 'remote',
         flavor: 'deepseek',
-        missingKeyHint: 'set DEEPSEEK_API_KEY or providers.<id>.apiKey',
+        missingKeyHint: `set DEEPSEEK_API_KEY or providers.${id}.apiKey`,
         ...(apiKey ? { apiKey } : {}),
       });
     }

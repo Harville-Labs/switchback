@@ -102,6 +102,32 @@ describe('Engine', () => {
     );
   });
 
+  test('asks for no more output than the known window has room for', async () => {
+    const maxTokensFor = async (model: Record<string, unknown>) => {
+      const config = SwitchbackConfig.parse({
+        providers: { lp: { type: 'mock', tier: 'local' } },
+        models: { m: { provider: 'lp', model: 'small', ...model } },
+        routing: { start: ['m'] },
+      });
+      const lp = Object.assign(new ScriptedProvider('lp', 'local', [{ text: 'a' }]), {
+        contextWindow: async () => ({ contextWindow: 6_000, source: 'test' }),
+      });
+      const engine = new Engine({
+        workspaceRoot: root,
+        config,
+        providers: new Map<string, Provider>([['lp', lp]]),
+      });
+      await engine.runTurn(engine.createSession({}).id, 'hi');
+      return lp.requests[0]?.maxTokens ?? 0;
+    };
+    // The detected 6,000-token window, not the 16,000 default (which vLLM would reject).
+    const detected = await maxTokensFor({});
+    expect(detected).toBeLessThan(6_000);
+    expect(detected).toBeGreaterThan(4_000);
+    // A configured cap under the window stands.
+    expect(await maxTokensFor({ contextWindow: 32_000, maxOutputTokens: 2_000 })).toBe(2_000);
+  });
+
   test('@mentions attach workspace files, and only those', async () => {
     const { engine, lp } = setup([{ text: 'seen' }], []);
     const s = engine.createSession({});

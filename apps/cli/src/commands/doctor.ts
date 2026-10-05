@@ -33,12 +33,26 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     out(
       `  ${status.ok ? '✓' : '✗'} ${id} (${pc.type}, ${tierOf(pc)}): ${status.detail}${status.latencyMs !== undefined ? ` [${status.latencyMs}ms]` : ''}`,
     );
+    // Local servers list exactly what they serve; hosted catalogs use other names and aliases.
+    if (!status.models || tierOf(pc) !== 'local') continue;
+    out(`    serves ${status.models.join(', ') || 'no models'}`);
+    for (const [alias, m] of Object.entries(config.models)) {
+      if (m.provider !== id || status.models.includes(m.model)) continue;
+      problems++;
+      out(`    ✗ models.${alias}: ${id} doesn't serve "${m.model}"`);
+    }
   }
 
   out('\nRouting');
   const r = config.routing;
   for (const line of formatRoles(configRoles(config), modelSummaries(config)).split('\n'))
     out(`  ${line}`);
+  if (r.classifier) {
+    const c = config.models[r.classifier.model];
+    out(
+      `  classifier ${r.classifier.model}${c ? ` (${c.model}, ${tierOfModel(config, r.classifier.model)})` : ''}; escalates ${r.classifier.escalateOn} prompts`,
+    );
+  }
   if (!r.allowRemote) out('  remote models are turned off (routing.allowRemote: false)');
   out(
     `  escalation ${r.escalation.policy}; budget ${r.budget.dailyUsd ? `$${r.budget.dailyUsd}/day ` : ''}${r.budget.monthlyUsd ? `$${r.budget.monthlyUsd}/month` : r.budget.dailyUsd ? '' : 'unlimited'}`,

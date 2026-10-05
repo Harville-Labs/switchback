@@ -20,6 +20,10 @@ Files are JSONC: `//` and `/* */` comments and trailing commas are allowed. Any 
 ```sh
 switchback init              # interactive: detect local servers, choose models, budgets
 switchback init --yes --local-model <name> --remote anthropic   # unattended
+switchback init --yes --no-local --remote openrouter --remote-model qwen/qwen3-coder
+switchback init --yes --no-local --remote azure-openai --resource acme-ai \
+  --remote-model gpt-6-sol --deployment prod-gpt --azure-auth entra
+switchback init --yes --local-model <name> --remote openai --classifier jev
 switchback config path       # where config files live and which exist
 switchback config show       # effective merged config (secrets redacted)
 switchback config edit       # open the user config in $EDITOR (--scope project for the project file)
@@ -82,6 +86,8 @@ A list inside a role is a chain of alternatives (the first that's up and fits); 
 | `gemini` | `apiKey` (default `$GEMINI_API_KEY`), or `project` + `location` (default `global`) for Vertex AI |
 | `anthropic-aws` | `region`, `workspaceId`, `profile`, `refusalFallback` (Claude Platform on AWS) |
 | `foundry` | `resource` or `baseUrl`, `apiKey` (default `$ANTHROPIC_FOUNDRY_API_KEY`) (Microsoft Foundry) |
+| `azure-openai` | `resource` or `baseUrl` (one is required), `apiKey` (default `$AZURE_OPENAI_API_KEY`), `auth` (`key` \| `entra`, default `key`), `api` (`responses` \| `chat`, default `responses`); models are deployment names |
+| `typesafe` | `apiKey` (default `$TYPESAFE_API_KEY`), `baseUrl` (default TypeSafe's), `tier` (default `remote`); for `routing.classifier` only |
 | `mock` | `tier` |
 
 ### `models.<alias>`
@@ -90,8 +96,8 @@ A list inside a role is a chain of alternatives (the first that's up and fits); 
 |---|---|---|
 | `provider` | required | A key of `providers` |
 | `model` | required | The provider's model ID |
-| `contextWindow` | detected / catalog | Tokens the model accepts; used by the context-overflow rule. Setup fills it from the catalog for hosted models. For local models it can be omitted, and the engine asks the server (Ollama, LM Studio, llama.cpp, vLLM). If the server can't say, it assumes 8,192 and `doctor` flags it. |
-| `maxOutputTokens` | 16000 | `max_tokens` per call |
+| `contextWindow` | detected / catalog | Tokens the model accepts; used by the context-overflow rule. Setup fills it from the catalog for hosted models. For local models it can be omitted, and the engine asks the server (Ollama, LM Studio, llama.cpp, vLLM), sending the provider's `apiKey`. A proxy in front of the server (LiteLLM, a vLLM router) usually can't say; then it assumes 8,192 and `doctor` flags it. |
+| `maxOutputTokens` | 16000 | `max_tokens` per call, lowered to what the context window (configured or detected) has left after the prompt |
 | `effort` | unset | `none`\|`low`\|`medium`\|`high`\|`xhigh`\|`max`. Sent as `output_config.effort` (Anthropic), `reasoning_effort` (OpenAI and local servers, capped at `high` locally), or thinking plus `reasoning_effort` (DeepSeek, where it turns thinking on). `none` turns thinking off everywhere: no thinking block for Claude, DeepSeek's non-thinking mode, and `reasoning_effort: "none"` plus `chat_template_kwargs.enable_thinking: false` for local servers. |
 | `price` | built-in table | `{ input, output, cacheRead?, cacheWrite? }` in USD per million tokens |
 

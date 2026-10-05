@@ -19,7 +19,9 @@
 import type { ModelRef, Part, StopReason, Tier, Usage } from '@switchback/protocol';
 import OpenAI from 'openai';
 import { probeContextWindow } from './local-detect.ts';
+import { listModels } from './model-list.ts';
 import {
+  type ApiKeySource,
   type ChatEvent,
   type ChatRequest,
   type Effort,
@@ -43,7 +45,7 @@ export function flavorForUrl(baseUrl: string): ChatFlavor {
 export interface OpenAICompatibleOptions {
   id: string;
   baseUrl: string;
-  apiKey?: string;
+  apiKey?: ApiKeySource;
   tier: Tier;
   flavor?: ChatFlavor;
   /** Shown when a hosted provider has no key, e.g. "set OPENAI_API_KEY". */
@@ -305,7 +307,7 @@ export class OpenAICompatibleProvider implements Provider {
     }
     const started = performance.now();
     try {
-      await this.client.models.list({
+      const page = await this.client.models.list({
         maxRetries: 0,
         timeout: 2000,
         ...(signal ? { signal } : {}),
@@ -314,6 +316,7 @@ export class OpenAICompatibleProvider implements Provider {
         ok: true,
         detail: `reachable at ${this.baseUrl}`,
         latencyMs: Math.round(performance.now() - started),
+        models: page.data.map((m) => m.id),
       };
     } catch (err) {
       const latencyMs = Math.round(performance.now() - started);
@@ -323,11 +326,30 @@ export class OpenAICompatibleProvider implements Provider {
     }
   }
 
+  /** What every request to this server carries: configured headers, then the key. */
+  private async authHeaders(): Promise<Record<string, string>> {
+    const k = this.options.apiKey;
+    const key = typeof k === 'function' ? await k() : k;
+    return { ...this.options.headers, ...(key ? { authorization: `Bearer ${key}` } : {}) };
+  }
+
   async contextWindow(model: string) {
-    // Local servers can say what they load; hosted APIs are configured from the catalog.
-    if (this.tier === 'remote') return undefined;
+    // Hosted APIs may list context lengths (OpenRouter, Together, Groq); only ask the listing.
+    if (this.tier === 'remote') {
+      const found = (
+        await listModels(this.baseUrl, {
+          headers: await this.authHeaders(),
+          ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+        })
+      ).find((m) => m.id === model);
+      return found?.contextWindow
+        ? { contextWindow: found.contextWindow, source: found.contextSource ?? this.baseUrl }
+        : undefined;
+    }
     return probeContextWindow(this.baseUrl, model, {
       ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+      // Servers started with an API key refuse even their info endpoints without it.
+      headers: await this.authHeaders(),
     });
   }
 
@@ -349,10 +371,7 @@ export class OpenAICompatibleProvider implements Provider {
       try {
         const res = await (this.options.fetch ?? fetch)(`${root}/tokenize`, {
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(this.options.apiKey ? { authorization: `Bearer ${this.options.apiKey}` } : {}),
-          },
+          headers: { ...(await this.authHeaders()), 'content-type': 'application/json' },
           body: JSON.stringify(shapes[dialect]),
           signal: signal ?? AbortSignal.timeout(3000),
         });

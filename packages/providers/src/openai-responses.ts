@@ -13,6 +13,7 @@ import type {
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 import {
+  type ApiKeySource,
   type ChatEvent,
   type ChatRequest,
   type HealthStatus,
@@ -23,7 +24,7 @@ import {
 export interface OpenAIResponsesOptions {
   id: string;
   baseUrl: string;
-  apiKey?: string;
+  apiKey?: ApiKeySource;
   missingKeyHint?: string;
   headers?: Record<string, string>;
   /** Injected for tests. */

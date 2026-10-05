@@ -6,6 +6,20 @@ A **provider** is a connection to a model server. A **model** (under `models` in
 
 Any server exposing `/v1/chat/completions` with SSE streaming and function calling works. Tier defaults to `local`.
 
+| Server | `switchback init` looks at | Context window read from |
+|---|---|---|
+| Ollama | `http://localhost:11434` | `/api/show` (`num_ctx`), else `OLLAMA_CONTEXT_LENGTH`, else Ollama's 4096 default |
+| LM Studio | `http://localhost:1234` | `/api/v0/models` (the loaded context) |
+| llama.cpp `llama-server` (and llamafile) | `http://localhost:8080` | `/props` (`n_ctx` per slot, so `-c 16384 -np 2` is 8192) |
+| vLLM | `http://localhost:8000` | `/v1/models` (`max_model_len`) |
+| SGLang | `http://localhost:30000` | `/v1/models` (`max_model_len`), when listed |
+| KoboldCpp | `http://localhost:5001` | `/api/extra/true_max_context_length` |
+| Jan | `http://localhost:1337` | not reported; set `contextWindow` |
+| Text Generation Inference | `--local-url` (often `:8080`) | `/info` (`max_total_tokens`) |
+| LocalAI, anything else | `--local-url` | `/v1/models` if it lists one of the fields above |
+
+Servers started with an API key (`llama-server --api-key`, `vllm serve --api-key`) need it for these endpoints too; Switchback sends the provider's `apiKey` to all of them. A router or gateway in front of the server (LiteLLM, the vLLM production-stack router) usually answers `/v1/models` itself and doesn't pass the other endpoints through, so set `contextWindow` by hand there.
+
 ```jsonc
 "providers": {
   "ollama":   { "type": "openai-compatible", "baseUrl": "http://localhost:11434/v1" },
@@ -23,7 +37,7 @@ Any server exposing `/v1/chat/completions` with SSE streaming and function calli
 Choosing a local model:
 
 - It must support **tool calling** through the chat completions API. Models without it will trip the malformed-tool-call signal and escalate constantly.
-- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `switchback init` reads the effective value from each server, and if you leave `contextWindow` out the engine asks the server at runtime (`doctor` shows the value and where it came from).
+- Set `contextWindow` to what the server actually loads, not the model's theoretical maximum. Ollama loads models with a 4096-token context unless you raise it with `OLLAMA_CONTEXT_LENGTH` or `num_ctx` in a Modelfile. That's too small for agent work; use 32768 or more. `switchback init` reads the effective value from each server, and if you leave `contextWindow` out the engine asks the server at runtime (`doctor` shows the value and where it came from). `doctor` also lists the models each local server serves and flags a configured `model` it doesn't.
 - Reasoning output (`reasoning_content` / `reasoning`) is shown in the UI but never sent back to the server.
 
 Health is checked with `GET {baseUrl}/models` (2-second timeout, cached for 30 seconds). If it fails, routing falls back to remote.
@@ -36,10 +50,14 @@ Switchback treats hosted providers equally. None is a default: `switchback init`
 |---|---|---|
 | `anthropic` | Claude Opus 5, Sonnet 5, Haiku 4.5 | `ANTHROPIC_API_KEY`, `ant auth login`, or `apiKey` |
 | `openai` | GPT-6 Astra, Sol, Luna | `OPENAI_API_KEY` or `apiKey` |
+| `azure-openai` | The OpenAI models, by your deployment names | `AZURE_OPENAI_API_KEY`, `apiKey`, or Microsoft Entra ID |
 | `deepseek` | DeepSeek V4 Pro, V4.1 Flash | `DEEPSEEK_API_KEY` or `apiKey` |
+| `gemini` | Gemini 3.1 Pro, 3.8 Flash, 2.5 Flash | `GEMINI_API_KEY`, or Vertex AI credentials |
 | `bedrock` | Claude models on AWS | AWS credential chain |
+| `anthropic-aws` | Claude on Claude Platform on AWS | AWS credential chain and a workspace ID |
 | `vertex` | Claude models on Google Cloud | Application Default Credentials |
-| `openai-compatible` with `tier: remote` | Any model: OpenRouter, Together, Groq, Fireworks, a vLLM cluster | `apiKey` (use `{env:NAME}`) |
+| `foundry` | Claude models on Microsoft Foundry | `ANTHROPIC_FOUNDRY_API_KEY` or `apiKey` |
+| `openai-compatible` with `tier: remote` | OpenRouter (its own choice in `init`), or any API: Together, Groq, Fireworks, a gateway | `apiKey` (use `{env:NAME}`) |
 
 ### Model aliases are tiers
 
@@ -60,9 +78,25 @@ Point any alias at any provider in config. If an agent names an alias that isn't
 "models": { "remote": { "provider": "openai", "model": "gpt-6-sol", "contextWindow": 1050000, "effort": "medium" } }
 ```
 
-Uses Chat Completions with streaming and function calling. Sends `max_completion_tokens` (OpenAI's reasoning models reject `max_tokens`) and passes `effort` through as `reasoning_effort`. Cached prompt tokens (`prompt_tokens_details.cached_tokens`) are priced at the cached rate. Optional: `baseUrl` (Azure OpenAI or a proxy) and `organization`.
+Uses Chat Completions with streaming and function calling. Sends `max_completion_tokens` (OpenAI's reasoning models reject `max_tokens`) and passes `effort` through as `reasoning_effort`. Cached prompt tokens (`prompt_tokens_details.cached_tokens`) are priced at the cached rate. Optional: `baseUrl` (a proxy) and `organization`. For Azure, use [`azure-openai`](#azure-openai).
 
 Set `"api": "responses"` to use the Responses API instead. It keeps the model's reasoning between tool calls, which helps reasoning models on multi-step agent work. Requests use `store: false` (nothing is kept on OpenAI's side) and ask for encrypted reasoning, which Switchback keeps in the transcript and sends back only to the model that produced it, the same rule as Claude thinking and DeepSeek reasoning. `effort` becomes `reasoning.effort`, with reasoning summaries shown in the clients. Chat Completions remains the default until the Responses path has been verified against the live API.
+
+### Azure OpenAI
+
+```jsonc
+"providers": { "azure": { "type": "azure-openai", "resource": "acme-ai" } },
+"models": {
+  "remote": { "provider": "azure", "model": "prod-gpt", "contextWindow": 1050000,
+              "price": { "input": 2, "output": 10, "cacheRead": 0.2 } }
+}
+```
+
+Azure OpenAI's [v1 API](https://learn.microsoft.com/azure/ai-foundry/openai/api-version-lifecycle) takes the OpenAI client unchanged, so this uses the same adapters as `openai`, against `https://<resource>.openai.azure.com/openai/v1` (or `baseUrl`, for example a `services.ai.azure.com` endpoint). No `api-version` is needed. `model` is your **deployment name**, not the model ID. It uses the Responses API by default, as Microsoft recommends; set `"api": "chat"` for Chat Completions (for example, a non-OpenAI model deployed on Azure). The key comes from `apiKey` or `AZURE_OPENAI_API_KEY`.
+
+For Microsoft Entra ID instead of a key, set `"auth": "entra"`. Tokens come from Azure's standard credential chain (`DefaultAzureCredential` in `@azure/identity`): `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` (or a certificate), workload identity, a managed identity, or your `az login`. Your identity needs the **Cognitive Services OpenAI User** role on the resource. Tokens are requested for `https://ai.azure.com/.default`, cached, and refreshed before they expire. The library loads only when a provider uses Entra ID.
+
+`switchback init` asks for the resource, the model, its deployment name, and how to sign in (`--azure-auth key|entra` unattended), and writes the model's context window, output limit, and OpenAI list price, because the deployment name usually doesn't match a catalog ID. Azure billing can differ from OpenAI's list prices; change `price` if yours does.
 
 ### DeepSeek
 
@@ -104,7 +138,7 @@ Bedrock uses the Mantle client from `@anthropic-ai/bedrock-sdk` with standard AW
 "models": { "remote": { "provider": "gemini", "model": "gemini-3.8-flash", "contextWindow": 1048576 } }
 ```
 
-Uses Google's `@google/genai` SDK. The key defaults to `$GEMINI_API_KEY` (or `$GOOGLE_API_KEY`); set `project` (and optionally `location`, default `global`) to use Gemini on Vertex AI with Application Default Credentials instead. `effort` maps to a thinking level on Gemini 3 models (`low`, `medium`, `high`) and to a thinking budget on 2.x models, where `none` turns thinking off. Gemini attaches thought signatures to each model turn; Switchback keeps the raw turn and sends it back verbatim, and only to the same model, as the API requires. Safety stops (`SAFETY`, `PROHIBITED_CONTENT`, ...) are refusals and go to the next model in `routing.remote`. The catalog lists Gemini 3.1 Pro (preview), 3.8 Flash, and 2.5 Flash; 3.8 Flash's introductory price doubles in 2027, and Pro prices double for prompts over 200k tokens, so set `price` if that applies.
+Uses Google's `@google/genai` SDK. The key defaults to `$GEMINI_API_KEY` (or `$GOOGLE_API_KEY`); set `project` (and optionally `location`, default `global`) to use Gemini on Vertex AI with Application Default Credentials instead. `effort` maps to a thinking level on Gemini 3 models (`low`, `medium`, `high`) and to a thinking budget on 2.x models, where `none` turns thinking off. Gemini attaches thought signatures to each model turn; Switchback keeps the raw turn and sends it back verbatim, and only to the same model, as the API requires. Safety stops (`SAFETY`, `PROHIBITED_CONTENT`, ...) are refusals and go to another model on the same escalation step, else the next step up ([routing.md](routing.md#refusals)). The catalog lists Gemini 3.1 Pro (preview), 3.8 Flash, and 2.5 Flash; 3.8 Flash's introductory price doubles in 2027, and Pro prices double for prompts over 200k tokens, so set `price` if that applies.
 
 ### Claude Platform on AWS and Microsoft Foundry
 
@@ -120,11 +154,11 @@ Uses Google's `@google/genai` SDK. The key defaults to `$GEMINI_API_KEY` (or `$G
 
 Claude Platform on AWS (`@anthropic-ai/aws-sdk`) is operated by Anthropic with AWS IAM (SigV4) authentication and AWS billing, and has the same API as the first-party Claude API, including server-side refusal fallbacks. It isn't Bedrock: model IDs are bare (`claude-opus-5`, no `anthropic.` prefix). It needs a region and a Claude workspace ID (`region`/`workspaceId`, or `AWS_REGION`/`ANTHROPIC_AWS_WORKSPACE_ID`); credentials come from the standard AWS chain or `profile`.
 
-Microsoft Foundry (`@anthropic-ai/foundry-sdk`) needs the Foundry resource name (or `baseUrl`) and an API key (`apiKey` or `ANTHROPIC_FOUNDRY_API_KEY`). It has no server-side refusal fallback, so refusals go to the next model in `routing.remote`. Foundry billing can differ from list prices; set `price` for accurate savings.
+Microsoft Foundry (`@anthropic-ai/foundry-sdk`) needs the Foundry resource name (or `baseUrl`) and an API key (`apiKey` or `ANTHROPIC_FOUNDRY_API_KEY`). It has no server-side refusal fallback, so refusals go to another model on the same escalation step, else the next step up ([routing.md](routing.md#refusals)). Foundry billing can differ from list prices; set `price` for accurate savings.
 
 Both use the same Claude adapter as the first-party API, so thinking replay, caching, and tool translation behave identically. `switchback init` offers both.
 
-### Any other OpenAI-compatible API
+### OpenRouter and any other OpenAI-compatible API
 
 ```jsonc
 "providers": {
@@ -137,9 +171,23 @@ Both use the same Claude adapter as the first-party API, so thinking replay, cac
 }
 ```
 
+`switchback init` offers OpenRouter directly (key in `OPENROUTER_API_KEY`), and asks for a base URL and key variable for anything else. For either, it reads the API's model list and fills in what it finds: the context window (`context_length`, `context_window`, or `max_model_len`, whichever the API uses), the output limit, and prices (OpenRouter's per-token `pricing`), and warns when the model isn't listed or doesn't take tools. At runtime, a model without `contextWindow` gets it from the same list. Prices are only read during setup, so they're in your config where you can see and change them.
+
 OpenRouter (a base URL on `openrouter.ai`) gets two things other compatible APIs don't. `effort` is sent as its `reasoning: { effort }` parameter, which OpenRouter translates for each upstream model. Its structured `reasoning_details` (Claude thinking signatures, Gemini thought signatures, encrypted OpenAI reasoning) are kept and sent back to the same model on tool-call turns, which those models need to continue after a tool result. Any other compatible API that streams `reasoning_details` is handled the same way.
 
 Gateways report upstream failures inside an already-successful stream. Server-side failures, like a provider disconnecting or a rate limit, count as retryable, so the router falls back to the next model in the chain; client errors don't.
+
+### TypeSafe Jev (the routing classifier)
+
+```jsonc
+"providers": { "typesafe": { "type": "typesafe" } },
+"models": { "jev": { "provider": "typesafe", "model": "jev-latest" } },
+"routing": { "classifier": { "model": "jev" } }
+```
+
+[Jev](https://docs.typesafe.ai) is TypeSafe AI's decision model: it answers typed questions about text with calibrated values instead of prose, in about 100 ms. It can't hold a conversation, so it can only be the router's [classifier](routing.md#pre-routing-classifier); config naming it in any other role is an error. Switchback asks it a Score question with three levels (easy, medium, hard, described as in the chat classifier's prompt) and rounds the probability-weighted score to a level.
+
+It uses TypeSafe's SDK (`@typesafe-ai/sdk`). The key comes from `apiKey` or `TYPESAFE_API_KEY`. List price is $0.042 per million input tokens, output free (checked 2026-10-04), and each rating is recorded under the `classify` rule. Jev is hosted, so it follows the remote rules: it never sees a private session or runs with `allowRemote: false`. Servers that speak the same API, such as [OpenJev](https://github.com/razorback16/openjev) or [LocalJev](https://github.com/githubnext/localjev), work with `baseUrl` and `"tier": "local"`. `switchback init` offers it when there's an escalation ladder (`--classifier jev` unattended).
 
 ### Behavior common to every remote
 
@@ -156,4 +204,4 @@ Gateways report upstream failures inside an already-successful stream. Server-si
 
 ## Adding a provider
 
-See "Add a provider" in [AGENTS.md](../AGENTS.md). Candidates on the roadmap: Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry, and MLX. A new provider must get the same treatment as the existing ones: a catalog entry, setup support, pricing, and tests ([ADR 0006](adr/0006-provider-neutrality.md)).
+See "Add a provider" in [AGENTS.md](../AGENTS.md). Candidates on the roadmap: MLX. A new provider must get the same treatment as the existing ones: a catalog entry, setup support, pricing, and tests ([ADR 0006](adr/0006-provider-neutrality.md)).
