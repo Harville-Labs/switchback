@@ -149,7 +149,7 @@ A command started with `background: true` keeps running after the call returns: 
 
 ### `hooks`
 
-Commands to run on session events, in Claude Code's format. Hooks from every layer add up; a project's wait for `switchback hooks trust`. See [hooks.md](hooks.md).
+Commands to run on session events. Hooks from every layer add up; a project's wait for `switchback hooks trust`. See [hooks.md](hooks.md).
 
 ### `mcpServers.<name>`
 

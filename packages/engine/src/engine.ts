@@ -347,7 +347,7 @@ export class Engine {
     void this.hooks.run('Notification', { session_id: event.sessionId, message });
   }
 
-  /** What every hook hears about the session, in Claude Code's field names. */
+  /** What every hook hears about the session. */
   private hookPayload(s: LiveSession): Record<string, unknown> {
     return { session_id: s.header.id, permission_mode: this.modeOf(s) };
   }
