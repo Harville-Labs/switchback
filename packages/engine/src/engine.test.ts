@@ -921,6 +921,24 @@ describe('protocol round-trip', () => {
     expect(text).toBe('over the wire');
   });
 
+  test('session.setMode and permissions.list round-trip', async () => {
+    const { engine } = setup([], [], { config: { permissions: { deny: ['bash(rm:*)'] } } });
+    const [serverSide, clientSide] = createTransportPair();
+    serve(engine, serverSide);
+    const client = new SwitchbackClient(clientSide);
+    await client.initialize({ name: 'test', version: '0' }, root);
+    const session = await client.request('session.create', { permissionMode: 'plan' });
+    expect(session.permissionMode).toBe('plan');
+    const changed = new Promise<EngineEvent>((resolve) =>
+      client.on((e) => e.type === 'mode.changed' && resolve(e)),
+    );
+    await client.request('session.setMode', { sessionId: session.id, mode: 'acceptEdits' });
+    expect(await changed).toMatchObject({ mode: 'acceptEdits', sessionId: session.id });
+    const p = await client.request('permissions.list', { sessionId: session.id });
+    expect(p.mode).toBe('acceptEdits');
+    expect(p.rules).toEqual([{ rule: 'bash(rm:*)', behavior: 'deny', source: 'config' }]);
+  });
+
   test('rejects calls before initialize', async () => {
     const { engine } = setup([], []);
     const [serverSide, clientSide] = createTransportPair();
@@ -1002,6 +1020,7 @@ describe('session roles', () => {
         notes: [],
         enforcedKeys: ['routing.escalate'],
         remoteDisabled: false,
+        bypassDisabled: false,
       },
     });
     const o = org.engine.createSession({});

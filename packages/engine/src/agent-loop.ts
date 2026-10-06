@@ -251,7 +251,7 @@ export class AgentLoop {
       (t) => !agent.tools || allowsMcpTool(agent.tools, t.name),
     );
     // Built-ins first in their fixed order, then MCP tools by name: a stable cache prefix.
-    const tools = [...toolsFor(agent.tools), ...mcpTools].filter(
+    const tools = [...toolsFor(agent.tools, s.depth === 0), ...mcpTools].filter(
       (t) => t.name !== 'task' || canDelegate,
     );
     const catalog = this.deps
@@ -341,12 +341,12 @@ export class AgentLoop {
     if (model.tier === 'remote' && this.host.remoteBlocked(s)) return undefined;
     if (!model.available) return undefined;
     const provider = this.deps.models.provider(model.ref.provider);
-    const prompt = s.messages.findLast(
-      (m) => m.role === 'user' && m.parts.some((p) => p.type === 'text' && !p.attachment),
-    );
+    const typed = (p: Message['parts'][number]) =>
+      p.type === 'text' && !p.attachment && !p.reminder;
+    const prompt = s.messages.findLast((m) => m.role === 'user' && m.parts.some(typed));
     if (!provider || !prompt) return undefined;
     const text = prompt.parts
-      .flatMap((p) => (p.type === 'text' && !p.attachment ? [p.text] : []))
+      .flatMap((p) => (typed(p) && p.type === 'text' ? [p.text] : []))
       .join('\n');
     const r = await classifyPrompt(provider, model.ref.model, text, {
       signal,

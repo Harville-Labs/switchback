@@ -3,10 +3,17 @@
  * the chat as the TUI does; ones that change something open the same pickers
  * as the command palette, since a picker beats typing model names.
  */
-import { formatMcpServers, formatModels, formatReceipt, formatUsage } from '@switchback/client';
+import {
+  formatMcpServers,
+  formatModels,
+  formatPermissions,
+  formatReceipt,
+  formatUsage,
+  parseMode,
+} from '@switchback/client';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
-import { chooseAgent, chooseModels, chooseRole } from './pickers.ts';
+import { chooseAgent, chooseMode, chooseModels, chooseRole } from './pickers.ts';
 
 export async function runChatCommand(
   engine: EngineConnection,
@@ -65,6 +72,18 @@ export async function runChatCommand(
       const u = await c.request('usage.get', { sessionId: session.id });
       return info(formatReceipt(u, 'This session, including subagents'));
     }
+    case 'mode': {
+      const mode = args[0] ? parseMode(args[0]) : undefined;
+      if (!mode) return chooseMode(engine);
+      await c
+        .request('session.setMode', { sessionId: session.id, mode })
+        .catch((err: Error) => info(`mode: ${err.message}`));
+      return;
+    }
+    case 'permissions':
+      return info(
+        formatPermissions(await c.request('permissions.list', { sessionId: session.id })),
+      );
     case 'mcp': {
       const { servers } = await c.request('mcp.list', {});
       return info(`MCP servers\n${formatMcpServers(servers)}`);

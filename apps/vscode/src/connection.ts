@@ -14,7 +14,7 @@ import { runChatCommand } from './chat-commands.ts';
 import type { EditorContext } from './context.ts';
 import { chooseEngine, type EngineBinary, findCli, probeVersion } from './engine-binary.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
-import { chooseAgent, chooseRole } from './pickers.ts';
+import { chooseAgent, chooseMode, chooseRole } from './pickers.ts';
 import type { EditReview } from './review.ts';
 import { VERSION } from './version.ts';
 
@@ -291,7 +291,11 @@ export class EngineConnection implements vscode.Disposable {
         await c.request('session.cancel', { sessionId: this.session.id });
         return;
       case 'permission':
-        await c.request('permission.respond', { requestId: m.requestId, decision: m.decision });
+        await c.request('permission.respond', {
+          requestId: m.requestId,
+          decision: m.decision,
+          ...(m.save ? { save: m.save } : {}),
+        });
         return;
       case 'escalation':
         await c.request('escalation.respond', { requestId: m.requestId, approve: m.approve });
@@ -307,6 +311,9 @@ export class EngineConnection implements vscode.Disposable {
         return;
       case 'chooseAgent':
         await chooseAgent(this);
+        return;
+      case 'chooseMode':
+        await chooseMode(this);
         return;
       case 'command':
         await runChatCommand(this, m.name, m.args);

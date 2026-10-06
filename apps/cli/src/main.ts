@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { RemoteKind } from '@switchback/engine';
-import { RoutePreference } from '@switchback/protocol';
+import { PermissionMode, RoutePreference } from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
 const MIN_BUN = [1, 4, 0];
@@ -32,6 +32,8 @@ Options
   --agent <name>     Agent to start with (default: config defaultAgent)
   -c, --continue     Resume the most recent session in this workspace
   --session <id>     Resume a specific session
+  --permission-mode <m>  default | acceptEdits | plan | bypassPermissions
+                     (default: permissions.defaultMode)
   --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
   --json             run/usage: machine-readable output
@@ -135,6 +137,7 @@ async function main(argv: string[]): Promise<number> {
       'no-daemon': { type: 'boolean', default: false },
       continue: { type: 'boolean', short: 'c', default: false },
       session: { type: 'string' },
+      'permission-mode': { type: 'string' },
       scope: { type: 'string' },
       'local-url': { type: 'string', multiple: true },
       'local-model': { type: 'string', multiple: true },
@@ -188,6 +191,12 @@ async function main(argv: string[]): Promise<number> {
   const route = RoutePreference.safeParse(values.route);
   if (!route.success) throw new UsageError('--route must be auto, local, or remote');
   const common = { cwd: resolve(values.cwd ?? process.cwd()), mock: values.mock };
+  const permissionMode = oneOf(
+    'permission-mode',
+    values['permission-mode'],
+    PermissionMode.options,
+  );
+  const mode = permissionMode ? { permissionMode } : {};
   const scope = oneOf('scope', values.scope, ['user', 'project'] as const);
   const [command, ...rest] = positionals;
 
@@ -206,6 +215,7 @@ async function main(argv: string[]): Promise<number> {
         ...common,
         daemon: !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON,
         route: route.data,
+        ...mode,
         ...(values.agent ? { agent: values.agent } : {}),
         ...(values.session
           ? { resume: values.session }
@@ -279,6 +289,7 @@ async function main(argv: string[]): Promise<number> {
         route: route.data,
         yes: values.yes,
         json: values.json,
+        ...mode,
         ...(values.review ? { review: true } : values['no-review'] ? { review: false } : {}),
         ...(values.agent ? { agent: values.agent } : {}),
       });

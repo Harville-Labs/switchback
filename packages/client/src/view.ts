@@ -8,6 +8,7 @@ import type {
   Message,
   ModelRef,
   PermissionDecision,
+  PermissionMode,
   ReviewIssue,
   SessionRoles,
   SessionSummary,
@@ -61,6 +62,12 @@ export interface PendingPermission {
   summary: string;
   /** Unified diff for edits. */
   preview?: string;
+  /** What "always" grants, as rules; absent when an ask rule asks every time. */
+  rules?: string[];
+  /** The ask rule behind this prompt, when there is one. */
+  askRule?: string;
+  /** A plan to approve (plan mode). */
+  plan?: string;
 }
 
 export interface PendingEscalation {
@@ -86,6 +93,8 @@ export interface ViewState {
   roles?: SessionRoles;
   /** Why the session is pinned local for privacy; set once and never cleared. */
   private?: string;
+  /** The permission mode (top-level sessions). */
+  mode?: PermissionMode;
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
   children: Record<string, ViewState>;
 }
@@ -139,6 +148,7 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
   messages.forEach((m, mi) => {
     if (m.role === 'user') {
       for (const p of m.parts) {
+        if (p.type === 'text' && p.reminder) continue;
         if (p.type === 'text' && p.backgroundTask)
           items.push({
             kind: 'info',
@@ -211,6 +221,7 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
     ...(priv && 'private' in priv && priv.private ? { private: priv.private } : {}),
     // Joining a session mid-turn: the live events that follow will finish it.
     running: !!session.running,
+    ...(session.permissionMode ? { mode: session.permissionMode } : {}),
     costUsd: session.costUsd,
     savingsUsd: session.savingsUsd ?? 0,
     ...(lastRoute?.kind === 'route' ? { lastTier: lastRoute.tier } : {}),
@@ -270,6 +281,9 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
           tool: event.tool,
           summary: event.summary,
           ...(event.preview ? { preview: event.preview } : {}),
+          ...(event.rules ? { rules: event.rules } : {}),
+          ...(event.askRule ? { askRule: event.askRule } : {}),
+          ...(event.plan ? { plan: event.plan } : {}),
         },
       ],
     };
@@ -338,6 +352,8 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       };
     case 'roles.updated':
       return { ...state, roles: event.roles };
+    case 'mode.changed':
+      return { ...state, mode: event.mode };
     case 'text.delta':
     case 'reasoning.delta': {
       const target =

@@ -2,7 +2,7 @@
  * QuickPick flows that change a session: roles (ADR 0015), review, and the
  * agent for a new session. Shared by the command palette and the chat view.
  */
-import { formatReviewers, formatSteps } from '@switchback/client';
+import { formatReviewers, formatSteps, MODE_DESCRIPTIONS, modeLabel } from '@switchback/client';
 import type { InitializeResult, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
@@ -155,6 +155,25 @@ async function reviewChange(
   return reviewers?.length
     ? { review: { mode: 'auto', models: reviewers.map((a) => [a]) } }
     : undefined;
+}
+
+/** Switch the session's permission mode. */
+export async function chooseMode(engine: EngineConnection): Promise<void> {
+  const { client, session } = engine;
+  if (!client || !session) return;
+  const { modes, mode } = await client.request('permissions.list', { sessionId: session.id });
+  const pick = await vscode.window.showQuickPick(
+    modes.map((m) => ({
+      label: `${m === mode ? '$(check) ' : ''}${modeLabel(m)}`,
+      detail: MODE_DESCRIPTIONS[m],
+      mode: m,
+    })),
+    { title: 'Switchback: Permission Mode' },
+  );
+  if (pick)
+    await client
+      .request('session.setMode', { sessionId: session.id, mode: pick.mode })
+      .catch((err: Error) => vscode.window.showErrorMessage(`Switchback: ${err.message}`));
 }
 
 /** Start a new session with an agent the user picks. */

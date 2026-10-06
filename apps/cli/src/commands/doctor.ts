@@ -1,5 +1,5 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
-import { formatMcpServers, formatRoles } from '@switchback/client';
+import { formatMcpServers, formatPermissions, formatRoles, modeLabel } from '@switchback/client';
 import { configRoles, modelSummaries, roleAliases, tierOfModel } from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
@@ -94,6 +94,14 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     out(formatMcpServers(servers));
     problems += servers.filter((s) => s.state === 'failed' || s.state === 'untrusted').length;
   }
+  out('\nPermissions');
+  out(
+    formatPermissions(engine.permissions())
+      .split('\n')
+      .map((l) => `  ${l}`)
+      .join('\n'),
+  );
+  out(`  new sessions start in ${modeLabel(config.permissions.defaultMode)} mode`);
   await engine.shutdown();
 
   out('\nAgents');

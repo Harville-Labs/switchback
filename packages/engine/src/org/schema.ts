@@ -37,6 +37,13 @@ export const OrgPolicy = z.object({
       allowUserProviders: z.boolean().default(true),
       /** false: only MCP servers defined by the org policy may run. */
       allowUserMcpServers: z.boolean().default(true),
+      /**
+       * false: only the organization's allow and ask rules apply. Users' and
+       * projects' deny rules still do, since they only tighten.
+       */
+      allowUserPermissionRules: z.boolean().default(true),
+      /** false: sessions can't use the `bypassPermissions` mode. */
+      allowBypassPermissions: z.boolean().default(true),
       /** Per-user remote spend caps; users may set lower budgets, never higher. */
       maxDailyUsd: z.number().positive().optional(),
       maxMonthlyUsd: z.number().positive().optional(),

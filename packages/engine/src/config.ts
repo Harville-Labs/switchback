@@ -6,15 +6,17 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { isAbsolute, relative, sep } from 'node:path';
 import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
-import { isDecisionOnly, type Price, ProviderConfig, tierOf } from '@switchback/providers';
-import { ModelChain, RoutingConfig } from '@switchback/router';
+import { isDecisionOnly, type Price, tierOf } from '@switchback/providers';
 
 export { roleAliases } from '@switchback/router';
 
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
-import { McpServerConfig, McpServerName } from './mcp/config.ts';
+import { removedKeyProblem } from './config-removed.ts';
+import { SwitchbackConfig } from './config-schema.ts';
 import { isTrusted } from './mcp/trust.ts';
 import {
   applyRestrictions,
@@ -25,132 +27,11 @@ import {
 } from './org/policy.ts';
 import { readCachedPolicy } from './org/store.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
-import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
+import { RuleLayers } from './permissions/layers.ts';
+import type { SourcedRule } from './permissions/policy.ts';
 
-export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
-export type PermissionLevel = z.infer<typeof PermissionLevel>;
-
-export const ModelConfig = z.object({
-  provider: z.string(),
-  model: z.string(),
-  /**
-   * Tokens the server loads. Optional for local models: the engine asks the
-   * server (Ollama, LM Studio, llama.cpp, vLLM) when it's left out.
-   */
-  contextWindow: z.number().int().positive().optional(),
-  maxOutputTokens: z.number().int().positive().default(16_000),
-  effort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
-  price: z
-    .object({
-      input: z.number(),
-      output: z.number(),
-      cacheRead: z.number().optional(),
-      cacheWrite: z.number().optional(),
-    })
-    .optional(),
-});
-export type ModelConfig = z.infer<typeof ModelConfig>;
-
-export const SwitchbackConfig = z.object({
-  $schema: z.string().optional(),
-  providers: z.record(z.string(), ProviderConfig).default({}),
-  models: z.record(z.string(), ModelConfig).default({}),
-  routing: RoutingConfig.prefault({}),
-  permissions: z
-    .object({
-      read: PermissionLevel.default('allow'),
-      edit: PermissionLevel.default('ask'),
-      bash: PermissionLevel.default('ask'),
-      /** Tools from MCP servers; each server can override it with `permission`. */
-      mcp: PermissionLevel.default('ask'),
-    })
-    .prefault({}),
-  /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
-  mcpServers: z.record(McpServerName, McpServerConfig).default({}),
-  /** External agent runtimes that agents can run on (`runtime: <name>`); see ADR 0009. */
-  runtimes: z
-    .record(
-      z.string(),
-      z.discriminatedUnion('type', [
-        z.object({
-          type: z.literal('claude-agent-sdk'),
-          /** Claude model for the runtime; defaults to Claude Code's own default. */
-          model: z.string().optional(),
-          maxTurns: z.number().int().positive().optional(),
-          /** Path to Claude Code; defaults to `claude` on PATH. */
-          executable: z.string().optional(),
-        }),
-      ]),
-    )
-    .default({}),
-  defaultAgent: z.string().default('build'),
-  subagents: z
-    .object({
-      maxConcurrent: z.number().int().positive().default(4),
-      maxDepth: z.number().int().positive().default(2),
-      /** Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it. */
-      budgetUsd: z.number().nonnegative().optional(),
-      /** Model alias for subagents whose agent doesn't pin a model or tier; else normal routing. */
-      model: z.string().optional(),
-    })
-    .prefault({}),
-  /** Hard cap on model calls per user prompt, to stop runaway loops. */
-  maxStepsPerTurn: z.number().int().positive().default(50),
-  /** Review of edits by another model (docs/review.md). */
-  review: z
-    .object({
-      /** `auto`: after a turn in which a model edited files, a reviewer checks the diff. */
-      mode: z.enum(['off', 'auto']).default('off'),
-      /**
-       * Reviewers in order, any models; each entry an alias or a chain of
-       * alternatives. The first reviews; if its findings still stand after a
-       * fix, the next takes over. Empty: the `routing.escalate` ladder.
-       */
-      models: z.array(ModelChain).default([]),
-      /** Reviews per prompt, across all reviewers. */
-      maxRounds: z.number().int().min(1).max(6).default(3),
-    })
-    .prefault({}),
-  /**
-   * Anonymous usage statistics (docs/telemetry.md). Off unless turned on;
-   * `DO_NOT_TRACK=1` or `SWITCHBACK_TELEMETRY=0` force it off.
-   */
-  telemetry: z
-    .object({
-      enabled: z.boolean().default(false),
-      endpoint: z.url().default(DEFAULT_TELEMETRY_ENDPOINT),
-    })
-    .prefault({}),
-  /** Content that must never reach a remote model (docs/privacy.md). */
-  privacy: z
-    .object({
-      /**
-       * Globs, relative to the workspace. Once content from a matching file
-       * enters a session, the session stays local. A pattern without a slash
-       * matches by file name anywhere (`*.pem`, `.env*`).
-       */
-      localOnlyPaths: z.array(z.string().min(1)).default([]),
-      /**
-       * Credentials in what is about to be sent to a remote model: `redact`
-       * replaces them with placeholders in the outbound copy, `block` keeps the
-       * turn local, `off` sends them as they are.
-       */
-      secrets: z.enum(['redact', 'block', 'off']).default('redact'),
-    })
-    .prefault({}),
-  /** Append-only context compaction (docs/adr/0008-append-only-compaction.md). */
-  compaction: z
-    .object({
-      /** Compact automatically when the prompt passes `threshold`. `session.compact` works either way. */
-      enabled: z.boolean().default(true),
-      /** Fraction of the largest local window (or the remote window without one) that triggers compaction. */
-      threshold: z.number().min(0.2).max(0.95).default(0.7),
-      /** Fraction of that window kept verbatim at the end of the conversation. */
-      keepRecent: z.number().min(0.05).max(0.6).default(0.25),
-    })
-    .prefault({}),
-});
-export type SwitchbackConfig = z.infer<typeof SwitchbackConfig>;
+export * from './config-removed.ts';
+export * from './config-schema.ts';
 
 export interface LoadedConfig {
   config: SwitchbackConfig;
@@ -161,7 +42,12 @@ export interface LoadedConfig {
   org?: OrgStatus;
   /** Project-defined MCP servers left out until trusted (`switchback mcp trust`). */
   untrustedMcp: { name: string; source: string; definition: unknown }[];
+  /** Every permission rule in effect, with the layer it came from. */
+  rules: SourcedRule[];
 }
+
+/** How rules from an organization's policy are labeled. */
+const ORG_SOURCE = 'organization';
 
 export class ConfigError extends Error {
   constructor(
@@ -201,7 +87,9 @@ export function loadConfig(
     { file: switchbackPaths(env).configFile, project: false },
     { file: pp.mcpJson, project: true, only: 'mcpServers' },
     { file: pp.configFile, project: true },
+    { file: pp.localConfigFile, project: true },
   ];
+  const rules = new RuleLayers();
   /** Where each MCP server's effective definition came from. */
   const mcpSource = new Map<string, { project: boolean; file: string }>();
   const noteMcp = (layer: unknown, project: boolean, file: string) => {
@@ -216,7 +104,7 @@ export function loadConfig(
       throw new ConfigError(
         `${org.org.name}'s policy uses an old key; ask an administrator to update it: ${removed}`,
       );
-    merged = deepMerge(merged, org.defaults);
+    merged = deepMerge(merged, rules.take(org.defaults, ORG_SOURCE, true));
     noteMcp(org.defaults, false, 'organization policy');
   }
   const sources: string[] = [];
@@ -238,19 +126,24 @@ export function loadConfig(
       parsed = { ...parsed, telemetry: rest };
     }
     noteMcp(parsed, project, file);
-    merged = deepMerge(merged, parsed);
+    merged = deepMerge(merged, rules.take(parsed, sourceLabel(file, workspaceRoot)));
     sources.push(file);
   }
   for (const layer of extra) {
     const removed = removedKeyProblem(layer);
     if (removed) throw new ConfigError(removed);
-    merged = deepMerge(merged, layer);
+    merged = deepMerge(merged, rules.take(layer, 'command line'));
     noteMcp(layer, false, 'command line');
   }
   if (org) {
-    merged = deepMerge(merged, org.enforced);
+    merged = deepMerge(merged, rules.take(org.enforced, ORG_SOURCE, true));
     noteMcp(org.enforced, false, 'organization policy');
   }
+  const ruleSet = rules.result(org ? !org.restrictions.allowUserPermissionRules : false);
+  merged = {
+    ...merged,
+    permissions: { ...(merged.permissions as Record<string, unknown>), ...ruleSet.lists },
+  };
 
   // A repository can't run commands on this machine until the user trusts it.
   const untrustedMcp: LoadedConfig['untrustedMcp'] = [];
@@ -287,14 +180,39 @@ export function loadConfig(
       id: org.org.id,
       name: org.org.name,
       version: org.version,
-      notes: [...skipped, ...restricted.notes],
+      notes: [
+        ...skipped,
+        ...restricted.notes,
+        ...ruleSet.ignored.map(
+          (r) =>
+            `${r.behavior} rule "${r.rule}" from ${r.source} ignored: only organization rules apply`,
+        ),
+      ],
       enforcedKeys: leafPaths(org.enforced),
       remoteDisabled: !org.restrictions.allowRemote,
+      bypassDisabled: !org.restrictions.allowBypassPermissions,
     };
   }
   const prices: Record<string, Price> = {};
   for (const m of Object.values(config.models)) if (m.price) prices[m.model] = m.price;
-  return { config, sources, prices, untrustedMcp, ...(orgStatus ? { org: orgStatus } : {}) };
+  return {
+    config,
+    sources,
+    prices,
+    untrustedMcp,
+    rules: ruleSet.sourced,
+    ...(orgStatus ? { org: orgStatus } : {}),
+  };
+}
+
+/** A config file as people know it: `.switchback/config.json`, `~/.config/switchback/config.json`. */
+function sourceLabel(file: string, workspaceRoot: string): string {
+  const inProject = relative(workspaceRoot, file);
+  if (!inProject.startsWith('..') && !isAbsolute(inProject)) return inProject.split(sep).join('/');
+  const home = homedir();
+  return file.startsWith(`${home}${sep}`)
+    ? `~${file.slice(home.length).split(sep).join('/')}`
+    : file;
 }
 
 /** `DO_NOT_TRACK` (consoledonottrack.com) or `SWITCHBACK_TELEMETRY=0`. */
@@ -338,66 +256,6 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
       return `${key}: "${alias}" is a decision model (${pc.type}), which can only be routing.classifier.model`;
   }
   return undefined;
-}
-
-/**
- * Keys removed by role-based routing (ADR 0015), with what replaced them. Zod
- * would drop them silently, which would quietly change how someone's turns
- * route; config loading reports them, and writing a layer migrates them.
- */
-export const REMOVED_KEYS: {
-  path: string[];
-  message: string;
-  when?: (value: unknown) => boolean;
-}[] = [
-  {
-    path: ['routing', 'local'],
-    message: 'routing.local was renamed routing.start: the models turns begin on (docs/routing.md)',
-  },
-  {
-    path: ['routing', 'remote'],
-    message:
-      'routing.remote was replaced by routing.escalate, an ordered ladder of any models; for example "escalate": [["remote"]] (docs/routing.md)',
-  },
-  {
-    path: ['routing', 'mode'],
-    message:
-      'routing.mode was removed: list the models you want in routing.start and routing.escalate, or set routing.allowRemote: false to keep remote models unused (docs/routing.md)',
-  },
-  {
-    path: ['routing', 'escalation', 'via'],
-    message:
-      'routing.escalation.via was replaced by routing.escalate, which lists every step (docs/routing.md)',
-  },
-  {
-    path: ['routing', 'fallback'],
-    // Only the old object form; "nearest" and "none" are the new values.
-    when: (v) => typeof v === 'object' && v !== null,
-    message:
-      'routing.fallback is now "nearest" (use the nearest other step that is up) or "none" (docs/routing.md)',
-  },
-  {
-    path: ['review', 'model'],
-    message:
-      'review.model was replaced by review.models, the reviewers in order; for example "models": ["large"] (docs/review.md)',
-  },
-];
-
-/** The removed keys a layer still sets. */
-export function removedKeysIn(layer: unknown): (typeof REMOVED_KEYS)[number][] {
-  return REMOVED_KEYS.filter(({ path, when }) => {
-    let node: unknown = layer;
-    for (const key of path) {
-      if (!node || typeof node !== 'object' || !(key in node)) return false;
-      node = (node as Record<string, unknown>)[key];
-    }
-    return when ? when(node) : true;
-  });
-}
-
-/** The first removed key a layer sets, as a message naming its replacement. */
-export function removedKeyProblem(layer: unknown): string | undefined {
-  return removedKeysIn(layer)[0]?.message;
 }
 
 /** Whether a model alias runs locally or remotely, from its provider's config. */

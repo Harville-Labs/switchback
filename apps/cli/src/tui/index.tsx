@@ -1,5 +1,5 @@
 import { fromTranscript, type ViewState } from '@switchback/client';
-import type { RoutePreference, SessionSummary } from '@switchback/protocol';
+import type { PermissionMode, RoutePreference, SessionSummary } from '@switchback/protocol';
 import { render } from 'ink';
 import { type CommonFlags, connectShared } from '../bootstrap.ts';
 import { App } from './App.tsx';
@@ -12,6 +12,7 @@ export async function tui(
     resume?: string;
     /** Attach to (or start) the workspace's shared daemon. */
     daemon: boolean;
+    permissionMode?: PermissionMode;
   },
 ): Promise<number> {
   if (!process.stdin.isTTY) {
@@ -34,7 +35,12 @@ export async function tui(
       process.stderr.write('switchback: no saved session in this workspace; starting a new one\n');
     }
   }
-  session ??= await client.request('session.create', opts.agent ? { agent: opts.agent } : {});
+  session ??= await client.request('session.create', {
+    ...(opts.agent ? { agent: opts.agent } : {}),
+    ...(opts.permissionMode ? { permissionMode: opts.permissionMode } : {}),
+  });
+  if (opts.permissionMode && session.permissionMode !== opts.permissionMode)
+    await client.request('session.setMode', { sessionId: session.id, mode: opts.permissionMode });
   const app = render(
     <App
       client={client}

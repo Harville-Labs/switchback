@@ -1,15 +1,21 @@
 /** Everything around the transcript: header, prompts, spinner, and status bar. */
 import { homedir } from 'node:os';
-import {
-  estimateLabel,
-  formatLadder,
-  type PendingEscalation,
-  type PendingPermission,
-  type ViewState,
-} from '@switchback/client';
-import type { RoutePreference, SessionSummary, UsageReport } from '@switchback/protocol';
+import { formatLadder, modeLabel, type ViewState } from '@switchback/client';
+import type {
+  PermissionMode,
+  RoutePreference,
+  SessionSummary,
+  UsageReport,
+} from '@switchback/protocol';
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
+
+const MODE_COLORS: Record<PermissionMode, string> = {
+  default: 'white',
+  acceptEdits: 'magenta',
+  plan: 'cyan',
+  bypassPermissions: 'red',
+};
 
 export function StatusBar({
   session,
@@ -17,12 +23,14 @@ export function StatusBar({
   review,
   view,
   usage,
+  mode,
 }: {
   session: SessionSummary;
   route: RoutePreference;
   review: boolean | undefined;
   view: ViewState;
   usage?: UsageReport;
+  mode: PermissionMode;
 }) {
   const tier = view.lastTier;
   const ladder = formatLadder(view.ladder);
@@ -33,6 +41,9 @@ export function StatusBar({
         <Text color="white">{session.agent}</Text>
         {' · '}
         <Text color={routeColor}>{route}</Text>
+        {mode !== 'default' ? (
+          <Text color={MODE_COLORS[mode]}> · {modeLabel(mode)} (shift+tab)</Text>
+        ) : null}
         {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
         {tier ? (
           <Text color={tier === 'local' ? 'green' : 'yellow'}>
@@ -161,50 +172,6 @@ export function Header({ version, root, width }: { version: string; root: string
         <Text color="white">/</Text> commands · <Text color="white">@</Text> mention a file ·{' '}
         <Text color="white">esc</Text> cancel
       </Text>
-    </Box>
-  );
-}
-
-export function PermissionPrompt({
-  permission,
-  maxDiffLines,
-}: {
-  permission: PendingPermission;
-  maxDiffLines: number;
-}) {
-  return (
-    <Box borderStyle="round" borderColor="yellow" paddingX={1} flexDirection="column">
-      <Text>
-        Allow <Text bold>{permission.summary}</Text>?
-      </Text>
-      {permission.preview ? <DiffView diff={permission.preview} maxLines={maxDiffLines} /> : null}
-      <Keys
-        keys={[
-          ['y', 'once'],
-          ['a', 'always this session'],
-          ['n', 'deny'],
-        ]}
-      />
-    </Box>
-  );
-}
-
-export function EscalationPrompt({ escalation }: { escalation: PendingEscalation }) {
-  return (
-    <Box borderStyle="round" borderColor="magenta" paddingX={1} flexDirection="column">
-      <Text>
-        Escalate to <Text bold>{escalation.target.model}</Text>
-        {escalation.estimatedCostUsd !== undefined ? (
-          <Text color="yellow"> ({estimateLabel(escalation.estimatedCostUsd)})</Text>
-        ) : null}
-        ? {escalation.reason}
-      </Text>
-      <Keys
-        keys={[
-          ['y', 'escalate'],
-          ['n', 'stay on the current model'],
-        ]}
-      />
     </Box>
   );
 }

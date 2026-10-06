@@ -44,6 +44,7 @@ const TOOL_ALIASES: Record<string, string> = {
   LS: 'glob',
   Task: 'task',
   Agent: 'task',
+  ExitPlanMode: 'exit_plan_mode',
 };
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [

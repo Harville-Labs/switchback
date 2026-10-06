@@ -32,7 +32,7 @@ switchback config schema     # JSON Schema for editor validation
 
 `switchback init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `switchback --help`.
 
-Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config.
+Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config, and your own settings for one project in `.switchback/config.local.json`.
 
 The VS Code extension validates both files against the schema and offers autocomplete. Other editors can use the output of `switchback config schema`.
 
@@ -113,8 +113,12 @@ See [routing.md](routing.md#configuration-reference).
 | `edit` | `ask` | `write`, `edit` |
 | `bash` | `ask` | `bash` |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
+| `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `plan`, or `bypassPermissions` |
+| `allow`, `ask`, `deny` | `[]` | Rules in Claude Code's syntax, such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
 
-Values are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md).
+The levels are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md) for the order rules and modes are applied in and the full rule syntax.
+
+Personal settings for one project go in `.switchback/config.local.json`. It's read after `.switchback/config.json`, and Switchback writes it when you answer a prompt with **Always in this project**, adding it to `.switchback/.gitignore`.
 
 ### `mcpServers.<name>`
 

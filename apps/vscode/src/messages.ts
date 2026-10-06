@@ -33,7 +33,7 @@ export type WebviewToHost =
   | { type: 'loaded' }
   | { type: 'prompt'; text: string; attach?: AttachChoice }
   | { type: 'cancel' }
-  | { type: 'permission'; requestId: string; decision: PermissionDecision }
+  | { type: 'permission'; requestId: string; decision: PermissionDecision; save?: 'project' }
   | { type: 'escalation'; requestId: string; approve: boolean }
   | { type: 'setRoute'; route: RoutePreference }
   | { type: 'newSession'; agent?: string }
@@ -44,6 +44,8 @@ export type WebviewToHost =
   /** Open the picker for one role (the chat's role buttons). */
   | { type: 'chooseRole'; role: RoleName | 'reset' }
   | { type: 'chooseAgent' }
+  /** Open the permission mode picker. */
+  | { type: 'chooseMode' }
   /** A slash command the webview can't run itself (`name` is from `SLASH_COMMANDS`). */
   | { type: 'command'; name: string; args: string[] };
 

@@ -1,6 +1,6 @@
 /** `switchback run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
 import { privateLabel, receiptLine, redactedLabel, reviewLines } from '@switchback/client';
-import type { RoutePreference } from '@switchback/protocol';
+import type { PermissionMode, RoutePreference } from '@switchback/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 
 export interface RunFlags extends CommonFlags {
@@ -11,6 +11,7 @@ export interface RunFlags extends CommonFlags {
   json: boolean;
   /** Review of local edits; undefined follows `review.mode`. */
   review?: boolean;
+  permissionMode?: PermissionMode;
 }
 
 const dim = (s: string) => (process.stderr.isTTY ? `\x1b[2m${s}\x1b[0m` : s);
@@ -21,7 +22,10 @@ export async function run(flags: RunFlags): Promise<number> {
     flags.yes ? 'approve' : 'deny',
     'switchback-run',
   );
-  const session = await client.request('session.create', flags.agent ? { agent: flags.agent } : {});
+  const session = await client.request('session.create', {
+    ...(flags.agent ? { agent: flags.agent } : {}),
+    ...(flags.permissionMode ? { permissionMode: flags.permissionMode } : {}),
+  });
 
   let pinned = false;
   const finished = new Promise<number>((resolve) => {

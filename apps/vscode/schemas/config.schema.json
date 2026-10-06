@@ -486,6 +486,32 @@
           "default": "ask",
           "type": "string",
           "enum": ["allow", "ask", "deny"]
+        },
+        "defaultMode": {
+          "default": "default",
+          "type": "string",
+          "enum": ["default", "acceptEdits", "plan", "bypassPermissions"]
+        },
+        "allow": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ask": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deny": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

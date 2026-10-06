@@ -9,11 +9,12 @@ import {
   type SlashCommand,
 } from '@switchback/client/commands';
 import {
-  estimateLabel,
   formatReviewers,
   formatSteps,
   formatSubagents,
   formatUsage,
+  MODE_DESCRIPTIONS,
+  modeLabel,
 } from '@switchback/client/format';
 import {
   addInfo,
@@ -26,11 +27,11 @@ import {
   type ViewItem,
   type ViewState,
 } from '@switchback/client/view';
-import type { RoutePreference, SessionRoles } from '@switchback/protocol';
+import type { PermissionMode, RoutePreference, SessionRoles } from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
 import { renderMenu } from './menu.ts';
-import { esc, renderDiff, renderItem as renderViewItem } from './render.ts';
+import { esc, permissionAnswer, renderPrompt, renderItem as renderViewItem } from './render.ts';
 import { STYLES } from './styles.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
@@ -40,6 +41,8 @@ let view: ViewState = initialView('');
 let route: RoutePreference = 'auto';
 let connected = false;
 let agent = '';
+/** The session's mode until a `mode.changed` event says otherwise. */
+let sessionMode: PermissionMode = 'default';
 /** Kept outside `view`, which is rebuilt when the session changes. */
 let roles: SessionRoles | undefined;
 
@@ -98,13 +101,7 @@ function render() {
   log.innerHTML = (fresh ? WELCOME : '') + view.items.map((i) => renderItem(i)).join('');
   if (nearBottom) log.scrollTop = log.scrollHeight;
 
-  const perm = view.permissions[0];
-  const escl = view.escalations[0];
-  prompts.innerHTML = perm
-    ? `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${perm.preview ? renderDiff(perm.preview) : ''}<div class="actions"><button class="btn" data-perm="allow_once">Allow once</button><button class="btn secondary" data-perm="allow_always">Always this session</button><button class="btn secondary" data-perm="deny">Deny</button></div></div>`
-    : escl
-      ? `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<div class="actions"><button class="btn" data-esc="1">Escalate</button><button class="btn secondary" data-esc="0">Stay on the current model</button></div></div>`
-      : '';
+  prompts.innerHTML = renderPrompt(view);
 
   // One button: send while idle, stop while a turn runs.
   sendBtn.innerHTML = view.running ? ICONS.stop : ICONS.send;
@@ -132,6 +129,10 @@ function renderControls() {
       `<button class="${r.value === route ? 'on' : ''}" data-route="${r.value}" title="${esc(r.title)}">${r.label}</button>`,
   ).join('')}</span>`;
   const parts = [routes];
+  const mode = view.mode ?? sessionMode;
+  parts.push(
+    pill('data-mode', 'Mode', esc(modeLabel(mode)), `${MODE_DESCRIPTIONS[mode]} (click to change)`),
+  );
   if (agent)
     parts.push(pill('data-agent', 'Agent', esc(agent), 'Start a new session with another agent'));
   if (roles) {
@@ -175,6 +176,7 @@ controls.addEventListener('click', (e) => {
     setRoute(r);
     render();
   } else if (btn.hasAttribute('data-agent')) vscode.postMessage({ type: 'chooseAgent' });
+  else if (btn.hasAttribute('data-mode')) vscode.postMessage({ type: 'chooseMode' });
   else if (btn.dataset.role)
     vscode.postMessage({ type: 'chooseRole', role: btn.dataset.role as RoleName });
 });
@@ -213,10 +215,10 @@ prompts.addEventListener('click', (e) => {
   if (!btn) return;
   const perm = view.permissions[0];
   const escl = view.escalations[0];
-  if (btn.dataset.perm && perm) {
-    const decision = btn.dataset.perm as 'allow_once' | 'allow_always' | 'deny';
-    vscode.postMessage({ type: 'permission', requestId: perm.requestId, decision });
-    view = resolvePermission(view, perm.requestId, decision);
+  const answer = btn.dataset.perm ? permissionAnswer(btn.dataset.perm) : undefined;
+  if (answer && perm) {
+    vscode.postMessage({ type: 'permission', requestId: perm.requestId, ...answer });
+    view = resolvePermission(view, perm.requestId, answer.decision);
   } else if (btn.dataset.esc && escl) {
     vscode.postMessage({
       type: 'escalation',
@@ -469,10 +471,12 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       connected = true;
       route = m.route;
       agent = m.session.agent;
+      sessionMode = m.session.permissionMode ?? 'default';
       if (view.sessionId !== m.session.id) view = initialView(m.session.id);
       break;
     case 'session':
       agent = m.session.agent;
+      sessionMode = m.session.permissionMode ?? 'default';
       view = addInfo(
         { ...initialView(m.session.id), items: view.items },
         `new session · agent ${m.session.agent}`,
@@ -496,6 +500,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       break;
     case 'history':
       agent = m.session.agent;
+      sessionMode = m.session.permissionMode ?? 'default';
       view = addInfo(
         fromTranscript(m.session, m.messages),
         `resumed "${m.session.title || m.session.id}"`,

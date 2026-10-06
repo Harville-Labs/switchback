@@ -34,13 +34,15 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | Method | Params | Result |
 |---|---|---|
 | `initialize` | `protocolVersion`, `client`, `workspaceRoot` | Engine version, models, agents, and `org` when an organization policy applies |
-| `session.create` | `agent?`, `title?` | `SessionSummary` |
+| `session.create` | `agent?`, `title?`, `permissionMode?` | `SessionSummary` (with the mode in `permissionMode`) |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
 | `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`), `review?` (boolean; overrides `review.mode`) | `{ turnId }`, returned immediately; progress arrives as events. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
-| `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`) | `{ ok }` |
+| `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`) | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config |
+| `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
+| `permissions.list` | `{ sessionId? }` | `{ mode?, modes, levels, rules }`: the session's mode, the modes it may switch to, the category levels, and every rule with its `source` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, and error |
@@ -59,11 +61,12 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
 | `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step; `step`/`steps` (where the model is on the escalation ladder) and `stickyTurns` |
 | `roles.updated` | A session's roles changed (`session.setRoles`), so every attached client can show them |
+| `mode.changed` | A session's permission mode changed (`session.setMode`, or a plan was approved) |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local |
 | `review.completed` | A review of the turn's local edits: `verdict` (`approve`, `revise`, or `skipped` with the reason in `summary`), `issues` (`file`, `line`, `severity`, `comment`), the reviewer `model`, and `round` |
 | `secrets.redacted` | Secrets were replaced with placeholders in a request to a remote model; `kinds` names each one (repeats included) and `model` the recipient. Sent only when a request contains more than the previous one |
-| `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file |
+| `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file. `rules` is what `allow_always` would grant (absent when `askRule` names an ask rule, which asks every time); `plan` is set when the model asks to leave plan mode |
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait |
