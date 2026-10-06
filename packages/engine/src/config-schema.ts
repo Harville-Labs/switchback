@@ -6,6 +6,7 @@ import { PermissionMode } from '@switchback/protocol';
 import { ProviderConfig } from '@switchback/providers';
 import { ModelChain, RoutingConfig } from '@switchback/router';
 import { z } from 'zod';
+import { HooksConfig } from './hooks/schema.ts';
 import { McpServerConfig, McpServerName } from './mcp/config.ts';
 import { ruleProblem } from './permissions/rules.ts';
 import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
@@ -85,6 +86,8 @@ export const SwitchbackConfig = z.object({
         .prefault({}),
     })
     .prefault({}),
+  /** Commands run on agent events, in Claude Code's format (docs/hooks.md). */
+  hooks: HooksConfig.default({}),
   /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
   mcpServers: z.record(McpServerName, McpServerConfig).default({}),
   /** External agent runtimes that agents can run on (`runtime: <name>`); see ADR 0009. */

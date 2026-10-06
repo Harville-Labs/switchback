@@ -1,19 +1,20 @@
 /**
- * MCP servers defined by a project (its `.switchback/config.json` or Claude
- * Code's `.mcp.json`) run commands from a checked-out repository, so they only
- * start after the user trusts them for that workspace. Trust is keyed by the
- * exact definition: editing a server means approving it again.
+ * What a project defines that runs commands on this machine (MCP servers in
+ * its config or `.mcp.json`, hooks in its config)
+ * comes from a checked-out repository, so it only runs after the user trusts
+ * it for that workspace. Trust is keyed by the exact definition: editing one
+ * means approving it again. Keys are namespaced: `mcp:<name>`, `hook:<hash>`.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { switchbackPaths } from '../paths.ts';
+import { switchbackPaths } from './paths.ts';
 
 type Env = Record<string, string | undefined>;
 type TrustFile = Record<string, Record<string, string>>;
 
 function trustFile(env: Env): string {
-  return join(switchbackPaths(env).dataDir, 'mcp-trust.json');
+  return join(switchbackPaths(env).dataDir, 'trust.json');
 }
 
 export function definitionHash(definition: unknown): string {
@@ -32,21 +33,22 @@ function read(env: Env): TrustFile {
 
 export function isTrusted(
   workspaceRoot: string,
-  name: string,
+  key: string,
   definition: unknown,
   env: Env,
 ): boolean {
-  return read(env)[workspaceRoot]?.[name] === definitionHash(definition);
+  return read(env)[workspaceRoot]?.[key] === definitionHash(definition);
 }
 
-export function trustServers(
+/** Trust these definitions, by key, as they are now. */
+export function trust(
   workspaceRoot: string,
-  servers: Record<string, unknown>,
+  entries: Record<string, unknown>,
   env: Env = process.env,
 ): void {
   const all = read(env);
   const mine = { ...(all[workspaceRoot] ?? {}) };
-  for (const [name, def] of Object.entries(servers)) mine[name] = definitionHash(def);
+  for (const [key, def] of Object.entries(entries)) mine[key] = definitionHash(def);
   all[workspaceRoot] = mine;
   const file = trustFile(env);
   mkdirSync(dirname(file), { recursive: true });

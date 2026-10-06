@@ -600,6 +600,57 @@
         }
       }
     },
+    "hooks": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "PreToolUse",
+          "PostToolUse",
+          "UserPromptSubmit",
+          "Stop",
+          "SubagentStop",
+          "SessionStart",
+          "Notification"
+        ]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "matcher": {
+              "type": "string"
+            },
+            "hooks": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "command"
+                  },
+                  "command": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "timeout": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 3600
+                  }
+                },
+                "required": ["type", "command"]
+              }
+            }
+          },
+          "required": ["hooks"]
+        }
+      }
+    },
     "mcpServers": {
       "default": {},
       "type": "object",

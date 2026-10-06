@@ -3,6 +3,7 @@
  * marks, and parallel execution of calls that don't mutate anything.
  */
 import type { ToolResultPart } from '@switchback/protocol';
+import type { HookOutcome, HookRunner } from './hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
 import { privateToolUse } from './privacy.ts';
@@ -12,6 +13,9 @@ export type Interaction = 'prompt' | 'approve' | 'deny';
 
 export interface ToolRunnerDeps {
   commands: CommandRunner;
+  hooks: HookRunner;
+  /** What every hook hears about the session (its ID, the permission mode). */
+  hookPayload(s: LiveSession): Record<string, unknown>;
   runSubagent(
     parent: LiveSession,
     agent: string,
@@ -78,6 +82,20 @@ export class ToolRunner {
     return results;
   }
 
+  private hook(
+    s: LiveSession,
+    event: 'PreToolUse' | 'PostToolUse',
+    toolName: string,
+    payload: Record<string, unknown>,
+  ): Promise<HookOutcome> {
+    if (!this.deps.hooks.has(event)) return Promise.resolve({ context: [] });
+    return this.deps.hooks.run(
+      event,
+      { ...this.deps.hookPayload(s), tool_name: toolName, ...payload },
+      toolName,
+    );
+  }
+
   private async runOne(
     s: LiveSession,
     tools: Tool[],
@@ -128,7 +146,13 @@ export class ToolRunner {
     let output: string;
     let isError = false;
     let ran = false;
-    const permission = await this.gate.check(s, tool, parsed.data, callCtx, signal);
+    const pre = await this.hook(s, 'PreToolUse', call.name, { tool_input: parsed.data });
+    const hookDenied =
+      pre.block ??
+      (pre.decision?.behavior === 'deny' ? (pre.decision.reason ?? 'no reason given') : undefined);
+    const permission = hookDenied
+      ? { allowed: false, error: `Blocked by a PreToolUse hook: ${hookDenied}` }
+      : await this.gate.check(s, tool, parsed.data, callCtx, signal, pre.decision);
     if (!permission.allowed) {
       output =
         permission.error ??
@@ -144,6 +168,13 @@ export class ToolRunner {
         output = (err as Error).message;
         isError = true;
       }
+      const post = await this.hook(s, 'PostToolUse', call.name, {
+        tool_input: parsed.data,
+        tool_response: { output, isError },
+      });
+      // The call already ran; hooks can only tell the model something about it.
+      const notes = [...(post.block ? [`PostToolUse hook: ${post.block}`] : []), ...post.context];
+      if (notes.length) output = `${output}\n\n${notes.join('\n')}`;
     }
     s.signals.recordToolResult(!isError);
     // Even a failed call may have printed private content (a bash error, say).

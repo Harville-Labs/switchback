@@ -42,6 +42,8 @@ export const OrgPolicy = z.object({
        * projects' deny rules still do, since they only tighten.
        */
       allowUserPermissionRules: z.boolean().default(true),
+      /** false: only hooks defined by the org policy run. */
+      allowUserHooks: z.boolean().default(true),
       /** false: sessions can't use the `bypassPermissions` mode. */
       allowBypassPermissions: z.boolean().default(true),
       /** Per-user remote spend caps; users may set lower budgets, never higher. */

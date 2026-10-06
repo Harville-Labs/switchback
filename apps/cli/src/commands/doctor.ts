@@ -102,6 +102,14 @@ export async function doctor(flags: CommonFlags): Promise<number> {
       .join('\n'),
   );
   out(`  new sessions start in ${modeLabel(config.permissions.defaultMode)} mode`);
+  const hookCount = Object.values(config.hooks).reduce((n, m) => n + (m?.length ?? 0), 0);
+  out(`\nHooks\n  ${hookCount} configured`);
+  if (loaded.untrustedHooks.length) {
+    problems++;
+    out(
+      `  ✗ ${loaded.untrustedHooks.length} project hook(s) waiting for trust; see \`switchback hooks\``,
+    );
+  }
   await engine.shutdown();
 
   out('\nAgents');

@@ -4,7 +4,7 @@
  * project's config or Claude Code's .mcp.json) to start in this workspace.
  */
 import { formatMcpServers } from '@switchback/client';
-import { loadConfig, trustServers } from '@switchback/engine';
+import { loadConfig, trust as trustDefinitions } from '@switchback/engine';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
 export async function mcp(
@@ -39,7 +39,10 @@ function trust(names: string[], flags: CommonFlags): number {
     return 0;
   }
   // Trust the exact definitions as they are now; any later edit needs approval again.
-  trustServers(flags.cwd, Object.fromEntries(pending.map((p) => [p.name, p.definition])));
+  trustDefinitions(
+    flags.cwd,
+    Object.fromEntries(pending.map((p) => [`mcp:${p.name}`, p.definition])),
+  );
   for (const p of pending) process.stdout.write(`trusted ${p.name} (${p.source})\n`);
   return 0;
 }

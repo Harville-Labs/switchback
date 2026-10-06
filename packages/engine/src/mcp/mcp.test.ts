@@ -7,8 +7,8 @@ import { type Provider, type Script, ScriptedProvider } from '@switchback/provid
 import { parseAgentFile } from '../agents.ts';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine, type EngineOptions } from '../engine.ts';
+import { trust } from '../trust.ts';
 import { allowsMcpTool, McpHub, mcpToolName, resultText } from './hub.ts';
-import { trustServers } from './trust.ts';
 
 const FIXTURE = join(import.meta.dir, 'fixtures', 'test-server.ts');
 
@@ -196,7 +196,7 @@ describe('project servers need trust', () => {
       { name: 'repo', source: join(root, '.mcp.json'), definition: { command: 'evil' } },
     ]);
 
-    trustServers(root, { repo: { command: 'evil' } }, env);
+    trust(root, { 'mcp:repo': { command: 'evil' } }, env);
     expect(Object.keys(loadConfig(root, env, [], null).config.mcpServers).sort()).toEqual([
       'mine',
       'repo',

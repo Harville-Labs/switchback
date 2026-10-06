@@ -16,6 +16,7 @@ Usage
   switchback config [action]         path | show | schema | edit
   switchback doctor                  Check configuration, providers, and agents
   switchback mcp [trust [name...]]   Show MCP servers; trust a project's servers
+  switchback hooks [trust]           Show hooks; trust a project's hooks
   switchback agents [new]            List agents, or create one (interview, optional drafted prompt)
   switchback sessions                List this workspace's saved sessions [--json]
   switchback usage                   Show spend, savings, cache hits, and budget
@@ -359,6 +360,10 @@ async function main(argv: string[]): Promise<number> {
     case 'telemetry': {
       const { telemetry } = await import('./commands/telemetry.ts');
       return telemetry(rest[0], common);
+    }
+    case 'hooks': {
+      const { hooks } = await import('./commands/hooks.ts');
+      return hooks(rest[0], common);
     }
     case 'sessions': {
       const { sessions } = await import('./commands/sessions.ts');

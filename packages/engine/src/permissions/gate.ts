@@ -6,11 +6,14 @@
  * 3. Plan mode: no edits.
  * 4. Ask rules, a command that wants to leave the sandbox, and edits to the
  *    agent's own configuration: always ask, whatever the mode.
- * 5. Allow rules, including what the user allowed this session.
+ * 5. A PreToolUse hook's decision (its deny is applied before the gate, its
+ *    ask asks, its allow skips a level's prompt), then allow rules, including
+ *    what the user allowed this session.
  * 6. The mode: `bypassPermissions` allows the rest; `acceptEdits` allows edits.
  * 7. The category's level: `allow`, or ask.
  */
 import type { PermissionDecision, PermissionMode } from '@switchback/protocol';
+import type { HookOutcome } from '../hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from '../live-session.ts';
 import { PendingPrompts } from '../prompts.ts';
 import {
@@ -84,6 +87,8 @@ export class PermissionGate {
     input: unknown,
     ctx: ToolContext,
     signal: AbortSignal,
+    /** What PreToolUse hooks decided (deny is handled before the gate). */
+    hook?: HookOutcome['decision'],
   ): Promise<{ allowed: boolean; error?: string }> {
     if (tool.permission === 'none') return { allowed: true };
     const levels = this.host.config().permissions;
@@ -111,6 +116,10 @@ export class PermissionGate {
     const forced = this.mustAsk(tool, input, ctx);
     if ('refused' in forced) return { allowed: false, error: forced.refused };
     if (forced.ask) return this.ask(s, tool, call, ctx, signal, forced.ask);
+    if (hook?.behavior === 'ask')
+      return this.ask(s, tool, call, ctx, signal, `a hook${hook.reason ? `: ${hook.reason}` : ''}`);
+    // A hook's allow skips the prompt a level would show, never an ask rule's.
+    if (hook?.behavior === 'allow' && verdict?.behavior !== 'ask') return { allowed: true };
     if (verdict?.behavior === 'allow') return { allowed: true };
     if (verdict?.behavior !== 'ask') {
       if (mode === 'bypassPermissions') return { allowed: true };

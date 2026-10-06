@@ -67,6 +67,8 @@ export interface LiveSession {
   turn?: { id: string; done: Promise<unknown> };
   /** Prompts sent during the running turn, delivered at its next step. */
   queue?: (QueuedPrompt & { attachments: Attachment[] })[];
+  /** SessionStart hooks have run for this session in this engine. */
+  hooksStarted?: boolean;
 }
 
 export interface TurnResult {
