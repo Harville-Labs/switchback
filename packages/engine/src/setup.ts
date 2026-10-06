@@ -356,8 +356,8 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       continue;
     }
     models[alias] = chosen ? entry(chosen) : { provider: id, model: wire(r.model) };
-    // Agent aliases (`model: opus|sonnet|haiku`) mean large/medium/small on the
-    // first hosted provider chosen; they never replace a chosen model's alias.
+    // Size aliases (`model: large|medium|small` in agent files) are the first
+    // hosted provider's models of that size; they never replace a chosen model's alias.
     if (!sizeAliasesFrom) {
       sizeAliasesFrom = catalog;
       for (const [sizeAlias, m] of Object.entries(aliasModels(catalog)))

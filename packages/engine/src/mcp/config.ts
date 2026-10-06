@@ -1,6 +1,6 @@
 /**
- * MCP server configuration, in the same shape Claude Code uses in
- * `.mcp.json`, so existing server definitions work unchanged.
+ * MCP server configuration, in the `mcpServers` shape most MCP clients share
+ * (`command`/`args`/`env` for stdio, `url`/`headers` for HTTP).
  */
 import { z } from 'zod';
 

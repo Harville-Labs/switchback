@@ -27,10 +27,7 @@ export function projectPaths(root: string) {
     /** Personal settings for this project, never committed (rules saved from prompts). */
     localConfigFile: join(root, '.switchback', 'config.local.json'),
     agentsDir: join(root, '.switchback', 'agents'),
-    /** Claude Code compatibility: agents defined for Claude Code work unchanged. */
-    claudeAgentsDir: join(root, '.claude', 'agents'),
-    instructionFiles: [join(root, 'AGENTS.md'), join(root, 'CLAUDE.md')],
-    /** Claude Code compatibility: project MCP servers. */
-    mcpJson: join(root, '.mcp.json'),
+    /** Project instructions, in the open AGENTS.md convention (agents.md). */
+    instructionsFile: join(root, 'AGENTS.md'),
   };
 }

@@ -1,6 +1,6 @@
 # 0005: Claude Code-compatible agent definitions
 
-**Status:** Accepted · 2026-09-26
+**Status:** Superseded by [0016](0016-open-conventions.md) · 2026-09-26
 
 ## Context
 

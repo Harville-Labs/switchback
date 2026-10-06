@@ -4,9 +4,9 @@
  * way; none is a default. Anything not listed still works when configured by
  * hand, and prices can be overridden per model in config.
  *
- * Sizes map to the model aliases agents use: `large` -> `opus`, `medium` ->
- * `sonnet`, `small` -> `haiku` (the names come from Claude Code agent files,
- * but they mean "tier" for every provider).
+ * Each model has a size (`large`, `medium`, `small`); setup gives the first
+ * hosted provider's models those names as aliases, so agent files can say
+ * `model: small` on any provider.
  *
  * Prices are USD per million tokens, list price, checked 2026-09-26 (Gemini:
  * 2026-09-27, ai.google.dev/gemini-api/docs/pricing; Pro prices are for prompts
@@ -147,7 +147,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
 /** The model for each alias, per provider: the listed size, or the nearest larger one. */
 export function aliasModels(
   kind: HostedProviderKind,
-): Record<'opus' | 'sonnet' | 'haiku', CatalogModel> {
+): Record<'large' | 'medium' | 'small', CatalogModel> {
   const models = CATALOG[kind].models;
   const pick = (...sizes: ModelSize[]) => {
     for (const size of sizes) {
@@ -157,9 +157,9 @@ export function aliasModels(
     return models[0] as CatalogModel;
   };
   return {
-    opus: pick('large', 'medium', 'small'),
-    sonnet: pick('medium', 'large', 'small'),
-    haiku: pick('small', 'medium', 'large'),
+    large: pick('large', 'medium', 'small'),
+    medium: pick('medium', 'large', 'small'),
+    small: pick('small', 'medium', 'large'),
   };
 }
 

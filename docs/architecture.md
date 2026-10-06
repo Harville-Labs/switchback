@@ -78,7 +78,7 @@ The `task` tool creates a child session (`parentId` set) running a named agent w
 |---|---|---|
 | User config | `~/.config/switchback/config.json` | JSONC |
 | Project config | `.switchback/config.json` | JSONC |
-| Agent definitions | `~/.config/switchback/agents/`, `.claude/agents/`, `.switchback/agents/` | Markdown + YAML frontmatter |
+| Agent definitions | `~/.config/switchback/agents/`, `.switchback/agents/` | Markdown + YAML frontmatter |
 | Sessions | `~/.local/share/switchback/sessions/<id>.jsonl` | Header line, then one message per line, append-only. Written on the first message, so the header has the title and unused sessions leave no file. |
 | Usage ledger | `~/.local/share/switchback/usage.jsonl` | One entry per model call |
 | Organization sign-in | `~/.config/switchback/auth.json` | Credentials, mode 0600 |

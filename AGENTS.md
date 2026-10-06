@@ -61,9 +61,9 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 
 **Add a routing rule.** Add it to `Router.pick()` in priority order, give it a unique `rule` name, and write a test in `router.test.ts` for when it fires and when a higher-priority rule overrides it. Document it in the table in [docs/routing.md](docs/routing.md).
 
-**Add a tool.** Create it with `defineTool` in `packages/engine/src/tools/`, choose a `permission` category, set `mutating` honestly (it controls parallel execution), and append it to `ALL_TOOLS`. Appending changes the cache prefix, so don't reorder existing tools. Add a Claude Code alias in `TOOL_ALIASES` if one exists.
+**Add a tool.** Create it with `defineTool` in `packages/engine/src/tools/`, choose a `permission` category, set `mutating` honestly (it controls parallel execution), and append it to `ALL_TOOLS`. Appending changes the cache prefix, so don't reorder existing tools. 
 
-**Change agent definitions.** Built-ins live in `packages/engine/src/agents.ts`. The file format must stay compatible with Claude Code's `.claude/agents/*.md`. See [docs/subagents.md](docs/subagents.md).
+**Change agent definitions.** Built-ins live in `packages/engine/src/agents.ts`. Agent files are Markdown with YAML frontmatter, read only from Switchback's own directories ([ADR 0016](docs/adr/0016-open-conventions.md)). See [docs/subagents.md](docs/subagents.md).
 
 **Add a config key.** Add it to the Zod schema in `packages/engine/src/config.ts` with a default, run `bun run schema` (a test fails if the shipped schema is stale), document it in [docs/configuration.md](docs/configuration.md), and, if users choose it during setup, add a prompt and flag to `switchback init`. Never add a default local provider or model: local setup is the user's choice.
 
@@ -96,3 +96,4 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 - Don't read `process.env` outside config loading and provider credential resolution.
 - Don't log prompts, file contents, or credentials at `info` level or above.
 - Don't commit secrets, `.env` files, or real usage ledgers.
+- Don't read or follow another agent's setup (`CLAUDE.md`, `.claude/`, `.mcp.json`, and the like). Use open conventions (`AGENTS.md`) and Switchback's own `.switchback/` ([ADR 0016](docs/adr/0016-open-conventions.md)).

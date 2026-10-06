@@ -115,7 +115,7 @@ See [routing.md](routing.md#configuration-reference).
 | `web` | `ask` | `webfetch`, `websearch` |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
 | `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `plan`, or `bypassPermissions` |
-| `allow`, `ask`, `deny` | `[]` | Rules in Claude Code's syntax, such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
+| `allow`, `ask`, `deny` | `[]` | Rules such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
 
 The levels are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md) for the order rules and modes are applied in and the full rule syntax.
 
@@ -149,11 +149,11 @@ A command started with `background: true` keeps running after the call returns: 
 
 ### `hooks`
 
-Commands to run on session events, in Claude Code's format. Hooks from every layer add up; a project's wait for `switchback hooks trust`. See [hooks.md](hooks.md).
+Commands to run on session events. Hooks from every layer add up; a project's wait for `switchback hooks trust`. See [hooks.md](hooks.md).
 
 ### `mcpServers.<name>`
 
-Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. The format is the same as Claude Code's `.mcp.json`, and a project's `.mcp.json` is read too.
+Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. Servers use the `mcpServers` shape most MCP clients share, so a definition can be copied from another tool's config. Switchback reads them only from its own config files, not from `.mcp.json` or another tool's settings.
 
 ```jsonc
 "mcpServers": {
@@ -178,7 +178,7 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 | `enabled` | `true` | Keep a definition without starting it |
 | `timeoutMs` | 60000 | Per tool call |
 
-**Project servers need trust.** A server defined in a project's `.switchback/config.json` or `.mcp.json` runs a command from the repository, so it doesn't start until you approve it with `switchback mcp trust` (or `switchback mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `switchback mcp` and `switchback doctor` show every server's state and tool count.
+**Project servers need trust.** A server defined in a project's `.switchback/config.json` runs a command from the repository, so it doesn't start until you approve it with `switchback mcp trust` (or `switchback mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `switchback mcp` and `switchback doctor` show every server's state and tool count.
 
 ### `privacy`
 
