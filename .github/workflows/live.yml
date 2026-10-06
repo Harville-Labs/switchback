@@ -5,7 +5,8 @@ name: Live models
 # catalog model: OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY.
 on:
   schedule:
-    - cron: '0 7 * * *'
+    # Weekly: real-model runs are slow and small models are flaky day to day.
+    - cron: '0 7 * * 1'
   workflow_dispatch:
     inputs:
       model:
