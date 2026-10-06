@@ -196,6 +196,23 @@ export interface PermissionsListResult {
   rules: { rule: string; behavior: 'allow' | 'ask' | 'deny'; source: string }[];
 }
 
+/** A command the bash tool started in the background. */
+export interface ShellInfo {
+  id: string;
+  sessionId: string;
+  command: string;
+  /** Epoch milliseconds. */
+  startedAt: number;
+  status: 'running' | 'exited' | 'killed';
+  exitCode?: number;
+}
+
+export const ShellsListParams = z.object({ sessionId: z.string().optional() });
+export type ShellsListParams = z.infer<typeof ShellsListParams>;
+
+export const ShellsKillParams = z.object({ shellId: z.string() });
+export type ShellsKillParams = z.infer<typeof ShellsKillParams>;
+
 export const EscalationRespondParams = z.object({
   requestId: z.string(),
   approve: z.boolean(),
@@ -297,6 +314,9 @@ export interface Methods {
   /** Switch a session's permission mode; refused for modes the organization rules out. */
   'session.setMode': { params: SessionSetModeParams; result: { mode: PermissionMode } };
   'permissions.list': { params: PermissionsListParams; result: PermissionsListResult };
+  /** Background shells, all or one session's. */
+  'shells.list': { params: ShellsListParams; result: ShellInfo[] };
+  'shells.kill': { params: ShellsKillParams; result: ShellInfo };
 }
 
 export type MethodName = keyof Methods;
@@ -330,6 +350,8 @@ export type EngineEvent =
     } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
+  /** A background shell started, exited, or was stopped. */
+  | ({ type: 'shell.updated'; shell: ShellInfo } & SessionScoped)
   | ({ type: 'text.delta'; turnId: string; text: string } & SessionScoped)
   | ({ type: 'reasoning.delta'; turnId: string; text: string } & SessionScoped)
   | ({

@@ -1,5 +1,4 @@
 import type { AgentDefinition } from './agents.ts';
-import { currentShell } from './tools/shell.ts';
 
 /**
  * A session's system prompt, frozen when the session is created (invariant 7):
@@ -10,6 +9,7 @@ export function systemPrompt(
   workspaceRoot: string,
   root: string,
   instructions: string | undefined,
+  shell: string,
 ): string {
   const isolated =
     root !== workspaceRoot
@@ -17,7 +17,7 @@ export function systemPrompt(
       : '';
   const sections = [
     agent.prompt,
-    `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${currentShell().name}\nFile paths in tool calls are relative to the workspace root.`,
+    `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${shell}\nFile paths in tool calls are relative to the workspace root.`,
   ];
   if (instructions) sections.push(`# Project instructions\n${instructions.trim()}`);
   return sections.join('\n\n');

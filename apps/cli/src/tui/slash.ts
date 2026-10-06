@@ -12,6 +12,7 @@ import {
   formatPermissions,
   formatReceipt,
   formatRoles,
+  formatShells,
   formatSubagents,
   formatUsage,
   fromTranscript,
@@ -270,6 +271,18 @@ const HANDLERS: Record<string, Handler> = {
     say(ctx, `MCP servers\n${formatMcpServers(servers)}`);
   },
   copy,
+  shells: async (ctx, args) => {
+    if (args[0] === 'kill') {
+      if (!args[1]) return say(ctx, 'usage: /shells kill <id>');
+      const shell = await ctx.client
+        .request('shells.kill', { shellId: args[1] })
+        .catch((err: Error) => say(ctx, `shells: ${err.message}`));
+      if (shell)
+        say(ctx, `${shell.id} ${shell.status === 'killed' ? 'stopped' : 'had already exited'}`);
+      return;
+    }
+    say(ctx, formatShells(await ctx.client.request('shells.list', {})));
+  },
   mode: async (ctx, args) => {
     const { modes, mode } = await ctx.client.request('permissions.list', {
       sessionId: ctx.session.id,

@@ -6,11 +6,12 @@ import type { ToolResultPart } from '@switchback/protocol';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
 import { privateToolUse } from './privacy.ts';
-import type { SubagentResult, Tool, ToolContext } from './tools/index.ts';
+import type { CommandRunner, SubagentResult, Tool, ToolContext } from './tools/index.ts';
 
 export type Interaction = 'prompt' | 'approve' | 'deny';
 
 export interface ToolRunnerDeps {
+  commands: CommandRunner;
   runSubagent(
     parent: LiveSession,
     agent: string,
@@ -56,6 +57,7 @@ export class ToolRunner {
       runSubagent: (agent, prompt, description, options) =>
         this.deps.runSubagent(s, agent, prompt, description, signal, options),
       hidden: (path) => policy.hides(path, root),
+      commands: this.deps.commands,
       ...(s.depth === 0
         ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
         : {}),

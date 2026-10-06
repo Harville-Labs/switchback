@@ -42,6 +42,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`) | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
+| `shells.list` | `{ sessionId? }` | `ShellInfo[]`: background shells, all or one session's |
+| `shells.kill` | `{ shellId }` | `ShellInfo` |
 | `permissions.list` | `{ sessionId? }` | `{ mode?, modes, levels, rules }`: the session's mode, the modes it may switch to, the category levels, and every rule with its `source` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
@@ -61,6 +63,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
 | `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step; `step`/`steps` (where the model is on the escalation ladder) and `stickyTurns` |
 | `roles.updated` | A session's roles changed (`session.setRoles`), so every attached client can show them |
+| `shell.updated` | A background shell started, exited, or was stopped (`shell`: id, command, status, exit code) |
 | `mode.changed` | A session's permission mode changed (`session.setMode`, or a plan was approved) |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local |

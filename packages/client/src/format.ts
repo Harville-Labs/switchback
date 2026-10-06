@@ -9,6 +9,7 @@ import type {
   PermissionMode,
   PermissionsListResult,
   SessionRoles,
+  ShellInfo,
   UsageReport,
 } from '@switchback/protocol';
 import type { ViewItem, ViewState } from './view.ts';
@@ -360,4 +361,27 @@ export function transcriptMarkdown(items: readonly ViewItem[]): string {
       parts.push(`> ${toolLabel(it.name, it.input)}${it.status === 'error' ? ' (failed)' : ''}`);
   }
   return parts.join('\n\n');
+}
+
+/** `/shells`: background shells, running first. */
+export function formatShells(shells: readonly ShellInfo[], now = Date.now()): string {
+  if (!shells.length) return 'no background shells (bash with background: true starts one)';
+  const order = { running: 0, exited: 1, killed: 2 };
+  return [...shells]
+    .sort((a, b) => order[a.status] - order[b.status] || b.startedAt - a.startedAt)
+    .map((s) => {
+      const state =
+        s.status === 'running'
+          ? `running ${Math.round((now - s.startedAt) / 1000)}s`
+          : s.status === 'killed'
+            ? 'stopped'
+            : `exited ${s.exitCode}`;
+      return `  ${s.status === 'running' ? '●' : '○'} ${s.id}  ${state.padEnd(14)} $ ${s.command}`;
+    })
+    .join('\n');
+}
+
+/** How many of a view's background shells are running. */
+export function runningShells(shells: Record<string, ShellInfo> | undefined): number {
+  return Object.values(shells ?? {}).filter((s) => s.status === 'running').length;
 }

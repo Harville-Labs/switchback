@@ -12,6 +12,7 @@ import type {
   ReviewIssue,
   SessionRoles,
   SessionSummary,
+  ShellInfo,
   Tier,
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
@@ -95,6 +96,8 @@ export interface ViewState {
   private?: string;
   /** The permission mode (top-level sessions). */
   mode?: PermissionMode;
+  /** Background shells started by this session or its subagents, by ID. */
+  shells?: Record<string, ShellInfo>;
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
   children: Record<string, ViewState>;
 }
@@ -263,6 +266,12 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
       ? `${event.org.name} policy updated (revision ${event.org.version})`
       : 'configuration updated';
     return addInfo(state, [head, ...event.notes.map((n) => `  ${n}`)].join('\n'));
+  }
+
+  // Shells from any session in the tree; the status line counts the running ones.
+  if (event.type === 'shell.updated') {
+    if (!owns(state, event.sessionId)) return state;
+    return { ...state, shells: { ...state.shells, [event.shell.id]: event.shell } };
   }
 
   if (event.type === 'permission.resolved')

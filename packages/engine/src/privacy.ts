@@ -77,8 +77,11 @@ export function privateToolUse(
     }
     return undefined;
   }
-  if (tool === 'bash' && typeof i.command === 'string') {
-    for (const word of commandWords(i.command)) {
+  // A background shell's output starts with its command (bash_output in tools/bash.ts).
+  const command =
+    tool === 'bash' ? i.command : tool === 'bash_output' ? /^\$ (.*)/.exec(output)?.[1] : undefined;
+  if (typeof command === 'string') {
+    for (const word of commandWords(command)) {
       const p = check(word);
       if (p) return `a command named ${p}`;
     }
