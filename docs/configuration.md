@@ -201,6 +201,17 @@ See [privacy.md](privacy.md) for what's detected and the limits.
 
 See [review.md](review.md).
 
+### `notifications`
+
+How clients get your attention: when a permission, plan, or escalation prompt is waiting, and when a long turn finishes.
+
+| Key | Default | |
+|---|---|---|
+| `mode` | `system` | `system`: the TUI asks the terminal for a desktop notification (iTerm2, WezTerm, Ghostty, kitty, foot, rxvt), and rings the bell in other terminals and inside tmux. `bell`: the terminal bell. `off`: nothing. VS Code shows its own notification unless this is `off` |
+| `afterSeconds` | `30` | Notify when a turn that ran at least this long finishes (cancelled turns and subagents' turns don't count); `0` turns that off |
+
+VS Code notifies only when you can't see the chat: its window isn't focused, or the chat view is closed. The [`Notification` hook](hooks.md) runs whatever this is set to, for your own notifier.
+
 ### `telemetry`
 
 | Key | Default | |

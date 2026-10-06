@@ -174,6 +174,19 @@ export const SwitchbackConfig = z.object({
       secrets: z.enum(['redact', 'block', 'off']).default('redact'),
     })
     .prefault({}),
+  /** How clients get your attention when Switchback needs you or finishes a long turn. */
+  notifications: z
+    .object({
+      /**
+       * `system`: a desktop notification (the TUI asks the terminal, falling
+       * back to the bell; VS Code shows its own). `bell`: the terminal bell
+       * (VS Code: its own notification). `off`: neither.
+       */
+      mode: z.enum(['system', 'bell', 'off']).default('system'),
+      /** Also notify when a turn that ran at least this long finishes; 0 turns that off. */
+      afterSeconds: z.number().int().min(0).default(30),
+    })
+    .prefault({}),
   /** Append-only context compaction (docs/adr/0008-append-only-compaction.md). */
   compaction: z
     .object({

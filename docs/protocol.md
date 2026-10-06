@@ -33,7 +33,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 
 | Method | Params | Result |
 |---|---|---|
-| `initialize` | `protocolVersion`, `client`, `workspaceRoot` | Engine version, models, agents, and `org` when an organization policy applies |
+| `initialize` | `protocolVersion`, `client`, `workspaceRoot` | Engine version, models, agents, `notifications` settings, and `org` when an organization policy applies |
 | `session.create` | `agent?`, `title?`, `permissionMode?` | `SessionSummary` (with the mode in `permissionMode`) |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |

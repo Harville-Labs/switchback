@@ -1,4 +1,5 @@
 import {
+  AttentionTracker,
   addInfo,
   addUserPrompt,
   customCommands,
@@ -25,6 +26,7 @@ import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
 import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
+import { terminalNotification } from './notify.ts';
 import { PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
@@ -118,13 +120,17 @@ export function App({
     );
   }, [client]);
 
+  // One tracker for the app's life: it remembers when turns started.
+  const [attention] = useState(() => new AttentionTracker(init.notifications));
   useEffect(() => {
     refreshUsage();
     return client.on((event) => {
       setView((v) => reduce(v, event));
+      const a = attention.observe(event);
+      if (a) stdout.write(terminalNotification(a.message, init.notifications?.mode ?? 'system'));
       if (event.type === 'turn.completed' && event.sessionId === session.id) refreshUsage();
     });
-  }, [client, session.id, refreshUsage]);
+  }, [client, session.id, refreshUsage, attention, init.notifications, stdout]);
 
   // Commit finished turns so Ink stops re-rendering them.
   useEffect(() => {

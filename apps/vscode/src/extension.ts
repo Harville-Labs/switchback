@@ -7,6 +7,7 @@
 import { chmodSync, existsSync } from 'node:fs';
 import type { EngineEvent, InitializeResult, Message, RoutePreference } from '@switchback/protocol';
 import * as vscode from 'vscode';
+import { AttentionNotifier } from './attention.ts';
 import { ChatViewProvider } from './chat-view.ts';
 import { EngineConnection, NoEngineError, resolveEngine } from './connection.ts';
 import { type AttachChoice, EditorContext } from './context.ts';
@@ -69,6 +70,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
+  const attention = new AttentionNotifier(chat);
 
   const start = async () => {
     engine?.dispose();
@@ -80,7 +82,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     }
     engine = new EngineConnection(root, log, status, review, bundled);
     engine.context = editorContext;
-    engine.onMessage((m) => chat.post(m));
+    engine.onMessage((m) => {
+      chat.post(m);
+      attention.observe(m);
+    });
     try {
       await engine.start();
       // Local models are user-configured; nudge toward setup when there isn't one.

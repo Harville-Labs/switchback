@@ -370,6 +370,7 @@ export class Engine {
         tier: this.models.tierOfProvider(m.provider),
       })),
       agents: this.listAgents(),
+      notifications: this.options.config.notifications,
       ...(org ? { org: { id: org.id, name: org.name, version: org.version } } : {}),
     };
   }
