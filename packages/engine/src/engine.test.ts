@@ -296,8 +296,14 @@ describe('Engine', () => {
     expect(lp.requests.filter((q) => q.system.includes('read-only search agent'))).toHaveLength(2);
     // Explore is read-only: its tool list must not include write or task.
     const exploreReq = lp.requests.find((q) => q.system.includes('read-only search agent'));
-    // The checklist comes with every agent; it isn't a capability.
-    expect(exploreReq?.tools.map((t) => t.name).sort()).toEqual(['glob', 'grep', 'read', 'todo']);
+    // The checklist and skills come with every agent; they aren't capabilities.
+    expect(exploreReq?.tools.map((t) => t.name).sort()).toEqual([
+      'glob',
+      'grep',
+      'read',
+      'skill',
+      'todo',
+    ]);
   });
 
   test('the session receipt includes subagents and the reference model', async () => {

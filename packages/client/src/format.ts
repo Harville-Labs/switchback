@@ -81,6 +81,10 @@ export function toolLabel(name: string, input: unknown): string {
       return `$ ${first('command') ?? ''}`;
     case 'task':
       return `${first('agent') ?? 'agent'}: ${first('description') ?? ''}`;
+    case 'skill': {
+      const file = first('file');
+      return `skill ${first('name') ?? ''}${file ? ` · ${file}` : ''}`;
+    }
     default: {
       const arg = first('path', 'pattern', 'file', 'url', 'query');
       return arg ? `${name} ${arg}` : name;

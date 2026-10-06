@@ -38,7 +38,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 - `●` rows are tool calls, colored by state: yellow running, green succeeded, red failed, with the first line of a failure under it (`⎿`). Replies start with a white `●`.
 - `↳` rows are subagents, showing their tier, tool-call count, and current activity. While one runs, its latest steps appear indented under the row (nested subagents too). Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did: its routes, every tool call with the first line of output, nested subagents, and its final report.
 - While a turn runs, a spinner line above the input says what's happening (thinking, running a tool, waiting on a subagent) and for how long.
-- Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`.
+- Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`. Your [custom commands](../commands-and-skills.md) follow under **Custom**.
 - The status bar shows the agent, route preference, last tier used, session cost, today's spend against budget, and this week's savings.
 
 ## Commands and keys

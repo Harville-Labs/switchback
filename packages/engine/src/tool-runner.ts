@@ -7,6 +7,7 @@ import type { HookOutcome, HookRunner } from './hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
 import { privateToolUse } from './privacy.ts';
+import type { Skill } from './skills.ts';
 import type { CommandRunner, SubagentResult, Tool, ToolContext } from './tools/index.ts';
 
 export type Interaction = 'prompt' | 'approve' | 'deny';
@@ -26,6 +27,7 @@ export interface ToolRunnerDeps {
   ): Promise<SubagentResult>;
   /** An edit or write is about to run; review remembers the file's content first. */
   noteEdit(s: LiveSession, path: string, writer: string): void;
+  skills(): Map<string, Skill>;
 }
 
 export interface ToolCall {
@@ -64,6 +66,7 @@ export class ToolRunner {
       web: this.host.config().web,
       ...(s.private ? { privateReason: s.private } : {}),
       commands: this.deps.commands,
+      skills: () => this.deps.skills(),
       ...(s.depth === 0
         ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
         : {}),

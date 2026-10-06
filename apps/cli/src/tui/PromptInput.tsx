@@ -54,6 +54,8 @@ interface Props {
   placeholder: string;
   history: readonly string[];
   root: string;
+  /** Custom commands, listed in the menu after the built-in ones. */
+  custom: readonly SlashCommand[];
   onSubmit: (text: string) => void;
   /** Ctrl+C on an empty input (with text in it, Ctrl+C clears it instead). */
   onInterrupt: () => void;
@@ -73,6 +75,7 @@ export function PromptInput({
   placeholder,
   history,
   root,
+  custom,
   onSubmit,
   onInterrupt,
   onSubmitNow,
@@ -92,7 +95,7 @@ export function PromptInput({
   const suggestions = mention && !menuClosed ? rankFiles(files, mention.query) : [];
   const menuOpen = suggestions.length > 0;
   const query = menuClosed ? undefined : commandQuery(state.value);
-  const commands = query === undefined ? [] : matchCommands(query, 'tui');
+  const commands = query === undefined ? [] : matchCommands(query, 'tui', custom);
   const commandsOpen = commands.length > 0;
 
   // Load the file list the first time a mention starts.

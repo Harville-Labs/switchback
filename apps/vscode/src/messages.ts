@@ -1,5 +1,6 @@
 /** Messages between the extension host and the chat webview. */
 import type {
+  CustomCommandInfo,
   EngineEvent,
   InitializeResult,
   Message,
@@ -25,6 +26,8 @@ export type HostToWebview =
   | { type: 'history'; session: SessionSummary; messages: Message[] }
   /** Which models fill the session's roles; sent whenever the session changes. */
   | { type: 'roles'; roles: SessionRoles }
+  /** Custom slash commands, for the menu; sent on connect and after each turn. */
+  | { type: 'commands'; commands: CustomCommandInfo[] }
   /** Output of a slash command the host ran, shown in the chat. */
   | { type: 'info'; text: string }
   | { type: 'disconnected'; message: string };

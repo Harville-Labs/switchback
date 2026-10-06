@@ -149,6 +149,8 @@ export function serve(
         return engine.mcpStatus();
       case 'agents.list':
         return engine.listAgents();
+      case 'commands.list':
+        return engine.listCommands();
       case 'usage.get': {
         const p = parse(UsageGetParams, req.params);
         return engine.usage(p.period, p.sessionId);

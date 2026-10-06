@@ -11,6 +11,7 @@
 - [Privacy](privacy.md): files that never leave your machine, and secret redaction
 - [Review with a stronger model](review.md): a ladder of reviewers, local or remote, checks what a model changed
 - [Telemetry](telemetry.md): opt-in anonymous usage statistics, field by field
+- [Custom commands and skills](commands-and-skills.md): your own `/commands`, and skills the model loads when it needs them
 - [Hooks](hooks.md): your own commands on session events (Claude Code's format)
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
 - [Sites](sites.md): your company's site on switchback.harville.ai: seats, members, roles, policy, devices

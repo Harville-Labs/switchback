@@ -1,11 +1,14 @@
 import {
   addInfo,
   addUserPrompt,
+  customCommands,
   initialView,
+  isCustomCommand,
   nextMode,
   reduce,
   resolveEscalation,
   resolvePermission,
+  type SlashCommand,
   type SwitchbackClient,
   type ViewState,
 } from '@switchback/client';
@@ -81,6 +84,8 @@ export function App({
   const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
   const [exitArmedAt, setExitArmedAt] = useState<number | undefined>();
+  /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
+  const [custom, setCustom] = useState<SlashCommand[]>([]);
 
   useEffect(() => {
     if (exitArmedAt === undefined) return;
@@ -106,6 +111,11 @@ export function App({
 
   const refreshUsage = useCallback(() => {
     client.request('usage.get', {}).then(setUsage, () => {});
+    // Command files can change between turns; the engine rescans them on each list.
+    client.request('commands.list', {}).then(
+      (c) => setCustom(customCommands(c)),
+      () => {},
+    );
   }, [client]);
 
   useEffect(() => {
@@ -131,6 +141,7 @@ export function App({
     setRoute,
     setReview,
     setUsage,
+    custom,
     listed,
     setListed,
     writeRaw: (s) => stdout.write(s),
@@ -170,7 +181,7 @@ export function App({
     const text = raw.trim();
     if (!text) return;
     history.add(raw);
-    if (text.startsWith('/')) return runSlashCommand(slash, text);
+    if (text.startsWith('/') && !isCustomCommand(text, custom)) return runSlashCommand(slash, text);
     send(text, view.running ? 'queue' : undefined);
   };
 
@@ -296,6 +307,7 @@ export function App({
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
         <PromptInput
           focus={!permission && !escalation && !picking && !rewinding}
+          custom={custom}
           onInterrupt={interrupt}
           onSubmitNow={(text) => send(text, 'interrupt')}
           onCancel={() => {

@@ -2,7 +2,11 @@
  * Slash commands, shared by both clients so the TUI's /help and the VS Code
  * command menu list the same things. Each client runs a command its own way
  * (the TUI prints, VS Code may open a picker); this is only the catalog.
+ * Custom commands (Markdown files the engine lists with `commands.list`) join
+ * it in the `Custom` group; a client sends one as a prompt and the engine
+ * expands it.
  */
+import type { CustomCommandInfo } from '@switchback/protocol';
 
 export type ClientName = 'tui' | 'vscode';
 
@@ -13,7 +17,8 @@ export type CommandGroup =
   | 'Models'
   | 'Usage'
   | 'Tools'
-  | 'Extension';
+  | 'Extension'
+  | 'Custom';
 
 export interface SlashCommand {
   name: string;
@@ -135,8 +140,35 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'exit', group: 'Extension', description: 'quit', clients: ['tui'] },
 ];
 
-export function commandsFor(client: ClientName): SlashCommand[] {
-  return SLASH_COMMANDS.filter((c) => !c.clients || c.clients.includes(client));
+/**
+ * Custom commands as menu entries. A built-in command keeps its name: a
+ * custom one that reuses it is left out, since the client would run the
+ * built-in anyway.
+ */
+export function customCommands(infos: readonly CustomCommandInfo[]): SlashCommand[] {
+  const builtin = new Set(SLASH_COMMANDS.map((c) => c.name));
+  return infos
+    .filter((c) => !builtin.has(c.name))
+    .map((c) => ({
+      name: c.name,
+      ...(c.args ? { args: c.args } : {}),
+      description: `${c.description} (${c.source})`,
+      group: 'Custom' as const,
+    }));
+}
+
+/** Whether a prompt runs a custom command (`/name args`), so it goes to the engine as a prompt. */
+export function isCustomCommand(text: string, custom: readonly SlashCommand[]): boolean {
+  const name = /^\/(\S+)/.exec(text.trim())?.[1];
+  return !!name && custom.some((c) => c.name === name);
+}
+
+/** The client's commands, its own first and then the custom ones. */
+export function commandsFor(
+  client: ClientName,
+  custom: readonly SlashCommand[] = [],
+): SlashCommand[] {
+  return [...SLASH_COMMANDS.filter((c) => !c.clients || c.clients.includes(client)), ...custom];
 }
 
 /**
@@ -144,9 +176,13 @@ export function commandsFor(client: ClientName): SlashCommand[] {
  * that contain the query, in catalog order within each. Descriptions are
  * searched from three characters on; shorter queries match too much prose.
  */
-export function matchCommands(query: string, client: ClientName): SlashCommand[] {
+export function matchCommands(
+  query: string,
+  client: ClientName,
+  custom: readonly SlashCommand[] = [],
+): SlashCommand[] {
   const q = query.trim().toLowerCase();
-  const all = commandsFor(client);
+  const all = commandsFor(client, custom);
   if (!q) return all;
   const prefix = all.filter((c) => c.name.startsWith(q));
   const contains = all.filter(
@@ -167,8 +203,8 @@ export function commandQuery(input: string): string | undefined {
 }
 
 /** The command list as aligned text, for /help. */
-export function formatCommands(client: ClientName): string {
-  const rows = commandsFor(client).map((c) => [
+export function formatCommands(client: ClientName, custom: readonly SlashCommand[] = []): string {
+  const rows = commandsFor(client, custom).map((c) => [
     `/${c.name}${c.args ? ` ${c.args}` : ''}`,
     c.description,
   ]);

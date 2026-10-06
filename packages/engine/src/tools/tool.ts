@@ -3,6 +3,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
+import type { Skill } from '../skills.ts';
 import type { CommandRunner } from './process.ts';
 import type { WebSettings } from './web.ts';
 
@@ -43,6 +44,8 @@ export interface ToolContext {
   commands?: CommandRunner;
   /** Ask the user to approve a plan; only top-level sessions have it (exit_plan_mode). */
   approvePlan?: (plan: string) => Promise<PlanAnswer>;
+  /** The skills there are now, by name (the skill tool). */
+  skills?: () => Map<string, Skill>;
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';

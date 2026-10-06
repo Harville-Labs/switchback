@@ -11,12 +11,14 @@ export interface SystemPromptParts {
   project?: string;
   /** Extra instructions for this session alone (a headless run's `--instructions`). */
   session?: string;
+  /** The skills section (names and descriptions; the skill tool loads the rest). */
+  skills?: string;
 }
 
 /**
  * A session's system prompt, frozen when the session is created (invariant 7):
  * the agent's prompt, the environment, the project's instructions, and any
- * instructions for this session.
+ * instructions for this session, and the skills it can load.
  */
 export function systemPrompt({
   agent,
@@ -25,6 +27,7 @@ export function systemPrompt({
   shell,
   project,
   session,
+  skills,
 }: SystemPromptParts): string {
   const isolated =
     root !== workspaceRoot
@@ -36,5 +39,6 @@ export function systemPrompt({
   ];
   if (project) sections.push(`# Project instructions\n${project.trim()}`);
   if (session) sections.push(`# Instructions for this session\n${session.trim()}`);
+  if (skills) sections.push(skills);
   return sections.join('\n\n');
 }
