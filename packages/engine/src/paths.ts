@@ -32,5 +32,8 @@ export function projectPaths(root: string) {
     instructionFiles: [join(root, 'AGENTS.md'), join(root, 'CLAUDE.md')],
     /** Claude Code compatibility: project MCP servers. */
     mcpJson: join(root, '.mcp.json'),
+    /** Claude Code compatibility: hooks (only `hooks` is read from these). */
+    claudeSettings: join(root, '.claude', 'settings.json'),
+    claudeLocalSettings: join(root, '.claude', 'settings.local.json'),
   };
 }

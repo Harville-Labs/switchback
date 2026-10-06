@@ -41,6 +41,8 @@ import { type AgentSpec, draftAgentPrompt } from './authoring.ts';
 import { Compactor } from './compactor.ts';
 import { type SwitchbackConfig, tierOfModel } from './config.ts';
 import { ExternalRuntimes } from './external-runtime.ts';
+import { HookRunner } from './hooks/runner.ts';
+import { TurnHooks } from './hooks/turn-hooks.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { McpHub } from './mcp/hub.ts';
@@ -132,6 +134,7 @@ export class Engine {
   private readonly models: ModelDirectory;
   private readonly gate: PermissionGate;
   private readonly commands: CommandRunner;
+  private readonly hooks: HookRunner;
   private readonly tools: ToolRunner;
   private readonly reviews: ReviewRunner;
   private readonly compactor: Compactor;
@@ -176,6 +179,12 @@ export class Engine {
     this.compactor = new Compactor(this.host, this.models);
     const paths = switchbackPaths();
     const dataDir = options.dataDir ?? paths.dataDir;
+    this.hooks = new HookRunner({
+      hooks: () => this.options.config.hooks,
+      workspaceRoot: options.workspaceRoot,
+      argv: (command) => shellOf(this.options.config.bash).argv(command),
+      notify: (level, message) => this.notify(level, message),
+    });
     this.commands = new CommandRunner(
       () => this.options.config.bash,
       (shell) => this.emit({ type: 'shell.updated', sessionId: shell.sessionId, shell }),
@@ -206,6 +215,8 @@ export class Engine {
     });
     this.tools = new ToolRunner(this.host, this.gate, {
       commands: this.commands,
+      hooks: this.hooks,
+      hookPayload: (s) => this.hookPayload(s),
       runSubagent: (parent, agent, prompt, description, signal, opts) =>
         this.subagents.run(parent, agent, prompt, description, signal, opts),
       noteEdit: (s, path, writer) => this.reviews.noteEdit(s, path, writer),
@@ -248,6 +259,7 @@ export class Engine {
     });
     this.turns = new TurnRunner(this.host, {
       loop: this.agentLoop,
+      hooks: new TurnHooks(this.hooks, (s) => this.hookPayload(s)),
       reviews: this.reviews,
       mode: (s) => this.modeOf(s),
     });
@@ -325,6 +337,19 @@ export class Engine {
 
   private emit(event: EngineEvent): void {
     for (const l of this.listeners) l(event);
+    // Notification hooks: Switchback is waiting on the user.
+    if (event.type !== 'permission.requested' && event.type !== 'escalation.requested') return;
+    if (!this.hooks.has('Notification')) return;
+    const message =
+      event.type === 'permission.requested'
+        ? `Switchback needs your permission: ${event.summary}`
+        : `Switchback asks to escalate to ${event.target.model}`;
+    void this.hooks.run('Notification', { session_id: event.sessionId, message });
+  }
+
+  /** What every hook hears about the session, in Claude Code's field names. */
+  private hookPayload(s: LiveSession): Record<string, unknown> {
+    return { session_id: s.header.id, permission_mode: this.modeOf(s) };
   }
 
   // -------------------------------------------------------------------------

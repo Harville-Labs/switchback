@@ -53,6 +53,7 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
     "allowUserMcpServers": false,                   // only MCP servers defined in this policy
     "allowUserPermissionRules": false,              // only this policy's allow/ask rules (members' deny rules still apply)
     "allowBypassPermissions": false,                // no bypassPermissions mode
+    "allowUserHooks": false,                        // only this policy's hooks run
     "maxDailyUsd": 10,                              // users may set lower budgets, never higher
     "maxMonthlyUsd": 150
   },
@@ -80,6 +81,10 @@ Then `restrictions` run on the result and *remove* anything not allowed: disallo
 ### Sandbox
 
 Enforce `"bash": { "sandbox": { "mode": "on", "allowUnsandboxed": false } }` to require the OS sandbox for every command and refuse requests to leave it. Members on a platform without it (Windows, or Linux without bubblewrap) can't run commands until they install what `switchback doctor` names.
+
+### Hooks
+
+Hooks in a policy's `defaults` or `enforced` run for every member, alongside their own, and need no trust. With `allowUserHooks: false`, only the policy's hooks run; members' and projects' are ignored, and `switchback whoami` lists what was left out. Enforce an audit hook with `"hooks": { "PostToolUse": [ ... ] }` in `enforced` ([hooks.md](hooks.md)).
 
 ### Permission rules
 

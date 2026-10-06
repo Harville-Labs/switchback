@@ -15,6 +15,7 @@ import {
   textOf,
 } from '@switchback/protocol';
 import type { AgentLoop } from './agent-loop.ts';
+import type { TurnHooks } from './hooks/turn-hooks.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import { modeReminder } from './permissions/modes.ts';
@@ -33,6 +34,7 @@ type PromptParams = Omit<SessionPromptParams, 'sessionId'>;
 
 export interface TurnRunnerDeps {
   loop: AgentLoop;
+  hooks: TurnHooks;
   reviews: ReviewRunner;
   mode(s: LiveSession): PermissionMode;
 }
@@ -90,13 +92,17 @@ export class TurnRunner {
     if (!queued.length) return;
     this.emitQueue(s);
     for (const q of queued) {
-      await this.appendPrompt(s, q.text, q.attachments, undefined);
-      this.host.emit({
-        type: 'queue.delivered',
-        ...scope(s),
-        turnId,
-        prompt: { id: q.id, text: q.text },
-      });
+      const blocked = await this.appendPrompt(s, q.text, q.attachments, undefined);
+      this.host.emit(
+        blocked
+          ? {
+              type: 'error',
+              ...scope(s),
+              turnId,
+              message: `A UserPromptSubmit hook blocked the queued prompt "${q.text}": ${blocked}`,
+            }
+          : { type: 'queue.delivered', ...scope(s), turnId, prompt: { id: q.id, text: q.text } },
+      );
     }
   }
 
@@ -153,12 +159,16 @@ export class TurnRunner {
 
     this.host.emit({ type: 'turn.started', ...scope(session), turnId });
     // An empty prompt continues the session with whatever reports are waiting.
-    if (text) await this.appendPrompt(session, text, extra, options.private);
+    const blocked = text
+      ? await this.appendPrompt(session, text, extra, options.private)
+      : undefined;
     session.signals.startUserTurn();
     if (session.depth === 0) session.turnEdits = new Map();
 
     let stopReason: StopReason = 'end_turn';
     try {
+      // A blocked prompt never reaches the model; the turn ends the usual way.
+      if (blocked) throw new Error(`A UserPromptSubmit hook blocked the prompt: ${blocked}`);
       stopReason = await this.deps.loop.run(session, route, turnId, controller.signal);
       // Headless runs and subagents finish their background work before they
       // report, so nothing is left running unattended.
@@ -171,6 +181,22 @@ export class TurnRunner {
         if (!session.inbox.length) await Promise.race(session.background.values());
         if (session.inbox.length)
           stopReason = await this.deps.loop.run(session, route, turnId, controller.signal);
+      }
+      // A Stop hook can send the model back to work, a few times at most.
+      for (let n = 0; stopReason === 'end_turn' && !controller.signal.aborted; n++) {
+        const reason = await this.deps.hooks.keepGoing(session, n);
+        if (!reason) break;
+        this.host.append(session, {
+          role: 'user',
+          parts: [
+            {
+              type: 'text',
+              text: `A Stop hook says the work isn't done: ${reason}`,
+              reminder: true,
+            },
+          ],
+        });
+        stopReason = await this.deps.loop.run(session, route, turnId, controller.signal);
       }
       const review = options.review ?? this.host.rolesOf(session).review.mode === 'auto';
       if (review && session.depth === 0 && stopReason === 'end_turn' && text)
@@ -203,13 +229,19 @@ export class TurnRunner {
     return { stopReason, text: last ? textOf(last) : '' };
   }
 
-  /** The user's prompt, with attachments and @-mentioned files, marked private where they are. */
+  /**
+   * The user's prompt, with attachments and @-mentioned files (marked private
+   * where they are), and whatever hooks or the mode add for the model.
+   * Returns why a hook blocked it, if one did; nothing is appended then.
+   */
   private async appendPrompt(
     s: LiveSession,
     text: string,
     extra: Attachment[],
     priv: string | undefined,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
+    const hooked = await this.deps.hooks.beforePrompt(s, text);
+    if (hooked.blocked) return hooked.blocked;
     const matches = this.host.privatePaths();
     const attachments = [
       ...(await expandAttachments(extra, this.host.rootOf(s)).catch(() => [])),
@@ -222,13 +254,15 @@ export class TurnRunner {
     const mode = this.deps.mode(s);
     const reminder = s.depth === 0 ? modeReminder(s.toldMode, mode) : undefined;
     s.toldMode = mode;
+    const notes = [...hooked.context, ...(reminder ? [reminder] : [])];
     this.host.append(s, {
       role: 'user',
       parts: [
         { type: 'text', text, ...(priv ? { private: priv } : {}) },
         ...attachments,
-        ...(reminder ? [{ type: 'text' as const, text: reminder, reminder: true as const }] : []),
+        ...notes.map((note) => ({ type: 'text' as const, text: note, reminder: true as const })),
       ],
     });
+    return undefined;
   }
 }

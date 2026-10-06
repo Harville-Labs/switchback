@@ -136,6 +136,10 @@ Personal settings for one project go in `.switchback/config.local.json`. It's re
 
 A command started with `background: true` keeps running after the call returns: dev servers, watchers, long builds. The model reads its new output with `bash_output` and stops it with `kill_shell`; you see them with `/shells` and stop one with `/shells kill <id>`. Background shells end when the engine does. Starting one is a normal `bash` call for permissions; reading and stopping it asks nothing more.
 
+### `hooks`
+
+Commands to run on session events, in Claude Code's format. Hooks from every layer add up; a project's wait for `switchback hooks trust`. See [hooks.md](hooks.md).
+
 ### `mcpServers.<name>`
 
 Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. The format is the same as Claude Code's `.mcp.json`, and a project's `.mcp.json` is read too.

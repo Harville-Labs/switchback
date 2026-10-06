@@ -217,6 +217,7 @@ describe('config layers', () => {
           allowUserProviders: true,
           allowUserMcpServers: true,
           allowUserPermissionRules: false,
+          allowUserHooks: true,
           allowBypassPermissions: true,
         },
         refreshSeconds: 300,

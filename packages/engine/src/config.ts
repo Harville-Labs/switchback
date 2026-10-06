@@ -17,7 +17,7 @@ import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'j
 import { z } from 'zod';
 import { removedKeyProblem } from './config-removed.ts';
 import { SwitchbackConfig } from './config-schema.ts';
-import { isTrusted } from './mcp/trust.ts';
+import { HookLayers, type SourcedHook } from './hooks/layers.ts';
 import {
   applyRestrictions,
   dropMissingPolicyAliases,
@@ -29,6 +29,7 @@ import { readCachedPolicy } from './org/store.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { RuleLayers } from './permissions/layers.ts';
 import type { SourcedRule } from './permissions/policy.ts';
+import { isTrusted } from './trust.ts';
 
 export * from './config-removed.ts';
 export * from './config-schema.ts';
@@ -44,6 +45,8 @@ export interface LoadedConfig {
   untrustedMcp: { name: string; source: string; definition: unknown }[];
   /** Every permission rule in effect, with the layer it came from. */
   rules: SourcedRule[];
+  /** Project hooks left out until trusted (`switchback hooks trust`). */
+  untrustedHooks: SourcedHook[];
 }
 
 /** How rules from an organization's policy are labeled. */
@@ -81,15 +84,24 @@ export function loadConfig(
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
   const pp = projectPaths(workspaceRoot);
-  // Claude Code's .mcp.json sits between the user and project files; only its
-  // `mcpServers` is read.
-  const files: { file: string; project: boolean; only?: 'mcpServers' }[] = [
+  // Claude Code's files sit between the user and project files; only their
+  // MCP servers (.mcp.json) and hooks (.claude/settings*.json) are read.
+  const files: { file: string; project: boolean; only?: 'mcpServers' | 'hooks' }[] = [
     { file: switchbackPaths(env).configFile, project: false },
     { file: pp.mcpJson, project: true, only: 'mcpServers' },
+    { file: pp.claudeSettings, project: true, only: 'hooks' },
+    { file: pp.claudeLocalSettings, project: true, only: 'hooks' },
     { file: pp.configFile, project: true },
     { file: pp.localConfigFile, project: true },
   ];
   const rules = new RuleLayers();
+  const hookLayers = new HookLayers();
+  /** A layer with its rules and hooks taken out, to add up rather than replace. */
+  const additive = (
+    layer: Record<string, unknown>,
+    source: string,
+    where: { project?: boolean; org?: boolean } = {},
+  ) => hookLayers.take(rules.take(layer, source, where.org), source, where);
   /** Where each MCP server's effective definition came from. */
   const mcpSource = new Map<string, { project: boolean; file: string }>();
   const noteMcp = (layer: unknown, project: boolean, file: string) => {
@@ -104,7 +116,7 @@ export function loadConfig(
       throw new ConfigError(
         `${org.org.name}'s policy uses an old key; ask an administrator to update it: ${removed}`,
       );
-    merged = deepMerge(merged, rules.take(org.defaults, ORG_SOURCE, true));
+    merged = deepMerge(merged, additive(org.defaults, ORG_SOURCE, { org: true }));
     noteMcp(org.defaults, false, 'organization policy');
   }
   const sources: string[] = [];
@@ -126,23 +138,29 @@ export function loadConfig(
       parsed = { ...parsed, telemetry: rest };
     }
     noteMcp(parsed, project, file);
-    merged = deepMerge(merged, rules.take(parsed, sourceLabel(file, workspaceRoot)));
+    merged = deepMerge(merged, additive(parsed, sourceLabel(file, workspaceRoot), { project }));
     sources.push(file);
   }
   for (const layer of extra) {
     const removed = removedKeyProblem(layer);
     if (removed) throw new ConfigError(removed);
-    merged = deepMerge(merged, rules.take(layer, 'command line'));
+    merged = deepMerge(merged, additive(layer, 'command line'));
     noteMcp(layer, false, 'command line');
   }
   if (org) {
-    merged = deepMerge(merged, rules.take(org.enforced, ORG_SOURCE, true));
+    merged = deepMerge(merged, additive(org.enforced, ORG_SOURCE, { org: true }));
     noteMcp(org.enforced, false, 'organization policy');
   }
   const ruleSet = rules.result(org ? !org.restrictions.allowUserPermissionRules : false);
+  const hookSet = hookLayers.result(
+    workspaceRoot,
+    env,
+    org ? !org.restrictions.allowUserHooks : false,
+  );
   merged = {
     ...merged,
     permissions: { ...(merged.permissions as Record<string, unknown>), ...ruleSet.lists },
+    hooks: hookSet.hooks,
   };
 
   // A repository can't run commands on this machine until the user trusts it.
@@ -150,7 +168,7 @@ export function loadConfig(
   const servers = { ...((merged.mcpServers as Record<string, unknown> | undefined) ?? {}) };
   for (const [name, def] of Object.entries(servers)) {
     const source = mcpSource.get(name);
-    if (source?.project && !isTrusted(workspaceRoot, name, def, env)) {
+    if (source?.project && !isTrusted(workspaceRoot, `mcp:${name}`, def, env)) {
       delete servers[name];
       untrustedMcp.push({ name, source: source.file, definition: def });
     }
@@ -183,6 +201,9 @@ export function loadConfig(
       notes: [
         ...skipped,
         ...restricted.notes,
+        ...hookSet.dropped.map(
+          (h) => `${h.event} hook from ${h.source} ignored: only organization hooks run`,
+        ),
         ...ruleSet.ignored.map(
           (r) =>
             `${r.behavior} rule "${r.rule}" from ${r.source} ignored: only organization rules apply`,
@@ -201,6 +222,7 @@ export function loadConfig(
     prices,
     untrustedMcp,
     rules: ruleSet.sourced,
+    untrustedHooks: hookSet.untrusted,
     ...(orgStatus ? { org: orgStatus } : {}),
   };
 }
