@@ -35,7 +35,22 @@ The engine is the product. Clients are views. That split is what lets the termin
 | `@switchback/providers` | Talks to models. Each adapter translates the neutral transcript to a wire format and streams back `ChatEvent`s. Also holds the model catalog, pricing, and local-server detection. No provider is privileged ([ADR 0006](adr/0006-provider-neutrality.md)). |
 | `@switchback/router` | Decides local vs. remote for each model call. Pure functions over a snapshot. |
 | `@switchback/engine` | Runs agents. Owns all state and all side effects. Exposes itself via `serve(engine, transport)`. |
-| `@switchback/client` | What clients import: `SwitchbackClient`, `spawnEngine`, and the view-model reducer. |
+| `@switchback/client` | What clients import: `SwitchbackClient`, `spawnEngine`, the view-model reducer (`view.ts`), and the text both clients print (`format.ts`). |
+
+### Inside the engine
+
+`Engine` (`engine.ts`) is the protocol surface: sessions, roles, turns, configuration. The work is done by collaborators, each in its own module, which borrow what they need from the engine through an `EngineHost` (`live-session.ts`) instead of reaching into it:
+
+| Module | Does |
+|---|---|
+| `agent-loop.ts` | One turn's loop: route, call the model, run tools, repeat; escalation prompts and the classifier |
+| `tool-runner.ts` | Validates tool calls, applies the permission policy, runs them (in parallel when nothing mutates) |
+| `review-runner.ts` | Review of edits by another model |
+| `compactor.ts` | Append-only compaction ([ADR 0008](adr/0008-append-only-compaction.md)) |
+| `subagents.ts` | Child sessions for the task tool: background runs, worktrees, budgets |
+| `external-runtime.ts` | Subagents on external agent runtimes ([ADR 0009](adr/0009-external-agent-runtimes.md)) |
+| `model-directory.ts` | Live providers, their health, and each model's context window |
+| `usage-recorder.ts` | The usage ledger and prompt-cache checks |
 
 ## Lifecycle of a turn
 

@@ -9,13 +9,15 @@ import {
   type SlashCommand,
 } from '@switchback/client/commands';
 import {
-  addInfo,
-  addUserPrompt,
   estimateLabel,
   formatReviewers,
   formatSteps,
   formatSubagents,
   formatUsage,
+} from '@switchback/client/format';
+import {
+  addInfo,
+  addUserPrompt,
   fromTranscript,
   initialView,
   reduce,

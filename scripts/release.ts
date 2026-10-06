@@ -17,7 +17,7 @@ export const VERSION_SITES = [
   { path: 'apps/cli/package.json', pattern: /("version":\s*")([^"]+)(")/ },
   { path: 'apps/vscode/package.json', pattern: /("version":\s*")([^"]+)(")/ },
   { path: 'packages/engine/src/engine.ts', pattern: /(ENGINE_VERSION = ')([^']+)(')/ },
-  { path: 'apps/vscode/src/extension.ts', pattern: /(const VERSION = ')([^']+)(')/ },
+  { path: 'apps/vscode/src/version.ts', pattern: /(const VERSION = ')([^']+)(')/ },
 ] as const;
 
 export function readVersions(): Record<string, string> {

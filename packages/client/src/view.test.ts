@@ -1,18 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import type { EngineEvent, Message, SessionSummary, UsageReport } from '@switchback/protocol';
 import {
-  childView,
   estimateLabel,
   formatLadder,
   formatModels,
   formatReceipt,
   formatRoles,
   formatUsage,
-  fromTranscript,
-  initialView,
-  reduce,
   reviewLines,
-} from './view.ts';
+} from './format.ts';
+import { childView, fromTranscript, initialView, reduce } from './view.ts';
 
 const session: SessionSummary = {
   id: 'ses_1',

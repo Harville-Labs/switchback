@@ -43,7 +43,7 @@ Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so yo
 These hold the product together. A change that breaks one needs an ADR in `docs/adr/` first.
 
 1. **Clients are thin.** The TUI and VS Code extension talk to the engine only through `@switchback/client` and the protocol. Neither imports `@switchback/engine` internals for behavior. The TUI runs the engine in-process, but still through a transport pair, not a private fast path. If a client needs something, add a protocol method or event.
-2. **One view model.** Both clients render from `reduce()` in `packages/client/src/view.ts`. Fix display logic there, not in one client.
+2. **One view model.** Both clients render from `reduce()` in `packages/client/src/view.ts`, and print text from `packages/client/src/format.ts`. Fix display logic there, not in one client.
 3. **The router is pure.** `Router.decide()` has no I/O, no clock, and no randomness. The engine gathers health, spend, and signals, then passes them in. Every decision carries a `rule` and a human-readable `reason` that the UI shows.
 4. **Transcripts are append-only.** Never rewrite or delete earlier messages in a session. Provider prompt caches and reasoning replay (Claude thinking signatures, DeepSeek `reasoning_content`) depend on stable prefixes. Compaction appends a marker and changes only what is *sent* ([ADR 0008](docs/adr/0008-append-only-compaction.md)); build request context with `contextOf()`, never from `s.messages` directly.
 5. **Reasoning is only replayed to the model that produced it.** `ReasoningPart.origin` records the provider and model. Adapters drop reasoning from other models when translating.
@@ -75,6 +75,7 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 - Biome formats and lints (single quotes, 2 spaces, 100 columns). Run `bun run format` rather than hand-formatting.
 - Validate external input with Zod at the boundary (config files, protocol params, tool inputs, model output). Trust internal types after that.
 - Test with `bun:test`, colocated as `*.test.ts`. Use `ScriptedProvider` for engine behavior. Tests never call real model APIs or need Ollama running.
+- Keep modules focused. A file that grows past about 500 lines is doing several jobs; split it along its seams (the engine's collaborators borrow what they need through `EngineHost` in `live-session.ts` rather than reaching into `Engine`).
 - Comments explain *why*: a constraint, an invariant, a non-obvious tradeoff. Don't narrate what the code does.
 - Errors are specific and actionable: say what was wrong and how to fix it (`models.local references unknown provider "olama"`).
 - Model IDs and prices live in `packages/providers/src/catalog.ts`, the single source for every provider. Use exact provider IDs (`gpt-6-sol`, `deepseek-flash`, `claude-sonnet-5`) with no date suffixes; Bedrock IDs carry an `anthropic.` prefix. Note the date you checked prices.
