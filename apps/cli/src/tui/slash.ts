@@ -19,6 +19,7 @@ import {
   MODE_DESCRIPTIONS,
   modeLabel,
   parseMode,
+  pickCopy,
   type SwitchbackClient,
   subagentList,
   type ViewState,
@@ -30,7 +31,8 @@ import type {
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
-import { copyText, pickCopy } from './clipboard.ts';
+import { copyText } from './clipboard.ts';
+import { ago } from './SessionPicker.tsx';
 
 export const HELP = `Commands
 ${formatCommands('tui')}
@@ -57,6 +59,8 @@ export interface SlashContext {
   setListed(sessions: SessionSummary[]): void;
   /** Write raw bytes to the terminal (OSC 52 clipboard). */
   writeRaw(s: string): void;
+  /** Show the session picker. */
+  openPicker(): Promise<void>;
   exit(): void;
 }
 
@@ -101,9 +105,11 @@ export async function newSession(ctx: SlashContext, agent?: string): Promise<voi
   }
 }
 
-async function resume(ctx: SlashContext, which: string | undefined): Promise<void> {
-  const target = which && /^\d+$/.test(which) ? ctx.listed[Number(which) - 1]?.id : which;
-  if (!target) return say(ctx, 'usage: /resume <number from /sessions | session id>');
+/** Switch to a saved session: by number from /sessions, by ID, or (with neither) from a picker. */
+export async function resume(ctx: SlashContext, which: string | undefined): Promise<void> {
+  if (!which) return ctx.openPicker();
+  const target = /^\d+$/.test(which) ? ctx.listed[Number(which) - 1]?.id : which;
+  if (!target) return say(ctx, `no session ${which} in the last /sessions list`);
   if (target === ctx.session.id) return say(ctx, 'already in that session');
   try {
     const { session: s, messages } = await ctx.client.request('session.get', {
@@ -138,7 +144,7 @@ async function listSessions(ctx: SlashContext): Promise<void> {
       (x, i) =>
         `${String(i + 1).padStart(2)}. ${x.id === ctx.session.id ? '* ' : ''}${x.title || '(untitled)'}  ${x.agent} · ${ago(x.updatedAt)} · $${x.costUsd.toFixed(3)}`,
     );
-  say(ctx, [...rows, '/resume <number> to switch'].join('\n'));
+  say(ctx, [...rows, '/resume to pick one, or /resume <number>'].join('\n'));
 }
 
 function review(ctx: SlashContext, args: string[]): Promise<void> | void {
@@ -168,9 +174,7 @@ function review(ctx: SlashContext, args: string[]): Promise<void> | void {
 }
 
 async function copy(ctx: SlashContext, args: string[]): Promise<void> {
-  const reply = ctx.view.items.findLast((it) => it.kind === 'assistant' && it.text);
-  if (reply?.kind !== 'assistant') return say(ctx, 'Nothing to copy yet.');
-  const pick = pickCopy(reply.text, args[0]);
+  const pick = pickCopy(ctx.view.items, args[0]);
   if ('error' in pick) return say(ctx, `copy: ${pick.error}`);
   const native = await copyText(pick.text, ctx.writeRaw);
   const lines = pick.text.split('\n').length;
@@ -317,12 +321,4 @@ export function runSlashCommand(ctx: SlashContext, text: string): Promise<void> 
   const handler = HANDLERS[cmd];
   if (!handler) return say(ctx, `unknown command /${cmd}; try /help`);
   return handler(ctx, args);
-}
-
-function ago(iso: string): string {
-  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
-  if (s < 90) return 'just now';
-  if (s < 5400) return `${Math.round(s / 60)}m ago`;
-  if (s < 129600) return `${Math.round(s / 3600)}h ago`;
-  return `${Math.round(s / 86400)}d ago`;
 }

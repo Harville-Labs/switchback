@@ -1,7 +1,7 @@
 /**
  * Copying out of the TUI. Selecting text in a terminal picks up the
  * rendering (wrapped lines, code-block indentation), so `/copy` puts the raw
- * text on the clipboard instead.
+ * text on the clipboard instead (what to copy: `pickCopy` in @switchback/client).
  *
  * Two routes, both tried: OSC 52, which the terminal handles (iTerm2, kitty,
  * WezTerm, Ghostty, Windows Terminal, tmux with set-clipboard) and which works
@@ -9,30 +9,6 @@
  * clipboardy would do the second part, but it ships helper binaries that don't
  * survive `bun build --compile`.
  */
-import { Lexer } from 'marked';
-
-/** The raw text of each fenced or indented code block, in order. */
-export function codeBlocks(markdown: string): string[] {
-  return new Lexer()
-    .lex(markdown)
-    .flatMap((t) => (t.type === 'code' ? [(t as { text: string }).text] : []));
-}
-
-/** What `/copy [arg]` copies from a reply: the whole reply, or code block `n` (1-based). */
-export function pickCopy(
-  reply: string,
-  arg: string | undefined,
-): { text: string; what: string } | { error: string } {
-  if (!arg) return { text: reply, what: 'the last reply' };
-  const blocks = codeBlocks(reply);
-  if (!blocks.length) return { error: 'the last reply has no code blocks; /copy copies all of it' };
-  const n = arg === 'code' ? 1 : Number(arg);
-  if (!Number.isInteger(n) || n < 1 || n > blocks.length)
-    return {
-      error: `the last reply has ${blocks.length} code block${blocks.length === 1 ? '' : 's'}: /copy 1${blocks.length > 1 ? `…${blocks.length}` : ''}`,
-    };
-  return { text: blocks[n - 1] as string, what: `code block ${n} of ${blocks.length}` };
-}
 
 export function osc52(text: string): string {
   const seq = `\x1b]52;c;${Buffer.from(text, 'utf8').toString('base64')}\x07`;

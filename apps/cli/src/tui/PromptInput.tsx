@@ -3,6 +3,7 @@
  * completion. Newline: Option/Alt+Enter, Shift+Enter (terminals that report
  * it), Ctrl+J, or a trailing backslash before Enter. Pastes arrive whole
  * through bracketed paste, so their newlines never submit (see paste.ts).
+ * Ctrl+C clears what's typed; on an empty input it goes to `onInterrupt`.
  */
 import { statSync } from 'node:fs';
 import { commandQuery, matchCommands, type SlashCommand } from '@switchback/client';
@@ -53,9 +54,19 @@ interface Props {
   history: readonly string[];
   root: string;
   onSubmit: (text: string) => void;
+  /** Ctrl+C on an empty input (with text in it, Ctrl+C clears it instead). */
+  onInterrupt: () => void;
 }
 
-export function PromptInput({ focus, busy, placeholder, history, root, onSubmit }: Props) {
+export function PromptInput({
+  focus,
+  busy,
+  placeholder,
+  history,
+  root,
+  onSubmit,
+  onInterrupt,
+}: Props) {
   const [state, setState] = useState<EditorState>(empty);
   // Index into history while browsing it; null when editing a fresh prompt.
   const [histIndex, setHistIndex] = useState<number | null>(null);
@@ -124,8 +135,20 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
     setSelected(0);
   };
 
+  const clear = () => {
+    edit(empty);
+    setPastes(noPastes);
+    setHistIndex(null);
+    setDraft('');
+  };
+
   useInput(
     (input, key) => {
+      if (key.ctrl && input === 'c') {
+        // Clearing a long paste must never cost the session.
+        if (state.value) return clear();
+        return onInterrupt();
+      }
       if (commandsOpen) {
         if (key.upArrow) return setSelected((i) => (i + commands.length - 1) % commands.length);
         if (key.downArrow) return setSelected((i) => (i + 1) % commands.length);

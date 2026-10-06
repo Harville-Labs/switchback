@@ -17,6 +17,7 @@ Usage
   switchback doctor                  Check configuration, providers, and agents
   switchback mcp [trust [name...]]   Show MCP servers; trust a project's servers
   switchback agents [new]            List agents, or create one (interview, optional drafted prompt)
+  switchback sessions                List this workspace's saved sessions [--json]
   switchback usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
   switchback telemetry [action]      status | on | off | preview (anonymous, off by default)
@@ -31,12 +32,13 @@ Options
   --route <r>        auto | local | remote (default: auto)
   --agent <name>     Agent to start with (default: config defaultAgent)
   -c, --continue     Resume the most recent session in this workspace
+  -r, --resume       Pick a saved session to resume
   --session <id>     Resume a specific session
   --permission-mode <m>  default | acceptEdits | plan | bypassPermissions
                      (default: permissions.defaultMode)
   --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
-  --json             run/usage: machine-readable output
+  --json             run/usage/sessions: machine-readable output
   --review, --no-review  run: review of local edits (default: review.mode)
   --mock             Use scripted mock providers (no models needed)
   -v, --version      Print version
@@ -136,6 +138,7 @@ async function main(argv: string[]): Promise<number> {
       socket: { type: 'boolean', default: false },
       'no-daemon': { type: 'boolean', default: false },
       continue: { type: 'boolean', short: 'c', default: false },
+      resume: { type: 'boolean', short: 'r', default: false },
       session: { type: 'string' },
       'permission-mode': { type: 'string' },
       scope: { type: 'string' },
@@ -216,6 +219,7 @@ async function main(argv: string[]): Promise<number> {
         daemon: !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON,
         route: route.data,
         ...mode,
+        ...(values.resume ? { pickSession: true } : {}),
         ...(values.agent ? { agent: values.agent } : {}),
         ...(values.session
           ? { resume: values.session }
@@ -355,6 +359,10 @@ async function main(argv: string[]): Promise<number> {
     case 'telemetry': {
       const { telemetry } = await import('./commands/telemetry.ts');
       return telemetry(rest[0], common);
+    }
+    case 'sessions': {
+      const { sessions } = await import('./commands/sessions.ts');
+      return sessions({ ...common, json: values.json });
     }
     case 'usage': {
       const { usage } = await import('./commands/usage.ts');

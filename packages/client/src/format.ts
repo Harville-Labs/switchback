@@ -349,3 +349,15 @@ export function formatPermissions(p: PermissionsListResult): string {
   }
   return lines.join('\n');
 }
+
+/** The conversation as Markdown: prompts, replies, and tool calls, for `/copy all`. */
+export function transcriptMarkdown(items: readonly ViewItem[]): string {
+  const parts: string[] = [];
+  for (const it of items) {
+    if (it.kind === 'user') parts.push(`## You\n\n${it.text}`);
+    else if (it.kind === 'assistant' && it.text) parts.push(it.text);
+    else if (it.kind === 'tool')
+      parts.push(`> ${toolLabel(it.name, it.input)}${it.status === 'error' ? ' (failed)' : ''}`);
+  }
+  return parts.join('\n\n');
+}

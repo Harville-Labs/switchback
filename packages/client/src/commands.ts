@@ -38,7 +38,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   { name: 'agents', group: 'Session', description: 'list agents' },
   { name: 'sessions', group: 'Session', description: 'list saved sessions in this workspace' },
-  { name: 'resume', args: '<n|id>', group: 'Session', description: 'switch to a saved session' },
+  {
+    name: 'resume',
+    args: '[n|id]',
+    group: 'Session',
+    description: 'switch to a saved session (no argument: pick from a list)',
+  },
   {
     name: 'compact',
     group: 'Session',
@@ -108,9 +113,9 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'mcp', group: 'Tools', description: 'MCP servers and their tools' },
   {
     name: 'copy',
-    args: '[n]',
+    args: '[n|tool|all]',
     group: 'Tools',
-    description: 'copy the last reply, or its nth code block',
+    description: 'copy the last reply, its nth code block, the last tool output, or everything',
   },
   { name: 'help', group: 'Tools', description: 'list commands' },
   { name: 'setup', group: 'Extension', description: 'set up models', clients: ['vscode'] },
