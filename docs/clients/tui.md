@@ -13,20 +13,33 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 ## Screen
 
 ```
+╭──────────────────────────────────────────────╮
+│ ◆ Switchback v0.6.0                          │
+│ ~/code/shop                                  │
+│ / commands · @ mention a file · esc cancel   │
+╰──────────────────────────────────────────────╯
+
 ❯ where is the retry logic?
 ☁ claude-opus-5 · context-overflow: ~29000 tokens exceeds 85% of local's 32768 window
+● grep retry
+● read src/http/foo.ts
+  ⎿ src/http/foo.ts does not exist
 ↳ ✓ explore find retry logic · local · 6 tool calls
-Retries live in src/http/client.ts:88 ...
-╭────────────────────────────────────────────╮
-│ ❯ Ask anything, or /help                   │
-╰────────────────────────────────────────────╯
- build · route auto · last remote     session $0.0142 · today $0.31/$5.00 · saved ~$4.12
+
+● Retries live in src/http/client.ts:88 ...
+⠹ Running bash… (4s · esc to cancel)
+╭──────────────────────────────────────────────────────────────────────────╮
+│ ❯ Ask anything · / for commands · @ to mention a file                    │
+╰──────────────────────────────────────────────────────────────────────────╯
+ build · auto ☁ remote                    $0.0142 · today $0.31/$5.00 · week saved ~$4.12
 ```
 
 - `⌂` lines are local routing decisions and `☁` lines are remote. Plain default decisions for the model already in use are hidden to reduce noise.
-- `●`/`✓`/`✗` mark tool calls: running, succeeded, failed.
+- `●` rows are tool calls, colored by state: yellow running, green succeeded, red failed, with the first line of a failure under it (`⎿`). Replies start with a white `●`.
 - `↳` rows are subagents, showing their tier, tool-call count, and current activity. While one runs, its latest steps appear indented under the row (nested subagents too). Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did: its routes, every tool call with the first line of output, nested subagents, and its final report.
-- The status bar shows the agent, route preference, last tier used, session cost, today's spend against budget, and month-to-date savings.
+- While a turn runs, a spinner line above the input says what's happening (thinking, running a tool, waiting on a subagent) and for how long.
+- Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`.
+- The status bar shows the agent, route preference, last tier used, session cost, today's spend against budget, and this week's savings.
 
 ## Commands and keys
 

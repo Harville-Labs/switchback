@@ -5,6 +5,7 @@
  * through bracketed paste, so their newlines never submit (see paste.ts).
  */
 import { statSync } from 'node:fs';
+import { commandQuery, matchCommands, type SlashCommand } from '@switchback/client';
 import { Box, Text, useInput, usePaste } from 'ink';
 import { useEffect, useState } from 'react';
 import {
@@ -67,6 +68,9 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
   const mention = mentionAt(state);
   const suggestions = mention && !menuClosed ? rankFiles(files, mention.query) : [];
   const menuOpen = suggestions.length > 0;
+  const query = menuClosed ? undefined : commandQuery(state.value);
+  const commands = query === undefined ? [] : matchCommands(query, 'tui');
+  const commandsOpen = commands.length > 0;
 
   // Load the file list the first time a mention starts.
   useEffect(() => {
@@ -113,8 +117,32 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
     { isActive: focus },
   );
 
+  /** Put `/name` in the input, with a space when arguments follow. */
+  const completeCommand = (c: SlashCommand) => {
+    const text = `/${c.name}${c.args ? ' ' : ''}`;
+    setState(at(text));
+    setSelected(0);
+  };
+
   useInput(
     (input, key) => {
+      if (commandsOpen) {
+        if (key.upArrow) return setSelected((i) => (i + commands.length - 1) % commands.length);
+        if (key.downArrow) return setSelected((i) => (i + 1) % commands.length);
+        const pick = commands[selected] ?? commands[0];
+        if (key.tab && pick) return completeCommand(pick);
+        if (key.return && !key.meta && !key.shift && pick) {
+          // A command that needs an argument waits for it; the rest run now.
+          if (pick.args?.startsWith('<')) return completeCommand(pick);
+          if (busy) return;
+          onSubmit(`/${pick.name}`);
+          setState(empty);
+          setHistIndex(null);
+          setDraft('');
+          return;
+        }
+        if (key.escape) return setMenuClosed(true);
+      }
       if (menuOpen) {
         if (key.upArrow)
           return setSelected((i) => (i + suggestions.length - 1) % suggestions.length);
@@ -208,6 +236,7 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
           );
         })
       )}
+      {commandsOpen ? <CommandMenu commands={commands} selected={selected} /> : null}
       {menuOpen ? (
         <Box flexDirection="column" marginTop={1}>
           {suggestions.map((path, i) => (
@@ -218,6 +247,48 @@ export function PromptInput({ focus, busy, placeholder, history, root, onSubmit 
           <Text dimColor>tab/enter to insert · esc to dismiss</Text>
         </Box>
       ) : null}
+    </Box>
+  );
+}
+
+/** Rows shown at once; the window scrolls to keep the selection in view. */
+const MENU_ROWS = 8;
+const NAME_COLUMN = 22;
+
+function CommandMenu({ commands, selected }: { commands: SlashCommand[]; selected: number }) {
+  const start = Math.min(
+    Math.max(0, selected - MENU_ROWS + 1),
+    Math.max(0, commands.length - MENU_ROWS),
+  );
+  const shown = commands.slice(start, start + MENU_ROWS);
+  // Capped so one long argument hint doesn't push every description off screen.
+  const width = Math.min(
+    NAME_COLUMN,
+    Math.max(...commands.map((c) => c.name.length + (c.args ? c.args.length + 1 : 0))),
+  );
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      {shown.map((c, i) => {
+        const on = start + i === selected;
+        // The argument hint, cut to the column; /help has it in full.
+        const room = Math.max(0, width - c.name.length);
+        const args = c.args ? ` ${c.args}` : '';
+        const hint = args.length > room ? `${args.slice(0, room - 1)}…` : args.padEnd(room);
+        return (
+          <Text key={c.name} wrap="truncate-end">
+            <Text color="cyan">{on ? '› ' : '  '}</Text>
+            <Text color={on ? 'cyan' : undefined} bold={on}>
+              {`/${c.name}`}
+            </Text>
+            <Text dimColor>{`${hint}  `}</Text>
+            <Text dimColor={!on}>{c.description}</Text>
+          </Text>
+        );
+      })}
+      <Text dimColor>
+        {commands.length > MENU_ROWS ? `${selected + 1}/${commands.length} · ` : ''}↑↓ choose ·
+        enter run · tab complete · esc close
+      </Text>
     </Box>
   );
 }

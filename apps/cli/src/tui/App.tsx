@@ -1,14 +1,17 @@
+import { homedir } from 'node:os';
 import {
   addInfo,
   addUserPrompt,
   childView,
   describeSession,
   estimateLabel,
+  formatCommands,
   formatLadder,
   formatMcpServers,
   formatModels,
   formatReceipt,
   formatRoles,
+  formatSubagents,
   formatUsage,
   fromTranscript,
   initialView,
@@ -47,28 +50,8 @@ interface Props {
 }
 
 const HELP = `Commands
-  /local  /remote  /auto   route the next prompts
-  /agent <name>            start a new session with an agent
-  /agents                  list agents
-  /new                     start a new session
-  /sessions                list saved sessions in this workspace
-  /resume <n|id>           switch to a saved session
-  /subagents               list this session's subagents as a tree
-  /subagent <n>            show what a subagent did: routes, tools, report
-  /usage [rule|agent|model] this week's spend, savings, and why
-  /receipt                 this session's cost vs. running it all-remote
-  /copy [n]                copy the last reply, or its nth code block, to the clipboard
-  /review on|off|default   review of edits for the next prompts (default: review.mode)
-  /review ladder | with <model...>   who reviews: the escalation ladder, or models in order
-  /models                  configured models, their tier, and the roles they fill
-  /roles [reset]           which model does what in this session; reset follows config
-  /start <model...>        where turns start (more models are backups)
-  /escalate <step...>|none the escalation ladder; a step is a model, or a,b alternatives
-  /subagent-model <model>|none   default model for subagents
-                           add --save to any role command to make it your default
-  /mcp                     MCP servers and their tools
-  /compact                 summarize earlier messages now (also automatic)
-  /exit                    quit
+${formatCommands('tui')}
+Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
        become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
@@ -317,23 +300,9 @@ export function App({
           client.request('usage.get', {}).then(setUsage, () => {});
           return;
         }
-        case 'subagents': {
-          const all = subagentList(view);
-          setView((v) =>
-            addInfo(
-              v,
-              all.length
-                ? `${all
-                    .map(
-                      (x, i) =>
-                        `${String(i + 1).padStart(2)}. ${'  '.repeat(x.depth)}${x.row.status === 'running' ? '◌' : x.row.status === 'ok' ? '✓' : '✗'} ${x.row.agent}: ${x.row.task} · ${x.row.toolCalls} tool calls`,
-                    )
-                    .join('\n')}\n/subagent <number> for details`
-                : 'no subagents in this session yet',
-            ),
-          );
+        case 'subagents':
+          setView((v) => addInfo(v, formatSubagents(view, '/subagent <number> for details')));
           return;
-        }
         case 'subagent': {
           const all = subagentList(view);
           const pick =
@@ -460,11 +429,28 @@ export function App({
       <Static items={[{ kind: 'header' as const, id: 'header' }, ...done]}>
         {(item) =>
           item.kind === 'header' ? (
-            <Box key="header" flexDirection="column" marginBottom={1}>
-              <Text bold>
-                switchback <Text dimColor>{init.engineVersion}</Text>
+            <Box
+              key="header"
+              flexDirection="column"
+              marginBottom={1}
+              borderStyle="round"
+              borderColor="cyan"
+              paddingX={1}
+              width={Math.min(width, 64)}
+            >
+              <Text>
+                <Text color="cyan" bold>
+                  ◆ Switchback
+                </Text>{' '}
+                <Text dimColor>v{init.engineVersion}</Text>
               </Text>
-              <Text dimColor>{init.workspaceRoot} · /help for commands</Text>
+              <Text dimColor wrap="truncate-middle">
+                {tildify(init.workspaceRoot)}
+              </Text>
+              <Text dimColor>
+                <Text color="white">/</Text> commands · <Text color="white">@</Text> mention a file
+                · <Text color="white">esc</Text> cancel
+              </Text>
             </Box>
           ) : (
             <Item key={item.id} item={item} hidden={hidden.has(item.id)} width={width} final />
@@ -488,7 +474,13 @@ export function App({
           {permission.preview ? (
             <DiffView diff={permission.preview} maxLines={Math.max(6, (stdout.rows ?? 30) - 12)} />
           ) : null}
-          <Text dimColor>[y] once [a] always this session [n] deny</Text>
+          <Keys
+            keys={[
+              ['y', 'once'],
+              ['a', 'always this session'],
+              ['n', 'deny'],
+            ]}
+          />
         </Box>
       )}
       {escalation && !permission && (
@@ -500,10 +492,16 @@ export function App({
             ) : null}
             ? {escalation.reason}
           </Text>
-          <Text dimColor>[y] use remote for this turn [n] stay local</Text>
+          <Keys
+            keys={[
+              ['y', 'escalate'],
+              ['n', 'stay on the current model'],
+            ]}
+          />
         </Box>
       )}
 
+      {view.running && !permission && !escalation ? <Working view={view} /> : null}
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
         <PromptInput
           focus={!permission && !escalation}
@@ -512,7 +510,9 @@ export function App({
           root={init.workspaceRoot}
           onSubmit={submit}
           placeholder={
-            view.running ? 'working (esc to cancel)' : 'Ask anything, @ to mention a file, /help'
+            view.running
+              ? 'Type your next message'
+              : 'Ask anything · / for commands · @ to mention a file'
           }
         />
       </Box>
@@ -535,25 +535,86 @@ function StatusBar({
   usage?: UsageReport;
 }) {
   const tier = view.lastTier;
+  const ladder = formatLadder(view.ladder);
+  const routeColor = route === 'local' ? 'green' : route === 'remote' ? 'yellow' : undefined;
   return (
-    <Box justifyContent="space-between" paddingX={1}>
-      <Text dimColor>
-        {session.agent} · route {route}
+    <Box justifyContent="space-between" paddingX={1} gap={2}>
+      <Text dimColor wrap="truncate-end">
+        <Text color="white">{session.agent}</Text>
+        {' · '}
+        <Text color={routeColor}>{route}</Text>
         {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
-        {tier ? ' · last ' : ''}
-        {tier ? <Text color={tier === 'local' ? 'green' : 'yellow'}>{tier}</Text> : null}
-        {formatLadder(view.ladder) ? ` · ${formatLadder(view.ladder)}` : ''}
+        {tier ? (
+          <Text color={tier === 'local' ? 'green' : 'yellow'}>
+            {' '}
+            {tier === 'local' ? '⌂' : '☁'} {tier}
+          </Text>
+        ) : null}
+        {ladder ? ` · ${ladder}` : ''}
         {view.private ? <Text color="cyan"> · 🔒 local only</Text> : null}
       </Text>
-      <Text dimColor>
-        session ${view.costUsd.toFixed(4)}
-        {view.savingsUsd > 0.005 ? ` (saved ~$${view.savingsUsd.toFixed(2)})` : ''}
+      <Text dimColor wrap="truncate-start">
+        <Text color="white">${view.costUsd.toFixed(4)}</Text>
+        {view.savingsUsd > 0.005 ? ` saved ~$${view.savingsUsd.toFixed(2)}` : ''}
         {usage
-          ? ` · today $${usage.budget.spentTodayUsd.toFixed(2)}${usage.budget.dailyUsd ? `/$${usage.budget.dailyUsd.toFixed(2)}` : ''} · saved ~$${usage.estimatedSavingsUsd.toFixed(2)}`
+          ? ` · today $${usage.budget.spentTodayUsd.toFixed(2)}${usage.budget.dailyUsd ? `/$${usage.budget.dailyUsd.toFixed(2)}` : ''} · week saved ~$${usage.estimatedSavingsUsd.toFixed(2)}`
           : ''}
       </Text>
     </Box>
   );
+}
+
+/** Key hints for a prompt: the key highlighted, then what it does. */
+function Keys({ keys }: { keys: [string, string][] }) {
+  return (
+    <Text>
+      {keys.map(([k, what], i) => (
+        <Text key={k}>
+          {i ? '   ' : ''}
+          <Text color="cyan" bold>
+            {k}
+          </Text>{' '}
+          <Text dimColor>{what}</Text>
+        </Text>
+      ))}
+    </Text>
+  );
+}
+
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+/** Shown while a turn runs: a spinner, what's happening, and how long it's taken. */
+function Working({ view }: { view: ViewState }) {
+  const [started] = useState(Date.now);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 100);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.floor((Date.now() - started) / 1000);
+  const last = view.items.findLast((i) => i.kind !== 'info' && i.kind !== 'user');
+  const doing =
+    last?.kind === 'tool' && last.status === 'running'
+      ? // The row above already shows the call; name it rather than repeat it.
+        `Running ${last.name}`
+      : last?.kind === 'assistant' && last.reasoning && !last.text
+        ? 'Thinking'
+        : last?.kind === 'subagent' && last.status === 'running'
+          ? `Waiting on ${last.agent}`
+          : 'Working';
+  return (
+    <Box>
+      <Text wrap="truncate-end">
+        <Text color="cyan">{SPINNER[tick % SPINNER.length]}</Text> <Text>{doing}…</Text>
+        <Text dimColor> ({seconds}s · esc to cancel)</Text>
+      </Text>
+    </Box>
+  );
+}
+
+function tildify(path: string): string {
+  const home = homedir();
+  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 
 /** Colored unified diff, cut to fit the terminal. */
@@ -640,9 +701,8 @@ function Item({
     case 'user':
       return (
         <Box marginTop={1}>
-          <Text bold color="cyan">
-            ❯ {item.text}
-          </Text>
+          <Text color="cyan">❯ </Text>
+          <Text bold>{item.text}</Text>
         </Box>
       );
     case 'info':
@@ -650,9 +710,9 @@ function Item({
     case 'route': {
       const color = item.tier === 'local' ? 'green' : 'yellow';
       return (
-        <Text color={color} dimColor={item.rule === 'default'}>
-          {item.tier === 'local' ? '⌂' : '☁'} {item.model.model}
-          <Text dimColor> · {item.reason}</Text>
+        <Text dimColor>
+          <Text color={color}>{item.tier === 'local' ? '⌂' : '☁'}</Text> {item.model.model} ·{' '}
+          {item.reason}
         </Text>
       );
     }
@@ -660,25 +720,31 @@ function Item({
       return (
         <Box flexDirection="column">
           {item.reasoning && !item.text ? (
-            <Text dimColor italic>
+            <Text dimColor italic wrap="truncate-end">
               ✻ {item.reasoning.slice(-200).replace(/\s+/g, ' ')}
             </Text>
           ) : null}
-          {item.text ? <Text>{final ? renderMarkdown(item.text, width) : item.text}</Text> : null}
+          {item.text ? (
+            <Box marginTop={1}>
+              <Text>● </Text>
+              <Box flexDirection="column" flexShrink={1}>
+                <Text>{final ? renderMarkdown(item.text, width - 2) : item.text}</Text>
+              </Box>
+            </Box>
+          ) : null}
         </Box>
       );
     case 'tool': {
-      const icon = item.status === 'running' ? '●' : item.status === 'ok' ? '✓' : '✗';
       const color = item.status === 'running' ? 'yellow' : item.status === 'ok' ? 'green' : 'red';
       return (
         <Box flexDirection="column">
-          <Text>
-            <Text color={color}>{icon}</Text> {toolLabel(item.name, item.input)}
+          <Text wrap="truncate-end">
+            <Text color={color}>●</Text> {toolLabel(item.name, item.input)}
             {item.private ? <Text color="cyan"> 🔒 stays local</Text> : null}
           </Text>
           {item.status === 'error' && item.output ? (
-            <Text color="red" dimColor>
-              {' '}
+            <Text color="red" dimColor wrap="truncate-end">
+              {'  ⎿ '}
               {item.output.split('\n')[0]}
             </Text>
           ) : null}
@@ -719,7 +785,11 @@ function Item({
       );
     }
     case 'error':
-      return <Text color="red">error: {item.message}</Text>;
+      return (
+        <Text color="red">
+          ✗ <Text bold>error</Text> {item.message}
+        </Text>
+      );
   }
 }
 

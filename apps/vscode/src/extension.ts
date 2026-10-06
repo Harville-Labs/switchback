@@ -8,8 +8,12 @@ import { chmodSync, existsSync } from 'node:fs';
 import {
   connectDaemon,
   formatLadder,
+  formatMcpServers,
+  formatModels,
+  formatReceipt,
   formatReviewers,
   formatSteps,
+  formatUsage,
   SwitchbackClient,
   spawnEngine,
 } from '@switchback/client';
@@ -321,6 +325,88 @@ class EngineConnection implements vscode.Disposable {
       case 'chooseAgent':
         await this.chooseAgent();
         return;
+      case 'command':
+        await this.command(m.name, m.args);
+        return;
+    }
+  }
+
+  /**
+   * Slash commands from the chat. Ones that show something print it into the
+   * chat as the TUI does; ones that change something open the same pickers as
+   * the command palette, since a picker beats typing model names.
+   */
+  private async command(name: string, args: string[]): Promise<void> {
+    const c = this.client;
+    const session = this.session;
+    if (!c || !session) return;
+    const info = (text: string) => this.broadcast({ type: 'info', text });
+    switch (name) {
+      case 'new':
+        return this.newSession();
+      case 'agent':
+        return args[0] ? this.newSession(args[0]) : this.chooseAgent();
+      case 'agents': {
+        const agents = await c.request('agents.list', {}).catch(() => this.init?.agents ?? []);
+        return info(
+          agents
+            .map(
+              (a) =>
+                `${a.name} [${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}]: ${a.description}`,
+            )
+            .join('\n'),
+        );
+      }
+      case 'sessions':
+      case 'resume':
+        return this.openSession();
+      case 'compact':
+        return this.compact();
+      case 'models': {
+        const roles = await this.currentRoles();
+        return info(formatModels(this.init?.models ?? [], roles));
+      }
+      case 'roles':
+        return args[0] === 'reset' ? this.chooseRole('reset') : this.chooseModels();
+      case 'start':
+      case 'escalate':
+        return this.chooseRole(name);
+      case 'subagent-model':
+        return this.chooseRole('subagents');
+      case 'review': {
+        const next = { on: true, off: false, default: undefined } as const;
+        if (!args[0] || !(args[0] in next)) return this.chooseRole('review');
+        this.remoteReview = next[args[0] as keyof typeof next];
+        return info(
+          this.remoteReview === undefined
+            ? 'review: following review.mode in config'
+            : `review: ${this.remoteReview ? 'on' : 'off'}`,
+        );
+      }
+      case 'usage': {
+        const u = await c.request('usage.get', { period: 'week' });
+        const by = (['rule', 'agent', 'model'] as const).find((b) => b === args[0]) ?? 'rule';
+        return info(formatUsage(u, by));
+      }
+      case 'receipt': {
+        const u = await c.request('usage.get', { sessionId: session.id });
+        return info(formatReceipt(u, 'This session, including subagents'));
+      }
+      case 'mcp': {
+        const { servers } = await c.request('mcp.list', {});
+        return info(`MCP servers\n${formatMcpServers(servers)}`);
+      }
+      case 'setup':
+        await vscode.commands.executeCommand('switchback.runSetup');
+        return;
+      case 'logs':
+        await vscode.commands.executeCommand('switchback.showLogs');
+        return;
+      case 'restart':
+        await vscode.commands.executeCommand('switchback.restartEngine');
+        return;
+      default:
+        return info(`unknown command /${name}; type / to see commands`);
     }
   }
 

@@ -15,7 +15,7 @@ export { esc };
 export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet<string>): string {
   switch (item.kind) {
     case 'user':
-      return `<div class="user">❯ ${esc(item.text)}</div>`;
+      return `<div class="user">${esc(item.text)}</div>`;
     case 'info':
       return `<div class="info">${esc(item.text)}</div>`;
     case 'route':
