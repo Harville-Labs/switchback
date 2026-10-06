@@ -43,7 +43,7 @@ export class TurnHooks {
     if (continuations >= MAX_STOP_CONTINUATIONS || !this.hooks.has(event)) return undefined;
     const r = await this.hooks.run(event, {
       ...this.payload(s),
-      // Claude Code's flag: true once a Stop hook has already sent the model back.
+      // True once a Stop hook has already sent the model back, so a hook can avoid looping.
       stop_hook_active: continuations > 0,
     });
     return r.block;

@@ -7,7 +7,7 @@
  *   prompt, the user)
  * - any other exit: a warning for the user; nothing is blocked
  *
- * JSON output, as in Claude Code: `decision: "block" | "approve"` with
+ * JSON output: `decision: "block" | "approve"` with
  * `reason`; `hookSpecificOutput.permissionDecision: "allow" | "deny" |
  * "ask"` with `permissionDecisionReason` (PreToolUse);
  * `hookSpecificOutput.additionalContext`; `continue: false` with
@@ -33,20 +33,6 @@ export interface HookRunnerDeps {
 }
 
 const DEFAULT_TIMEOUT_S = 60;
-
-/** Claude Code's names for our tools, so matchers written for it match. */
-const CLAUDE_NAMES: Record<string, string> = {
-  bash: 'Bash',
-  read: 'Read',
-  edit: 'Edit',
-  write: 'Write',
-  glob: 'Glob',
-  grep: 'Grep',
-  task: 'Task',
-  bash_output: 'BashOutput',
-  kill_shell: 'KillShell',
-  exit_plan_mode: 'ExitPlanMode',
-};
 
 const TOOL_EVENTS = new Set<HookEvent>(['PreToolUse', 'PostToolUse']);
 
@@ -94,8 +80,6 @@ export class HookRunner {
       env: {
         ...process.env,
         SWITCHBACK_PROJECT_DIR: this.deps.workspaceRoot,
-        // Hooks written for Claude Code read this name.
-        CLAUDE_PROJECT_DIR: this.deps.workspaceRoot,
       },
     });
     const seconds = hook.timeout ?? DEFAULT_TIMEOUT_S;
@@ -157,15 +141,12 @@ function matches(m: HookMatcher, event: HookEvent, subject: string | undefined):
   if (!pattern || pattern === '*') return true;
   if (!TOOL_EVENTS.has(event) && event !== 'SessionStart') return true;
   if (subject === undefined) return false;
-  let re: RegExp;
+  // Tool names are case-insensitive, as in agent files and permission rules.
   try {
-    re = new RegExp(`^(?:${pattern})$`);
+    return new RegExp(`^(?:${pattern})$`, 'i').test(subject);
   } catch {
     return false;
   }
-  return (
-    re.test(subject) || (CLAUDE_NAMES[subject] !== undefined && re.test(CLAUDE_NAMES[subject]))
-  );
 }
 
 const RANK = { allow: 0, ask: 1, deny: 2 } as const;

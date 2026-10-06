@@ -1,7 +1,6 @@
 /**
- * Hooks, in the same format as Claude Code's (per event, matchers with the
- * commands to run), so they're familiar and easy to copy over. Switchback reads
- * them only from its own config files, never from another agent's.
+ * Hooks: per event, matchers with the commands to run. Read only from
+ * Switchback's own config files (ADR 0016).
  */
 import { z } from 'zod';
 
@@ -27,8 +26,8 @@ export type HookCommand = z.infer<typeof HookCommand>;
 
 export const HookMatcher = z.object({
   /**
-   * Tool events: a regular expression for the tool name, ours or Claude
-   * Code's (`bash|edit`, `Bash`, `mcp__github__.*`). SessionStart: `startup`
+   * Tool events: a regular expression for the tool name, case-insensitive
+   * (`bash|edit`, `mcp__github__.*`). SessionStart: `startup`
    * or `resume`. Empty or `*` matches everything.
    */
   matcher: z.string().optional(),

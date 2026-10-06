@@ -50,7 +50,7 @@ describe('hook runner', () => {
     expect(event).toMatchObject({ hook_event_name: 'PreToolUse', tool_name: 'bash', cwd: root });
   });
 
-  test("matchers take our tool names and Claude Code's", async () => {
+  test('matchers are case-insensitive regular expressions', async () => {
     const { r } = runner({ PreToolUse: [{ matcher: 'Edit|Write', hooks: [cmd('exit 2')] }] });
     expect((await r.run('PreToolUse', {}, 'write')).block).toBeDefined();
     expect((await r.run('PreToolUse', {}, 'bash')).block).toBeUndefined();
@@ -226,7 +226,7 @@ describe('hooks in config', () => {
       writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify(hook('echo claude')));
       const before = loadConfig(root, env, [], null);
       expect(before.config.hooks.Stop?.map((m) => m.hooks[0]?.command)).toEqual(['echo user']);
-      // Claude Code's settings are its own; Switchback doesn't run its hooks.
+      // Another agent's settings are its own; Switchback never reads them.
       expect(before.untrustedHooks.map((h) => h.source)).toEqual(['.switchback/config.json']);
       trust(
         root,

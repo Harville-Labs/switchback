@@ -1,6 +1,6 @@
 # Hooks
 
-Hooks run your own commands when something happens in a session: format a file after an edit, refuse a command, add the current branch to every prompt, tell you when Switchback is waiting. They use the same format as Claude Code's hooks, so one written for Claude Code can be copied into a Switchback config as is. Switchback reads hooks only from its own config files, never from `.claude/settings.json` or another agent's setup.
+Hooks run your own commands when something happens in a session: format a file after an edit, refuse a command, add the current branch to every prompt, tell you when Switchback is waiting. Switchback reads hooks only from its own config files, never from another agent's setup ([ADR 0016](adr/0016-open-conventions.md)).
 
 Hooks aren't skills. A hook is your command, run automatically on an event; the model never chooses it. A skill is instructions the model chooses to load when a task calls for it.
 
@@ -18,13 +18,13 @@ Hooks aren't skills. A hook is your command, run automatically on an event; the 
 }
 ```
 
-Each event lists matchers, and each matcher lists commands. Commands run in the workspace with the event as JSON on stdin, `SWITCHBACK_PROJECT_DIR` (and `CLAUDE_PROJECT_DIR`) set to the workspace, and a timeout in seconds (default 60). A matcher's commands run in parallel.
+Each event lists matchers, and each matcher lists commands. Commands run in the workspace with the event as JSON on stdin, `SWITCHBACK_PROJECT_DIR` set to the workspace, and a timeout in seconds (default 60). A matcher's commands run in parallel.
 
 ## Events
 
 | Event | When | Matcher | What a hook can do |
 |---|---|---|---|
-| `PreToolUse` | Before a tool call, after its input is validated | Tool name, ours or Claude Code's (`bash`, `Bash`, `edit\|write`, `mcp__github__.*`) | Block it, allow it without asking, or make it ask |
+| `PreToolUse` | Before a tool call, after its input is validated | Tool name, as a case-insensitive regular expression (`bash`, `edit\|write`, `mcp__github__.*`) | Block it, allow it without asking, or make it ask |
 | `PostToolUse` | After a tool call ran | Tool name | Tell the model something about the result (it already happened) |
 | `UserPromptSubmit` | Before a prompt reaches the model, queued ones included | none | Block the prompt, or add context for the model |
 | `Stop` | When the model finishes a turn | none | Send it back to work, with a reason (at most three times a turn) |
@@ -40,7 +40,7 @@ Every event's JSON has `hook_event_name`, `session_id`, `cwd`, and `permission_m
 - **Exit 2** blocks. Stderr says why: the model hears it for tool calls and Stop, and you see it for a blocked prompt.
 - **Any other exit** is a warning in the log; nothing is blocked.
 
-A hook can also print JSON, as in Claude Code:
+A hook can also print JSON:
 
 | Field | Meaning |
 |---|---|
@@ -62,10 +62,7 @@ A project's hooks run commands from a checked-out repository, so they wait for y
 
 An organization can run only its own hooks (`restrictions.allowUserHooks: false`); see [organizations.md](organizations.md).
 
-## Differences from Claude Code
+## Limits
 
-- Hooks are read only from Switchback's config, not from `.claude/settings.json`.
-- Tool names match both ways: `bash` and `Bash`, `edit` and `Edit`.
-- `transcript_path` isn't sent.
-- Hooks run with your permissions, outside the bash tool's sandbox, as they do in Claude Code. Only trusted ones run.
-- The `PreCompact` and `SessionEnd` events aren't supported yet.
+- Hooks run with your permissions, outside the bash tool's sandbox. Only trusted ones run.
+- The event JSON doesn't include the transcript.
