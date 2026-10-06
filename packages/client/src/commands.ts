@@ -6,7 +6,14 @@
 
 export type ClientName = 'tui' | 'vscode';
 
-export type CommandGroup = 'Routing' | 'Session' | 'Models' | 'Usage' | 'Tools' | 'Extension';
+export type CommandGroup =
+  | 'Routing'
+  | 'Session'
+  | 'Permissions'
+  | 'Models'
+  | 'Usage'
+  | 'Tools'
+  | 'Extension';
 
 export interface SlashCommand {
   name: string;
@@ -44,6 +51,17 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: 'Session',
     description: 'show what a subagent did: routes, tools, report',
     clients: ['tui'],
+  },
+  {
+    name: 'mode',
+    args: '[default|accept-edits|plan|bypass]',
+    group: 'Permissions',
+    description: 'how tool calls are approved in this session (Shift+Tab cycles)',
+  },
+  {
+    name: 'permissions',
+    group: 'Permissions',
+    description: 'the mode, permission levels, and every rule with its source',
   },
   {
     name: 'models',

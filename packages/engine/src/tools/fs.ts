@@ -141,7 +141,7 @@ export const globTool = defineTool({
     const cwd = resolveInWorkspace(ctx.workspaceRoot, input.path ?? '.');
     const matches: string[] = [];
     for await (const f of new Glob(input.pattern).scan({ cwd, onlyFiles: true, dot: false })) {
-      if (IGNORED.test(f)) continue;
+      if (IGNORED.test(f) || ctx.hidden?.(join(cwd, f))) continue;
       matches.push(workspacePath(ctx.workspaceRoot, join(cwd, f)));
       if (matches.length >= 500) break;
     }
@@ -255,9 +255,17 @@ export const grepTool = defineTool({
   async run(input, ctx) {
     const cwd = resolveInWorkspace(ctx.workspaceRoot, input.path ?? '.');
     if (ripgrep === undefined) ripgrep = process.env.SWITCHBACK_NO_RIPGREP ? null : Bun.which('rg');
-    const out =
+    const found =
       (ripgrep ? await grepRipgrep(ripgrep, input, cwd, ctx.workspaceRoot) : undefined) ??
       (await grepJs(input, cwd, ctx.workspaceRoot));
+    // Files deny rules keep from being read don't show up in what they contain either.
+    const hidden = ctx.hidden;
+    const out = hidden
+      ? found.filter((line) => {
+          const path = /^(.+?):\d+: /.exec(line)?.[1];
+          return !path || !hidden(join(ctx.workspaceRoot, path));
+        })
+      : found;
     if (!out.length) return 'no matches';
     const body = out.join('\n');
     return truncate(out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body);

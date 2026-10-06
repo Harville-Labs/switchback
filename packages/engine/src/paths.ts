@@ -24,6 +24,8 @@ export type SwitchbackPaths = ReturnType<typeof switchbackPaths>;
 export function projectPaths(root: string) {
   return {
     configFile: join(root, '.switchback', 'config.json'),
+    /** Personal settings for this project, never committed (rules saved from prompts). */
+    localConfigFile: join(root, '.switchback', 'config.local.json'),
     agentsDir: join(root, '.switchback', 'agents'),
     /** Claude Code compatibility: agents defined for Claude Code work unchanged. */
     claudeAgentsDir: join(root, '.claude', 'agents'),

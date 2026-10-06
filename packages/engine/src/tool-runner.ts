@@ -1,18 +1,16 @@
 /**
- * Running a model's tool calls: validation, the permission policy, privacy
+ * Running a model's tool calls: validation, the permission gate, privacy
  * marks, and parallel execution of calls that don't mutate anything.
  */
-import type { PermissionDecision, ToolResultPart } from '@switchback/protocol';
+import type { ToolResultPart } from '@switchback/protocol';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
+import type { PermissionGate } from './permissions/gate.ts';
 import { privateToolUse } from './privacy.ts';
-import { PendingPrompts } from './prompts.ts';
-import type { SubagentResult, Tool, ToolContext, ToolPreview } from './tools/index.ts';
+import type { SubagentResult, Tool, ToolContext } from './tools/index.ts';
 
 export type Interaction = 'prompt' | 'approve' | 'deny';
 
 export interface ToolRunnerDeps {
-  /** How `ask` is resolved when no client answers (headless runs approve or deny). */
-  interaction(): Interaction;
   runSubagent(
     parent: LiveSession,
     agent: string,
@@ -32,19 +30,11 @@ export interface ToolCall {
 }
 
 export class ToolRunner {
-  readonly permissions = new PendingPrompts<PermissionDecision>('permission');
-  /** Categories (or MCP servers) the user allowed for the engine's lifetime. */
-  private alwaysAllowed = new Set<string>();
-
   constructor(
     private readonly host: EngineHost,
+    private readonly gate: PermissionGate,
     private readonly deps: ToolRunnerDeps,
   ) {}
-
-  /** Grants were made under the old policy. */
-  revokeGrants(): void {
-    this.alwaysAllowed.clear();
-  }
 
   async run(
     s: LiveSession,
@@ -56,13 +46,19 @@ export class ToolRunner {
     /** The alias of the model that made these calls, for review. */
     writer: string,
   ): Promise<ToolResultPart[]> {
+    const root = this.host.rootOf(s);
+    const policy = this.gate.policy();
     const ctx: ToolContext = {
-      workspaceRoot: this.host.rootOf(s),
+      workspaceRoot: root,
       sessionId: s.header.id,
       signal,
       agentCatalog: catalog,
       runSubagent: (agent, prompt, description, options) =>
         this.deps.runSubagent(s, agent, prompt, description, signal, options),
+      hidden: (path) => policy.hides(path, root),
+      ...(s.depth === 0
+        ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
+        : {}),
     };
     const runOne = (call: ToolCall) => this.runOne(s, tools, ctx, call, turnId, signal, writer);
     const allParallelSafe = calls.every(
@@ -130,7 +126,7 @@ export class ToolRunner {
     let output: string;
     let isError = false;
     let ran = false;
-    const permission = await this.check(s, tool, parsed.data, callCtx, signal);
+    const permission = await this.gate.check(s, tool, parsed.data, callCtx, signal);
     if (!permission.allowed) {
       output =
         permission.error ??
@@ -172,55 +168,5 @@ export class ToolRunner {
       ...(isError ? { isError } : {}),
       ...(priv ? { private: priv } : {}),
     };
-  }
-
-  /**
-   * Decide whether a tool call may run. `allowed: false` with an `error` means
-   * the call would fail anyway (found while building the preview), so the
-   * user is never asked about it.
-   */
-  async check(
-    s: LiveSession,
-    tool: Tool,
-    input: unknown,
-    ctx: ToolContext,
-    signal: AbortSignal,
-  ): Promise<{ allowed: boolean; error?: string }> {
-    if (tool.permission === 'none') return { allowed: true };
-    const category = this.host.config().permissions[tool.permission];
-    // deny first: an org can enforce it, and neither a per-server setting nor a
-    // session grant may override that.
-    if (category === 'deny') return { allowed: false };
-    const level = tool.permissionLevel ?? category;
-    if (level === 'deny') return { allowed: false };
-    const key = tool.permissionKey ?? tool.permission;
-    if (level === 'allow' || this.alwaysAllowed.has(key)) return { allowed: true };
-    const mode = this.deps.interaction();
-    if (mode !== 'prompt') return { allowed: mode === 'approve' };
-
-    let preview: ToolPreview | undefined;
-    try {
-      preview = await tool.preview?.(input, ctx);
-    } catch (err) {
-      return { allowed: false, error: (err as Error).message };
-    }
-
-    const requestId = `perm_${crypto.randomUUID().slice(0, 8)}`;
-    const decision = await this.permissions.ask(requestId, signal, 'deny', () =>
-      this.host.emit({
-        type: 'permission.requested',
-        ...scope(s),
-        requestId,
-        tool: tool.name,
-        summary: tool.summarize(input),
-        input,
-        ...(preview ? { preview: preview.diff } : {}),
-        ...(preview?.proposed ? { proposed: preview.proposed } : {}),
-      }),
-    );
-    // Every client clears the prompt, whichever one answered (or none, on cancel).
-    this.host.emit({ type: 'permission.resolved', ...scope(s), requestId, decision });
-    if (decision === 'allow_always') this.alwaysAllowed.add(key);
-    return { allowed: decision !== 'deny' };
   }
 }

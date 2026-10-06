@@ -26,6 +26,8 @@ export interface OrgStatus {
   enforcedKeys: string[];
   /** The policy disables remote models entirely. */
   remoteDisabled: boolean;
+  /** Sessions can't use the `bypassPermissions` mode. */
+  bypassDisabled: boolean;
 }
 
 /** Dotted paths of every leaf set by a layer, e.g. `routing.budget.dailyUsd`. */
@@ -159,8 +161,13 @@ export function applyRestrictions(
     ...(daily !== undefined ? { dailyUsd: daily } : {}),
     ...(monthly !== undefined ? { monthlyUsd: monthly } : {}),
   };
+  let { permissions } = config;
+  if (!r.allowBypassPermissions && permissions.defaultMode === 'bypassPermissions') {
+    notes.push('permissions.defaultMode bypassPermissions turned off');
+    permissions = { ...permissions, defaultMode: 'default' };
+  }
   return {
-    config: { ...config, providers, models, routing, review, subagents, mcpServers },
+    config: { ...config, providers, models, routing, review, subagents, mcpServers, permissions },
     notes,
   };
 }

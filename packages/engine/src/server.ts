@@ -16,6 +16,7 @@ import {
   type JsonRpcRequest,
   NdjsonDecoder,
   PermissionRespondParams,
+  PermissionsListParams,
   PROTOCOL_VERSION,
   RpcError,
   SessionCancelParams,
@@ -24,6 +25,7 @@ import {
   SessionGetParams,
   SessionPromptParams,
   SessionRolesParams,
+  SessionSetModeParams,
   SessionSetRolesParams,
   type Transport,
   UsageGetParams,
@@ -112,9 +114,15 @@ export function serve(
         return { cancelled: engine.cancel(parse(SessionCancelParams, req.params).sessionId) };
       case 'permission.respond': {
         const p = parse(PermissionRespondParams, req.params);
-        engine.respondPermission(p.requestId, p.decision);
+        engine.respondPermission(p.requestId, p.decision, p.save);
         return { ok: true };
       }
+      case 'session.setMode': {
+        const p = parse(SessionSetModeParams, req.params);
+        return engine.setMode(p.sessionId, p.mode);
+      }
+      case 'permissions.list':
+        return engine.permissions(parse(PermissionsListParams, req.params).sessionId);
       case 'escalation.respond': {
         const p = parse(EscalationRespondParams, req.params);
         engine.respondEscalation(p.requestId, p.approve);

@@ -6,6 +6,8 @@ import type {
   InitializeResult,
   McpServerInfo,
   ModelRef,
+  PermissionMode,
+  PermissionsListResult,
   SessionRoles,
   UsageReport,
 } from '@switchback/protocol';
@@ -290,4 +292,60 @@ export function formatModels(models: ModelSummary[], roles?: SessionRoles): stri
       return `${m.alias}  ${m.ref.model} (${m.tier})${filled.length ? `  · ${filled.join(', ')}` : ''}`;
     })
     .join('\n');
+}
+
+const MODE_LABELS: Record<PermissionMode, string> = {
+  default: 'default',
+  acceptEdits: 'accept edits',
+  plan: 'plan',
+  bypassPermissions: 'bypass permissions',
+};
+
+/** What each mode does, for pickers and `/mode`. */
+export const MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
+  default: 'ask before edits and commands, as the permission levels say',
+  acceptEdits: 'edits in the workspace go ahead; commands still ask',
+  plan: 'read and plan only; nothing changes until you approve the plan',
+  bypassPermissions: 'everything goes ahead except what deny and ask rules stop',
+};
+
+export function modeLabel(mode: PermissionMode): string {
+  return MODE_LABELS[mode];
+}
+
+/** A mode as people type it: `plan`, `accept-edits`, `bypass`, or the config name. */
+export function parseMode(input: string): PermissionMode | undefined {
+  const key = input.toLowerCase().replace(/[-_\s]/g, '');
+  const aliases: Record<string, PermissionMode> = {
+    default: 'default',
+    normal: 'default',
+    acceptedits: 'acceptEdits',
+    accept: 'acceptEdits',
+    plan: 'plan',
+    bypass: 'bypassPermissions',
+    bypasspermissions: 'bypassPermissions',
+  };
+  return aliases[key];
+}
+
+/** The mode after `current` when cycling (Shift+Tab), among those allowed. */
+export function nextMode(current: PermissionMode, allowed: PermissionMode[]): PermissionMode {
+  const i = allowed.indexOf(current);
+  return allowed[(i + 1) % allowed.length] ?? 'default';
+}
+
+/** `/permissions`: the mode, the levels, and every rule with where it came from. */
+export function formatPermissions(p: PermissionsListResult): string {
+  const lines = [
+    ...(p.mode ? [`mode   ${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`] : []),
+    `levels read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · mcp ${p.levels.mcp}`,
+  ];
+  if (!p.rules.length) lines.push('rules  none (see docs/permissions.md)');
+  else {
+    const width = Math.max(...p.rules.map((r) => r.rule.length));
+    lines.push('rules');
+    for (const r of p.rules)
+      lines.push(`  ${r.behavior.padEnd(5)} ${r.rule.padEnd(width)}  ${r.source}`);
+  }
+  return lines.join('\n');
 }

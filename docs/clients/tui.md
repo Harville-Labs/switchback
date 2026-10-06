@@ -63,8 +63,9 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `/start <model...>` | Where turns start (more models are backups for when it's down or too small) |
 | `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
 | `/subagent-model <model>\|none` | Default model for subagents |
+| `/mode [default\|accept-edits\|plan\|bypass]` | Show or switch the permission mode ([permissions.md](../permissions.md#modes)) |
+| `/permissions` | The mode, the permission levels, and every rule with where it came from |
 
-Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder: `step 1/2 qwen3-coder-480b, 2 more`.
 | `/copy [n]` | Copy the last reply, or its `n`th code block, to the clipboard as raw text (no wrapping or indentation from the terminal rendering). Works over SSH in terminals that support OSC 52 |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/help`, `/exit` | |
@@ -74,9 +75,13 @@ Role commands change the current session; add `--save` to make the change your d
 | Paste | Arrives whole (bracketed paste), so newlines in it never send the prompt. Terminal colors and control characters are removed. A paste of 12 lines or 1,500 characters or more shows as a chip, `[Pasted text #1 · 240 lines]`, that Backspace deletes in one go and that expands to the full text when you send. A file dragged into the terminal becomes an `@` mention when it's in the workspace |
 | Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word |
 | `esc` | Cancel the running turn (or close the mention menu) |
-| `y` / `a` / `n` | Answer a permission prompt: once, always, deny |
+| Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
+| `y` / `a` / `p` / `n` | Answer a permission prompt: once, always this session (the rules it grants are shown), always in this project (saved to `.switchback/config.local.json`), deny |
+| `y` / `a` / `n` | Answer a plan: approve, approve and accept edits, keep planning |
 | `y` / `n` | Answer an escalation prompt |
 | `ctrl+c` | Quit |
+
+Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission mode when it isn't `default`.
 
 ## Implementation notes
 

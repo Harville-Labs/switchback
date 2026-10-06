@@ -7,6 +7,7 @@ import type {
   EngineEvent,
   Message,
   ModelRef,
+  PermissionMode,
   SessionRoles,
   StopReason,
   TextPart,
@@ -56,6 +57,10 @@ export interface LiveSession {
   };
   /** Secrets redacted from the last remote request, to report only new ones. */
   redacted?: number;
+  /** Top-level sessions: the permission mode; subagents follow their top-level session's. */
+  mode?: PermissionMode;
+  /** The mode the model was last told about (plan mode reminders). */
+  toldMode?: PermissionMode;
 }
 
 export interface TurnResult {

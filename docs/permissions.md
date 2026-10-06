@@ -1,6 +1,6 @@
 # Permissions and safety
 
-Switchback runs tools on the user's machine, so every tool call passes three checks.
+Switchback runs tools on the user's machine, so every tool call passes three checks: validation, workspace confinement, and the permission policy.
 
 ## 1. Validation
 
@@ -10,9 +10,21 @@ Tool inputs come from a model and are untrusted. Each tool has a Zod schema. Inv
 
 File tools resolve paths against the workspace root and reject anything outside it, including `..`, absolute paths elsewhere, and symlinks that point out of the workspace. The deepest existing ancestor is canonicalized with `realpath` before the check.
 
-The `bash` tool runs with the workspace as its working directory but isn't sandboxed. It can do anything the user can. That's why it defaults to `ask`. OS-level sandboxing is on the roadmap.
+The `bash` tool runs with the workspace as its working directory but isn't sandboxed. It can do anything the user can. That's why it defaults to `ask`, and why deny rules for commands are best effort. OS-level sandboxing is on the roadmap.
 
 ## 3. Permission policy
+
+Every call that passes validation and confinement is decided in this order:
+
+1. **A category set to `deny`** (`permissions.bash: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off.
+2. **Deny rules.** The call is refused, and the model is told which rule refused it and where the rule came from.
+3. **Plan mode.** Edits are refused until the user approves a plan.
+4. **Ask rules.** The user is asked, in every mode, including `bypassPermissions`.
+5. **Allow rules,** including what the user allowed earlier in the session.
+6. **The mode.** `bypassPermissions` allows the rest; `acceptEdits` allows edits.
+7. **The category's level:** `allow`, or ask.
+
+### Levels
 
 | Category | Tools | Default |
 |---|---|---|
@@ -20,15 +32,64 @@ The `bash` tool runs with the workspace as its working directory but isn't sandb
 | `edit` | write, edit | `ask` |
 | `bash` | bash | `ask` |
 | `mcp` | tools from MCP servers (`mcp__<server>__<tool>`) | `ask`; a server's `permission` setting overrides it, except that a category-level `deny` always wins |
-| (none) | task | always allowed; the subagent's own tools are checked individually |
+| (none) | task, exit_plan_mode | always allowed; a subagent's own tools are checked individually |
 
-With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show in the prompt. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked. Clients offer:
+### Rules
+
+Rules are in Claude Code's syntax, so rules from `.claude/settings.json` can be copied unchanged. A rule names a tool and optionally a specifier in parentheses:
+
+```jsonc
+"permissions": {
+  "allow": ["bash(git status:*)", "bash(bun test:*)", "edit(src/**)"],
+  "ask":   ["bash(git push:*)"],
+  "deny":  ["read(.env)", "read(**/*.pem)", "bash(rm -rf:*)", "mcp__github__delete_repo"]
+}
+```
+
+| Rule | Matches |
+|---|---|
+| `bash` | every command |
+| `bash(npm run build)` | exactly that command |
+| `bash(npm run test:*)` | that command, alone or followed by arguments |
+| `bash(git * --force)` | `*` matches anything |
+| `read(.env)` | read, glob, and grep of `.env` at any depth |
+| `edit(src/**)` | edit and write under `src/` |
+| `edit(/build/)` | under `build/` at the workspace root |
+| `read(~/.ssh/**)`, `read(//etc/hosts)` | absolute paths: home directory, filesystem root |
+| `mcp__github` or `mcp__github__*` | every tool of that server |
+| `mcp__github__create_issue` | one tool |
+
+Claude Code's tool names work too: `Read`, `Grep`, `Glob`, and `LS` are read rules; `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` are edit rules; `Bash` is bash. Path patterns are gitignore-style: a pattern without a slash matches that name at any depth, a trailing `/` means everything under the directory, and `**` crosses directories.
+
+**Shell commands.** A command line can hold several commands (`a && b; c | d`). A deny or ask rule applies when any of them matches, and it also sees through `sudo`, `env`, `xargs`, `nice`, `nohup`, `time`, and `VAR=value` prefixes, so `bash(rm:*)` refuses `sudo rm -rf x`. An allow rule applies only when every command matches an allow rule, so `bash(git status:*)` never approves `git status; rm -rf x`. A command no rule can vouch for never matches an allow rule: one with command substitution (`$(...)`, backticks), process substitution (`<(...)`), or output redirected to a file. Those still ask. Rules are a policy aid, not a sandbox. A script can do whatever its interpreter can, so deny rules for `bash` are best effort. OS sandboxing of the bash tool is separate.
+
+**Searches.** A `read` deny rule also keeps matching files out of glob and grep results, so `read(.env)` hides `.env` from a search of the whole workspace.
+
+**Where rules come from.** Rule lists add up across config layers instead of replacing each other: the user config, the project config, the project's personal file `.switchback/config.local.json`, and an organization's policy. A project can't remove a user's deny rules, and nobody can remove an organization's. `/permissions` (both clients) and `switchback doctor` list every rule in effect and where each came from.
+
+### Answering a prompt
+
+With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked.
 
 - **Allow once**: this call only.
-- **Always**: every call in this category for the rest of the engine's lifetime. For MCP tools, "always" covers that one server's tools.
-- **Deny**: the model is told the user declined and not to retry.
+- **Always this session**: allow rules for this call, shown in the prompt (`bash(git status:*)`, `edit`, `mcp__github`), for the rest of the engine's lifetime.
+- **Always in this project**: the same rules, also saved to `.switchback/config.local.json`. Switchback adds that file to `.switchback/.gitignore`, so your personal rules aren't committed.
+- **Deny**: the model is told the call was declined and not to retry.
 
-Cancelling the turn denies any pending request. Headless `switchback run` denies `ask` permissions unless you pass `--yes`.
+A call an ask rule caught offers no "always": the rule says to ask every time. Cancelling the turn denies any pending request. Headless `switchback run` denies `ask` permissions unless you pass `--yes`.
+
+### Modes
+
+| Mode | What it changes |
+|---|---|
+| `default` | Nothing: the levels and rules decide |
+| `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
+| `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
+| `bypassPermissions` | Everything goes ahead except what a category `deny`, a deny rule, or an ask rule stops |
+
+New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
+
+An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and keep only its own allow and ask rules (`restrictions.allowUserPermissionRules: false`); see [organizations.md](organizations.md).
 
 ## Cost safety
 

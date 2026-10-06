@@ -25,6 +25,8 @@ export interface TextPart {
   private?: string;
   /** Set on a reviewer's findings handed back to the model (docs/review.md). */
   review?: { round: number; model: ModelRef };
+  /** Context the engine added for the model (e.g. that plan mode is on); clients don't show it. */
+  reminder?: true;
 }
 
 /**

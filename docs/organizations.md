@@ -40,7 +40,10 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
     "routing": { "start": ["local", "acme-coder"], "escalate": [["remote"]] }
   },
   "enforced": {                                     // a config layer above everything; users can't override
-    "permissions": { "bash": "ask" },
+    "permissions": {
+      "bash": "ask",
+      "deny": ["read(.env)", "read(**/*.pem)", "bash(curl:*)"]  // added to every member's rules
+    },
     "routing": { "escalation": { "policy": "ask" } }
   },
   "restrictions": {
@@ -48,6 +51,8 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
     "allowedProviderTypes": ["openai-compatible", "openai"],
     "allowUserProviders": false,                    // only providers defined in this policy
     "allowUserMcpServers": false,                   // only MCP servers defined in this policy
+    "allowUserPermissionRules": false,              // only this policy's allow/ask rules (members' deny rules still apply)
+    "allowBypassPermissions": false,                // no bypassPermissions mode
     "maxDailyUsd": 10,                              // users may set lower budgets, never higher
     "maxMonthlyUsd": 150
   },
@@ -66,11 +71,15 @@ Config layers merge in this order, lowest first:
 1. built-in defaults (none)
 2. org `defaults`
 3. user config (`~/.config/switchback/config.json`)
-4. project config (`.switchback/config.json`)
+4. project config (`.switchback/config.json`), then the project's personal file (`.switchback/config.local.json`)
 5. command-line layers
 6. org `enforced`
 
 Then `restrictions` run on the result and *remove* anything not allowed: disallowed providers and the models that use them, remote routing when `allowRemote` is false, and MCP servers the org didn't define when `allowUserMcpServers` is false. To block MCP tools entirely, enforce `permissions.mcp: "deny"`. Budgets are capped. `switchback doctor` and `switchback whoami` list exactly what the policy changed.
+
+### Permission rules
+
+Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "later layers replace arrays": every layer's rules add up. An organization's deny rules, in `defaults` or `enforced`, join every member's rules as soon as the policy arrives, appear in `/permissions` and `switchback doctor` with the source `organization`, and can't be removed by a member, a project, or an answer at a prompt (deny is checked before anything a session allows). With `allowUserPermissionRules: false`, only the policy's allow and ask rules apply; members' and projects' deny rules still do, since they only tighten. With `allowBypassPermissions: false`, no session can switch to `bypassPermissions`, and a `defaultMode` of `bypassPermissions` becomes `default`. See [permissions.md](permissions.md#rules) for the syntax.
 
 ## Server API
 

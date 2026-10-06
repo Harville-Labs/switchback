@@ -17,8 +17,9 @@ import {
   ErrorCode,
   type InitializeResult,
   type McpListResult,
-  type Message,
   type PermissionDecision,
+  type PermissionMode,
+  type PermissionsListResult,
   PROTOCOL_VERSION,
   type RoutePreference,
   RpcError,
@@ -26,13 +27,11 @@ import {
   type SessionRoles,
   type SessionSetRolesParams,
   type SessionSummary,
-  type StopReason,
-  textOf,
   type UsagePeriod,
   type UsageReport,
 } from '@switchback/protocol';
 import type { Price, Provider } from '@switchback/providers';
-import { budgetReached, Router, roleAliases, SignalTracker } from '@switchback/router';
+import { budgetReached, Router, roleAliases } from '@switchback/router';
 import { AgentLoop } from './agent-loop.ts';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import { type AgentSpec, draftAgentPrompt } from './authoring.ts';
@@ -42,13 +41,16 @@ import { ExternalRuntimes } from './external-runtime.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { McpHub } from './mcp/hub.ts';
-import { expandAttachments, expandMentions } from './mentions.ts';
 import { ModelDirectory } from './model-directory.ts';
 import type { OrgStatus } from './org/policy.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
-import { type PrivatePathMatcher, privatePathMatcher, privateReason } from './privacy.ts';
+import { PermissionGate } from './permissions/gate.ts';
+import { allowedModes, assertModeAllowed } from './permissions/modes.ts';
+import { configRules, type SourcedRule } from './permissions/policy.ts';
+import { type PrivatePathMatcher, privatePathMatcher } from './privacy.ts';
 import { ReviewRunner } from './review-runner.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
+import { SessionRegistry } from './session-registry.ts';
 import { changeRoles, effectiveRoles, rolesLayer } from './session-roles.ts';
 import { writeConfigLayer } from './setup.ts';
 import {
@@ -60,6 +62,7 @@ import {
 import { Subagents } from './subagents.ts';
 import { systemPrompt } from './system-prompt.ts';
 import { type Interaction, ToolRunner } from './tool-runner.ts';
+import { type TurnOptions, TurnRunner } from './turn-runner.ts';
 import { UsageRecorder } from './usage-recorder.ts';
 import type { Worktree } from './worktree.ts';
 
@@ -94,6 +97,8 @@ export interface EngineOptions {
   dataDir?: string;
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];
+  /** Permission rules with their sources (from `loadConfig`); default: the config's, unsourced. */
+  rules?: SourcedRule[];
   now?: () => Date;
 }
 
@@ -105,10 +110,9 @@ function referenceModel(config: SwitchbackConfig): string | undefined {
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
-  private sessions = new Map<string, LiveSession>();
+  private readonly sessions: SessionRegistry;
   private router: Router;
   private readonly ledger: UsageLedger;
-  private readonly store: SessionStore;
   private agents: Map<string, AgentDefinition>;
   private agentErrorsSeen = new Set<string>();
   private readonly now: () => Date;
@@ -116,12 +120,14 @@ export class Engine {
   private privateMatcher: { key: string; matches: PrivatePathMatcher | undefined } | undefined;
   private readonly host: EngineHost;
   private readonly models: ModelDirectory;
+  private readonly gate: PermissionGate;
   private readonly tools: ToolRunner;
   private readonly reviews: ReviewRunner;
   private readonly compactor: Compactor;
   private readonly subagents: Subagents;
   private readonly external: ExternalRuntimes;
   private readonly agentLoop: AgentLoop;
+  private readonly turns: TurnRunner;
 
   constructor(private readonly options: EngineOptions) {
     const { config } = options;
@@ -134,7 +140,11 @@ export class Engine {
       referenceModel(config),
       options.now,
     );
-    this.store = options.store ?? new MemorySessionStore();
+    this.sessions = new SessionRegistry(
+      options.store ?? new MemorySessionStore(),
+      () => this.options.config,
+      this.now,
+    );
     this.agents = options.agents ?? loadAgents([]).agents;
     this.mcp = this.startMcp(config);
     const recorder = new UsageRecorder(this.ledger, (e) => this.emit(e), this.now);
@@ -143,19 +153,29 @@ export class Engine {
       org: () => this.options.org,
       emit: (e) => this.emit(e),
       notify: (level, message) => this.notify(level, message),
-      append: (s, m) => this.append(s, m),
+      append: (s, m) => this.sessions.append(s, m),
       rolesOf: (s) => this.rolesOf(s),
       remoteBlocked: (s) => this.remoteBlocked(s),
       recordUsage: (s, tier, model, usage, meta) => recorder.record(s, tier, model, usage, meta),
       rootOf: (s) => this.rootOf(s),
-      top: (s) => this.top(s),
+      top: (s) => this.sessions.top(s),
       session: (id) => this.sessions.get(id),
       privatePaths: () => this.privatePaths(),
     };
     this.compactor = new Compactor(this.host, this.models);
     // Collaborators call each other only after construction, through these closures.
-    this.tools = new ToolRunner(this.host, {
+    this.gate = new PermissionGate(this.host, {
       interaction: () => this.options.interaction ?? 'prompt',
+      rules: () => (this.options.rules ??= configRules(this.options.config)),
+      mode: (s) => this.modeOf(s),
+      // exit_plan_mode's result tells the model about the change itself.
+      setMode: (s, mode) => this.changeMode(this.sessions.top(s), mode, true),
+      saveTo: {
+        project: projectPaths(options.workspaceRoot).localConfigFile,
+        user: options.userConfigFile ?? switchbackPaths().configFile,
+      },
+    });
+    this.tools = new ToolRunner(this.host, this.gate, {
       runSubagent: (parent, agent, prompt, description, signal, opts) =>
         this.subagents.run(parent, agent, prompt, description, signal, opts),
       noteEdit: (s, path, writer) => this.reviews.noteEdit(s, path, writer),
@@ -164,16 +184,16 @@ export class Engine {
       injected: options.runtimes,
       invocationBudget: (s) => this.subagents.invocationBudget(s),
       checkPermission: (s, tool, input, ctx, signal) =>
-        this.tools.check(s, tool, input, ctx, signal),
+        this.gate.check(s, tool, input, ctx, signal),
     });
     this.subagents = new Subagents(this.host, {
       agent: (name) => this.agents.get(name),
-      createSession: (p) => this.live(this.createSession(p).id),
+      createSession: (p) => this.sessions.live(this.createSession(p).id),
       runTurn: (s, text, route, signal, opts) =>
         this.runTurn(s, text, route, undefined, signal, [], opts),
       runExternal: (s, agent, prompt, signal) => this.external.run(s, agent, prompt, signal),
       sessionCost: (id) => this.ledger.sessionCost(id).costUsd,
-      children: (id) => [...this.sessions.values()].filter((c) => c.header.parentId === id),
+      children: (id) => this.sessions.children(id),
       workspaceRoot: options.workspaceRoot,
       dataDir: options.dataDir,
     });
@@ -191,6 +211,11 @@ export class Engine {
       agents: () => [...this.agents.values()],
       mcp: () => this.mcp,
       interaction: () => this.options.interaction ?? 'prompt',
+    });
+    this.turns = new TurnRunner(this.host, {
+      loop: this.agentLoop,
+      reviews: this.reviews,
+      mode: (s) => this.modeOf(s),
     });
   }
 
@@ -311,12 +336,13 @@ export class Engine {
     title?: string;
     parentId?: string;
     worktree?: Worktree;
+    permissionMode?: PermissionMode;
   }): SessionSummary {
     const agentName = params.agent ?? this.options.config.defaultAgent;
     if (!params.parentId) this.refreshAgents();
     const agent = this.agents.get(agentName);
     if (!agent) throw new RpcError(ErrorCode.InvalidParams, `unknown agent "${agentName}"`);
-    const parent = params.parentId ? this.sessions.get(params.parentId) : undefined;
+    if (params.permissionMode) assertModeAllowed(params.permissionMode, this.options.org);
     const now = this.now().toISOString();
     const wt = params.worktree;
     const header: SessionHeader = {
@@ -334,24 +360,17 @@ export class Engine {
         this.options.instructions,
       ),
     };
-    this.store.create(header);
-    const live: LiveSession = {
+    const live = this.sessions.create(
       header,
-      messages: [],
-      updatedAt: now,
-      signals: new SignalTracker(this.options.config.routing.escalation),
-      depth: parent ? parent.depth + 1 : 0,
-      background: new Map(),
-      inbox: [],
-    };
-    this.sessions.set(header.id, live);
+      params.permissionMode && !params.parentId ? { mode: params.permissionMode } : {},
+    );
     return this.summary(live);
   }
 
   /** Top-level sessions in this workspace, most recently updated first. */
   listSessions(): SessionSummary[] {
-    return this.store
-      .list()
+    return this.sessions
+      .stored()
       .filter(
         ({ header }) => !header.parentId && header.workspaceRoot === this.options.workspaceRoot,
       )
@@ -360,13 +379,13 @@ export class Engine {
   }
 
   getSession(sessionId: string): SessionGetResult {
-    const s = this.live(sessionId);
+    const s = this.sessions.live(sessionId);
     return { session: this.summary(s), messages: s.messages };
   }
 
   /** A session's effective roles: its own changes over the config. */
   roles(sessionId: string): SessionRoles {
-    return this.rolesOf(this.live(sessionId));
+    return this.rolesOf(this.sessions.live(sessionId));
   }
 
   /**
@@ -375,7 +394,7 @@ export class Engine {
    * can't be changed.
    */
   setRoles(params: SessionSetRolesParams): SessionRoles & { savedTo?: string } {
-    const s = this.top(this.live(params.sessionId));
+    const s = this.sessions.top(this.sessions.live(params.sessionId));
     s.roles = changeRoles(s.roles, params, this.options.config, this.options.org);
     const result = this.rolesOf(s);
     let savedTo: string | undefined;
@@ -397,104 +416,21 @@ export class Engine {
     attachments?: Attachment[];
     review?: boolean;
   }): { turnId: string } {
-    const s = this.live(params.sessionId);
-    if (s.controller)
-      throw new RpcError(ErrorCode.SessionBusy, 'session is already running a turn');
-    const turnId = `turn_${crypto.randomUUID().slice(0, 8)}`;
-    void this.runTurn(
-      s,
-      params.text,
-      params.route ?? 'auto',
-      turnId,
-      undefined,
-      params.attachments ?? [],
-      // Interactive sessions stay usable while background tasks run; their
-      // reports start a follow-up turn when they arrive.
-      {
-        waitForBackground: false,
-        ...(params.review !== undefined ? { review: params.review } : {}),
-      },
-    ).catch((err) => {
-      this.emit({ type: 'error', ...scope(s), turnId, message: (err as Error).message });
-    });
-    return { turnId };
+    return this.turns.start(this.sessions.live(params.sessionId), params);
   }
 
   /** Run a full user turn to completion. Used directly by headless mode and subagents. */
-  async runTurn(
+  runTurn(
     s: LiveSession | string,
     text: string,
     route: RoutePreference = 'auto',
     turnId = `turn_${crypto.randomUUID().slice(0, 8)}`,
     parentSignal?: AbortSignal,
     extra: Attachment[] = [],
-    options: { waitForBackground?: boolean; private?: string; review?: boolean } = {},
+    options: TurnOptions = {},
   ): Promise<TurnResult> {
-    const session = typeof s === 'string' ? this.live(s) : s;
-    if (session.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is busy');
-    const controller = new AbortController();
-    const onParentAbort = () => controller.abort();
-    parentSignal?.addEventListener('abort', onParentAbort, { once: true });
-    session.controller = controller;
-    if (!session.header.title && text) session.header.title = text.slice(0, 60);
-
-    this.emit({ type: 'turn.started', ...scope(session), turnId });
-    // An empty prompt continues the session with whatever reports are waiting.
-    if (text) await this.appendPrompt(session, text, extra, options.private);
-    session.signals.startUserTurn();
-    if (session.depth === 0) session.turnEdits = new Map();
-
-    let stopReason: StopReason = 'end_turn';
-    try {
-      stopReason = await this.agentLoop.run(session, route, turnId, controller.signal);
-      // Headless runs and subagents finish their background work before they
-      // report, so nothing is left running unattended.
-      while (
-        options.waitForBackground !== false &&
-        stopReason === 'end_turn' &&
-        (session.background.size || session.inbox.length) &&
-        !controller.signal.aborted
-      ) {
-        if (!session.inbox.length) await Promise.race(session.background.values());
-        if (session.inbox.length)
-          stopReason = await this.agentLoop.run(session, route, turnId, controller.signal);
-      }
-      const review = options.review ?? this.rolesOf(session).review.mode === 'auto';
-      if (review && session.depth === 0 && stopReason === 'end_turn' && text)
-        stopReason = await this.reviews.reviewTurn(session, text, route, turnId, controller.signal);
-    } catch (err) {
-      stopReason = controller.signal.aborted ? 'cancelled' : 'error';
-      if (stopReason === 'error')
-        this.emit({ type: 'error', ...scope(session), turnId, message: (err as Error).message });
-    } finally {
-      session.controller = undefined;
-      parentSignal?.removeEventListener('abort', onParentAbort);
-    }
-    this.emit({ type: 'turn.completed', ...scope(session), turnId, stopReason });
-    const last = session.messages.findLast((m) => m.role === 'assistant');
-    return { stopReason, text: last ? textOf(last) : '' };
-  }
-
-  /** The user's prompt, with attachments and @-mentioned files, marked private where they are. */
-  private async appendPrompt(
-    s: LiveSession,
-    text: string,
-    extra: Attachment[],
-    priv: string | undefined,
-  ): Promise<void> {
-    const matches = this.privatePaths();
-    const attachments = [
-      ...(await expandAttachments(extra, this.rootOf(s)).catch(() => [])),
-      ...(await expandMentions(text, this.rootOf(s)).catch(() => [])),
-    ].map((p) => {
-      // A file attachment's path may carry a line range (`src/a.ts:3-9`).
-      const path = p.attachment?.path.replace(/:\d+-\d+$/, '');
-      return path && matches?.(path) ? { ...p, private: `attached ${path}` } : p;
-    });
-    this.append(s, {
-      role: 'user',
-      parts: [{ type: 'text', text, ...(priv ? { private: priv } : {}) }, ...attachments],
-    });
+    const session = typeof s === 'string' ? this.sessions.live(s) : s;
+    return this.turns.run(session, text, route, turnId, parentSignal, extra, options);
   }
 
   /** Cancel the running turn and every background subagent the session started. */
@@ -509,8 +445,30 @@ export class Engine {
     return hadWork;
   }
 
-  respondPermission(requestId: string, decision: PermissionDecision): void {
-    this.tools.permissions.answer(requestId, decision);
+  respondPermission(
+    requestId: string,
+    decision: PermissionDecision,
+    save?: 'project' | 'user',
+  ): void {
+    this.gate.prompts.answer(requestId, { decision, ...(save ? { save } : {}) });
+  }
+
+  /** `session.setMode`. Subagents follow their top-level session, so this changes the tree. */
+  setMode(sessionId: string, mode: PermissionMode): { mode: PermissionMode } {
+    assertModeAllowed(mode, this.options.org);
+    this.changeMode(this.sessions.top(this.sessions.live(sessionId)), mode, false);
+    return { mode };
+  }
+
+  /** `permissions.list`: the rules in effect, with their sources, and the session's mode. */
+  permissions(sessionId?: string): PermissionsListResult {
+    const { read, edit, bash, mcp } = this.options.config.permissions;
+    return {
+      ...(sessionId ? { mode: this.modeOf(this.sessions.live(sessionId)) } : {}),
+      modes: allowedModes(this.options.org),
+      levels: { read, edit, bash, mcp },
+      rules: this.gate.policy().list(),
+    };
   }
 
   respondEscalation(requestId: string, approve: boolean): void {
@@ -527,9 +485,11 @@ export class Engine {
     prices?: Record<string, Price>;
     org?: OrgStatus;
     untrustedMcp?: { name: string; source: string }[];
+    rules?: SourcedRule[];
   }): void {
     this.models.apply(next.config);
-    this.tools.revokeGrants();
+    this.gate.revokeGrants();
+    this.options.rules = next.rules;
     if (JSON.stringify(next.config.mcpServers) !== JSON.stringify(this.options.config.mcpServers)) {
       void this.mcp?.close();
       this.mcp = this.startMcp(next.config);
@@ -556,13 +516,13 @@ export class Engine {
     return this.ledger.report(
       this.options.config.routing.budget,
       period,
-      sessionId ? this.sessionTree(sessionId) : undefined,
+      sessionId ? this.sessions.tree(sessionId) : undefined,
     );
   }
 
   /** `session.compact`: compact now, whatever the prompt size. */
   async compactSession(sessionId: string): Promise<{ compacted: boolean }> {
-    const s = this.live(sessionId);
+    const s = this.sessions.live(sessionId);
     if (s.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is running a turn');
     const controller = new AbortController();
     s.controller = controller;
@@ -596,7 +556,7 @@ export class Engine {
   }
 
   async shutdown(): Promise<void> {
-    for (const s of this.sessions.values()) {
+    for (const s of this.sessions.inMemory()) {
       s.controller?.abort();
       s.bgController?.abort();
     }
@@ -605,7 +565,7 @@ export class Engine {
 
   /** Whether any session has a turn in progress (daemons stay up while busy). */
   busy(): boolean {
-    for (const s of this.sessions.values()) if (s.controller || s.background.size) return true;
+    for (const s of this.sessions.inMemory()) if (s.controller || s.background.size) return true;
     return false;
   }
 
@@ -613,70 +573,24 @@ export class Engine {
   // Sessions and what the collaborators borrow (`EngineHost`)
   // -------------------------------------------------------------------------
 
-  /** A session and every subagent session under it, live or stored. */
-  private sessionTree(sessionId: string): Set<string> {
-    const children = new Map<string, string[]>();
-    const link = (id: string, parent: string | undefined) => {
-      if (parent) children.set(parent, [...(children.get(parent) ?? []), id]);
-    };
-    for (const { header } of this.store.list()) link(header.id, header.parentId);
-    for (const s of this.sessions.values()) link(s.header.id, s.header.parentId);
-    const tree = new Set<string>();
-    const walk = (id: string) => {
-      if (tree.has(id)) return;
-      tree.add(id);
-      for (const c of children.get(id) ?? []) walk(c);
-    };
-    walk(sessionId);
-    return tree;
+  private modeOf(s: LiveSession): PermissionMode {
+    return this.sessions.top(s).mode ?? this.options.config.permissions.defaultMode;
   }
 
-  private live(sessionId: string): LiveSession {
-    const existing = this.sessions.get(sessionId);
-    if (existing) return existing;
-    const stored = this.store.load(sessionId);
-    if (!stored) throw new RpcError(ErrorCode.SessionNotFound, `session ${sessionId} not found`);
-    const parent = stored.header.parentId ? this.sessions.get(stored.header.parentId) : undefined;
-    const priv = privateReason(stored.messages);
-    const live: LiveSession = {
-      header: stored.header,
-      messages: stored.messages,
-      updatedAt: this.now().toISOString(),
-      signals: new SignalTracker(this.options.config.routing.escalation),
-      depth: parent ? parent.depth + 1 : stored.header.parentId ? 1 : 0,
-      background: new Map(),
-      inbox: [],
-      ...(priv ? { private: priv } : {}),
-    };
-    this.sessions.set(sessionId, live);
-    return live;
-  }
-
-  private append(s: LiveSession, message: Message): void {
-    s.private ??= privateReason([message]);
-    s.messages.push(message);
-    s.updatedAt = this.now().toISOString();
-    this.store.append(s.header.id, message);
-  }
-
-  /** The top-level session of a subagent (or the session itself). */
-  private top(s: LiveSession): LiveSession {
-    let top = s;
-    while (top.header.parentId) {
-      const parent = this.sessions.get(top.header.parentId);
-      if (!parent) break;
-      top = parent;
-    }
-    return top;
+  /** `told`: the model already knows; otherwise it hears with the next prompt. */
+  private changeMode(top: LiveSession, mode: PermissionMode, told: boolean): void {
+    top.mode = mode;
+    if (told) top.toldMode = mode;
+    this.emit({ type: 'mode.changed', ...scope(top), mode });
   }
 
   private rolesOf(s: LiveSession): SessionRoles {
-    return effectiveRoles(this.options.config, this.top(s).roles);
+    return effectiveRoles(this.options.config, this.sessions.top(s).roles);
   }
 
   /** The router for a session: the config's, or one with the session's own roles. */
   private routerFor(s: LiveSession): Router {
-    const own = this.top(s).roles;
+    const own = this.sessions.top(s).roles;
     if (!own?.start && !own?.escalate) return this.router;
     const roles = this.rolesOf(s);
     return this.newRouter({
@@ -727,6 +641,12 @@ export class Engine {
       costUsd: cost.costUsd,
       savingsUsd: cost.savingsUsd,
       ...(this.sessions.get(header.id)?.controller ? { running: true } : {}),
+      ...(header.parentId
+        ? {}
+        : {
+            permissionMode:
+              this.sessions.get(header.id)?.mode ?? this.options.config.permissions.defaultMode,
+          }),
     };
   }
 

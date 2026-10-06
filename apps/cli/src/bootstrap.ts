@@ -79,6 +79,7 @@ export function createEngine(
     const { engine, agentErrors } = Engine.fromWorkspace(flags.cwd, loaded.config, {
       prices: loaded.prices,
       untrustedMcp: loaded.untrustedMcp,
+      rules: loaded.rules,
       ...(interaction ? { interaction } : {}),
       ...(loaded.org ? { org: loaded.org } : {}),
     });

@@ -9,12 +9,16 @@ import {
   formatCommands,
   formatMcpServers,
   formatModels,
+  formatPermissions,
   formatReceipt,
   formatRoles,
   formatSubagents,
   formatUsage,
   fromTranscript,
   initialView,
+  MODE_DESCRIPTIONS,
+  modeLabel,
+  parseMode,
   type SwitchbackClient,
   subagentList,
   type ViewState,
@@ -34,7 +38,8 @@ Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
        become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
-Keys: esc cancels the running turn; y/a/n answer permission prompts.`;
+Keys: esc cancels the running turn; shift+tab cycles the permission mode;
+      y/a/p/n answer permission prompts (once / this session / this project / deny).`;
 
 /** What a command can see and change in the app. */
 export interface SlashContext {
@@ -261,6 +266,33 @@ const HANDLERS: Record<string, Handler> = {
     say(ctx, `MCP servers\n${formatMcpServers(servers)}`);
   },
   copy,
+  mode: async (ctx, args) => {
+    const { modes, mode } = await ctx.client.request('permissions.list', {
+      sessionId: ctx.session.id,
+    });
+    if (!args[0])
+      return say(
+        ctx,
+        [
+          ...modes.map(
+            (m) => `${m === mode ? '●' : ' '} ${modeLabel(m).padEnd(18)} ${MODE_DESCRIPTIONS[m]}`,
+          ),
+          '/mode <name> to switch; Shift+Tab cycles',
+        ].join('\n'),
+      );
+    const next = parseMode(args[0]);
+    if (!next) return say(ctx, 'usage: /mode default|accept-edits|plan|bypass');
+    try {
+      await ctx.client.request('session.setMode', { sessionId: ctx.session.id, mode: next });
+      say(ctx, `mode: ${modeLabel(next)}. ${MODE_DESCRIPTIONS[next]}`);
+    } catch (err) {
+      say(ctx, `mode: ${(err as Error).message}`);
+    }
+  },
+  permissions: async (ctx) => {
+    const p = await ctx.client.request('permissions.list', { sessionId: ctx.session.id });
+    say(ctx, formatPermissions(p));
+  },
   receipt: async (ctx) => {
     const u = await ctx.client.request('usage.get', { sessionId: ctx.session.id });
     say(ctx, formatReceipt(u, 'This session, including subagents'));

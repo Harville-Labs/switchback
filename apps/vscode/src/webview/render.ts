@@ -3,8 +3,9 @@
  * so it can be tested. All model text is escaped or goes through the
  * sanitizing Markdown renderer.
  */
-import { toolLabel } from '@switchback/client/format';
+import { estimateLabel, toolLabel } from '@switchback/client/format';
 import type { ViewItem, ViewState } from '@switchback/client/view';
+import type { PermissionDecision } from '@switchback/protocol';
 import { esc, renderMarkdown } from './markdown.ts';
 
 export { esc };
@@ -102,4 +103,42 @@ export function renderDiff(diff: string): string {
 
 export function lastAssistantId(ctx: ViewState): string | undefined {
   return ctx.items.findLast((i) => i.kind === 'assistant')?.id;
+}
+
+/** The question waiting for an answer: a permission, a plan to approve, or an escalation. */
+export function renderPrompt(view: ViewState): string {
+  const perm = view.permissions[0];
+  if (perm?.plan)
+    return `<div class="prompt plan"><div class="plan-title">Plan</div><div class="md">${renderMarkdown(perm.plan)}</div><div class="actions"><button class="btn" data-perm="once">Approve</button><button class="btn secondary" data-perm="always">Approve and accept edits</button><button class="btn secondary" data-perm="deny">Keep planning</button></div></div>`;
+  if (perm) {
+    const always = perm.rules
+      ? `<button class="btn secondary" data-perm="always" title="${esc(perm.rules.join(', '))}">Always this session</button><button class="btn secondary" data-perm="project" title="Saved to .switchback/config.local.json">Always in this project</button>`
+      : '';
+    const why = perm.askRule
+      ? `<div class="hint">The rule ${esc(perm.askRule)} asks every time.</div>`
+      : '';
+    return `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${why}${perm.preview ? renderDiff(perm.preview) : ''}<div class="actions"><button class="btn" data-perm="once">Allow once</button>${always}<button class="btn secondary" data-perm="deny">Deny</button></div></div>`;
+  }
+  const escl = view.escalations[0];
+  if (escl)
+    return `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<div class="actions"><button class="btn" data-esc="1">Escalate</button><button class="btn secondary" data-esc="0">Stay on the current model</button></div></div>`;
+  return '';
+}
+
+/** A prompt button's answer to a permission request. */
+export function permissionAnswer(
+  button: string,
+): { decision: PermissionDecision; save?: 'project' } | undefined {
+  switch (button) {
+    case 'once':
+      return { decision: 'allow_once' };
+    case 'always':
+      return { decision: 'allow_always' };
+    case 'project':
+      return { decision: 'allow_always', save: 'project' };
+    case 'deny':
+      return { decision: 'deny' };
+    default:
+      return undefined;
+  }
 }

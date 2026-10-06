@@ -28,7 +28,16 @@ export interface ToolContext {
   ) => Promise<SubagentResult>;
   /** Names and descriptions of agents available as subagents. */
   agentCatalog: { name: string; description: string }[];
+  /**
+   * Whether a deny rule keeps this file (an absolute path) from being read;
+   * search tools leave such files out of their results.
+   */
+  hidden?: (path: string) => boolean;
+  /** Ask the user to approve a plan; only top-level sessions have it (exit_plan_mode). */
+  approvePlan?: (plan: string) => Promise<PlanAnswer>;
 }
+
+export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';
 
 /** What a mutating call would change, for review before approval. */
 export interface ToolPreview {

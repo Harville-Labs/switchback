@@ -11,6 +11,15 @@ export const PROTOCOL_VERSION = 1;
 export const RoutePreference = z.enum(['auto', 'local', 'remote']);
 export type RoutePreference = z.infer<typeof RoutePreference>;
 
+/**
+ * How a session treats tool calls the rules don't decide (docs/permissions.md):
+ * `default` asks per the configured levels, `acceptEdits` allows edits in the
+ * workspace, `plan` allows no edits until the user approves a plan, and
+ * `bypassPermissions` allows everything but deny and ask rules.
+ */
+export const PermissionMode = z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']);
+export type PermissionMode = z.infer<typeof PermissionMode>;
+
 // ---------------------------------------------------------------------------
 // Client -> engine requests
 // ---------------------------------------------------------------------------
@@ -93,6 +102,8 @@ export interface OrgInfo {
 export const SessionCreateParams = z.object({
   agent: z.string().optional(),
   title: z.string().optional(),
+  /** Defaults to `permissions.defaultMode`. */
+  permissionMode: PermissionMode.optional(),
 });
 export type SessionCreateParams = z.infer<typeof SessionCreateParams>;
 
@@ -109,6 +120,8 @@ export interface SessionSummary {
   savingsUsd?: number;
   /** A turn is in progress (possibly driven by another client). */
   running?: boolean;
+  /** Top-level sessions: the permission mode in effect. */
+  permissionMode?: PermissionMode;
 }
 
 export const SessionGetParams = z.object({ sessionId: z.string() });
@@ -157,11 +170,31 @@ export type PermissionDecision = z.infer<typeof PermissionDecision>;
 export const PermissionRespondParams = z.object({
   requestId: z.string(),
   decision: PermissionDecision,
+  /**
+   * With `allow_always`: also save the request's `rules` as allow rules in the
+   * project's personal config (`.switchback/config.local.json`) or the user config.
+   */
+  save: z.enum(['project', 'user']).optional(),
 });
 export type PermissionRespondParams = z.infer<typeof PermissionRespondParams>;
 
 export const SessionCompactParams = z.object({ sessionId: z.string() });
 export type SessionCompactParams = z.infer<typeof SessionCompactParams>;
+
+export const SessionSetModeParams = z.object({ sessionId: z.string(), mode: PermissionMode });
+export type SessionSetModeParams = z.infer<typeof SessionSetModeParams>;
+
+export const PermissionsListParams = z.object({ sessionId: z.string().optional() });
+export type PermissionsListParams = z.infer<typeof PermissionsListParams>;
+
+/** The rules in effect, where each came from, and the session's mode. */
+export interface PermissionsListResult {
+  mode?: PermissionMode;
+  /** Modes this session may switch to (an organization can rule out `bypassPermissions`). */
+  modes: PermissionMode[];
+  levels: Record<'read' | 'edit' | 'bash' | 'mcp', 'allow' | 'ask' | 'deny'>;
+  rules: { rule: string; behavior: 'allow' | 'ask' | 'deny'; source: string }[];
+}
 
 export const EscalationRespondParams = z.object({
   requestId: z.string(),
@@ -261,6 +294,9 @@ export interface Methods {
     params: SessionSetRolesParams;
     result: SessionRoles & { savedTo?: string };
   };
+  /** Switch a session's permission mode; refused for modes the organization rules out. */
+  'session.setMode': { params: SessionSetModeParams; result: { mode: PermissionMode } };
+  'permissions.list': { params: PermissionsListParams; result: PermissionsListResult };
 }
 
 export type MethodName = keyof Methods;
@@ -293,6 +329,7 @@ export type EngineEvent =
       stickyTurns?: number;
     } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
+  | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
   | ({ type: 'text.delta'; turnId: string; text: string } & SessionScoped)
   | ({ type: 'reasoning.delta'; turnId: string; text: string } & SessionScoped)
   | ({
@@ -322,6 +359,12 @@ export type EngineEvent =
       preview?: string;
       /** The complete proposed file, so editors can show a real diff. */
       proposed?: { path: string; content: string };
+      /** What `allow_always` grants, as permission rules (e.g. `bash(git status:*)`). */
+      rules?: string[];
+      /** For `exit_plan_mode`: the plan the user is asked to approve (Markdown). */
+      plan?: string;
+      /** Why the user is asked even though a mode or level would allow it: an ask rule. */
+      askRule?: string;
     } & SessionScoped)
   | ({
       type: 'permission.resolved';

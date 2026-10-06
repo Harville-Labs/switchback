@@ -58,6 +58,9 @@ export const STYLES = `
   .prompt { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--vscode-focusBorder); background: var(--vscode-editorWidget-background); line-height: 1.45; }
   .prompt .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .prompt .estimate { color: var(--vscode-charts-yellow); }
+  .prompt .hint { color: var(--vscode-descriptionForeground); margin-top: 4px; }
+  .prompt.plan { max-height: 50vh; overflow-y: auto; }
+  .prompt .plan-title { font-weight: 600; margin-bottom: 4px; }
   .btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; border-radius: 4px; }
   .btn:hover { background: var(--vscode-button-hoverBackground); }
   .btn.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
