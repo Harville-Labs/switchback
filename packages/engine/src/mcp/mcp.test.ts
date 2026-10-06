@@ -155,10 +155,11 @@ describe('stdio server', () => {
       },
     );
     await e.runTurn(e.createSession({ agent: 'notes' }).id, 'x');
-    // exit_plan_mode isn't an agent capability; every top-level session has it.
+    // exit_plan_mode and todo aren't agent capabilities; sessions always have them.
     expect(lp.requests[0]?.tools.map((t) => t.name)).toEqual([
       'read',
       'exit_plan_mode',
+      'todo',
       'mcp__test__add',
     ]);
     await e.shutdown();

@@ -61,6 +61,10 @@ export const STYLES = `
   .prompt .hint { color: var(--vscode-descriptionForeground); margin-top: 4px; }
   .prompt.plan { max-height: 50vh; overflow-y: auto; }
   .prompt .plan-title { font-weight: 600; margin-bottom: 4px; }
+  .todos { margin: 0 12px 6px; padding: 8px 12px; border-radius: 12px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border); }
+  .todo { line-height: 1.6; }
+  .todo.done { color: var(--vscode-descriptionForeground); text-decoration: line-through; }
+  .todo.in_progress { font-weight: 600; color: var(--vscode-textLink-foreground); }
   .queued { display: flex; gap: 8px; align-items: center; margin: 0 12px 6px; padding: 5px 12px; border-radius: 999px; background: var(--vscode-editorWidget-background); border: 1px dashed var(--vscode-panel-border); color: var(--vscode-descriptionForeground); font-size: .92em; }
   .queued .text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .queued .link { background: none; border: none; color: var(--vscode-textLink-foreground); cursor: pointer; padding: 0; }

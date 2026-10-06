@@ -18,7 +18,7 @@ import type {
 } from '@switchback/protocol';
 import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
-import { Header, Queue, StatusBar, Working } from './Chrome.tsx';
+import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
 import { PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
@@ -260,6 +260,7 @@ export function App({
           }}
         />
       ) : null}
+      {view.todos?.some((t) => t.status !== 'done') ? <Todos todos={view.todos} /> : null}
       {view.queue?.length ? <Queue queue={view.queue} /> : null}
       {view.running && !permission && !escalation ? <Working view={view} /> : null}
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>

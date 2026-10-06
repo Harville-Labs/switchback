@@ -1,6 +1,13 @@
 /** Everything around the transcript: header, prompts, spinner, and status bar. */
 import { homedir } from 'node:os';
-import { formatLadder, modeLabel, runningShells, type ViewState } from '@switchback/client';
+import {
+  formatLadder,
+  formatTodos,
+  modeLabel,
+  runningShells,
+  type TodoItem,
+  type ViewState,
+} from '@switchback/client';
 import type {
   PermissionMode,
   QueuedPrompt,
@@ -196,6 +203,27 @@ export function Queue({ queue }: { queue: QueuedPrompt[] }) {
       <Text dimColor>
         {'  '}↑ to edit the last one · esc on an empty prompt cancels the turn and the queue
       </Text>
+    </Box>
+  );
+}
+
+/** The model's checklist while there's work left on it. */
+export function Todos({ todos }: { todos: TodoItem[] }) {
+  const lines = formatTodos(todos);
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      {todos.map((t, i) => (
+        <Text
+          key={lines[i]}
+          wrap="truncate-end"
+          dimColor={t.status === 'done'}
+          color={t.status === 'in_progress' ? 'cyan' : undefined}
+          bold={t.status === 'in_progress'}
+        >
+          {'  '}
+          {lines[i]}
+        </Text>
+      ))}
     </Box>
   );
 }

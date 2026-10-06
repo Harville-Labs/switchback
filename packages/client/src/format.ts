@@ -12,7 +12,7 @@ import type {
   ShellInfo,
   UsageReport,
 } from '@switchback/protocol';
-import type { ViewItem, ViewState } from './view.ts';
+import type { TodoItem, ViewItem, ViewState } from './view.ts';
 
 export function compactedLabel(messages: number, before: number, after: number): string {
   const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
@@ -58,6 +58,17 @@ export function estimateLabel(usd: number | undefined): string {
   if (usd === undefined) return '';
   if (usd < 0.01) return '≈ <$0.01';
   return `≈ $${usd.toFixed(2)}`;
+}
+
+/** Tools whose rows the transcript leaves out: the checklist panel shows `todo`. */
+export function isQuietTool(name: string): boolean {
+  return name === 'todo';
+}
+
+/** The checklist as lines: `☑ done`, `▶ in progress`, `☐ to do`. */
+export function formatTodos(todos: readonly TodoItem[]): string[] {
+  const mark = { done: '☑', in_progress: '▶', pending: '☐' } as const;
+  return todos.map((t) => `${mark[t.status]} ${t.text}`);
 }
 
 /** Short human label for a tool call, e.g. `read src/app.ts` or `$ bun test`. */
