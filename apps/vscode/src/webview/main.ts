@@ -31,6 +31,7 @@ import {
   permissionAnswer,
   renderPrompt,
   renderQueue,
+  renderTodos,
   renderItem as renderViewItem,
 } from './render.ts';
 import { STYLES } from './styles.ts';
@@ -61,6 +62,7 @@ app.innerHTML = `
 <style>${STYLES}</style>
 <div id="log"></div>
 <div id="prompts"></div>
+<div id="todos"></div>
 <div id="queue"></div>
 <footer>
   <div class="composer">
@@ -90,6 +92,7 @@ const statusEl = $<HTMLSpanElement>('status');
 const sendBtn = $<HTMLButtonElement>('send');
 const nowBtn = $<HTMLButtonElement>('now');
 const queueEl = $<HTMLDivElement>('queue');
+const todosEl = $<HTMLDivElement>('todos');
 const menu = $<HTMLDivElement>('menu');
 const slashBtn = $<HTMLButtonElement>('slash');
 
@@ -109,6 +112,7 @@ function render() {
   prompts.innerHTML = renderPrompt(view);
 
   // One button: send while idle, stop while a turn runs.
+  todosEl.innerHTML = renderTodos(view.todos);
   queueEl.innerHTML = renderQueue(view.queue ?? []);
   syncSend();
   renderControls();

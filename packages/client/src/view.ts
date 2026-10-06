@@ -57,6 +57,24 @@ export type ViewItem =
   /** Client-local notices (slash command output); never produced by the engine. */
   | { kind: 'info'; id: string; text: string };
 
+export interface TodoItem {
+  text: string;
+  status: 'pending' | 'in_progress' | 'done';
+}
+
+const TODO_STATUSES = new Set(['pending', 'in_progress', 'done']);
+
+/** A `todo` call's items, or undefined when they aren't a valid list (the engine rejects those). */
+export function todoItems(input: unknown): TodoItem[] | undefined {
+  const items = (input as { items?: unknown } | undefined)?.items;
+  if (!Array.isArray(items)) return undefined;
+  const ok = items.every(
+    (i) =>
+      typeof i?.text === 'string' && TODO_STATUSES.has((i as { status?: string }).status ?? ''),
+  );
+  return ok ? (items as TodoItem[]) : undefined;
+}
+
 export interface PendingPermission {
   requestId: string;
   sessionId: string;
@@ -101,6 +119,8 @@ export interface ViewState {
   shells?: Record<string, ShellInfo>;
   /** Prompts sent during the running turn, waiting for its next step. */
   queue?: QueuedPrompt[];
+  /** The model's latest checklist (its `todo` tool), if it keeps one. */
+  todos?: TodoItem[];
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
   children: Record<string, ViewState>;
 }
@@ -151,6 +171,7 @@ export function childView(state: ViewState, sessionId: string): ViewState | unde
 export function fromTranscript(session: SessionSummary, messages: Message[]): ViewState {
   const items: ViewItem[] = [];
   const tools = new Map<string, Extract<ViewItem, { kind: 'tool' }>>();
+  let todos: TodoItem[] | undefined;
   messages.forEach((m, mi) => {
     if (m.role === 'user') {
       for (const p of m.parts) {
@@ -205,6 +226,7 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
       if (p.type === 'text' && p.text)
         items.push({ kind: 'assistant', id: `h${mi}a${pi}`, text: p.text, reasoning: '' });
       else if (p.type === 'tool_call') {
+        if (p.name === 'todo') todos = todoItems(p.input) ?? todos;
         const t = {
           kind: 'tool' as const,
           id: p.id,
@@ -227,6 +249,7 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
     ...(priv && 'private' in priv && priv.private ? { private: priv.private } : {}),
     // Joining a session mid-turn: the live events that follow will finish it.
     running: !!session.running,
+    ...(todos ? { todos } : {}),
     ...(session.permissionMode ? { mode: session.permissionMode } : {}),
     costUsd: session.costUsd,
     savingsUsd: session.savingsUsd ?? 0,
@@ -384,7 +407,7 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       else items.push(target);
       return { ...state, items };
     }
-    case 'tool.started':
+    case 'tool.started': {
       items.push({
         kind: 'tool',
         id: event.callId,
@@ -392,7 +415,9 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         input: event.input,
         status: 'running',
       });
-      return { ...state, items };
+      const todos = event.name === 'todo' ? todoItems(event.input) : undefined;
+      return { ...state, items, ...(todos ? { todos } : {}) };
+    }
     case 'tool.completed': {
       const i = items.findIndex((it) => it.kind === 'tool' && it.id === event.callId);
       const updated = {

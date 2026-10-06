@@ -6,10 +6,11 @@ import {
   formatModels,
   formatReceipt,
   formatRoles,
+  formatTodos,
   formatUsage,
   reviewLines,
 } from './format.ts';
-import { childView, fromTranscript, initialView, reduce } from './view.ts';
+import { childView, fromTranscript, initialView, reduce, type TodoItem } from './view.ts';
 
 const session: SessionSummary = {
   id: 'ses_1',
@@ -383,5 +384,42 @@ describe('roles and the ladder', () => {
       ].join('\n'),
     );
     expect(formatModels(models, roles)).toContain('opus  claude-opus-5 (remote)  · step 2');
+  });
+});
+
+describe('the todo checklist', () => {
+  const items: TodoItem[] = [
+    { text: 'read the parser', status: 'done' },
+    { text: 'fix the bug', status: 'in_progress' },
+    { text: 'add a test', status: 'pending' },
+  ];
+
+  test('follows the latest todo call, live and from a transcript', () => {
+    const started = (input: unknown, callId = 'c1'): EngineEvent => ({
+      type: 'tool.started',
+      sessionId: 's',
+      turnId: 't',
+      callId,
+      name: 'todo',
+      input,
+    });
+    let v = reduce(initialView('s'), started({ items }));
+    expect(v.todos).toEqual(items);
+    // A malformed call (the engine rejects it) leaves the list as it was.
+    v = reduce(v, started({ items: [{ text: 'x', status: 'later' }] }, 'c2'));
+    expect(v.todos).toEqual(items);
+
+    const messages: Message[] = [
+      { role: 'user', parts: [{ type: 'text', text: 'go' }] },
+      {
+        role: 'assistant',
+        parts: [{ type: 'tool_call', id: 'a', name: 'todo', input: { items } }],
+      },
+    ];
+    expect(fromTranscript(session, messages).todos).toEqual(items);
+  });
+
+  test('reads as a checklist', () => {
+    expect(formatTodos(items)).toEqual(['☑ read the parser', '▶ fix the bug', '☐ add a test']);
   });
 });

@@ -3,8 +3,8 @@
  * so it can be tested. All model text is escaped or goes through the
  * sanitizing Markdown renderer.
  */
-import { estimateLabel, toolLabel } from '@switchback/client/format';
-import type { ViewItem, ViewState } from '@switchback/client/view';
+import { estimateLabel, formatTodos, isQuietTool, toolLabel } from '@switchback/client/format';
+import type { TodoItem, ViewItem, ViewState } from '@switchback/client/view';
 import type { PermissionDecision } from '@switchback/protocol';
 import { esc, renderMarkdown } from './markdown.ts';
 
@@ -33,6 +33,7 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
       return `${item.reasoning && !item.text ? `<div class="reasoning">✻ ${esc(item.reasoning.slice(-300))}</div>` : ''}${body}`;
     }
     case 'tool': {
+      if (isQuietTool(item.name)) return '';
       const icon = item.status === 'running' ? '●' : item.status === 'ok' ? '✓' : '✗';
       const detail =
         item.status === 'error' && item.output
@@ -151,4 +152,13 @@ export function renderQueue(queue: readonly { id: string; text: string }[]): str
         `<div class="queued"><span class="text" title="${esc(q.text)}">⧗ ${esc(q.text)}</span><button class="link" data-dequeue="${esc(q.id)}">Withdraw</button></div>`,
     )
     .join('');
+}
+
+/** The model's checklist while there's work left on it. */
+export function renderTodos(todos: readonly TodoItem[] | undefined): string {
+  if (!todos?.some((t) => t.status !== 'done')) return '';
+  const lines = formatTodos(todos);
+  return `<div class="todos">${todos
+    .map((t, i) => `<div class="todo ${t.status}">${esc(lines[i] ?? '')}</div>`)
+    .join('')}</div>`;
 }

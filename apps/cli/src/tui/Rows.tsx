@@ -1,5 +1,11 @@
 /** Transcript rows: one per view item, plus the live view of running subagents. */
-import { reviewLines, toolLabel, type ViewItem, type ViewState } from '@switchback/client';
+import {
+  isQuietTool,
+  reviewLines,
+  toolLabel,
+  type ViewItem,
+  type ViewState,
+} from '@switchback/client';
 import { Box, Text } from 'ink';
 import { renderMarkdown } from './markdown.ts';
 
@@ -51,7 +57,7 @@ export function Item({
   /** Committed items render Markdown; live ones stay plain while streaming. */
   final?: boolean;
 }) {
-  if (hidden) return null;
+  if (hidden || (item.kind === 'tool' && isQuietTool(item.name))) return null;
   switch (item.kind) {
     case 'user':
       return (
