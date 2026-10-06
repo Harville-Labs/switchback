@@ -252,6 +252,7 @@ export class Engine {
       reviews: this.reviews,
       mode: (s) => this.controls.modeOf(s),
       checkpoint: (s, turnId, prompt) => this.controls.beginCheckpoint(s, turnId, prompt),
+      mcp: () => this.mcp,
     });
   }
 
@@ -381,8 +382,22 @@ export class Engine {
   }
 
   /** `commands.list`. */
-  listCommands(): CustomCommandInfo[] {
-    return this.library.listCommands();
+  async listCommands(): Promise<CustomCommandInfo[]> {
+    // MCP prompts are commands too, named for their server (waiting briefly for servers still connecting).
+    if (this.mcp) await Promise.race([this.mcp.ready, Bun.sleep(5_000)]);
+    const prompts = (this.mcp?.status() ?? []).flatMap((s) =>
+      (s.prompts ?? []).map((p) => ({
+        name: `${s.name}:${p.name}`,
+        description: p.description ?? `${s.name} prompt`,
+        ...(p.arguments?.length
+          ? {
+              args: p.arguments.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`)).join(' '),
+            }
+          : {}),
+        source: 'mcp' as const,
+      })),
+    );
+    return [...this.library.listCommands(), ...prompts];
   }
 
   /** Pick up agent files added or changed since startup (a few small files). */

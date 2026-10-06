@@ -8,7 +8,8 @@ import { parseAgentFile } from '../agents.ts';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine, type EngineOptions } from '../engine.ts';
 import { trust } from '../trust.ts';
-import { allowsMcpTool, McpHub, mcpToolName, resultText } from './hub.ts';
+import { fromContent } from './content.ts';
+import { allowsMcpTool, McpHub, mcpToolName } from './hub.ts';
 
 const FIXTURE = join(import.meta.dir, 'fixtures', 'test-server.ts');
 
@@ -53,13 +54,18 @@ describe('helpers', () => {
     expect(allowsMcpTool(['mcp__git'], 'mcp__github__x')).toBe(false);
   });
 
-  test('result text keeps text and describes other content', () => {
-    expect(
-      resultText([
+  test('content keeps text and images, and describes the rest', () => {
+    const r = fromContent(
+      [
         { type: 'text', text: 'hi' },
-        { type: 'image', mimeType: 'image/png', data: '...' },
-      ]),
-    ).toBe('hi\n[image content (image/png) omitted]');
+        { type: 'image', mimeType: 'image/png', data: 'not a png' },
+        { type: 'audio', mimeType: 'audio/wav', data: '...' },
+      ],
+      'x',
+    );
+    expect(r.images).toEqual([]);
+    expect(r.text).toContain('hi\n[image omitted:');
+    expect(r.text).toContain('[audio content (audio/wav) omitted]');
   });
 });
 
@@ -74,10 +80,93 @@ describe('stdio server', () => {
       'mcp__test__add',
       'mcp__test__fail',
       'mcp__test__note',
+      'mcp__test__pic',
+      'mcp__test__read_resource',
     ]);
-    expect(hub.status()).toEqual([{ name: 'test', state: 'connected', tools: 3 }]);
+    expect(hub.status()).toEqual([
+      {
+        name: 'test',
+        state: 'connected',
+        tools: 5,
+        resources: [
+          {
+            uri: 'test://readme',
+            name: 'readme',
+            description: 'The readme',
+            mimeType: 'text/markdown',
+          },
+          { uri: 'test://dot', name: 'dot', mimeType: 'image/png' },
+        ],
+        prompts: [
+          {
+            name: 'review',
+            description: 'Review a file',
+            arguments: [{ name: 'file', required: true }, { name: 'focus' }],
+          },
+        ],
+      },
+    ]);
     expect(hub.tools().find((t) => t.name === 'mcp__test__add')?.mutating).toBe(false);
+    expect(hub.tools().find((t) => t.name === 'mcp__test__read_resource')?.description).toContain(
+      '- test://readme',
+    );
     await hub.close();
+  }, 20_000);
+
+  test('@server:uri attaches a resource; /server:prompt runs a prompt', async () => {
+    const { e, lp, events } = engine([{ text: 'ok' }, { text: 'ok' }, { text: 'ok' }], {
+      mcpServers: { test: server() },
+      models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000, vision: true } },
+    });
+    expect(await e.listCommands()).toContainEqual({
+      name: 'test:review',
+      description: 'Review a file',
+      args: '<file> [focus]',
+      source: 'mcp',
+    });
+    const s = e.createSession({});
+    await e.runTurn(s.id, 'summarize @test:test://readme and @test:test://dot');
+    const parts = lp.requests[0]?.messages[0]?.parts ?? [];
+    expect(parts[1]).toMatchObject({ type: 'text', attachment: { path: 'test:test://readme' } });
+    expect(JSON.stringify(parts[1])).toContain('It adds numbers.');
+    expect(parts[2]).toMatchObject({ type: 'image', attachment: { path: 'test:test://dot' } });
+
+    await e.runTurn(s.id, '/test:review src/a.ts errors');
+    expect(lp.requests[1]?.messages.at(-1)?.parts[0]).toEqual({
+      type: 'text',
+      text: 'Review src/a.ts, focusing on errors.',
+    });
+
+    // A prompt missing its argument fails the turn, which still ends.
+    const r = await e.runTurn(s.id, '/test:review');
+    expect(r.stopReason).toBe('error');
+    expect(events.some((ev) => ev.type === 'error' && ev.message.includes('<file> [focus]'))).toBe(
+      true,
+    );
+    await e.shutdown();
+  }, 20_000);
+
+  test("a tool's images and a read resource's image reach the model", async () => {
+    const { e, lp } = engine(
+      [
+        {
+          toolCalls: [
+            { name: 'mcp__test__pic', input: {} },
+            { name: 'mcp__test__read_resource', input: { uri: 'test://readme' } },
+          ],
+        },
+        { text: 'done' },
+      ],
+      {
+        mcpServers: { test: server({ permission: 'allow' }) },
+        models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000, vision: true } },
+      },
+    );
+    await e.runTurn(e.createSession({}).id, 'draw');
+    const results = lp.requests[1]?.messages.at(-1)?.parts ?? [];
+    expect(results[0]).toMatchObject({ content: 'a dot', images: [{ mediaType: 'image/png' }] });
+    expect(JSON.stringify(results[1])).toContain('It adds numbers.');
+    await e.shutdown();
   }, 20_000);
 
   test('a model calls an MCP tool; the result comes back; permission ask is honored', async () => {

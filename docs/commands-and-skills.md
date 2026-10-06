@@ -33,6 +33,10 @@ Type `/` in the TUI or the VS Code chat to see your commands under **Custom**, a
 
 The engine expands the command, so the transcript (and the model) sees the prompt it makes. Clients list commands with `commands.list` ([protocol.md](protocol.md)).
 
+## MCP prompts
+
+Prompts from [MCP servers](configuration.md#mcpserversname) are commands too, named `<server>:<prompt>` (`/github:review-pr 123`), and listed under **Custom** with `(mcp)` after their description. Words after the name fill the prompt's arguments in order; the last argument takes the rest of the line. A prompt missing a required argument says which it needs.
+
 ## Skills
 
 Skills use the open [Agent Skills](https://agentskills.io) format: a folder with a `SKILL.md`, plus any scripts, templates, or reference files the skill needs.

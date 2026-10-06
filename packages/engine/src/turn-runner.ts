@@ -17,6 +17,8 @@ import {
 import type { AgentLoop } from './agent-loop.ts';
 import type { TurnHooks } from './hooks/turn-hooks.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
+import type { McpHub } from './mcp/hub.ts';
+import { expandMcp } from './mcp/mentions.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
 import { modeReminder } from './permissions/modes.ts';
 import type { ReviewRunner } from './review-runner.ts';
@@ -39,6 +41,8 @@ export interface TurnRunnerDeps {
   mode(s: LiveSession): PermissionMode;
   /** A top-level turn with a prompt starts: the checkpoint it can be rewound to. */
   checkpoint(s: LiveSession, turnId: string, prompt: string): void;
+  /** Connected MCP servers, for `/server:prompt` and `@server:uri`. */
+  mcp(): McpHub | undefined;
 }
 
 export class TurnRunner {
@@ -162,14 +166,15 @@ export class TurnRunner {
     this.host.emit({ type: 'turn.started', ...scope(session), turnId });
     // An empty prompt continues the session with whatever reports are waiting.
     if (text && session.depth === 0) this.deps.checkpoint(session, turnId, text);
-    const blocked = text
-      ? await this.appendPrompt(session, text, extra, options.private)
-      : undefined;
-    session.signals.startUserTurn();
-    if (session.depth === 0) session.turnEdits = new Map();
-
     let stopReason: StopReason = 'end_turn';
     try {
+      // Inside the try: a prompt that can't be built (an MCP prompt missing an
+      // argument) fails the turn rather than leaving the session busy.
+      const blocked = text
+        ? await this.appendPrompt(session, text, extra, options.private)
+        : undefined;
+      session.signals.startUserTurn();
+      if (session.depth === 0) session.turnEdits = new Map();
       // A blocked prompt never reaches the model; the turn ends the usual way.
       if (blocked) throw new Error(`A UserPromptSubmit hook blocked the prompt: ${blocked}`);
       stopReason = await this.deps.loop.run(session, route, turnId, controller.signal);
@@ -239,14 +244,19 @@ export class TurnRunner {
    */
   private async appendPrompt(
     s: LiveSession,
-    text: string,
+    typed: string,
     extra: Attachment[],
     priv: string | undefined,
   ): Promise<string | undefined> {
+    // Subagent briefs are the model's words; only the user's prompts reach MCP.
+    const mcp =
+      s.depth === 0 ? await expandMcp(typed, this.deps.mcp()) : { text: typed, parts: [] };
+    const text = mcp.text;
     const hooked = await this.deps.hooks.beforePrompt(s, text);
     if (hooked.blocked) return hooked.blocked;
     const matches = this.host.privatePaths();
     const attachments = [
+      ...mcp.parts,
       ...(await expandAttachments(extra, this.host.rootOf(s)).catch(() => [])),
       ...(await expandMentions(text, this.host.rootOf(s)).catch(() => [])),
     ].map((p) => {

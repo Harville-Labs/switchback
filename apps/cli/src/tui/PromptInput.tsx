@@ -10,7 +10,7 @@
 import { statSync } from 'node:fs';
 import { commandQuery, matchCommands, type SlashCommand } from '@switchback/client';
 import { Box, Text, useInput, usePaste } from 'ink';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { readClipboardImage } from './clipboard.ts';
 import {
   at,
@@ -52,6 +52,8 @@ const isFile = (p: string) => {
   }
 };
 
+const NO_RESOURCES: readonly string[] = [];
+
 interface Props {
   focus: boolean;
   busy: boolean;
@@ -60,6 +62,8 @@ interface Props {
   root: string;
   /** Custom commands, listed in the menu after the built-in ones. */
   custom: readonly SlashCommand[];
+  /** MCP resources (`server:uri`), offered by @ completion after the workspace's files. */
+  resources?: readonly string[];
   /** The prompt, and the images whose chips are still in it. */
   onSubmit: (text: string, images: PastedImage[]) => void;
   /** Ctrl+C on an empty input (with text in it, Ctrl+C clears it instead). */
@@ -90,6 +94,7 @@ export function PromptInput({
   history,
   root,
   custom,
+  resources = NO_RESOURCES,
   onSubmit,
   onInterrupt,
   onSubmitNow,
@@ -111,7 +116,9 @@ export function PromptInput({
   pastesRef.current = pastes;
 
   const mention = mentionAt(state);
-  const suggestions = mention && !menuClosed ? rankFiles(files, mention.query) : [];
+  // One list for as long as its parts last: rankFiles keeps a search index per list.
+  const candidates = useMemo(() => [...files, ...resources], [files, resources]);
+  const suggestions = mention && !menuClosed ? rankFiles(candidates, mention.query) : [];
   const menuOpen = suggestions.length > 0;
   const query = menuClosed ? undefined : commandQuery(state.value);
   const commands = query === undefined ? [] : matchCommands(query, 'tui', custom);

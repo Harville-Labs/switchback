@@ -179,7 +179,14 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 | `url`, `headers`, `type` | `type: http` | Remote servers over streamable HTTP; `type: "sse"` for older servers |
 | `permission` | `permissions.mcp` | `allow`, `ask`, or `deny` for this server's tools |
 | `enabled` | `true` | Keep a definition without starting it |
-| `timeoutMs` | 60000 | Per tool call |
+| `timeoutMs` | 60000 | Per tool call, resource read, or prompt |
+
+**Resources and prompts.** Besides tools, a server can offer:
+
+- **Resources**: type `@<server>:<uri>` in a prompt (`@docs:docs://api/auth`) to attach one, as `@path` attaches a file; the TUI's `@` completion lists them. Text comes in as text and images as images. The model can read them too, with `mcp__<server>__read_resource`, whose description lists the server's resources (that call follows the server's `permission`, like its tools).
+- **Prompts**: they're slash commands named `<server>:<prompt>` (`/github:review-pr 123`), listed under **Custom** in both clients' menus. Words after the name fill the prompt's arguments in order, and the last argument takes the rest of the line.
+
+`/mcp` lists each server's resources and prompts. A server's tool results can include images, which reach models with vision.
 
 **Project servers need trust.** A server defined in a project's `.switchback/config.json` runs a command from the repository, so it doesn't start until you approve it with `switchback mcp trust` (or `switchback mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `switchback mcp` and `switchback doctor` show every server's state and tool count.
 
