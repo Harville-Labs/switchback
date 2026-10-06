@@ -15,6 +15,7 @@ import {
   type AgentSummary,
   type Attachment,
   type CheckpointInfo,
+  type CustomCommandInfo,
   type EngineEvent,
   ErrorCode,
   type InitializeResult,
@@ -50,6 +51,7 @@ import { ExternalRuntimes } from './external-runtime.ts';
 import { HookRunner } from './hooks/runner.ts';
 import { TurnHooks } from './hooks/turn-hooks.ts';
 import { type LedgerEntry, UsageLedger } from './ledger.ts';
+import { Library } from './library.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { McpHub } from './mcp/hub.ts';
 import { ModelDirectory } from './model-directory.ts';
@@ -64,6 +66,7 @@ import { SessionControls } from './session-controls.ts';
 import { SessionRegistry } from './session-registry.ts';
 import { changeRoles, effectiveRoles, rolesLayer } from './session-roles.ts';
 import { writeConfigLayer } from './setup.ts';
+import { skillsSection } from './skills.ts';
 import { FileSessionStore, MemorySessionStore, type SessionHeader } from './store.ts';
 import { Subagents } from './subagents.ts';
 import { systemPrompt } from './system-prompt.ts';
@@ -111,6 +114,7 @@ export class Engine {
   private readonly agentLoop: AgentLoop;
   private readonly turns: TurnRunner;
   private readonly controls: SessionControls;
+  private readonly library: Library;
 
   constructor(private readonly options: EngineOptions) {
     const { config } = options;
@@ -129,6 +133,9 @@ export class Engine {
       this.now,
     );
     this.agents = options.agents ?? loadAgents([]).agents;
+    this.library = new Library(options.library ?? { commands: [], skills: [] }, (m) =>
+      this.notify('warn', m),
+    );
     this.mcp = this.startMcp(config);
     const recorder = new UsageRecorder(this.ledger, (e) => this.emit(e), this.now);
     this.host = {
@@ -201,6 +208,7 @@ export class Engine {
         this.reviews.noteEdit(s, path, writer);
         this.controls.noteCheckpoint(s, path);
       },
+      skills: () => this.library.skills(),
     });
     this.external = new ExternalRuntimes(this.host, {
       injected: options.runtimes,
@@ -287,6 +295,16 @@ export class Engine {
       { dir: pp.agentsDir, source: 'project' },
     ];
     const { agents, errors } = loadAgents(agentDirs);
+    const library: EngineOptions['library'] = {
+      commands: [
+        { dir: hp.commandsDir, source: 'user' },
+        { dir: pp.commandsDir, source: 'project' },
+      ],
+      skills: [
+        { dir: hp.skillsDir, source: 'user' },
+        { dir: pp.skillsDir, source: 'project' },
+      ],
+    };
     const instructions = existsSync(pp.instructionsFile)
       ? readFileSync(pp.instructionsFile, 'utf8')
       : undefined;
@@ -295,6 +313,7 @@ export class Engine {
       config,
       agents,
       agentDirs,
+      library,
       ...(instructions ? { instructions } : {}),
       ledgerFile: hp.usageFile,
       store: new FileSessionStore(hp.sessionsDir),
@@ -360,6 +379,11 @@ export class Engine {
     return [...this.agents.values()].map(summarize);
   }
 
+  /** `commands.list`. */
+  listCommands(): CustomCommandInfo[] {
+    return this.library.listCommands();
+  }
+
   /** Pick up agent files added or changed since startup (a few small files). */
   private refreshAgents(): void {
     const dirs = this.options.agentDirs;
@@ -403,6 +427,7 @@ export class Engine {
         shell: shellOf(this.options.config.bash).name,
         ...(this.options.instructions ? { project: this.options.instructions } : {}),
         ...(params.instructions ? { session: params.instructions } : {}),
+        skills: skillsSection(this.library.skills().values()),
       }),
     };
     const live = this.sessions.create(
@@ -455,8 +480,12 @@ export class Engine {
 
   /** Start a turn and return immediately; progress arrives as events. */
   prompt(params: SessionPromptParams): SessionPromptResult {
-    const { sessionId, ...rest } = params;
-    return this.turns.start(this.sessions.live(sessionId), rest);
+    const { sessionId, text, ...rest } = params;
+    // A custom command becomes its prompt here, so every client gets it the same way.
+    return this.turns.start(this.sessions.live(sessionId), {
+      ...rest,
+      text: this.library.expand(text),
+    });
   }
 
   /** `session.checkpoints`. */

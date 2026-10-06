@@ -2,10 +2,13 @@ import { expect, test } from 'bun:test';
 import {
   commandQuery,
   commandsFor,
+  customCommands,
   formatCommands,
+  isCustomCommand,
   matchCommands,
   SLASH_COMMANDS,
 } from './commands.ts';
+import { toolLabel } from './format.ts';
 
 test('command names are unique', () => {
   const names = SLASH_COMMANDS.map((c) => c.name);
@@ -48,4 +51,18 @@ test('commandQuery follows only a bare command name', () => {
   expect(commandQuery('/rev')).toBe('rev');
   expect(commandQuery('/review on')).toBeUndefined();
   expect(commandQuery('explain /etc')).toBeUndefined();
+});
+
+test('custom commands join the menu; built-in names win', () => {
+  const custom = customCommands([
+    { name: 'deploy', args: '<env>', description: 'Deploy', source: 'project' },
+    { name: 'help', description: 'mine', source: 'user' },
+  ]);
+  expect(custom.map((c) => [c.name, c.group, c.description])).toEqual([
+    ['deploy', 'Custom', 'Deploy (project)'],
+  ]);
+  expect(matchCommands('dep', 'tui', custom).map((c) => c.name)).toEqual(['deploy']);
+  expect(isCustomCommand('/deploy staging', custom)).toBe(true);
+  expect(isCustomCommand('/help', custom)).toBe(false);
+  expect(toolLabel('skill', { name: 'pdf', file: 'forms.py' })).toBe('skill pdf · forms.py');
 });

@@ -1,6 +1,7 @@
 import { bashOutputTool, bashTool, killShellTool } from './bash.ts';
 import { editTool, globTool, grepTool, readTool, writeTool } from './fs.ts';
 import { exitPlanModeTool } from './plan.ts';
+import { skillTool } from './skill.ts';
 import { taskTool } from './task.ts';
 import { todoTool } from './todo.ts';
 import type { Tool } from './tool.ts';
@@ -26,6 +27,7 @@ export const ALL_TOOLS: Tool[] = [
   webFetchTool,
   webSearchTool,
   todoTool,
+  skillTool,
 ];
 
 /** Tools that come with another: an agent that may run bash may also read and stop what it started. */
@@ -37,12 +39,12 @@ const COMPANIONS: Record<string, string> = {
 /**
  * An agent's tools in their fixed order. Some aren't capabilities an agent
  * definition grants: exit_plan_mode is offered to every top-level session,
- * and the todo checklist to every session.
+ * and the todo checklist and skills to every session.
  */
 export function toolsFor(allowed: string[] | undefined, topLevel: boolean): Tool[] {
   return ALL_TOOLS.filter((t) => {
     if (t.name === exitPlanModeTool.name) return topLevel;
-    if (t.name === todoTool.name) return true;
+    if (t.name === todoTool.name || t.name === skillTool.name) return true;
     const needs = COMPANIONS[t.name] ?? t.name;
     return !allowed || allowed.includes(needs);
   });

@@ -165,6 +165,8 @@ export class EngineConnection implements vscode.Disposable {
             : undefined;
         this.updateStatus();
       }
+      if (event.type === 'turn.completed' && event.sessionId === this.session?.id)
+        void this.sendCommands();
       if (event.type === 'log') this.log.appendLine(`[${event.level}] ${event.message}`);
       if (
         event.type === 'permission.requested' &&
@@ -189,6 +191,7 @@ export class EngineConnection implements vscode.Disposable {
     this.broadcast({ type: 'ready', init: this.init, session: this.session, route: this.route });
     if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
     await this.sendRoles();
+    await this.sendCommands();
   }
 
   /** Pick a saved session and show it in the chat. */
@@ -280,6 +283,7 @@ export class EngineConnection implements vscode.Disposable {
         });
       if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
       await this.sendRoles();
+      await this.sendCommands();
       return;
     }
     if (!c || !this.session) return;
@@ -372,6 +376,12 @@ export class EngineConnection implements vscode.Disposable {
     this.ladder = undefined;
     const roles = await this.currentRoles().catch(() => undefined);
     if (roles) this.broadcast({ type: 'roles', roles });
+  }
+
+  /** Custom commands to the menu; the engine rescans their files on each list. */
+  async sendCommands() {
+    const commands = await this.client?.request('commands.list', {}).catch(() => undefined);
+    if (commands) this.broadcast({ type: 'commands', commands });
   }
 
   async receipt() {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { SwitchbackClient } from '@switchback/client';
+import { customCommands, type SwitchbackClient } from '@switchback/client';
 import type { InitializeResult, SessionSummary } from '@switchback/protocol';
 import { render } from 'ink-testing-library';
 import { App } from './App.tsx';
@@ -31,6 +31,7 @@ describe('Ctrl+C in the prompt', () => {
         placeholder="Ask"
         history={[]}
         root="/tmp"
+        custom={[]}
         onSubmit={() => {}}
         onInterrupt={() => interrupts++}
         onSubmitNow={() => {}}
@@ -51,6 +52,41 @@ describe('Ctrl+C in the prompt', () => {
   });
 });
 
+describe('custom commands', () => {
+  test('appear in the menu, and Enter waits for their argument', async () => {
+    const got: string[] = [];
+    const ui = render(
+      <PromptInput
+        focus
+        busy={false}
+        placeholder="Ask"
+        history={[]}
+        root="/tmp"
+        custom={customCommands([
+          { name: 'fix-issue', args: '<n>', description: 'Fix an issue', source: 'project' },
+          { name: 'help', description: 'shadowed by the built-in', source: 'user' },
+        ])}
+        onSubmit={(t) => got.push(t)}
+        onInterrupt={() => {}}
+        onSubmitNow={() => {}}
+        onCancel={() => {}}
+        recall={() => undefined}
+      />,
+    );
+    ui.stdin.write('/fix');
+    await tick();
+    expect(ui.lastFrame()).toContain('/fix-issue');
+    expect(ui.lastFrame()).toContain('Fix an issue (project)');
+    ui.stdin.write(ENTER);
+    await tick();
+    ui.stdin.write('12');
+    await tick();
+    ui.stdin.write(ENTER);
+    await tick();
+    expect(got).toEqual(['/fix-issue 12']);
+  });
+});
+
 describe('during a turn', () => {
   test('Enter queues, Esc sends now, Esc on an empty prompt cancels, ↑ recalls', async () => {
     const got: string[] = [];
@@ -61,6 +97,7 @@ describe('during a turn', () => {
         placeholder="Queue"
         history={[]}
         root="/tmp"
+        custom={[]}
         onSubmit={(t) => got.push(`queue:${t}`)}
         onInterrupt={() => {}}
         onSubmitNow={(t) => got.push(`now:${t}`)}
@@ -102,6 +139,7 @@ describe('Ctrl+C in the app', () => {
         if (method === 'permissions.list') return { modes: ['default'], levels: {}, rules: [] };
         if (method === 'usage.get') throw new Error('not needed');
         if (method === 'session.list') return [session('s2', 'fix the parser')];
+        if (method === 'commands.list') return [];
         return {};
       },
       on: () => () => {},

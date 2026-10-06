@@ -17,8 +17,9 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `webfetch` | web | Read a web page as Markdown |
 | `websearch` | web | Search the web through the configured backend ([configuration.md](configuration.md#web)) |
 | `todo` | none | Keep a checklist for multi-step work; each call replaces the list |
+| `skill` | none | Load a [skill](commands-and-skills.md#skills): its instructions, or one of its files |
 
-An agent definition's `tools` list limits which of these it gets, with three exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `exit_plan_mode` comes with every top-level session, and `todo` with every session.
+An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `exit_plan_mode` comes with every top-level session, and `todo` and `skill` with every session.
 
 ## The checklist
 

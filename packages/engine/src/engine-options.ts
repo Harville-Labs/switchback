@@ -3,6 +3,7 @@ import type { Price, Provider } from '@switchback/providers';
 import type { AgentDefinition } from './agents.ts';
 import type { CheckpointStore } from './checkpoints.ts';
 import type { SwitchbackConfig } from './config.ts';
+import type { LibraryDirs } from './library.ts';
 import type { OrgStatus } from './org/policy.ts';
 import type { SourcedRule } from './permissions/policy.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
@@ -27,6 +28,8 @@ export interface EngineOptions {
   runtimes?: Map<string, AgentRuntime>;
   /** Where agent files live; rescanned so new agents appear without a restart. */
   agentDirs?: { dir: string; source: AgentDefinition['source'] }[];
+  /** Where custom commands and skills live; rescanned like agents. */
+  library?: LibraryDirs;
   /** Project instructions (the workspace's AGENTS.md). */
   instructions?: string;
   /**

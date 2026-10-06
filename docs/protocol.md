@@ -50,6 +50,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `permissions.list` | `{ sessionId? }` | `{ mode?, modes, levels, rules }`: the session's mode, the modes it may switch to, the category levels, and every rule with its `source` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
+| `commands.list` | none | `CustomCommandInfo[]`: custom commands; send `/name args` as a prompt to run one ([commands-and-skills.md](commands-and-skills.md)) |
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, and error |
 | `usage.get` | `period?`: `today` \| `week` \| `month` (default); or `sessionId?` for one session and its subagents over their whole life (the receipt) | Spend, savings, the `referenceModel` savings are measured against, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |

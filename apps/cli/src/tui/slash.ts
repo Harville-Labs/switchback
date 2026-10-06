@@ -21,6 +21,7 @@ import {
   modeLabel,
   parseMode,
   pickCopy,
+  type SlashCommand,
   type SwitchbackClient,
   subagentList,
   type ViewState,
@@ -35,8 +36,8 @@ import type {
 import { copyText } from './clipboard.ts';
 import { ago } from './SessionPicker.tsx';
 
-export const HELP = `Commands
-${formatCommands('tui')}
+export const helpText = (custom: readonly SlashCommand[]) => `Commands
+${formatCommands('tui', custom)}
 Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
        become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
@@ -44,7 +45,9 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
       shift+tab cycles the permission mode;
-      y/a/p/n answer permission prompts (once / this session / this project / deny).`;
+      y/a/p/n answer permission prompts (once / this session / this project / deny).
+Your own commands are Markdown files in .switchback/commands/ or
+~/.config/switchback/commands/.`;
 
 /** What a command can see and change in the app. */
 export interface SlashContext {
@@ -57,6 +60,8 @@ export interface SlashContext {
   setRoute(route: RoutePreference): void;
   setReview(review: boolean | undefined): void;
   setUsage(u: UsageReport): void;
+  /** Custom commands, for /help. */
+  custom: readonly SlashCommand[];
   /** Sessions from the last /sessions, for `/resume <n>`. */
   listed: SessionSummary[];
   setListed(sessions: SessionSummary[]): void;
@@ -328,7 +333,7 @@ const HANDLERS: Record<string, Handler> = {
       });
     if (!compacted) say(ctx, 'Nothing to compact yet.');
   },
-  help: (ctx) => say(ctx, HELP),
+  help: (ctx) => say(ctx, helpText(ctx.custom)),
   exit: (ctx) => ctx.exit(),
   quit: (ctx) => ctx.exit(),
 };

@@ -282,6 +282,15 @@ export interface AgentSummary {
   budgetUsd?: number;
 }
 
+/** A slash command defined in a Markdown file (`.switchback/commands/`, `~/.config/switchback/commands/`). */
+export interface CustomCommandInfo {
+  name: string;
+  description: string;
+  /** What to type after the name, as shown in menus (`<file> [focus]`). */
+  args?: string;
+  source: 'user' | 'project';
+}
+
 export const UsagePeriod = z.enum(['today', 'week', 'month']);
 export type UsagePeriod = z.infer<typeof UsagePeriod>;
 
@@ -359,6 +368,8 @@ export interface Methods {
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };
   'escalation.respond': { params: EscalationRespondParams; result: { ok: true } };
   'agents.list': { params: Record<string, never>; result: AgentSummary[] };
+  /** Custom slash commands; a prompt of `/name args` runs one. */
+  'commands.list': { params: Record<string, never>; result: CustomCommandInfo[] };
   'usage.get': { params: UsageGetParams; result: UsageReport };
   /** MCP servers: connection state and tool counts, plus project servers awaiting trust. */
   'mcp.list': { params: Record<string, never>; result: McpListResult };

@@ -149,6 +149,28 @@ test('the / button toggles the menu; routing commands run in the webview', () =>
   expect($('[data-route="remote"]').className).toBe('on');
 });
 
+test('custom commands are listed and go to the engine as prompts', async () => {
+  await send({
+    type: 'commands',
+    commands: [
+      { name: 'fix-issue', args: '<n>', description: 'Fix an issue', source: 'project' },
+      { name: 'standup', description: 'Summarize yesterday', source: 'user' },
+    ],
+  });
+  type('/fix');
+  expect($('#menu').textContent).toContain('Custom');
+  expect($('#menu').textContent).toContain('Fix an issue (project)');
+  // It needs an argument, so Enter completes the name and waits for it.
+  key('Enter');
+  expect(($('#input') as HTMLTextAreaElement).value).toBe('/fix-issue ');
+  type('/fix-issue 12');
+  key('Enter');
+  expect(posted.at(-1)).toMatchObject({ type: 'prompt', text: '/fix-issue 12' });
+  type('/stand');
+  key('Enter');
+  expect(posted.at(-1)).toMatchObject({ type: 'prompt', text: '/standup' });
+});
+
 test('typed commands pass their arguments; unknown ones say so', async () => {
   type('/usage model');
   key('Escape');

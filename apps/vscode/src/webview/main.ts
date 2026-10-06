@@ -2,12 +2,7 @@
  * Chat webview. Renders from the same view-model reducer as the TUI
  * (`@switchback/client`), so both clients show identical session state.
  */
-import {
-  commandQuery,
-  commandsFor,
-  matchCommands,
-  type SlashCommand,
-} from '@switchback/client/commands';
+import { commandsFor } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
 import { formatSubagents, formatUsage } from '@switchback/client/format';
 import {
@@ -25,7 +20,6 @@ import type { PermissionMode, RoutePreference, SessionRoles } from '@switchback/
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
 import { renderControls as renderControlsHtml } from './controls.ts';
-import { renderMenu } from './menu.ts';
 import {
   esc,
   permissionAnswer,
@@ -34,6 +28,7 @@ import {
   renderTodos,
   renderItem as renderViewItem,
 } from './render.ts';
+import { SlashMenu } from './slash-menu.ts';
 import { STYLES } from './styles.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
@@ -235,72 +230,13 @@ chips.addEventListener('click', (e) => {
   renderChips();
 });
 
-// Slash command menu: opened by the / button or by typing / at the start of
-// the input, filtered as the command name is typed.
-let menuItems: SlashCommand[] = [];
-let menuActive = 0;
-
-function openMenu(query: string) {
-  menuItems = matchCommands(query, 'vscode');
-  menuActive = Math.min(menuActive, Math.max(0, menuItems.length - 1));
-  menu.innerHTML = renderMenu(menuItems, menuActive);
-  menu.hidden = false;
-  slashBtn.classList.add('on');
-  menu.querySelector('.menu-item.active')?.scrollIntoView?.({ block: 'nearest' });
-}
-
-function closeMenu() {
-  menu.hidden = true;
-  menuActive = 0;
-  slashBtn.classList.remove('on');
-}
-
-/** Keep the menu in step with the input: open while it's a bare `/name`. */
-function syncMenu() {
-  const query = commandQuery(input.value);
-  if (query !== undefined) openMenu(query);
-  else if (!menu.hidden) closeMenu();
-}
-
-function pickCommand(c: SlashCommand) {
-  closeMenu();
-  input.value = '';
-  autosize();
-  runCommand(c.name, []);
-  input.focus();
-}
-
-// Keep focus in the input, so its blur doesn't close the menu this click toggles.
-slashBtn.addEventListener('mousedown', (e) => e.preventDefault());
-slashBtn.addEventListener('click', () => {
-  if (!menu.hidden) {
-    closeMenu();
-    input.focus();
-    return;
-  }
-  // Like typing it: start a command unless the input already has one.
-  if (!input.value.startsWith('/')) input.value = '/';
-  autosize();
-  input.focus();
-  syncMenu();
-});
-
-// mousedown, not click, so the textarea keeps focus.
-menu.addEventListener('mousedown', (e) => {
-  const row = (e.target as HTMLElement).closest<HTMLElement>('.menu-item');
-  if (!row) return;
-  e.preventDefault();
-  const c = menuItems[Number(row.dataset.i)];
-  if (c) pickCommand(c);
-});
-
-menu.addEventListener('mousemove', (e) => {
-  const row = (e.target as HTMLElement).closest<HTMLElement>('.menu-item');
-  const i = Number(row?.dataset.i);
-  if (!row || i === menuActive) return;
-  menuActive = i;
-  for (const el of menu.querySelectorAll('.menu-item')) el.classList.toggle('active', el === row);
-});
+const slash = new SlashMenu(
+  menu,
+  slashBtn,
+  input,
+  (c) => (c.group === 'Custom' ? sendPrompt(`/${c.name}`) : runCommand(c.name, [])),
+  () => autosize(),
+);
 
 function addNotice(text: string) {
   view = addInfo(view, text);
@@ -322,7 +258,7 @@ function runCommand(name: string, args: string[]) {
       return;
     case 'help':
       input.value = '/';
-      syncMenu();
+      slash.sync();
       return;
     case 'subagents':
       addNotice(formatSubagents(view, 'Expand a subagent in the chat to see what it did.'));
@@ -369,12 +305,19 @@ function send(delivery?: 'interrupt') {
   if (!text || !connected) return;
   input.value = '';
   autosize();
-  closeMenu();
-  if (text.startsWith('/')) {
+  slash.close();
+  // Custom commands go to the engine as prompts; it expands them.
+  if (text.startsWith('/') && !slash.isCustom(text)) {
     const [name = '', ...args] = text.slice(1).split(/\s+/);
     runCommand(name, args);
     return;
   }
+  sendPrompt(text, delivery);
+}
+
+/** Send a prompt with the chosen editor context. */
+function sendPrompt(text: string, delivery?: 'interrupt') {
+  if (!connected) return;
   const choice = {
     selection: attach.selection && !!ctx.selection,
     file: attach.file && !ctx.selection && !!ctx.file,
@@ -414,36 +357,12 @@ queueEl.addEventListener('click', (e) => {
 });
 input.addEventListener('input', () => {
   autosize();
-  syncMenu();
+  slash.sync();
   syncSend();
 });
-input.addEventListener('blur', () => closeMenu());
+input.addEventListener('blur', () => slash.close());
 input.addEventListener('keydown', (e) => {
-  if (!menu.hidden) {
-    const move = { ArrowDown: 1, ArrowUp: -1 }[e.key];
-    if (move && menuItems.length) {
-      e.preventDefault();
-      menuActive = (menuActive + move + menuItems.length) % menuItems.length;
-      openMenu(commandQuery(input.value) ?? '');
-      return;
-    }
-    const c = menuItems[menuActive];
-    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
-      e.preventDefault();
-      if (!c) return;
-      // Tab completes the name so arguments can follow; Enter runs it.
-      if (e.key === 'Tab') {
-        input.value = `/${c.name} `;
-        closeMenu();
-      } else pickCommand(c);
-      return;
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      closeMenu();
-      return;
-    }
-  }
+  if (slash.key(e)) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     send();
@@ -487,6 +406,9 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       break;
     case 'info':
       view = addInfo(view, m.text);
+      break;
+    case 'commands':
+      slash.setCustom(m.commands);
       break;
     case 'history':
       agent = m.session.agent;
