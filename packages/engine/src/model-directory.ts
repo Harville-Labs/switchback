@@ -3,7 +3,7 @@
  * up, and how much each model's context holds.
  */
 import type { EngineEvent, Message, Tier } from '@switchback/protocol';
-import { createProvider, type Provider, tierOf } from '@switchback/providers';
+import { catalogModel, createProvider, type Provider, tierOf } from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import { nearThreshold, PER_MESSAGE_OVERHEAD, promptText, promptTokens } from './tokens.ts';
@@ -81,6 +81,7 @@ export class ModelDirectory {
       tier: this.tierOfProvider(m.provider),
       contextWindow: this.contextWindowOf(alias),
       available: this.health.get(m.provider)?.ok ?? true,
+      vision: m.vision ?? catalogModel(m.model)?.vision ?? false,
     };
   }
 

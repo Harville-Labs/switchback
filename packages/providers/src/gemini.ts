@@ -14,7 +14,7 @@ import {
   GoogleGenAI,
   ThinkingLevel,
 } from '@google/genai';
-import type { Message, ModelRef, Part, StopReason, Usage } from '@switchback/protocol';
+import type { ImagePart, Message, ModelRef, Part, StopReason, Usage } from '@switchback/protocol';
 import {
   type ChatEvent,
   type ChatRequest,
@@ -37,6 +37,10 @@ interface GeminiOpaque {
   geminiParts: GeminiPart[];
 }
 
+function geminiImage(p: ImagePart): GeminiPart {
+  return { inlineData: { mimeType: p.mediaType, data: p.data } };
+}
+
 /** Translate the neutral transcript into Gemini contents. */
 export function toGeminiContents(messages: Message[], origin: ModelRef): Content[] {
   const names = new Map<string, string>();
@@ -46,14 +50,18 @@ export function toGeminiContents(messages: Message[], origin: ModelRef): Content
       const parts: GeminiPart[] = [];
       for (const p of m.parts) {
         if (p.type === 'text') parts.push({ text: p.text });
+        else if (p.type === 'image') parts.push(geminiImage(p));
         else if (p.type === 'tool_result')
-          parts.push({
-            functionResponse: {
-              id: p.callId,
-              name: names.get(p.callId) ?? 'unknown',
-              response: p.isError ? { error: p.content } : { output: p.content },
+          parts.push(
+            {
+              functionResponse: {
+                id: p.callId,
+                name: names.get(p.callId) ?? 'unknown',
+                response: p.isError ? { error: p.content } : { output: p.content },
+              },
             },
-          });
+            ...(p.images ?? []).map(geminiImage),
+          );
       }
       if (parts.length) contents.push({ role: 'user', parts });
       continue;

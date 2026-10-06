@@ -32,6 +32,8 @@ export const STYLES = `
   .code-bar { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; font-size: .8em; color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); }
   .code pre { margin: 0; padding: 8px 10px; overflow-x: auto; } .code pre code { background: none; padding: 0; }
   button.link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
+  .image { display: block; width: fit-content; margin: 6px 0; font-size: .85em; color: var(--vscode-descriptionForeground); }
+  .image img { max-width: 160px; max-height: 120px; border-radius: 8px; border: 1px solid var(--vscode-panel-border); object-fit: cover; }
   details.thinking { margin: 6px 0; color: var(--vscode-descriptionForeground); }
   details.thinking > summary { cursor: pointer; list-style: none; font-size: .88em; user-select: none; }
   details.thinking > summary::-webkit-details-marker { display: none; }
@@ -105,6 +107,11 @@ export const STYLES = `
   @media (prefers-reduced-motion: reduce) { .send.stop::after { animation: none; } }
 
   /* Attachable editor context */
+  .images { display: flex; flex-wrap: wrap; gap: 6px; }
+  .images:not(:empty) { margin: 0 0 6px; }
+  .pending-image { position: relative; }
+  .pending-image img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid var(--vscode-panel-border); display: block; }
+  .pending-image .remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: none; padding: 0; font-size: 10px; line-height: 18px; cursor: pointer; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .chips:not(:empty) { margin: 0 0 4px; }
   .chip { font-size: .8em; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--vscode-panel-border); background: transparent; color: var(--vscode-descriptionForeground); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

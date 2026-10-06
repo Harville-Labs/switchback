@@ -4,7 +4,14 @@
  * this surface. Adding a capability means adding it here first.
  */
 import { z } from 'zod';
-import type { Message, ModelRef, StopReason, Tier, Usage } from './transcript.ts';
+import {
+  MAX_IMAGE_BYTES,
+  type Message,
+  type ModelRef,
+  type StopReason,
+  type Tier,
+  type Usage,
+} from './transcript.ts';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -153,6 +160,14 @@ export const Attachment = z.discriminatedUnion('kind', [
     endLine: z.number().int().positive().optional(),
   }),
   z.object({ kind: z.literal('text'), label: z.string(), text: z.string().max(200_000) }),
+  /** A pasted or dropped image. The engine checks the bytes, not just the declared type. */
+  z.object({
+    kind: z.literal('image'),
+    /** Shown on the chip: a file name, or `image 1` for a pasted one. */
+    name: z.string().max(200),
+    /** Base64, no `data:` prefix. */
+    data: z.string().max(Math.ceil(MAX_IMAGE_BYTES / 3) * 4),
+  }),
 ]);
 export type Attachment = z.infer<typeof Attachment>;
 

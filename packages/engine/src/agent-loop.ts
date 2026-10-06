@@ -16,6 +16,7 @@ import { classifyPrompt } from './classifier.ts';
 import { contextOf } from './compaction.ts';
 import type { Compactor } from './compactor.ts';
 import { estimateEscalationCost } from './estimate.ts';
+import { hasImages, withoutImages } from './images.ts';
 import type { UsageLedger } from './ledger.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import { allowsMcpTool, type McpHub } from './mcp/hub.ts';
@@ -85,12 +86,8 @@ export class AgentLoop {
         });
       }
 
-      const inputTokens = await models.countPrompt(
-        s.header.system,
-        contextOf(s.messages),
-        specsJson,
-        signal,
-      );
+      const context = contextOf(s.messages);
+      const inputTokens = await models.countPrompt(s.header.system, context, specsJson, signal);
       const signals = s.signals.snapshot();
       const budget = this.deps.subagents.invocationBudget(s);
       const decision = this.deps.router(s).decide({
@@ -103,6 +100,7 @@ export class AgentLoop {
         ...(budget ? { invocationBudget: budget } : {}),
         agent: { name: agent.name, route: agent.route, ...this.pinnedModel(s, agent) },
         estimatedInputTokens: inputTokens,
+        images: context.some(hasImages),
         signals,
         spend: ledger.spend(),
         escalationApproved,
@@ -405,13 +403,17 @@ export class AgentLoop {
       : {};
   }
 
-  /** What a model is sent: for remote models, with secrets redacted (`privacy.secrets`). */
+  /**
+   * What a model is sent: images as notes when it can't see them, and for
+   * remote models, secrets redacted (`privacy.secrets`).
+   */
   private async outbound(
     s: LiveSession,
     model: ModelInfo,
     system: string,
-    messages: Message[],
+    context: Message[],
   ): Promise<{ system: string; messages: Message[] }> {
+    const messages = model.vision ? context : withoutImages(context);
     if (model.tier !== 'remote' || this.host.config().privacy.secrets !== 'redact')
       return { system, messages };
     const r = await redactOutbound(system, messages);

@@ -29,6 +29,31 @@ export interface TextPart {
   reminder?: true;
 }
 
+/** Image formats every vision-capable provider accepts. */
+export const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+export type ImageMediaType = (typeof IMAGE_MEDIA_TYPES)[number];
+
+/**
+ * The largest image, in bytes before base64: under the strictest provider's
+ * limit (5 MB of base64), so an image that works with one model works with all.
+ */
+export const MAX_IMAGE_BYTES = 3_750_000;
+
+/**
+ * An image the user attached or a tool returned. Models without vision get a
+ * text placeholder instead; the transcript keeps the image.
+ */
+export interface ImagePart {
+  type: 'image';
+  mediaType: ImageMediaType;
+  /** Base64, no `data:` prefix. */
+  data: string;
+  /** Where it came from: a workspace path, or a name for a pasted image. */
+  attachment?: { path: string };
+  /** Why this image must never be sent to a remote model. */
+  private?: string;
+}
+
 /**
  * Model reasoning. `origin` records the exact model that produced it: reasoning
  * blocks are only replayed to that same model (see docs/routing.md, "Switching
@@ -56,6 +81,8 @@ export interface ToolResultPart {
   isError?: boolean;
   /** Why this result must never be sent to a remote model, e.g. `read secrets/prod.env`. */
   private?: string;
+  /** Images the tool returned (`read` on an image file). */
+  images?: ImagePart[];
 }
 
 /**
@@ -73,7 +100,13 @@ export interface CompactionPart {
   tokensAfter: number;
 }
 
-export type Part = TextPart | ReasoningPart | ToolCallPart | ToolResultPart | CompactionPart;
+export type Part =
+  | TextPart
+  | ImagePart
+  | ReasoningPart
+  | ToolCallPart
+  | ToolResultPart
+  | CompactionPart;
 
 export interface Message {
   role: 'user' | 'assistant';

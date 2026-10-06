@@ -5,7 +5,7 @@
  * their origin) and replays only to the same model, the same rule as Claude
  * thinking blocks and DeepSeek `reasoning_content`.
  */
-import type { Message, ModelRef, Part, StopReason, Usage } from '@switchback/protocol';
+import type { ImagePart, Message, ModelRef, Part, StopReason, Usage } from '@switchback/protocol';
 import OpenAI from 'openai';
 import type {
   Response,
@@ -42,16 +42,32 @@ export function toResponsesInput(messages: Message[], origin: ModelRef): Respons
   for (const m of messages) {
     if (m.role === 'user') {
       const text: string[] = [];
+      const images: ImagePart[] = [];
       for (const p of m.parts) {
-        if (p.type === 'tool_result')
+        if (p.type === 'tool_result') {
           items.push({
             type: 'function_call_output',
             call_id: p.callId,
             output: p.isError ? `Error: ${p.content}` : p.content,
           });
-        else if (p.type === 'text') text.push(p.text);
+          images.push(...(p.images ?? []));
+        } else if (p.type === 'text') text.push(p.text);
+        else if (p.type === 'image') images.push(p);
       }
-      if (text.length) items.push({ role: 'user', content: text.join('\n') });
+      // A tool's images follow its output in a user message, like the user's own.
+      if (images.length)
+        items.push({
+          role: 'user',
+          content: [
+            ...(text.length ? [{ type: 'input_text' as const, text: text.join('\n') }] : []),
+            ...images.map((i) => ({
+              type: 'input_image' as const,
+              image_url: `data:${i.mediaType};base64,${i.data}`,
+              detail: 'auto' as const,
+            })),
+          ],
+        });
+      else if (text.length) items.push({ role: 'user', content: text.join('\n') });
       continue;
     }
     for (const p of m.parts) {

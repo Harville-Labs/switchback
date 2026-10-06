@@ -104,6 +104,11 @@ export function tailLines(text: string, width: number, rows: number): string[] {
   return out.slice(-rows);
 }
 
+/** How an attached image is listed in a transcript. */
+export function imageLabel(name: string): string {
+  return `🖼 ${name}`;
+}
+
 /** Short human label for a tool call, e.g. `read src/app.ts` or `$ bun test`. */
 export function toolLabel(name: string, input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>;

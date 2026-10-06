@@ -25,6 +25,8 @@ export interface ModelInfo {
   tier: Tier;
   contextWindow: number;
   available: boolean;
+  /** Can read images (`models.<alias>.vision`, or known from the catalog). */
+  vision?: boolean;
 }
 
 /** A classifier's rating of the user's prompt. */
@@ -41,6 +43,8 @@ export interface RouteInput {
   /** From the active agent's definition. */
   agent: { name: string; route: RoutePreference; model?: string };
   estimatedInputTokens: number;
+  /** The conversation holds images: among a step's alternatives, prefer one that can see them. */
+  images?: boolean;
   signals: SignalSnapshot;
   spend: { todayUsd: number; monthUsd: number };
   /** Set when the user already approved an escalation for this turn. */
@@ -101,6 +105,7 @@ interface Rung {
 interface Context {
   input: RouteInput;
   tokens: number;
+  images: boolean;
   steps: string[][];
   /** Remote models may be used: `allowRemote` and no private content. */
   remoteOk: boolean;
@@ -117,6 +122,7 @@ export class Router {
     const ctx: Context = {
       input,
       tokens: input.estimatedInputTokens,
+      images: input.images ?? false,
       steps: ladderSteps(this.config).map((chain) => chain.filter((a) => !refused.has(a))),
       remoteOk: this.config.allowRemote && !input.privacy,
     };
@@ -126,24 +132,34 @@ export class Router {
   }
 
   /**
-   * The first model in a chain that is reachable and fits the prompt; else the
-   * first reachable one; else the first configured one (which the
-   * availability guard then handles). Aliases with no model are skipped.
+   * The first model in a chain that is reachable and fits the prompt (and,
+   * when the conversation holds images, can see them); else the first that
+   * is reachable and fits; else the first reachable one; else the first
+   * configured one (which the availability guard then handles). Aliases with
+   * no model are skipped.
    */
-  private choose(aliases: string[], tokens: number): Choice {
+  private choose(aliases: string[], ctx: Pick<Context, 'tokens' | 'images'>): Choice {
+    const { tokens, images } = ctx;
     const chain = aliases.flatMap((a) => this.models(a) ?? []);
     const primary = chain[0];
     if (!primary) return { model: undefined, fits: false };
     const up = chain.filter((m) => m.available);
-    const model = up.find((m) => this.fits(m, tokens)) ?? up[0] ?? primary;
+    const fitting = up.filter((m) => this.fits(m, tokens));
+    const model =
+      (images ? fitting.find((m) => m.vision) : undefined) ?? fitting[0] ?? up[0] ?? primary;
     const fits = this.fits(model, tokens);
     if (model === primary) return { model, fits };
     const detour = !primary.available
       ? { rule: 'fallback', reason: `${primary.alias} is unavailable; using ${model.alias}` }
-      : {
-          rule: 'context-fit',
-          reason: `~${tokens} tokens exceeds ${primary.alias}'s window; using ${model.alias} (${model.contextWindow})`,
-        };
+      : !this.fits(primary, tokens)
+        ? {
+            rule: 'context-fit',
+            reason: `~${tokens} tokens exceeds ${primary.alias}'s window; using ${model.alias} (${model.contextWindow})`,
+          }
+        : {
+            rule: 'vision',
+            reason: `${primary.alias} can't see images; using ${model.alias}`,
+          };
     return { model, detour, fits };
   }
 
@@ -157,7 +173,7 @@ export class Router {
       const m = this.models(a);
       return m && (m.tier === 'local' || ctx.remoteOk) && (!tier || m.tier === tier);
     });
-    return this.choose(aliases, ctx.tokens);
+    return this.choose(aliases, ctx);
   }
 
   /**
@@ -271,7 +287,7 @@ export class Router {
 
   private pick(ctx: Context): RouteDecision {
     const { input } = ctx;
-    const start = this.choose(ctx.steps[0] ?? [], ctx.tokens);
+    const start = this.choose(ctx.steps[0] ?? [], ctx);
     const at = input.signals.stickyTurns > 0 ? input.signals.escalationStep : 0;
     const byTier = (tier: Tier, rule: string, reason: string): Routed | Blocked => {
       const rung = this.ofTier(ctx, tier);

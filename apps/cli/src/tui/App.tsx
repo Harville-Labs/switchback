@@ -27,7 +27,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
 import { terminalNotification } from './notify.ts';
-import { PromptInput } from './PromptInput.tsx';
+import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { Item, LiveChild, quietRoutes } from './Rows.tsx';
@@ -185,23 +185,33 @@ export function App({
     setExitArmedAt(Date.now());
   };
 
-  const submit = async (raw: string) => {
+  const submit = async (raw: string, images: PastedImage[] = []) => {
     const text = raw.trim();
     if (!text) return;
     history.add(raw);
     if (text.startsWith('/') && !isCustomCommand(text, custom)) return runSlashCommand(slash, text);
-    send(text, view.running ? 'queue' : undefined);
+    send(text, view.running ? 'queue' : undefined, images);
   };
 
   /**
    * Send a prompt. Idle, it starts a turn; during one, `queue` hands it to the
    * model at the next step (it shows once delivered) and `interrupt` starts it now.
    */
-  const send = (text: string, delivery?: 'queue' | 'interrupt') => {
-    if (delivery !== 'queue') setView((v) => addUserPrompt(v, text));
+  const send = (text: string, delivery?: 'queue' | 'interrupt', images: PastedImage[] = []) => {
+    if (delivery !== 'queue')
+      setView((v) =>
+        addUserPrompt(
+          v,
+          text,
+          images.map(({ name }) => ({ name })),
+        ),
+      );
     const params = {
       sessionId: session.id,
       text,
+      ...(images.length
+        ? { attachments: images.map((i) => ({ kind: 'image' as const, ...i })) }
+        : {}),
       route,
       ...(review !== undefined ? { review } : {}),
       ...(delivery ? { delivery } : {}),
@@ -330,7 +340,15 @@ export function App({
           focus={!permission && !escalation && !picking && !rewinding}
           custom={custom}
           onInterrupt={interrupt}
-          onSubmitNow={(text) => send(text, 'interrupt')}
+          onSubmitNow={(text, images) => send(text, 'interrupt', images)}
+          onNoImage={() =>
+            setView((v) =>
+              addInfo(
+                v,
+                'No image on the clipboard. To attach an image file, drag it in or mention it with @.',
+              ),
+            )
+          }
           onCancel={() => {
             if (view.running)
               client.request('session.cancel', { sessionId: session.id }).catch(() => {});

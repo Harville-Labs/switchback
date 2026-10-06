@@ -8,6 +8,7 @@
  */
 import type { Message } from '@switchback/protocol';
 import { countTokens as bpeCount } from 'gpt-tokenizer';
+import { IMAGE_TOKENS } from './images.ts';
 
 /**
  * BPE merging is quadratic in the length of one pre-token, and long runs
@@ -37,7 +38,8 @@ export function messageText(m: Message): string {
     .map((p) => {
       if (p.type === 'text' || p.type === 'reasoning') return p.text;
       if (p.type === 'tool_result') return p.content;
-      if (p.type === 'compaction') return ''; // never sent; `contextOf` substitutes the summary
+      // Images are counted by imageCount, not by their base64.
+      if (p.type === 'compaction' || p.type === 'image') return ''; // compaction: never sent
       return `${p.name} ${JSON.stringify(p.input ?? {})}`;
     })
     .join('\n');
@@ -46,8 +48,17 @@ export function messageText(m: Message): string {
 export function messageTokens(m: Message): number {
   let n = messageCache.get(m);
   if (n === undefined) {
-    n = countTokens(messageText(m)) + PER_MESSAGE_OVERHEAD;
+    n = countTokens(messageText(m)) + imageCount(m) * IMAGE_TOKENS + PER_MESSAGE_OVERHEAD;
     messageCache.set(m, n);
+  }
+  return n;
+}
+
+function imageCount(m: Message): number {
+  let n = 0;
+  for (const p of m.parts) {
+    if (p.type === 'image') n++;
+    else if (p.type === 'tool_result') n += p.images?.length ?? 0;
   }
   return n;
 }

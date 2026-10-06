@@ -1,5 +1,6 @@
 /**
- * Adapter for Chat Completions APIs. It serves three kinds of provider:
+ * Adapter for Chat Completions APIs (messages are translated in
+ * openai-chat-messages.ts). It serves three kinds of provider:
  *
  * - local servers (Ollama, llama.cpp, LM Studio, vLLM, MLX), flavor `generic`
  * - OpenAI, flavor `openai`: `max_completion_tokens`, `reasoning_effort`
@@ -20,6 +21,7 @@ import type { ModelRef, Part, StopReason, Tier, Usage } from '@switchback/protoc
 import OpenAI from 'openai';
 import { probeContextWindow } from './local-detect.ts';
 import { listModels } from './model-list.ts';
+import { type ReasoningOpaque, toWireMessages } from './openai-chat-messages.ts';
 import {
   type ApiKeySource,
   type ChatEvent,
@@ -53,91 +55,6 @@ export interface OpenAICompatibleOptions {
   headers?: Record<string, string>;
   /** Injected for tests. */
   fetch?: typeof fetch;
-}
-
-type WireMessage =
-  | { role: 'system' | 'user'; content: string }
-  | {
-      role: 'assistant';
-      content: string | null;
-      reasoning_content?: string;
-      reasoning_details?: unknown[];
-      tool_calls?: {
-        id: string;
-        type: 'function';
-        function: { name: string; arguments: string };
-      }[];
-    }
-  | { role: 'tool'; tool_call_id: string; content: string };
-
-/** Structured reasoning from a gateway, kept on `ReasoningPart.opaque`. */
-interface ReasoningOpaque {
-  reasoningDetails?: unknown[];
-}
-
-/**
- * Translate the neutral transcript. Only reasoning that `model` produced is
- * ever sent back: its `reasoning_details` always (gateways need them on tool-call
- * turns), and its text as `reasoning_content` only when `replayText` is set
- * (DeepSeek).
- */
-export function toWireMessages(
-  system: string,
-  messages: ChatRequest['messages'],
-  model?: ModelRef,
-  replayText = false,
-): WireMessage[] {
-  const out: WireMessage[] = [];
-  if (system) out.push({ role: 'system', content: system });
-  for (const m of messages) {
-    if (m.role === 'user') {
-      // Tool results become `tool` messages; plain text becomes a user message.
-      const text: string[] = [];
-      for (const p of m.parts) {
-        if (p.type === 'tool_result') {
-          const content = p.isError ? `Error: ${p.content}` : p.content;
-          out.push({ role: 'tool', tool_call_id: p.callId, content });
-        } else if (p.type === 'text') {
-          text.push(p.text);
-        }
-      }
-      if (text.length) out.push({ role: 'user', content: text.join('\n') });
-    } else {
-      const text = m.parts
-        .filter((p) => p.type === 'text')
-        .map((p) => p.text)
-        .join('');
-      const own = m.parts.flatMap((p) =>
-        p.type === 'reasoning' &&
-        model &&
-        p.origin.provider === model.provider &&
-        p.origin.model === model.model
-          ? [p]
-          : [],
-      );
-      const reasoning = replayText ? own.map((p) => p.text).join('') : '';
-      const details = own.flatMap(
-        (p) => (p.opaque as ReasoningOpaque | undefined)?.reasoningDetails ?? [],
-      );
-      const calls = m.parts.filter((p) => p.type === 'tool_call');
-      out.push({
-        role: 'assistant',
-        content: text || null,
-        ...(reasoning ? { reasoning_content: reasoning } : {}),
-        ...(details.length ? { reasoning_details: details } : {}),
-        ...(calls.length
-          ? {
-              tool_calls: calls.map((c) => ({
-                id: c.id,
-                type: 'function' as const,
-                function: { name: c.name, arguments: JSON.stringify(c.input ?? {}) },
-              })),
-            }
-          : {}),
-      });
-    }
-  }
-  return out;
 }
 
 /** DeepSeek accepts low/high/max. */

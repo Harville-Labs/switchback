@@ -2,7 +2,7 @@
  * Running a model's tool calls: validation, the permission gate, privacy
  * marks, and parallel execution of calls that don't mutate anything.
  */
-import type { ToolResultPart } from '@switchback/protocol';
+import type { ImagePart, ToolResultPart } from '@switchback/protocol';
 import type { HookOutcome, HookRunner } from './hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
@@ -151,6 +151,7 @@ export class ToolRunner {
     let output: string;
     let isError = false;
     let ran = false;
+    let images: ImagePart[] = [];
     const pre = await this.hook(s, 'PreToolUse', call.name, { tool_input: parsed.data });
     const hookDenied =
       pre.block ??
@@ -169,7 +170,9 @@ export class ToolRunner {
       if (tool.name === 'edit' || tool.name === 'write')
         this.deps.noteEdit(s, (parsed.data as { path: string }).path, writer);
       try {
-        output = await tool.run(parsed.data, callCtx);
+        const result = await tool.run(parsed.data, callCtx);
+        if (typeof result === 'string') output = result;
+        else ({ text: output, images } = result);
       } catch (err) {
         output = (err as Error).message;
         isError = true;
@@ -207,6 +210,7 @@ export class ToolRunner {
       content: output,
       ...(isError ? { isError } : {}),
       ...(priv ? { private: priv } : {}),
+      ...(images.length ? { images } : {}),
     };
   }
 }

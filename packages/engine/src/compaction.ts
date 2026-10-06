@@ -92,6 +92,8 @@ export function renderForSummary(messages: Message[]): string[] {
         .map((p) => {
           if (p.type === 'text')
             return `[${m.role}] ${p.attachment ? `(attached ${p.attachment.path}) ` : ''}${p.text}`;
+          // The summarizer may not see images; it notes that one was there.
+          if (p.type === 'image') return `[${m.role}] (image ${p.attachment?.path ?? ''})`;
           if (p.type === 'tool_call')
             return `[tool call] ${p.name} ${JSON.stringify(p.input ?? {})}`;
           if (p.type === 'tool_result') {

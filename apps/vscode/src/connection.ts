@@ -294,7 +294,10 @@ export class EngineConnection implements vscode.Disposable {
           text: m.text,
           route: this.route,
           ...(this.remoteReview !== undefined ? { review: this.remoteReview } : {}),
-          ...(m.attach && this.context ? { attachments: this.context.attachments(m.attach) } : {}),
+          attachments: [
+            ...(m.attach && this.context ? this.context.attachments(m.attach) : []),
+            ...(m.images ?? []).map((i) => ({ kind: 'image' as const, ...i })),
+          ],
           ...(m.delivery ? { delivery: m.delivery } : {}),
         });
         return;
