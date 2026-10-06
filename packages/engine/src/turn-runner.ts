@@ -9,6 +9,8 @@ import {
   type PermissionMode,
   type RoutePreference,
   RpcError,
+  type SessionPromptParams,
+  type SessionPromptResult,
   type StopReason,
   textOf,
 } from '@switchback/protocol';
@@ -27,6 +29,8 @@ export interface TurnOptions {
   review?: boolean;
 }
 
+type PromptParams = Omit<SessionPromptParams, 'sessionId'>;
+
 export interface TurnRunnerDeps {
   loop: AgentLoop;
   reviews: ReviewRunner;
@@ -40,13 +44,67 @@ export class TurnRunner {
   ) {}
 
   /** Start a turn and return immediately; progress arrives as events. */
-  start(
+  /**
+   * `session.prompt`: start a turn, or, while one runs, queue the prompt for
+   * its next step or interrupt it.
+   */
+  start(s: LiveSession, params: PromptParams): SessionPromptResult {
+    const running = s.turn;
+    if (!running) return { turnId: this.begin(s, params) };
+    if (params.delivery === 'interrupt') {
+      const turnId = `turn_${crypto.randomUUID().slice(0, 8)}`;
+      // Only the turn: background subagents and queued prompts carry on.
+      s.controller?.abort();
+      // A cancelled turn doesn't start the queue, so the interrupting prompt goes first.
+      void running.done.then(() => this.begin(s, params, turnId));
+      return { turnId };
+    }
+    const id = `q_${crypto.randomUUID().slice(0, 8)}`;
+    s.queue = [
+      ...(s.queue ?? []),
+      { id, text: params.text, attachments: params.attachments ?? [] },
+    ];
+    this.emitQueue(s);
+    return { turnId: running.id, queued: id };
+  }
+
+  /** Withdraw a queued prompt. */
+  dequeue(s: LiveSession, id: string): boolean {
+    const before = s.queue?.length ?? 0;
+    s.queue = s.queue?.filter((q) => q.id !== id);
+    if ((s.queue?.length ?? 0) === before) return false;
+    this.emitQueue(s);
+    return true;
+  }
+
+  /** Drop every queued prompt (cancel). */
+  clearQueue(s: LiveSession): void {
+    if (!s.queue?.length) return;
+    s.queue = [];
+    this.emitQueue(s);
+  }
+
+  /** Hand queued prompts to the model; the agent loop calls this before each step. */
+  async deliverQueued(s: LiveSession, turnId: string): Promise<void> {
+    const queued = s.queue?.splice(0) ?? [];
+    if (!queued.length) return;
+    this.emitQueue(s);
+    for (const q of queued) {
+      await this.appendPrompt(s, q.text, q.attachments, undefined);
+      this.host.emit({
+        type: 'queue.delivered',
+        ...scope(s),
+        turnId,
+        prompt: { id: q.id, text: q.text },
+      });
+    }
+  }
+
+  private begin(
     s: LiveSession,
-    params: { text: string; route?: RoutePreference; attachments?: Attachment[]; review?: boolean },
-  ): { turnId: string } {
-    if (s.controller)
-      throw new RpcError(ErrorCode.SessionBusy, 'session is already running a turn');
-    const turnId = `turn_${crypto.randomUUID().slice(0, 8)}`;
+    params: PromptParams,
+    turnId = `turn_${crypto.randomUUID().slice(0, 8)}`,
+  ): string {
     void this.run(
       s,
       params.text,
@@ -63,7 +121,15 @@ export class TurnRunner {
     ).catch((err) => {
       this.host.emit({ type: 'error', ...scope(s), turnId, message: (err as Error).message });
     });
-    return { turnId };
+    return turnId;
+  }
+
+  private emitQueue(s: LiveSession): void {
+    this.host.emit({
+      type: 'queue.updated',
+      ...scope(s),
+      queued: (s.queue ?? []).map(({ id, text }) => ({ id, text })),
+    });
   }
 
   /** Run a full user turn to completion: the loop, waiting background work, and review. */
@@ -81,6 +147,8 @@ export class TurnRunner {
     const onParentAbort = () => controller.abort();
     parentSignal?.addEventListener('abort', onParentAbort, { once: true });
     session.controller = controller;
+    let finished = () => {};
+    session.turn = { id: turnId, done: new Promise<void>((r) => (finished = r)) };
     if (!session.header.title && text) session.header.title = text.slice(0, 60);
 
     this.host.emit({ type: 'turn.started', ...scope(session), turnId });
@@ -127,6 +195,10 @@ export class TurnRunner {
       parentSignal?.removeEventListener('abort', onParentAbort);
     }
     this.host.emit({ type: 'turn.completed', ...scope(session), turnId, stopReason });
+    session.turn = undefined;
+    finished();
+    // Prompts queued after the model's last step start the next turn.
+    if (session.queue?.length && stopReason !== 'cancelled') this.begin(session, { text: '' });
     const last = session.messages.findLast((m) => m.role === 'assistant');
     return { stopReason, text: last ? textOf(last) : '' };
   }

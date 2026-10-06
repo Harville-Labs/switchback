@@ -75,7 +75,9 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | Option/Alt+Enter, Ctrl+J, or `\` then Enter | Newline |
 | Paste | Arrives whole (bracketed paste), so newlines in it never send the prompt. Terminal colors and control characters are removed. A paste of 12 lines or 1,500 characters or more shows as a chip, `[Pasted text #1 · 240 lines]`, that Backspace deletes in one go and that expands to the full text when you send. A file dragged into the terminal becomes an `@` mention when it's in the workspace |
 | Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word |
-| `esc` | Cancel the running turn (or close the mention menu) |
+| Enter during a turn | Queue the message: the model reads it at its next step (between tool calls), or as the next turn if it's already finishing. Queued messages show under the transcript |
+| `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt: cancel the turn and drop the queue. Otherwise it closes a menu |
+| `↑` on an empty prompt | Take back the last queued message to edit it |
 | Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
 | `y` / `a` / `p` / `n` | Answer a permission prompt: once, always this session (the rules it grants are shown), always in this project (saved to `.switchback/config.local.json`), deny |
 | `y` / `a` / `n` | Answer a plan: approve, approve and accept edits, keep planning |

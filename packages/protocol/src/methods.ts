@@ -154,12 +154,30 @@ export const SessionPromptParams = z.object({
   route: RoutePreference.default('auto'),
   /** Review of local edits for this prompt; overrides `review.mode` (docs/review.md). */
   review: z.boolean().optional(),
+  /**
+   * While a turn runs: `queue` (the default) hands the prompt to the model at
+   * the next step, and `interrupt` stops the turn and starts this one at once.
+   * Ignored when the session is idle.
+   */
+  delivery: z.enum(['queue', 'interrupt']).optional(),
 });
 export type SessionPromptParams = z.input<typeof SessionPromptParams>;
 
 export interface SessionPromptResult {
+  /** The turn the prompt runs in: a new one, or (queued) the one already running. */
   turnId: string;
+  /** Set when the prompt was queued: its ID, for `session.dequeue`. */
+  queued?: string;
 }
+
+/** A prompt waiting for the running turn's next step. */
+export interface QueuedPrompt {
+  id: string;
+  text: string;
+}
+
+export const SessionDequeueParams = z.object({ sessionId: z.string(), id: z.string() });
+export type SessionDequeueParams = z.infer<typeof SessionDequeueParams>;
 
 export const SessionCancelParams = z.object({ sessionId: z.string() });
 export type SessionCancelParams = z.infer<typeof SessionCancelParams>;
@@ -293,7 +311,10 @@ export interface Methods {
   'session.list': { params: Record<string, never>; result: SessionSummary[] };
   'session.get': { params: SessionGetParams; result: SessionGetResult };
   'session.prompt': { params: SessionPromptParams; result: SessionPromptResult };
+  /** Stop the running turn and its background subagents, and drop queued prompts. */
   'session.cancel': { params: SessionCancelParams; result: { cancelled: boolean } };
+  /** Withdraw a queued prompt before it's delivered; `removed: false` if it already was. */
+  'session.dequeue': { params: SessionDequeueParams; result: { removed: boolean } };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
   'session.compact': { params: SessionCompactParams; result: { compacted: boolean } };
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };
@@ -350,6 +371,10 @@ export type EngineEvent =
     } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
+  /** The session's queued prompts changed. */
+  | ({ type: 'queue.updated'; queued: QueuedPrompt[] } & SessionScoped)
+  /** A queued prompt reached the model; clients show it as the user's message now. */
+  | ({ type: 'queue.delivered'; turnId: string; prompt: QueuedPrompt } & SessionScoped)
   /** A background shell started, exited, or was stopped. */
   | ({ type: 'shell.updated'; shell: ShellInfo } & SessionScoped)
   | ({ type: 'text.delta'; turnId: string; text: string } & SessionScoped)

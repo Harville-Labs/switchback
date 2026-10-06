@@ -41,7 +41,9 @@ Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
        become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
-Keys: esc cancels the running turn; shift+tab cycles the permission mode;
+Keys: during a turn, enter queues a message and esc sends it now (interrupting);
+      esc on an empty prompt cancels; ↑ takes back the last queued message;
+      shift+tab cycles the permission mode;
       y/a/p/n answer permission prompts (once / this session / this project / deny).`;
 
 /** What a command can see and change in the app. */

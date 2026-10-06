@@ -37,6 +37,8 @@ export interface AgentLoopDeps {
   agents(): AgentDefinition[];
   mcp(): McpHub | undefined;
   interaction(): Interaction;
+  /** Waiting reports and queued prompts join the conversation here, between steps. */
+  beforeStep(s: LiveSession, turnId: string): Promise<void>;
 }
 
 type Done = Extract<ChatEvent, { type: 'done' }>;
@@ -73,7 +75,7 @@ export class AgentLoop {
     for (let step = 0; step < config().maxStepsPerTurn; step++) {
       if (signal.aborted) return 'cancelled';
       await models.refreshHealth(signal);
-      this.deps.subagents.drainInbox(s);
+      await this.deps.beforeStep(s, turnId);
       if (config().compaction.enabled) {
         // A failed summary costs context, not the turn: routing still has
         // overflow escalation to fall back on.
