@@ -1,10 +1,9 @@
 /**
- * Permission rules in Claude Code's syntax: a tool, optionally with a
- * specifier in parentheses. `bash(npm run test:*)`, `read(**\/.env)`,
+ * Permission rules: a tool, optionally with a specifier in parentheses. `bash(npm run test:*)`, `read(**\/.env)`,
  * `edit(src/**)`, `mcp__github`, `mcp__github__create_issue`.
  *
- * File tools are grouped as Claude Code groups them: a `read` rule covers
- * read, glob, and grep; an `edit` rule covers edit and write.
+ * File tools are grouped: a `read` rule covers read, glob, and grep; an
+ * `edit` rule covers edit and write. Tool names are case-insensitive.
  */
 
 export type RuleBehavior = 'allow' | 'ask' | 'deny';
@@ -27,17 +26,14 @@ export interface PermissionRule {
   specifier?: string;
 }
 
-/** Claude Code's tool names, so rules copied from `.claude/settings.json` work unchanged. */
+/** Tool names a rule can start with, and the target each means. */
 const NAMES: Record<string, Exclude<RuleTarget['kind'], 'mcp'>> = {
   bash: 'bash',
   read: 'read',
   glob: 'read',
   grep: 'read',
-  ls: 'read',
   edit: 'edit',
   write: 'edit',
-  multiedit: 'edit',
-  notebookedit: 'edit',
   webfetch: 'webfetch',
   websearch: 'websearch',
 };

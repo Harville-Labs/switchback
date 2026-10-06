@@ -44,8 +44,8 @@ export interface GateDeps {
 
 const SESSION = 'this session';
 
-/** Agent configuration in the workspace: editing it always asks (it could grant more). */
-const PROTECTED_CONFIG = ['.switchback', '.claude', '.mcp.json'];
+/** Switchback's configuration in the workspace: editing it always asks (it could grant more). */
+const PROTECTED_CONFIG = ['.switchback'];
 
 export class PermissionGate {
   readonly prompts = new PendingPrompts<PermissionAnswer>('permission');

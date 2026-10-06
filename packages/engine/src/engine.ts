@@ -90,7 +90,7 @@ export interface EngineOptions {
   runtimes?: Map<string, AgentRuntime>;
   /** Where agent files live; rescanned so new agents appear without a restart. */
   agentDirs?: { dir: string; source: AgentDefinition['source'] }[];
-  /** Project instructions (AGENTS.md / CLAUDE.md contents). */
+  /** Project instructions (the workspace's AGENTS.md). */
   instructions?: string;
   /**
    * How to resolve `ask` permissions and escalations when no client answers.
@@ -302,12 +302,12 @@ export class Engine {
     const pp = projectPaths(workspaceRoot);
     const agentDirs: EngineOptions['agentDirs'] = [
       { dir: hp.agentsDir, source: 'user' },
-      { dir: pp.claudeAgentsDir, source: 'claude-compat' },
       { dir: pp.agentsDir, source: 'project' },
     ];
     const { agents, errors } = loadAgents(agentDirs);
-    const instructionFile = pp.instructionFiles.find((f) => existsSync(f));
-    const instructions = instructionFile ? readFileSync(instructionFile, 'utf8') : undefined;
+    const instructions = existsSync(pp.instructionsFile)
+      ? readFileSync(pp.instructionsFile, 'utf8')
+      : undefined;
     const engine = new Engine({
       workspaceRoot,
       config,

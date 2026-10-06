@@ -105,7 +105,7 @@ describe('buildSetupConfig', () => {
       model: 'anthropic.claude-sonnet-5',
     });
     // Claude Code size aliases follow the first hosted provider.
-    expect(parsed.models.haiku?.model).toBe('anthropic.claude-haiku-4-5');
+    expect(parsed.models.small?.model).toBe('anthropic.claude-haiku-4-5');
     expect(parsed.routing).toMatchObject({
       start: ['coder-7b'],
       escalate: [['claude-sonnet-5']],
@@ -128,7 +128,7 @@ describe('buildSetupConfig', () => {
       );
       expect(parsed.providers[kind]?.type).toBe(kind);
       expect(parsed.models[model]).toMatchObject({ provider: kind, model });
-      for (const alias of ['opus', 'sonnet', 'haiku'])
+      for (const alias of ['large', 'medium', 'small'])
         expect(parsed.models[alias]?.provider).toBe(kind);
     }
   });
@@ -156,7 +156,7 @@ describe('buildSetupConfig', () => {
     expect(parsed.providers.foundry).toMatchObject({ type: 'foundry', resource: 'acme' });
     expect(parsed.models['claude-opus-5']?.provider).toBe('anthropic-aws');
     expect(parsed.models['claude-sonnet-5']?.provider).toBe('foundry');
-    expect(parsed.models.haiku?.model).toBe('claude-haiku-4-5');
+    expect(parsed.models.small?.model).toBe('claude-haiku-4-5');
   });
 
   test('DeepSeek models get an effort so thinking mode is on', () => {
@@ -218,7 +218,7 @@ describe('buildSetupConfig', () => {
     expect(m?.price?.input).toBeGreaterThan(0);
     expect(m?.contextWindow).toBeGreaterThan(0);
     // No size aliases: they'd name deployments nobody created.
-    expect(parsed.models.opus).toBeUndefined();
+    expect(parsed.models.large).toBeUndefined();
   });
 
   test('OpenRouter: what its model list says is written out', () => {

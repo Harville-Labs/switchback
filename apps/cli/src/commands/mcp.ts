@@ -1,7 +1,7 @@
 /**
  * `switchback mcp`: show MCP servers and their tools' status.
- * `switchback mcp trust [name...]`: allow project-defined servers (from the
- * project's config or Claude Code's .mcp.json) to start in this workspace.
+ * `switchback mcp trust [name...]`: allow servers defined in the project's
+ * config to start in this workspace.
  */
 import { formatMcpServers } from '@switchback/client';
 import { loadConfig, trust as trustDefinitions } from '@switchback/engine';

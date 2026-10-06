@@ -1,6 +1,6 @@
 /**
  * Pick the shell the `bash` tool runs commands with. The tool keeps its name
- * on every platform (agent definitions and Claude Code aliases refer to it);
+ * on every platform (agent definitions and permission rules refer to it);
  * the system prompt tells the model which shell it actually has.
  */
 

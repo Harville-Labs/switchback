@@ -59,7 +59,7 @@ const CACHES = [
  * agent's own configuration, and git hooks or config that run commands
  * outside the sandbox the next time someone uses git.
  */
-const PROTECTED = ['.switchback', '.claude', '.mcp.json', '.git/hooks', '.git/config'];
+const PROTECTED = ['.switchback', '.git/hooks', '.git/config'];
 
 export interface SandboxContext {
   workspaceRoot: string;

@@ -23,7 +23,7 @@ export async function config(
       console.log(`user config     ${hp.configFile}  ${mark(hp.configFile)}`);
       console.log(`project config  ${pp.configFile}  ${mark(pp.configFile)}`);
       console.log(`user agents     ${hp.agentsDir}`);
-      console.log(`project agents  ${pp.agentsDir}, ${pp.claudeAgentsDir}`);
+      console.log(`project agents  ${pp.agentsDir}`);
       console.log(`data            ${hp.dataDir}`);
       return 0;
     case 'show': {

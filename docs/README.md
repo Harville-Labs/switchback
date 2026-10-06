@@ -5,7 +5,7 @@
 - [Configuration](configuration.md): every config key, file locations, environment variables
 - [Providers](providers.md): local servers (Ollama, llama.cpp, vLLM, LM Studio, SGLang, KoboldCpp, Jan, TGI), OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, any OpenAI-compatible API, and TypeSafe Jev for the routing classifier
 - [Routing and escalation](routing.md): how local vs. remote is decided, budgets, tuning
-- [Agents and subagents](subagents.md): built-in agents, writing your own, Claude Code compatibility
+- [Agents and subagents](subagents.md): built-in agents, writing your own
 - [Permissions and safety](permissions.md)
 - [Privacy](privacy.md): files that never leave your machine, and secret redaction
 - [Review with a stronger model](review.md): a ladder of reviewers, local or remote, checks what a model changed
