@@ -515,6 +515,31 @@
         }
       }
     },
+    "bash": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "timeoutMs": {
+          "default": 120000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 600000
+        },
+        "env": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "shell": {
+          "type": "string"
+        }
+      }
+    },
     "mcpServers": {
       "default": {},
       "type": "object",

@@ -27,6 +27,8 @@ import {
   SessionRolesParams,
   SessionSetModeParams,
   SessionSetRolesParams,
+  ShellsKillParams,
+  ShellsListParams,
   type Transport,
   UsageGetParams,
 } from '@switchback/protocol';
@@ -121,6 +123,10 @@ export function serve(
         const p = parse(SessionSetModeParams, req.params);
         return engine.setMode(p.sessionId, p.mode);
       }
+      case 'shells.list':
+        return engine.shells(parse(ShellsListParams, req.params).sessionId);
+      case 'shells.kill':
+        return engine.killShell(parse(ShellsKillParams, req.params).shellId);
       case 'permissions.list':
         return engine.permissions(parse(PermissionsListParams, req.params).sessionId);
       case 'escalation.respond': {

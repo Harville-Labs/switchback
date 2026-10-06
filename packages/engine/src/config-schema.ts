@@ -62,6 +62,17 @@ export const SwitchbackConfig = z.object({
       deny: PermissionRules,
     })
     .prefault({}),
+  /** How the bash tool runs commands. */
+  bash: z
+    .object({
+      /** Default timeout for a foreground command; a call may ask for up to 10 minutes. */
+      timeoutMs: z.number().int().positive().max(600_000).default(120_000),
+      /** Added to every command's environment; values may be `{env:NAME}`. */
+      env: z.record(z.string(), z.string()).default({}),
+      /** A POSIX shell to run commands with instead of the detected one (`/bin/zsh`). */
+      shell: z.string().optional(),
+    })
+    .prefault({}),
   /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
   mcpServers: z.record(McpServerName, McpServerConfig).default({}),
   /** External agent runtimes that agents can run on (`runtime: <name>`); see ADR 0009. */

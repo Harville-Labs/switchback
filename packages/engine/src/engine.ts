@@ -27,6 +27,7 @@ import {
   type SessionRoles,
   type SessionSetRolesParams,
   type SessionSummary,
+  type ShellInfo,
   type UsagePeriod,
   type UsageReport,
 } from '@switchback/protocol';
@@ -62,6 +63,7 @@ import {
 import { Subagents } from './subagents.ts';
 import { systemPrompt } from './system-prompt.ts';
 import { type Interaction, ToolRunner } from './tool-runner.ts';
+import { CommandRunner, shellOf } from './tools/process.ts';
 import { type TurnOptions, TurnRunner } from './turn-runner.ts';
 import { UsageRecorder } from './usage-recorder.ts';
 import type { Worktree } from './worktree.ts';
@@ -121,6 +123,7 @@ export class Engine {
   private readonly host: EngineHost;
   private readonly models: ModelDirectory;
   private readonly gate: PermissionGate;
+  private readonly commands: CommandRunner;
   private readonly tools: ToolRunner;
   private readonly reviews: ReviewRunner;
   private readonly compactor: Compactor;
@@ -163,6 +166,10 @@ export class Engine {
       privatePaths: () => this.privatePaths(),
     };
     this.compactor = new Compactor(this.host, this.models);
+    this.commands = new CommandRunner(
+      () => this.options.config.bash,
+      (shell) => this.emit({ type: 'shell.updated', sessionId: shell.sessionId, shell }),
+    );
     // Collaborators call each other only after construction, through these closures.
     this.gate = new PermissionGate(this.host, {
       interaction: () => this.options.interaction ?? 'prompt',
@@ -176,6 +183,7 @@ export class Engine {
       },
     });
     this.tools = new ToolRunner(this.host, this.gate, {
+      commands: this.commands,
       runSubagent: (parent, agent, prompt, description, signal, opts) =>
         this.subagents.run(parent, agent, prompt, description, signal, opts),
       noteEdit: (s, path, writer) => this.reviews.noteEdit(s, path, writer),
@@ -358,6 +366,7 @@ export class Engine {
         this.options.workspaceRoot,
         wt?.root ?? this.options.workspaceRoot,
         this.options.instructions,
+        shellOf(this.options.config.bash).name,
       ),
     };
     const live = this.sessions.create(
@@ -555,7 +564,18 @@ export class Engine {
     return draft.text;
   }
 
+  /** `shells.list`. */
+  shells(sessionId?: string): ShellInfo[] {
+    return this.commands.list(sessionId);
+  }
+
+  /** `shells.kill`. */
+  killShell(shellId: string): ShellInfo {
+    return this.commands.kill(shellId);
+  }
+
   async shutdown(): Promise<void> {
+    this.commands.killAll();
     for (const s of this.sessions.inMemory()) {
       s.controller?.abort();
       s.bgController?.abort();

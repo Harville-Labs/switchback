@@ -112,6 +112,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'receipt', group: 'Usage', description: "this session's cost vs. running it all-remote" },
   { name: 'mcp', group: 'Tools', description: 'MCP servers and their tools' },
   {
+    name: 'shells',
+    args: '[kill <id>]',
+    group: 'Tools',
+    description: 'background shells (dev servers, watchers); kill stops one',
+  },
+  {
     name: 'copy',
     args: '[n|tool|all]',
     group: 'Tools',

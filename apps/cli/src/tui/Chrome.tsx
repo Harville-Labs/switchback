@@ -1,6 +1,6 @@
 /** Everything around the transcript: header, prompts, spinner, and status bar. */
 import { homedir } from 'node:os';
-import { formatLadder, modeLabel, type ViewState } from '@switchback/client';
+import { formatLadder, modeLabel, runningShells, type ViewState } from '@switchback/client';
 import type {
   PermissionMode,
   RoutePreference,
@@ -33,6 +33,7 @@ export function StatusBar({
   mode: PermissionMode;
 }) {
   const tier = view.lastTier;
+  const shells = runningShells(view.shells);
   const ladder = formatLadder(view.ladder);
   const routeColor = route === 'local' ? 'green' : route === 'remote' ? 'yellow' : undefined;
   return (
@@ -53,6 +54,12 @@ export function StatusBar({
         ) : null}
         {ladder ? ` · ${ladder}` : ''}
         {view.private ? <Text color="cyan"> · 🔒 local only</Text> : null}
+        {shells ? (
+          <Text color="yellow">
+            {' '}
+            · {shells} shell{shells === 1 ? '' : 's'} running
+          </Text>
+        ) : null}
       </Text>
       <Text dimColor wrap="truncate-start">
         <Text color="white">${view.costUsd.toFixed(4)}</Text>

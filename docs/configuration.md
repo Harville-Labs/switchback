@@ -120,6 +120,16 @@ The levels are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md) 
 
 Personal settings for one project go in `.switchback/config.local.json`. It's read after `.switchback/config.json`, and Switchback writes it when you answer a prompt with **Always in this project**, adding it to `.switchback/.gitignore`.
 
+### `bash`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `timeoutMs` | `120000` | How long a foreground command may run before it's killed. A call may ask for up to 10 minutes; longer-running commands belong in the background |
+| `env` | `{}` | Added to every command's environment. Values may be `{env:NAME}` |
+| `shell` | detected | A POSIX shell to run commands with instead of the detected one, such as `/bin/zsh`; run as `<shell> -c <command>` |
+
+A command started with `background: true` keeps running after the call returns: dev servers, watchers, long builds. The model reads its new output with `bash_output` and stops it with `kill_shell`; you see them with `/shells` and stop one with `/shells kill <id>`. Background shells end when the engine does. Starting one is a normal `bash` call for permissions; reading and stopping it asks nothing more.
+
 ### `mcpServers.<name>`
 
 Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. The format is the same as Claude Code's `.mcp.json`, and a project's `.mcp.json` is read too.

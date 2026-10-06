@@ -45,6 +45,9 @@ const TOOL_ALIASES: Record<string, string> = {
   Task: 'task',
   Agent: 'task',
   ExitPlanMode: 'exit_plan_mode',
+  BashOutput: 'bash_output',
+  KillShell: 'kill_shell',
+  KillBash: 'kill_shell',
 };
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [

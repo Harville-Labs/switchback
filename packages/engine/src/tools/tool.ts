@@ -3,6 +3,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
+import type { CommandRunner } from './process.ts';
 
 /** Which permission setting governs a tool. `none` tools never prompt. */
 export type PermissionCategory = 'read' | 'edit' | 'bash' | 'mcp' | 'none';
@@ -33,6 +34,8 @@ export interface ToolContext {
    * search tools leave such files out of their results.
    */
   hidden?: (path: string) => boolean;
+  /** Runs shell commands, in the foreground or in the background (the bash tools). */
+  commands?: CommandRunner;
   /** Ask the user to approve a plan; only top-level sessions have it (exit_plan_mode). */
   approvePlan?: (plan: string) => Promise<PlanAnswer>;
 }

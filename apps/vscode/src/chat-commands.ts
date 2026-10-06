@@ -8,6 +8,7 @@ import {
   formatModels,
   formatPermissions,
   formatReceipt,
+  formatShells,
   formatUsage,
   parseMode,
 } from '@switchback/client';
@@ -84,6 +85,13 @@ export async function runChatCommand(
       return info(
         formatPermissions(await c.request('permissions.list', { sessionId: session.id })),
       );
+    case 'shells': {
+      if (args[0] === 'kill' && args[1]) {
+        const shell = await c.request('shells.kill', { shellId: args[1] });
+        return info(`${shell.id} ${shell.status === 'killed' ? 'stopped' : 'had already exited'}`);
+      }
+      return info(formatShells(await c.request('shells.list', {})));
+    }
     case 'mcp': {
       const { servers } = await c.request('mcp.list', {});
       return info(`MCP servers\n${formatMcpServers(servers)}`);

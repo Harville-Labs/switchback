@@ -32,7 +32,7 @@ Every call that passes validation and confinement is decided in this order:
 | `edit` | write, edit | `ask` |
 | `bash` | bash | `ask` |
 | `mcp` | tools from MCP servers (`mcp__<server>__<tool>`) | `ask`; a server's `permission` setting overrides it, except that a category-level `deny` always wins |
-| (none) | task, exit_plan_mode | always allowed; a subagent's own tools are checked individually |
+| (none) | task, exit_plan_mode, bash_output, kill_shell | always allowed: a subagent's own tools are checked individually, and a background shell's command was checked when it started |
 
 ### Rules
 
