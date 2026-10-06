@@ -31,7 +31,7 @@ bun run check        # must pass before you start and before you push
 
 ## Live tests
 
-Unit tests never touch real models. `bun run test:live` runs scenarios against a real local model (detected, or `SWITCHBACK_LIVE_LOCAL_URL` + `SWITCHBACK_LIVE_LOCAL_MODEL`) and against every hosted provider whose API key is set (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`), each on its cheapest model; the run prints what it spent. The **Live models** workflow runs nightly with an Ollama container and can be triggered manually with a different model. Run it before changing an adapter.
+Unit tests never touch real models. `bun run test:live` runs scenarios against a real local model (detected, or `SWITCHBACK_LIVE_LOCAL_URL` + `SWITCHBACK_LIVE_LOCAL_MODEL`) and against every hosted provider whose API key is set (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`), each on its cheapest model; the run prints what it spent. The **Live models** workflow runs weekly (Mondays) with an Ollama container and can be triggered manually with a different model. Run it before changing an adapter.
 
 ## Labels
 
