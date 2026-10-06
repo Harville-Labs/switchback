@@ -16,14 +16,15 @@ import type {
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
-import { Box, Static, useApp, useInput, useStdout } from 'ink';
+import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
 import { Header, StatusBar, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
 import { PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
 import { Item, LiveChild, quietRoutes } from './Rows.tsx';
-import { runSlashCommand, type SlashContext } from './slash.ts';
+import { SessionPicker } from './SessionPicker.tsx';
+import { resume, runSlashCommand, type SlashContext } from './slash.ts';
 
 interface Props {
   client: SwitchbackClient;
@@ -33,7 +34,12 @@ interface Props {
   initialView?: ViewState;
   initialRoute: RoutePreference;
   warnings: string[];
+  /** Open the session picker first (`switchback --resume`). */
+  pickSession?: boolean;
 }
+
+/** A second Ctrl+C within this long quits; one press alone never does. */
+const EXIT_WINDOW_MS = 2_000;
 
 export function App({
   client,
@@ -42,6 +48,7 @@ export function App({
   initialView: resumed,
   initialRoute,
   warnings,
+  pickSession = false,
 }: Props) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -65,6 +72,25 @@ export function App({
   /** Modes this session may cycle through; an organization can rule out bypass. */
   const [modes, setModes] = useState<PermissionMode[]>(['default', 'acceptEdits', 'plan']);
   const mode = view.mode ?? session.permissionMode ?? 'default';
+  /** Saved sessions while the picker is open. */
+  const [picking, setPicking] = useState<SessionSummary[] | undefined>();
+  /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
+  const [exitArmedAt, setExitArmedAt] = useState<number | undefined>();
+
+  useEffect(() => {
+    if (exitArmedAt === undefined) return;
+    const timer = setTimeout(() => setExitArmedAt(undefined), EXIT_WINDOW_MS);
+    return () => clearTimeout(timer);
+  }, [exitArmedAt]);
+
+  const openPicker = async () => {
+    const sessions = await client.request('session.list', {}).catch(() => []);
+    setPicking(sessions);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only on the first render
+  useEffect(() => {
+    if (pickSession) void openPicker();
+  }, []);
 
   useEffect(() => {
     client.request('permissions.list', { sessionId: session.id }).then(
@@ -104,6 +130,17 @@ export function App({
     setListed,
     writeRaw: (s) => stdout.write(s),
     exit,
+    openPicker,
+  };
+
+  /** Ctrl+C with nothing typed: cancel the turn, or quit on a second press. */
+  const interrupt = () => {
+    if (view.running) {
+      client.request('session.cancel', { sessionId: session.id }).catch(() => {});
+      return;
+    }
+    if (exitArmedAt !== undefined && Date.now() - exitArmedAt < EXIT_WINDOW_MS) return exit();
+    setExitArmedAt(Date.now());
   };
 
   const submit = async (raw: string) => {
@@ -128,8 +165,11 @@ export function App({
   const escalation = view.escalations[0];
 
   useInput((ch, key) => {
+    // The picker and the prompt input handle their own keys, Ctrl+C included.
+    if (picking) return;
+    const ctrlC = key.ctrl && ch === 'c';
     if (permission) {
-      const answer = permissionKey(permission, ch, key.escape);
+      const answer = permissionKey(permission, ch, key.escape || ctrlC);
       if (!answer) return;
       client
         .request('permission.respond', { requestId: permission.requestId, ...answer })
@@ -138,7 +178,7 @@ export function App({
       return;
     }
     if (escalation) {
-      const approve = ch === 'y' ? true : ch === 'n' || key.escape ? false : undefined;
+      const approve = ch === 'y' ? true : ch === 'n' || key.escape || ctrlC ? false : undefined;
       if (approve === undefined) return;
       client
         .request('escalation.respond', { requestId: escalation.requestId, approve })
@@ -195,10 +235,22 @@ export function App({
       )}
       {escalation && !permission && <EscalationPrompt escalation={escalation} />}
 
+      {picking ? (
+        <SessionPicker
+          sessions={picking}
+          current={session.id}
+          onCancel={() => setPicking(undefined)}
+          onPick={(id) => {
+            setPicking(undefined);
+            void resume(slash, id);
+          }}
+        />
+      ) : null}
       {view.running && !permission && !escalation ? <Working view={view} /> : null}
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
         <PromptInput
-          focus={!permission && !escalation}
+          focus={!permission && !escalation && !picking}
+          onInterrupt={interrupt}
           busy={view.running}
           history={history.list()}
           root={init.workspaceRoot}
@@ -210,6 +262,11 @@ export function App({
           }
         />
       </Box>
+      {exitArmedAt !== undefined ? (
+        <Text color="yellow" dimColor>
+          {'  '}Press Ctrl+C again to exit
+        </Text>
+      ) : null}
       <StatusBar
         session={session}
         route={route}

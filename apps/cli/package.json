@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/marked-terminal": "^6.1.1",
-    "@types/react": "^19.3.0"
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0"
   }
 }

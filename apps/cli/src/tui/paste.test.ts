@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
-import { osc52, pickCopy } from './clipboard.ts';
+import { pickCopy, type ViewItem } from '@switchback/client';
+import { osc52 } from './clipboard.ts';
 import {
   chipBefore,
   cleanPaste,
@@ -78,14 +79,37 @@ describe('dropped files', () => {
 
 describe('/copy', () => {
   const reply = 'Here:\n\n```ts\nconst a = 1;\n```\n\nand\n\n```sh\nbun test\n```\n';
+  const said = (text: string): ViewItem[] => [{ kind: 'assistant', id: 'a', text, reasoning: '' }];
   test('copies the reply or one code block, raw', () => {
-    expect(pickCopy(reply, undefined)).toEqual({ text: reply, what: 'the last reply' });
-    expect(pickCopy(reply, '2')).toEqual({ text: 'bun test', what: 'code block 2 of 2' });
-    expect(pickCopy(reply, 'code')).toMatchObject({ text: 'const a = 1;' });
-    expect(pickCopy(reply, '3')).toEqual({ error: 'the last reply has 2 code blocks: /copy 1…2' });
-    expect(pickCopy('plain', '1')).toMatchObject({
+    const items = said(reply);
+    expect(pickCopy(items, undefined)).toEqual({ text: reply, what: 'the last reply' });
+    expect(pickCopy(items, '2')).toEqual({ text: 'bun test', what: 'code block 2 of 2' });
+    expect(pickCopy(items, 'code')).toMatchObject({ text: 'const a = 1;' });
+    expect(pickCopy(items, '3')).toEqual({ error: 'the last reply has 2 code blocks: /copy 1…2' });
+    expect(pickCopy(said('plain'), '1')).toMatchObject({
       error: expect.stringContaining('no code blocks'),
     });
+    expect(pickCopy(items, 'x')).toEqual({ error: 'usage: /copy [n | code | tool | all]' });
+  });
+  test('copies the last tool output, or the whole conversation as Markdown', () => {
+    const items: ViewItem[] = [
+      { kind: 'user', id: 'u', text: 'run the tests' },
+      {
+        kind: 'tool',
+        id: 't',
+        name: 'bash',
+        input: { command: 'bun test' },
+        status: 'ok',
+        output: '3 pass',
+      },
+      { kind: 'assistant', id: 'a', text: 'All pass.', reasoning: '' },
+    ];
+    expect(pickCopy(items, 'tool')).toEqual({ text: '3 pass', what: 'the output of bash' });
+    expect(pickCopy(items, 'all')).toEqual({
+      text: '## You\n\nrun the tests\n\n> $ bun test\n\nAll pass.',
+      what: 'the conversation',
+    });
+    expect(pickCopy([], 'tool')).toEqual({ error: 'no tool output yet' });
   });
   test('OSC 52 carries the text base64-encoded', () => {
     const tmux = process.env.TMUX;

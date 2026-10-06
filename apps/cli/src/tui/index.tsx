@@ -13,6 +13,8 @@ export async function tui(
     /** Attach to (or start) the workspace's shared daemon. */
     daemon: boolean;
     permissionMode?: PermissionMode;
+    /** Open the session picker (`--resume`). */
+    pickSession?: boolean;
   },
 ): Promise<number> {
   if (!process.stdin.isTTY) {
@@ -48,9 +50,11 @@ export async function tui(
       initialSession={session}
       {...(history ? { initialView: history } : {})}
       initialRoute={opts.route}
+      pickSession={opts.pickSession ?? false}
       warnings={warnings}
     />,
-    { exitOnCtrlC: true },
+    // Ctrl+C clears the prompt or cancels a turn; quitting takes a second press (App.tsx).
+    { exitOnCtrlC: false },
   );
   await app.waitUntilExit();
   await client.request('shutdown', {}).catch(() => {});

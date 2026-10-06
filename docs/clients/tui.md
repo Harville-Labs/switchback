@@ -50,7 +50,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `/agents` | List agents and where they came from |
 | `/new` | New session with the default agent |
 | `/sessions` | Saved sessions in this workspace, newest first |
-| `/resume <n\|id>` | Switch to a saved session (number from `/sessions`) |
+| `/resume [n\|id]` | Switch to a saved session. With no argument, a picker: type to filter by title, agent, or ID, ↑/↓ to choose, Enter to open. `switchback --resume` opens it at startup, `-c` resumes the latest, `--session <id>` a specific one, and `switchback sessions [--json]` lists them for scripts |
 | `/subagents` | This session's subagents as a numbered tree |
 | `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
@@ -66,7 +66,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `/mode [default\|accept-edits\|plan\|bypass]` | Show or switch the permission mode ([permissions.md](../permissions.md#modes)) |
 | `/permissions` | The mode, the permission levels, and every rule with where it came from |
 
-| `/copy [n]` | Copy the last reply, or its `n`th code block, to the clipboard as raw text (no wrapping or indentation from the terminal rendering). Works over SSH in terminals that support OSC 52 |
+| `/copy [n\|tool\|all]` | Copy to the clipboard as raw text (no wrapping, indentation, or colors from the terminal rendering): the last reply, its `n`th code block, the last tool's output, or the whole conversation as Markdown. Works over SSH in terminals that support OSC 52 (iTerm2, kitty, WezTerm, Ghostty, Windows Terminal, and tmux with `set-clipboard on`) |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
@@ -79,7 +79,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `y` / `a` / `p` / `n` | Answer a permission prompt: once, always this session (the rules it grants are shown), always in this project (saved to `.switchback/config.local.json`), deny |
 | `y` / `a` / `n` | Answer a plan: approve, approve and accept edits, keep planning |
 | `y` / `n` | Answer an escalation prompt |
-| `ctrl+c` | Quit |
+| `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
 
 Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission mode when it isn't `default`.
 

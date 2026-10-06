@@ -8,10 +8,12 @@
     ".": "./src/index.ts",
     "./view": "./src/view.ts",
     "./format": "./src/format.ts",
+    "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts"
   },
   "dependencies": {
     "@switchback/protocol": "workspace:*",
+    "marked": "15",
     "semver": "^7.8.5"
   },
   "devDependencies": {

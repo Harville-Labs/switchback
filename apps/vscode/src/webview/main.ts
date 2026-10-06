@@ -8,6 +8,7 @@ import {
   matchCommands,
   type SlashCommand,
 } from '@switchback/client/commands';
+import { pickCopy } from '@switchback/client/copy';
 import {
   formatReviewers,
   formatSteps,
@@ -333,27 +334,6 @@ menu.addEventListener('mousemove', (e) => {
   for (const el of menu.querySelectorAll('.menu-item')) el.classList.toggle('active', el === row);
 });
 
-/** The last reply, or its nth code block, as the TUI's /copy does. */
-function copyFromLastReply(arg: string | undefined) {
-  const replies = log.querySelectorAll<HTMLElement>('.assistant');
-  const reply = replies[replies.length - 1];
-  if (!reply) return addNotice('Nothing to copy yet.');
-  if (!arg) {
-    vscode.postMessage({ type: 'copy', text: reply.innerText ?? reply.textContent ?? '' });
-    return;
-  }
-  const blocks = [...reply.querySelectorAll('.code code')].map((c) => c.textContent ?? '');
-  const n = Number(arg);
-  const block = blocks[n - 1];
-  if (block === undefined)
-    return addNotice(
-      blocks.length
-        ? `copy: the last reply has ${blocks.length} code block${blocks.length === 1 ? '' : 's'}`
-        : 'copy: the last reply has no code blocks; /copy copies all of it',
-    );
-  vscode.postMessage({ type: 'copy', text: block });
-}
-
 function addNotice(text: string) {
   view = addInfo(view, text);
   render();
@@ -379,9 +359,15 @@ function runCommand(name: string, args: string[]) {
     case 'subagents':
       addNotice(formatSubagents(view, 'Expand a subagent in the chat to see what it did.'));
       return;
-    case 'copy':
-      copyFromLastReply(args[0]);
+    case 'copy': {
+      const pick = pickCopy(view.items, args[0]);
+      if ('error' in pick) addNotice(`copy: ${pick.error}`);
+      else {
+        vscode.postMessage({ type: 'copy', text: pick.text });
+        addNotice(`Copied ${pick.what}.`);
+      }
       return;
+    }
     default:
       vscode.postMessage({ type: 'command', name, args });
   }
@@ -461,6 +447,10 @@ input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     send();
+  } else if (e.key === 'Escape' && view.running && !input.value) {
+    // As in the TUI: Esc cancels the running turn; with text in the box it does nothing.
+    e.preventDefault();
+    vscode.postMessage({ type: 'cancel' });
   }
 });
 
