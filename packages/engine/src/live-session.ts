@@ -99,7 +99,7 @@ export interface EngineHost {
     tier: Tier,
     model: ModelRef,
     usage: Usage,
-    meta: { rule: string; agent: string; costUsd?: number },
+    meta: { rule: string; agent: string; costUsd?: number; decodeMs?: number },
   ): void;
   /** Where a session's tools operate: its worktree, or the workspace. */
   rootOf(s: LiveSession): string;

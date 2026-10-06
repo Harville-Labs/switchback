@@ -23,7 +23,16 @@ export type ViewItem =
   /** An image the user sent; `src` is a data URL for clients that can show it. */
   | { kind: 'image'; id: string; name: string; src?: string }
   | { kind: 'assistant'; id: string; text: string; reasoning: string }
-  | { kind: 'route'; id: string; tier: Tier; model: ModelRef; rule: string; reason: string }
+  | {
+      kind: 'route';
+      id: string;
+      tier: Tier;
+      model: ModelRef;
+      rule: string;
+      reason: string;
+      /** How fast the call it started answered, once it has (`call.stats`). */
+      tokensPerSecond?: number;
+    }
   | {
       kind: 'tool';
       id: string;
@@ -109,6 +118,8 @@ export interface ViewState {
   /** Saved versus running this session all-remote (this session only, not its subagents). */
   savingsUsd: number;
   lastTier?: Tier;
+  /** The last call's speed, for status lines. */
+  speed?: { model: string; tokensPerSecond: number };
   /** Where the last call ran on the escalation ladder (`step` 0 is the start model). */
   ladder?: { step: number; steps: number; model: string; stickyTurns?: number };
   /** The session's roles, once they're known (`session.roles`) or changed. */
@@ -538,6 +549,18 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         text: compactedLabel(event.messages, event.tokensBefore, event.tokensAfter),
       });
       return { ...state, items };
+    case 'call.stats': {
+      if (event.tokensPerSecond === undefined) return state;
+      // The route row for this call is the latest one: calls in a session run one at a time.
+      const at = items.findLastIndex((i) => i.kind === 'route');
+      const row = items[at];
+      if (row?.kind === 'route') items[at] = { ...row, tokensPerSecond: event.tokensPerSecond };
+      return {
+        ...state,
+        items,
+        speed: { model: event.model.model, tokensPerSecond: event.tokensPerSecond },
+      };
+    }
     case 'usage.updated':
       return { ...state, costUsd: event.costUsd, savingsUsd: event.savingsUsd ?? state.savingsUsd };
     case 'error':

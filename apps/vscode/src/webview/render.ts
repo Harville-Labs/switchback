@@ -9,6 +9,7 @@ import {
   formatTodos,
   imageLabel,
   isQuietTool,
+  speedLabel,
   tailLines,
   toolLabel,
 } from '@switchback/client/format';
@@ -60,8 +61,13 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
         : `<span>${esc(imageLabel(item.name))}</span>`;
       return `<div class="image" title="${esc(item.name)}">${body}</div>`;
     }
-    case 'route':
-      return `<div class="route ${item.tier}">${esc(item.model.model)} · ${esc(item.reason)}</div>`;
+    case 'route': {
+      const speed =
+        item.tokensPerSecond !== undefined
+          ? ` · <span class="speed">${esc(speedLabel(item.tokensPerSecond))}</span>`
+          : '';
+      return `<div class="route ${item.tier}">${esc(item.model.model)} · ${esc(item.reason)}${speed}</div>`;
+    }
     case 'assistant': {
       // Streaming text stays plain; finished messages render as Markdown.
       const streaming = ctx.running && item.id === lastAssistantId(ctx);

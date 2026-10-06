@@ -4,7 +4,7 @@
  */
 import { commandsFor } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
-import { formatSubagents, formatUsage } from '@switchback/client/format';
+import { formatSubagents, formatUsage, speedLabel } from '@switchback/client/format';
 import {
   addInfo,
   addUserPrompt,
@@ -114,7 +114,7 @@ function render() {
   syncSend();
   renderControls();
   statusEl.textContent = connected
-    ? `${view.private ? '🔒 local only · ' : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
+    ? `${view.private ? '🔒 local only · ' : ''}${view.speed ? `${speedLabel(view.speed.tokensPerSecond)} · ` : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
     : 'disconnected';
 }
 

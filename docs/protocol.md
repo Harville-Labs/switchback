@@ -80,6 +80,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait |
 | `usage.updated` | Cumulative session usage, cost, and `savingsUsd` |
+| `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (e.g. an organization policy update); carries `org` and human-readable `notes` |

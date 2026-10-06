@@ -332,6 +332,8 @@ export interface UsageRow {
   usage: Usage;
   costUsd: number;
   savingsUsd: number;
+  /** Average output speed over the calls that were timed. */
+  tokensPerSecond?: number;
 }
 
 /** One finding from a review of local edits. */
@@ -553,6 +555,22 @@ export type EngineEvent =
       /** Saved so far in this session versus running it all on the reference remote model. */
       savingsUsd?: number;
       tier: Tier;
+    } & SessionScoped)
+  /** A model call finished: how fast the model answered. */
+  | ({
+      type: 'call.stats';
+      turnId: string;
+      model: ModelRef;
+      tier: Tier;
+      outputTokens: number;
+      /**
+       * Output tokens per second, from the first streamed token to the last
+       * (the whole call when nothing streamed). Absent for very short answers,
+       * where it would mostly measure latency.
+       */
+      tokensPerSecond?: number;
+      /** Milliseconds until the first token streamed. */
+      firstTokenMs?: number;
     } & SessionScoped)
   | ({ type: 'turn.completed'; turnId: string; stopReason: StopReason } & SessionScoped)
   | ({ type: 'error'; turnId?: string; message: string } & SessionScoped)

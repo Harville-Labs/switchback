@@ -9,6 +9,7 @@ import {
   formatTodos,
   formatUsage,
   reviewLines,
+  speedLabel,
 } from './format.ts';
 import { childView, fromTranscript, initialView, reduce, type TodoItem } from './view.ts';
 
@@ -422,4 +423,30 @@ describe('the todo checklist', () => {
   test('reads as a checklist', () => {
     expect(formatTodos(items)).toEqual(['☑ read the parser', '▶ fix the bug', '☐ add a test']);
   });
+});
+
+test('a call’s speed lands on its route row and the status', () => {
+  let v = initialView('s');
+  v = reduce(v, {
+    type: 'route.decided',
+    sessionId: 's',
+    turnId: 't',
+    tier: 'local',
+    model: { provider: 'p', model: 'qwen' },
+    rule: 'default',
+    reason: 'start',
+  });
+  v = reduce(v, {
+    type: 'call.stats',
+    sessionId: 's',
+    turnId: 't',
+    model: { provider: 'p', model: 'qwen' },
+    tier: 'local',
+    outputTokens: 400,
+    tokensPerSecond: 52.4,
+  });
+  expect(v.items.at(-1)).toMatchObject({ kind: 'route', tokensPerSecond: 52.4 });
+  expect(v.speed).toEqual({ model: 'qwen', tokensPerSecond: 52.4 });
+  expect(speedLabel(52.4)).toBe('52 tok/s');
+  expect(speedLabel(1_840)).toBe('1.8k tok/s');
 });

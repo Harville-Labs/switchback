@@ -6,6 +6,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `switchb
 
 - **Chat view** in the activity bar. It renders from the same view-model reducer as the TUI, so both show the same routing lines, tool rows, subagent rows, and prompts. A subagent row expands to show that subagent's own routes, tool calls, nested subagents, and report; expanded rows stay open while the session updates.
 - **Images**: paste an image into the composer or drop one on it. It waits above the input as a thumbnail (✕ removes it) and goes with your next prompt; the chat shows it as a thumbnail. PNG, JPEG, GIF, and WebP up to 3.75 MB.
+- **Speed**: each route line ends with how fast that call answered (`52 tok/s`), and the composer's status shows the last call's.
 - **Thinking**: a model's reasoning shows as a **✻ Thinking…** row (**✻ Thought** once it's done); click it to read it as paragraphs. Open rows stay open as the chat updates.
 - **Markdown answers** with syntax-aware code blocks and **Copy** / **Insert** (at the cursor in the active editor). Model output can't run script: raw HTML is shown as text, links are limited to http(s) and mailto and open in your browser.
 - **Session history**: the history button (or **Switchback: Open Session…**) lists saved sessions for the workspace and reopens one.

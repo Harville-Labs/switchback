@@ -4,6 +4,7 @@ import {
   imageLabel,
   isQuietTool,
   reviewLines,
+  speedLabel,
   tailLines,
   toolLabel,
   type ViewItem,
@@ -124,6 +125,7 @@ export function Item({
         <Text dimColor>
           <Text color={color}>{item.tier === 'local' ? '⌂' : '☁'}</Text> {item.model.model} ·{' '}
           {item.reason}
+          {item.tokensPerSecond !== undefined ? ` · ${speedLabel(item.tokensPerSecond)}` : ''}
         </Text>
       );
     }

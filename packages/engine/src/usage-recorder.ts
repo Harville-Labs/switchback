@@ -23,7 +23,7 @@ export class UsageRecorder {
     tier: Tier,
     model: ModelRef,
     usage: Usage,
-    meta: { rule: string; agent: string; costUsd?: number },
+    meta: { rule: string; agent: string; costUsd?: number; decodeMs?: number },
   ): void {
     this.ledger.record(s.header.id, tier, model, usage, meta);
     if (tier === 'remote') this.checkCache(s, model, usage);

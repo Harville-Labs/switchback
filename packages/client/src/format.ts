@@ -104,6 +104,15 @@ export function tailLines(text: string, width: number, rows: number): string[] {
   return out.slice(-rows);
 }
 
+/** `52 tok/s`, or `1.2k tok/s` for very fast servers. */
+export function speedLabel(tokensPerSecond: number): string {
+  const n =
+    tokensPerSecond >= 1000
+      ? `${(tokensPerSecond / 1000).toFixed(1)}k`
+      : String(Math.round(tokensPerSecond));
+  return `${n} tok/s`;
+}
+
 /** How an attached image is listed in a transcript. */
 export function imageLabel(name: string): string {
   return `🖼 ${name}`;
@@ -153,7 +162,7 @@ export function formatUsage(u: UsageReport, by?: UsageBreakdown): string {
     const width = Math.max(by.length, ...rows.map((r) => r.key.length));
     for (const r of rows) {
       lines.push(
-        `  ${r.key.padEnd(width)}  ${String(r.calls).padStart(5)} calls  ${tok(r.usage.inputTokens + (r.usage.cacheReadTokens ?? 0)).padStart(12)} in  ${$(r.costUsd).padStart(9)}`,
+        `  ${r.key.padEnd(width)}  ${String(r.calls).padStart(5)} calls  ${tok(r.usage.inputTokens + (r.usage.cacheReadTokens ?? 0)).padStart(12)} in  ${$(r.costUsd).padStart(9)}${by === 'model' && r.tokensPerSecond !== undefined ? `  ${speedLabel(r.tokensPerSecond).padStart(11)}` : ''}`,
       );
     }
     if (rows.length === 0) lines.push('  no model calls in this period');
