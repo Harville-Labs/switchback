@@ -85,6 +85,8 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `y` / `n` | Answer an escalation prompt |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
 
+When a prompt is waiting for you, or a turn that ran 30 seconds or more finishes, the TUI asks the terminal for a desktop notification, or rings the bell where it can't (`notifications` in [configuration.md](../configuration.md#notifications)).
+
 Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission mode when it isn't `default`.
 
 ## Implementation notes

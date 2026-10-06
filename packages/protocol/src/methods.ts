@@ -90,6 +90,14 @@ export interface InitializeResult {
   agents: AgentSummary[];
   /** Set when the user is signed in to an organization whose policy applies. */
   org?: OrgInfo;
+  /** How clients should get the user's attention (`notifications` in config). */
+  notifications?: NotificationSettings;
+}
+
+export interface NotificationSettings {
+  mode: 'system' | 'bell' | 'off';
+  /** Notify when a turn that ran at least this long finishes; 0 never. */
+  afterSeconds: number;
 }
 
 export interface OrgInfo {

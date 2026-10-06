@@ -955,6 +955,23 @@
         }
       }
     },
+    "notifications": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "mode": {
+          "default": "system",
+          "type": "string",
+          "enum": ["system", "bell", "off"]
+        },
+        "afterSeconds": {
+          "default": 30,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
     "compaction": {
       "default": {},
       "type": "object",
