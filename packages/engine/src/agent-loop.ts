@@ -156,8 +156,17 @@ export class AgentLoop {
       const provider = models.provider(model.ref.provider);
       if (!provider) throw new Error(`provider "${model.ref.provider}" is not configured`);
       let done: Done;
+      let decodeMs: number | undefined;
       try {
-        done = await this.call(s, provider, model, specs, inputTokens, turnId, signal);
+        ({ done, decodeMs } = await this.call(
+          s,
+          provider,
+          model,
+          specs,
+          inputTokens,
+          turnId,
+          signal,
+        ));
       } catch (err) {
         if (signal.aborted) return 'cancelled';
         if (err instanceof ProviderError && err.retryable) models.markDown(model.ref.provider);
@@ -179,7 +188,7 @@ export class AgentLoop {
         model.tier,
         servedBy ? { ...model.ref, model: servedBy } : model.ref,
         done.usage,
-        { rule, agent: agent.name },
+        { rule, agent: agent.name, ...(decodeMs ? { decodeMs } : {}) },
       );
       s.signals.recordTurn(decision.step, escalated);
       escalationApproved = false;
@@ -271,12 +280,14 @@ export class AgentLoop {
     inputTokens: number,
     turnId: string,
     signal: AbortSignal,
-  ): Promise<Done> {
+  ): Promise<{ done: Done; decodeMs?: number }> {
     const effort = this.host.config().models[model.alias]?.effort;
     // A fresh array (so providers never observe later appends), built from
     // the latest compaction marker; for remote models, with secrets redacted.
     const outbound = await this.outbound(s, model, s.header.system, contextOf(s.messages));
     let done: Done | undefined;
+    const started = performance.now();
+    let firstToken: number | undefined;
     for await (const ev of provider.stream({
       model: model.ref.model,
       system: outbound.system,
@@ -286,6 +297,7 @@ export class AgentLoop {
       ...(effort ? { effort } : {}),
       signal,
     })) {
+      if (ev.type !== 'done') firstToken ??= performance.now();
       if (ev.type === 'text.delta')
         this.host.emit({ type: 'text.delta', ...scope(s), turnId, text: ev.text });
       else if (ev.type === 'reasoning.delta')
@@ -293,7 +305,21 @@ export class AgentLoop {
       else done = ev;
     }
     if (!done) throw new Error(`${provider.id} ended the stream without a result`);
-    return done;
+    const { decodeMs, ...speed } = callSpeed(
+      done.usage.outputTokens,
+      started,
+      firstToken,
+      performance.now(),
+    );
+    this.host.emit({
+      type: 'call.stats',
+      ...scope(s),
+      turnId,
+      model: model.ref,
+      tier: model.tier,
+      ...speed,
+    });
+    return { done, ...(decodeMs ? { decodeMs } : {}) };
   }
 
   /** Another configured model at this step or above that hasn't refused this turn. */
@@ -423,4 +449,28 @@ export class AgentLoop {
     s.redacted = r.found.length;
     return r;
   }
+}
+
+/** Below this many output tokens, a rate mostly measures latency; it isn't reported. */
+const MIN_TOKENS_FOR_SPEED = 16;
+
+/** A call's output and speed, from when it started, first streamed, and ended (ms). */
+export function callSpeed(
+  outputTokens: number,
+  started: number,
+  firstToken: number | undefined,
+  ended: number,
+): { outputTokens: number; tokensPerSecond?: number; firstTokenMs?: number; decodeMs?: number } {
+  // Decoding speed: from the first token, so the prompt's processing time doesn't count.
+  const ms = ended - (firstToken ?? started);
+  return {
+    outputTokens,
+    ...(outputTokens >= MIN_TOKENS_FOR_SPEED && ms > 0
+      ? {
+          tokensPerSecond: Math.round((outputTokens / ms) * 10_000) / 10,
+          decodeMs: Math.round(ms),
+        }
+      : {}),
+    ...(firstToken !== undefined ? { firstTokenMs: Math.round(firstToken - started) } : {}),
+  };
 }

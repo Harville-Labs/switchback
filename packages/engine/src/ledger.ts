@@ -30,11 +30,15 @@ export interface LedgerEntry {
   /** Routing rule that picked the model (absent in ledgers written before 0.4). */
   rule?: string;
   agent?: string;
+  /** How long the model took to write its output (for tokens per second), when it was measured. */
+  decodeMs?: number;
 }
 
 /** Group entries by a key, most expensive first (ties: most calls). */
 export function groupUsage(entries: LedgerEntry[], key: (e: LedgerEntry) => string): UsageRow[] {
   const rows = new Map<string, UsageRow>();
+  // Output tokens and time over the timed calls only, so untimed ones don't skew the rate.
+  const timed = new Map<string, { tokens: number; ms: number }>();
   for (const e of entries) {
     const k = key(e);
     const row = rows.get(k) ?? { key: k, calls: 0, usage: emptyUsage(), costUsd: 0, savingsUsd: 0 };
@@ -43,6 +47,14 @@ export function groupUsage(entries: LedgerEntry[], key: (e: LedgerEntry) => stri
     row.costUsd += e.costUsd;
     row.savingsUsd += e.savingsUsd;
     rows.set(k, row);
+    if (e.decodeMs) {
+      const t = timed.get(k) ?? { tokens: 0, ms: 0 };
+      timed.set(k, { tokens: t.tokens + e.usage.outputTokens, ms: t.ms + e.decodeMs });
+    }
+  }
+  for (const [k, t] of timed) {
+    const row = rows.get(k);
+    if (row) row.tokensPerSecond = Math.round((t.tokens / t.ms) * 10_000) / 10;
   }
   return [...rows.values()].sort((a, b) => b.costUsd - a.costUsd || b.calls - a.calls);
 }
@@ -109,7 +121,7 @@ export class UsageLedger {
     tier: Tier,
     model: ModelRef,
     usage: Usage,
-    meta: { rule?: string; agent?: string; costUsd?: number } = {},
+    meta: { rule?: string; agent?: string; costUsd?: number; decodeMs?: number } = {},
   ): LedgerEntry {
     // A runtime that reports its own cost (external agents) is taken at its word.
     const cost =
@@ -133,6 +145,7 @@ export class UsageLedger {
       savingsUsd: savings,
       ...(meta.rule ? { rule: meta.rule } : {}),
       ...(meta.agent ? { agent: meta.agent } : {}),
+      ...(meta.decodeMs ? { decodeMs: meta.decodeMs } : {}),
     };
     this.entries.push(entry);
     if (this.file) {

@@ -5,6 +5,7 @@ import {
   formatTodos,
   modeLabel,
   runningShells,
+  speedLabel,
   type TodoItem,
   type ViewState,
 } from '@switchback/client';
@@ -60,6 +61,7 @@ export function StatusBar({
             {tier === 'local' ? '⌂' : '☁'} {tier}
           </Text>
         ) : null}
+        {view.speed ? ` ${speedLabel(view.speed.tokensPerSecond)}` : ''}
         {ladder ? ` · ${ladder}` : ''}
         {view.private ? <Text color="cyan"> · 🔒 local only</Text> : null}
         {shells ? (
