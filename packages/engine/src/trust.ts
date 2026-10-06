@@ -1,9 +1,9 @@
 /**
- * What a project defines that runs commands on this machine (MCP servers in
- * its config or `.mcp.json`, hooks in its config)
- * comes from a checked-out repository, so it only runs after the user trusts
- * it for that workspace. Trust is keyed by the exact definition: editing one
- * means approving it again. Keys are namespaced: `mcp:<name>`, `hook:<hash>`.
+ * What a project defines that runs commands on this machine (MCP servers and
+ * hooks in its `.switchback/config.json`) comes from a checked-out repository,
+ * so it only runs after the user trusts it for that workspace. Trust is keyed
+ * by the exact definition: editing one means approving it again. Keys are
+ * namespaced: `mcp:<name>`, `hook:<event>:<definition>`.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';

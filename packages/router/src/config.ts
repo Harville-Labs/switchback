@@ -30,7 +30,7 @@ export const BudgetConfig = z.object({
 /**
  * One model alias or an ordered list of alternatives: the router uses the
  * first that is reachable and whose context window fits, so a chain can mix
- * servers and providers: `["laptop", "gpu-box"]`, `["opus", "opus-aws"]`.
+ * servers and providers: `["laptop", "gpu-box"]`, `["remote", "remote-aws"]`.
  */
 export const ModelChain = z
   .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
@@ -46,7 +46,7 @@ export const RoutingConfig = z.object({
   start: ModelChain.default([]),
   /**
    * The escalation ladder. Each escalation moves one step up; each step is an
-   * alias or a chain of alternatives (`["large", ["opus", "opus-aws"]]`).
+   * alias or a chain of alternatives (`["large", ["remote", "remote-aws"]]`).
    */
   escalate: z.array(ModelChain).default([]),
   /** False: never call a remote model, even one configured in a role. */

@@ -254,7 +254,7 @@ function modelLabel(alias: string, models: ModelSummary[]): string {
   return m ? `${alias} (${m.ref.model}, ${m.tier})` : `${alias} (not configured)`;
 }
 
-/** Ladder steps on one line: `large → opus | sol`; with `models`, each with its model and tier. */
+/** Ladder steps on one line: `large → big-remote | sol`; with `models`, each with its model and tier. */
 export function formatSteps(steps: string[][], models?: ModelSummary[]): string {
   const name = (a: string) => (models ? modelLabel(a, models) : a);
   return steps.map((step) => step.map(name).join(' | ')).join(' → ');

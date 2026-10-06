@@ -21,14 +21,14 @@ Subagents are both a quality feature and a cost feature:
 
 ## Defining agents
 
-Agents are Markdown files with YAML frontmatter. The format is compatible with Claude Code, so existing `.claude/agents/*.md` files load unchanged.
+Agents are Markdown files with YAML frontmatter in `.switchback/agents/` (the project) or `~/.config/switchback/agents/` (you). Switchback doesn't read other agents' folders ([ADR 0016](adr/0016-open-conventions.md)); to reuse an agent written for another tool, copy it into one of these and adjust it.
 
 ```markdown
 ---
 name: reviewer
 description: Reviews a diff for correctness bugs. Use after making changes.
-tools: Read, Grep, Glob, Bash
-model: sonnet
+tools: read, grep, glob, bash
+model: medium
 ---
 You are a code reviewer. Look for bugs that would cause incorrect behavior...
 ```
@@ -37,14 +37,14 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 |---|---|---|
 | `name` | string | Defaults to the file name |
 | `description` | string, required | Shown to the parent agent to decide when to delegate. Write it as "what + when". |
-| `tools` | comma list or YAML list | Claude Code names (`Read`, `Grep`, `Bash`, `Task`, ...) and switchback names (`read`, `grep`, ...) both work. MCP tools use Claude Code's names: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
-| `model` | `local`, `remote`, `inherit`, or a model alias (`haiku`, `sonnet`, `opus`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
-| `route` | `auto`, `local`, `remote` | Switchback extension; same effect as `model: local`/`remote` |
-| `runtime` | name under `runtimes` | Switchback extension. Run on an external agent runtime such as Claude Code (see below) |
-| `isolation` | `worktree` | Switchback extension. Always run this agent in its own git worktree (see below) |
-| `budgetUsd` | dollars | Switchback extension. Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
+| `tools` | comma list or YAML list | Tool names (`read`, `grep`, `bash`, `task`, ...), case-insensitive. MCP tools: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
+| `model` | `local`, `remote`, `inherit`, or a model alias (`small`, `medium`, `large`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
+| `route` | `auto`, `local`, `remote` | Same effect as `model: local`/`remote` |
+| `runtime` | name under `runtimes` | Run on an external agent runtime such as Claude Code (see below) |
+| `isolation` | `worktree` | Always run this agent in its own git worktree (see below) |
+| `budgetUsd` | dollars | Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
 
-The body is the system prompt. Switchback appends an environment section and the project's `AGENTS.md` (or `CLAUDE.md`) to it.
+The body is the system prompt. Switchback appends an environment section and the project's `AGENTS.md` to it.
 
 ### Creating one
 
@@ -62,14 +62,13 @@ Later locations override earlier ones by name:
 
 1. Built-ins
 2. `~/.config/switchback/agents/*.md` (user)
-3. `.claude/agents/*.md` (Claude Code compatibility)
-4. `.switchback/agents/*.md` (project)
+3. `.switchback/agents/*.md` (project)
 
 Files that fail to parse are skipped and reported by `switchback doctor` and at startup. They never prevent the engine from starting.
 
 ### Model aliases
 
-Claude Code agents use `model: opus|sonnet|haiku`. In Switchback these mean the large, medium, and small model of the remote provider you chose in `switchback init`, whether that's Anthropic, OpenAI, DeepSeek, or another. So a `.claude/agents` file with `model: haiku` runs on `gpt-6-luna` or `deepseek-flash` just as well as on Claude Haiku. See [providers.md](providers.md#model-aliases-are-tiers) for the mapping, and point any alias at any model in config. An alias that isn't configured is ignored and normal routing applies.
+`model: large|medium|small` means the large, medium, and small model of the remote provider you chose in `switchback init`, whether that's Anthropic, OpenAI, DeepSeek, or another. So an agent with `model: small` runs on `gpt-6-luna`, `deepseek-flash`, or Claude Haiku, depending on your setup. See [providers.md](providers.md#model-aliases-are-tiers) for the mapping, and point any alias at any model in config. An alias that isn't configured is ignored and normal routing applies.
 
 ## The `task` tool
 

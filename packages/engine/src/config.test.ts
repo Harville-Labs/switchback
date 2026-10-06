@@ -93,22 +93,22 @@ test('keys removed by role-based routing say what replaced them', () => {
 });
 
 describe('agents', () => {
-  test('parses Claude Code agent files unchanged', () => {
+  test('parses agent files; tool names are case-insensitive', () => {
     const agent = parseAgentFile(
       `---
 name: reviewer
 description: Reviews diffs for bugs
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: medium
 ---
 You review code.`,
       'reviewer.md',
-      'claude-compat',
+      'project',
     );
     expect(agent).toMatchObject({
       name: 'reviewer',
       tools: ['read', 'grep', 'glob', 'bash'],
-      model: 'sonnet',
+      model: 'medium',
       route: 'auto',
       prompt: 'You review code.',
     });

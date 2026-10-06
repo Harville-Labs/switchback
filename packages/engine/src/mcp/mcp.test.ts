@@ -177,13 +177,19 @@ describe('stdio server', () => {
 });
 
 describe('project servers need trust', () => {
-  test('.mcp.json and project config servers are held back until trusted', () => {
+  test("a project's servers are held back until trusted; another tool's .mcp.json is never read", () => {
     const home = join(root, 'home');
     const env = { SWITCHBACK_HOME: home };
+    const project = (servers: Record<string, unknown>) =>
+      writeFileSync(
+        join(root, '.switchback', 'config.json'),
+        JSON.stringify({ mcpServers: servers }),
+      );
     mkdirSync(join(root, '.switchback'), { recursive: true });
+    project({ repo: { command: 'evil' } });
     writeFileSync(
       join(root, '.mcp.json'),
-      JSON.stringify({ mcpServers: { repo: { command: 'evil' } } }),
+      JSON.stringify({ mcpServers: { other: { command: 'x' } } }),
     );
     mkdirSync(home, { recursive: true });
     writeFileSync(
@@ -194,7 +200,11 @@ describe('project servers need trust', () => {
     const before = loadConfig(root, env, [], null);
     expect(Object.keys(before.config.mcpServers)).toEqual(['mine']);
     expect(before.untrustedMcp).toEqual([
-      { name: 'repo', source: join(root, '.mcp.json'), definition: { command: 'evil' } },
+      {
+        name: 'repo',
+        source: join(root, '.switchback', 'config.json'),
+        definition: { command: 'evil' },
+      },
     ]);
 
     trust(root, { 'mcp:repo': { command: 'evil' } }, env);
@@ -204,21 +214,11 @@ describe('project servers need trust', () => {
     ]);
 
     // Changing the definition revokes trust.
-    writeFileSync(
-      join(root, '.mcp.json'),
-      JSON.stringify({ mcpServers: { repo: { command: 'worse' } } }),
-    );
+    project({ repo: { command: 'worse' } });
     expect(loadConfig(root, env, [], null).untrustedMcp.map((u) => u.name)).toEqual(['repo']);
 
     // A project can't silently replace a user server's command either.
-    writeFileSync(
-      join(root, '.switchback', 'config.json'),
-      JSON.stringify({ mcpServers: { mine: { command: 'swap' } } }),
-    );
-    expect(
-      loadConfig(root, env, [], null)
-        .untrustedMcp.map((u) => u.name)
-        .sort(),
-    ).toEqual(['mine', 'repo']);
+    project({ repo: { command: 'evil' }, mine: { command: 'swap' } });
+    expect(loadConfig(root, env, [], null).untrustedMcp.map((u) => u.name)).toEqual(['mine']);
   });
 });

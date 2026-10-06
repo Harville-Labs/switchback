@@ -84,11 +84,8 @@ export function loadConfig(
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
   const pp = projectPaths(workspaceRoot);
-  // Claude Code's .mcp.json sits between the user and project files; only its
-  // `mcpServers` is read.
-  const files: { file: string; project: boolean; only?: 'mcpServers' }[] = [
+  const files: { file: string; project: boolean }[] = [
     { file: switchbackPaths(env).configFile, project: false },
-    { file: pp.mcpJson, project: true, only: 'mcpServers' },
     { file: pp.configFile, project: true },
     { file: pp.localConfigFile, project: true },
   ];
@@ -118,7 +115,7 @@ export function loadConfig(
     noteMcp(org.defaults, false, 'organization policy');
   }
   const sources: string[] = [];
-  for (const { file, project, only } of files) {
+  for (const { file, project } of files) {
     if (!existsSync(file)) continue;
     let parsed: Record<string, unknown>;
     try {
@@ -126,7 +123,6 @@ export function loadConfig(
     } catch (err) {
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
-    if (only) parsed = { [only]: parsed[only] ?? {} };
     const removed = removedKeyProblem(parsed);
     if (removed) throw new ConfigError(removed, file);
     // A repository may turn telemetry off for its contributors, never on.

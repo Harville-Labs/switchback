@@ -61,7 +61,7 @@ export const SwitchbackConfig = z.object({
       mcp: PermissionLevel.default('ask'),
       /** The mode new sessions start in (docs/permissions.md). */
       defaultMode: PermissionMode.default('default'),
-      /** Rules in Claude Code's syntax. Lists from every layer add up; deny beats ask beats allow. */
+      /** Rules like `bash(git status:*)`. Lists from every layer add up; deny beats ask beats allow. */
       allow: PermissionRules,
       ask: PermissionRules,
       deny: PermissionRules,
@@ -99,9 +99,9 @@ export const SwitchbackConfig = z.object({
         .prefault({}),
     })
     .prefault({}),
-  /** Commands run on agent events, in Claude Code's format (docs/hooks.md). */
+  /** Commands run on session events (docs/hooks.md). */
   hooks: HooksConfig.default({}),
-  /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
+  /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). */
   mcpServers: z.record(McpServerName, McpServerConfig).default({}),
   /** External agent runtimes that agents can run on (`runtime: <name>`); see ADR 0009. */
   runtimes: z

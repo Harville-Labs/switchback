@@ -242,7 +242,7 @@ export type EscalationRespondParams = z.infer<typeof EscalationRespondParams>;
 export interface AgentSummary {
   name: string;
   description: string;
-  source: 'builtin' | 'user' | 'project' | 'claude-compat';
+  source: 'builtin' | 'user' | 'project';
   route: RoutePreference;
   model?: string;
   /** Remote spend allowed per invocation as a subagent. */

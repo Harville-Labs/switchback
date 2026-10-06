@@ -19,7 +19,7 @@ Every call that passes validation and confinement is decided in this order:
 1. **A category set to `deny`** (`permissions.bash: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off.
 2. **Deny rules.** The call is refused, and the model is told which rule refused it and where the rule came from.
 3. **Plan mode.** Edits are refused until the user approves a plan.
-4. **Ask rules,** a command that asks to run outside the sandbox, and edits to the agent's own configuration (`.switchback/`, `.claude/`, `.mcp.json`): the user is asked, in every mode, including `bypassPermissions` and `acceptEdits`.
+4. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/`): the user is asked, in every mode, including `bypassPermissions` and `acceptEdits`.
 5. **Allow rules,** including what the user allowed earlier in the session.
 6. **The mode.** `bypassPermissions` allows the rest; `acceptEdits` allows edits.
 7. **The category's level:** `allow`, or ask.
@@ -37,7 +37,7 @@ Every call that passes validation and confinement is decided in this order:
 
 ### Rules
 
-Rules are in Claude Code's syntax, so rules from `.claude/settings.json` can be copied unchanged. A rule names a tool and optionally a specifier in parentheses:
+A rule names a tool and optionally a specifier in parentheses:
 
 ```jsonc
 "permissions": {
@@ -62,7 +62,7 @@ Rules are in Claude Code's syntax, so rules from `.claude/settings.json` can be 
 | `mcp__github` or `mcp__github__*` | every tool of that server |
 | `mcp__github__create_issue` | one tool |
 
-Claude Code's tool names work too: `Read`, `Grep`, `Glob`, and `LS` are read rules; `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` are edit rules; `Bash` is bash. Path patterns are gitignore-style: a pattern without a slash matches that name at any depth, a trailing `/` means everything under the directory, and `**` crosses directories.
+Tool names are case-insensitive (`Bash` is `bash`); `glob` and `grep` are read rules and `write` is an edit rule. Path patterns are gitignore-style: a pattern without a slash matches that name at any depth, a trailing `/` means everything under the directory, and `**` crosses directories.
 
 **Shell commands.** A command line can hold several commands (`a && b; c | d`). A deny or ask rule applies when any of them matches, and it also sees through `sudo`, `env`, `xargs`, `nice`, `nohup`, `time`, and `VAR=value` prefixes, so `bash(rm:*)` refuses `sudo rm -rf x`. An allow rule applies only when every command matches an allow rule, so `bash(git status:*)` never approves `git status; rm -rf x`. A command no rule can vouch for never matches an allow rule: one with command substitution (`$(...)`, backticks), process substitution (`<(...)`), or output redirected to a file. Those still ask. Rules are a policy aid, not a sandbox. A script can do whatever its interpreter can, so deny rules for `bash` are best effort; the [sandbox](#sandbox) is what holds.
 
@@ -98,7 +98,7 @@ An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermi
 
 Bash commands, foreground and background, run in an OS sandbox through Anthropic's [sandbox runtime](https://github.com/anthropics/sandbox-runtime): Seatbelt (`sandbox-exec`) on macOS, bubblewrap and seccomp on Linux. Inside it:
 
-- **Writes** go only to the workspace (and a subagent's worktree), temp directories, package caches (`~/.npm`, `~/.bun/install/cache`, `~/.cache`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, `~/.m2/repository`, `~/Library/Caches`, ...), and `bash.sandbox.allowWrite`. Never to the agent's own configuration (`.switchback/`, `.claude/`, `.mcp.json`) or to `.git/hooks` and `.git/config`, which would let a command run code outside the sandbox the next time you use git.
+- **Writes** go only to the workspace (and a subagent's worktree), temp directories, package caches (`~/.npm`, `~/.bun/install/cache`, `~/.cache`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, `~/.m2/repository`, `~/Library/Caches`, ...), and `bash.sandbox.allowWrite`. Never to Switchback's own configuration (`.switchback/`) or to `.git/hooks` and `.git/config`, which would let a command run code outside the sandbox the next time you use git.
 - **Reads** are open except credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.azure`, `~/.kube`, `~/.config/gcloud`, `~/.docker/config.json`, `~/.netrc`; set `bash.sandbox.denyRead` to change the list), Switchback's config and data directories, and files your `read(...)` deny rules name. `edit(...)` deny rules become write denies. So `read(.env)` holds for `cat .env` too.
 - **Network** is open by default (`bash.sandbox.network: "all"`), so installs and `git fetch` work. Use a list of hosts (`["registry.npmjs.org", "*.github.com"]`) to allow only those, or `"none"`. Commands can listen on local ports (dev servers).
 

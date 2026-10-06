@@ -44,7 +44,7 @@ describe.skipIf(process.platform === 'win32')('sandbox policy', () => {
         '/work/repo/.switchback',
         '/work/repo/.git/hooks',
         '/work/repo/.git/config',
-        '/data/worktrees/x/.mcp.json',
+        '/data/worktrees/x/.git/hooks',
       ]),
     );
   });

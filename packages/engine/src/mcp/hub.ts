@@ -1,7 +1,6 @@
 /**
  * Connects to the configured MCP servers with the official SDK and exposes
- * their tools as switchback tools named `mcp__<server>__<tool>` (Claude Code's
- * naming, so agent files that list MCP tools work in both).
+ * their tools as switchback tools named `mcp__<server>__<tool>`.
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';

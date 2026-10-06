@@ -8,7 +8,7 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0002](0002-bun-typescript-monorepo.md) | Bun + TypeScript workspace monorepo | Accepted |
 | [0003](0003-neutral-append-only-transcript.md) | Provider-neutral, append-only transcript | Accepted |
 | [0004](0004-pure-router.md) | Routing is a pure, explainable function | Accepted |
-| [0005](0005-claude-code-agent-compat.md) | Agent definitions are compatible with Claude Code | Accepted |
+| [0005](0005-claude-code-agent-compat.md) | Agent definitions are compatible with Claude Code | Superseded by 0016 |
 | [0006](0006-provider-neutrality.md) | No default vendor; every provider gets equal treatment | Accepted |
 | [0007](0007-organization-policy.md) | Organization policy from a config server | Accepted |
 | [0008](0008-append-only-compaction.md) | Append-only context compaction | Accepted |
@@ -19,3 +19,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0013](0013-site-auth-with-better-auth.md) | Site authentication with Better Auth, and single sign-on per site | Accepted |
 | [0014](0014-open-core-licensing.md) | Apache-2.0 for Switchback, proprietary hosted sites | Accepted |
 | [0015](0015-role-based-routing.md) | Roles (start, escalate, review, subagents) filled by any model; local/remote is a model property | Accepted |
+| [0016](0016-open-conventions.md) | Open conventions (AGENTS.md, `.switchback/`), never another agent's files | Accepted |

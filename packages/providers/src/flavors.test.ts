@@ -160,10 +160,10 @@ describe('hosted providers', () => {
   test('every catalog provider maps all three agent aliases', () => {
     for (const kind of Object.keys(CATALOG) as (keyof typeof CATALOG)[]) {
       const aliases = aliasModels(kind);
-      expect(Object.keys(aliases).sort()).toEqual(['haiku', 'opus', 'sonnet']);
+      expect(Object.keys(aliases).sort()).toEqual(['large', 'medium', 'small']);
     }
-    expect(aliasModels('deepseek').sonnet.id).toBe('deepseek-v4-pro'); // no medium: next larger
-    expect(aliasModels('openai').haiku.id).toBe('gpt-6-luna');
+    expect(aliasModels('deepseek').medium.id).toBe('deepseek-v4-pro'); // no medium: next larger
+    expect(aliasModels('openai').small.id).toBe('gpt-6-luna');
   });
 });
 

@@ -61,13 +61,13 @@ Switchback treats hosted providers equally. None is a default: `switchback init`
 
 ### Model aliases are tiers
 
-Agent definitions can say `model: opus`, `model: sonnet`, or `model: haiku`. The names come from Claude Code agent files, but in Switchback they mean the **large, medium, and small** model of whichever remote provider you chose. Setup maps them from the catalog:
+Agent definitions can say `model: large`, `model: medium`, or `model: small`: the **large, medium, and small** model of whichever remote provider you chose. Setup maps them from the catalog:
 
 | Alias | Anthropic | OpenAI | DeepSeek |
 |---|---|---|---|
-| `opus` (large) | claude-opus-5 | gpt-6-astra | deepseek-v4-pro |
-| `sonnet` (medium) | claude-sonnet-5 | gpt-6-sol | deepseek-v4-pro (no medium; next larger) |
-| `haiku` (small) | claude-haiku-4-5 | gpt-6-luna | deepseek-flash |
+| `large` | claude-opus-5 | gpt-6-astra | deepseek-v4-pro |
+| `medium` | claude-sonnet-5 | gpt-6-sol | deepseek-v4-pro (no medium; next larger) |
+| `small` | claude-haiku-4-5 | gpt-6-luna | deepseek-flash |
 
 Point any alias at any provider in config. If an agent names an alias that isn't configured, the pin is ignored and normal routing applies.
 

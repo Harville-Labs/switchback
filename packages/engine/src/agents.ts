@@ -3,10 +3,9 @@
  * routing preference. The same definition works as the primary agent of a
  * session or as a subagent spawned through the `task` tool.
  *
- * Definitions are Markdown with YAML frontmatter, in the same format Claude
- * Code uses, so `.claude/agents/*.md` files load unchanged. Lookup order
- * (later wins): built-in, user (~/.config/switchback/agents), Claude compat
- * (.claude/agents), project (.switchback/agents).
+ * Definitions are Markdown files with YAML frontmatter. Lookup order (later
+ * wins): built-in, user (~/.config/switchback/agents), project
+ * (.switchback/agents).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -20,7 +19,7 @@ export interface AgentDefinition {
   /** Tool names this agent may use; undefined means all tools. */
   tools?: string[];
   route: RoutePreference;
-  /** Model alias pin, e.g. `haiku` or `local`. */
+  /** Model alias pin, e.g. `small` or `local`. */
   model?: string;
   /** Remote spend allowed per subagent invocation (including its own subagents). */
   budgetUsd?: number;
@@ -31,24 +30,6 @@ export interface AgentDefinition {
   source: AgentSummary['source'];
   file?: string;
 }
-
-/** Claude Code tool names mapped to switchback tool names. */
-const TOOL_ALIASES: Record<string, string> = {
-  Read: 'read',
-  Write: 'write',
-  Edit: 'edit',
-  MultiEdit: 'edit',
-  Bash: 'bash',
-  Glob: 'glob',
-  Grep: 'grep',
-  LS: 'glob',
-  Task: 'task',
-  Agent: 'task',
-  ExitPlanMode: 'exit_plan_mode',
-  BashOutput: 'bash_output',
-  KillShell: 'kill_shell',
-  KillBash: 'kill_shell',
-};
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [
   {
@@ -108,15 +89,11 @@ export function parseAgentFile(
       .map((t) => String(t).trim())
       .filter(Boolean);
     // MCP tool names (`mcp__server__tool`) are case-sensitive; built-in names aren't.
-    tools = [
-      ...new Set(
-        list.map((t) => (t.startsWith('mcp__') ? t : (TOOL_ALIASES[t] ?? t.toLowerCase()))),
-      ),
-    ];
+    tools = [...new Set(list.map((t) => (t.startsWith('mcp__') ? t : t.toLowerCase())))];
   }
 
-  // `model` accepts Claude Code values (sonnet/opus/haiku/inherit), switchback tiers
-  // (local/remote), or any configured model alias.
+  // `model` is a tier (local/remote), `inherit` (route like the parent), or any
+  // configured model alias.
   let route: RoutePreference = 'auto';
   let model: string | undefined;
   const rawModel = typeof meta.model === 'string' ? meta.model.trim() : undefined;
@@ -187,8 +164,8 @@ export function summarize(agent: AgentDefinition): AgentSummary {
 export const AGENT_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 
 /**
- * Render an agent definition as a Markdown file in Claude Code's format (plus
- * switchback extensions only when set). The result always parses back to the
+ * Render an agent definition as a Markdown file (optional fields only when
+ * set). The result always parses back to the
  * same definition; `renderAgentFile` throws if it wouldn't.
  */
 export function renderAgentFile(agent: {
