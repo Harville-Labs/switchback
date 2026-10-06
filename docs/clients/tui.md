@@ -83,6 +83,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `y` / `a` / `p` / `n` | Answer a permission prompt: once, always this session (the rules it grants are shown), always in this project (saved to `.switchback/config.local.json`), deny |
 | `y` / `a` / `n` | Answer a plan: approve, approve and accept edits, keep planning |
 | `y` / `n` | Answer an escalation prompt |
+| `ctrl+o` | Show or hide the model's thinking. Hidden, it's one line (`✻ Thinking…`, then `✻ Thought`); shown, it's paragraphs, keeping to the last few lines while it streams. Turns already scrolled into the transcript keep how they were shown |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
 
 When a prompt is waiting for you, or a turn that ran 30 seconds or more finishes, the TUI asks the terminal for a desktop notification, or rings the bell where it can't (`notifications` in [configuration.md](../configuration.md#notifications)).

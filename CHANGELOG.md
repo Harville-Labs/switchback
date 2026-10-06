@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- A model's thinking no longer streams along one line. The TUI shows `✻ Thinking…` (then `✻ Thought`) and **ctrl+o** opens it as wrapped paragraphs, keeping to the last few lines while it streams; VS Code shows a **Thinking** row you click to open. Both clean up the text the same way (`formatReasoning` in `@switchback/client`)
+
 ## [0.7.0] - 2026-10-06
 
 ### Added

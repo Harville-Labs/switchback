@@ -8,7 +8,7 @@ import {
   matchCommands,
   SLASH_COMMANDS,
 } from './commands.ts';
-import { toolLabel } from './format.ts';
+import { formatReasoning, tailLines, toolLabel } from './format.ts';
 
 test('command names are unique', () => {
   const names = SLASH_COMMANDS.map((c) => c.name);
@@ -65,4 +65,10 @@ test('custom commands join the menu; built-in names win', () => {
   expect(isCustomCommand('/deploy staging', custom)).toBe(true);
   expect(isCustomCommand('/help', custom)).toBe(false);
   expect(toolLabel('skill', { name: 'pdf', file: 'forms.py' })).toBe('skill pdf · forms.py');
+});
+
+test('reasoning reads as paragraphs, and a live preview keeps its height', () => {
+  expect(formatReasoning('**Plan**\r\n\n\n\nstep one')).toBe('Plan\n\nstep one');
+  expect(tailLines('one two three four five six', 9, 2)).toEqual(['four five', 'six']);
+  expect(tailLines('a\n\nb', 80, 5)).toEqual(['a', '', 'b']);
 });

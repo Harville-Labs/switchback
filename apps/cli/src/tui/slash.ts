@@ -44,7 +44,7 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
-      shift+tab cycles the permission mode;
+      shift+tab cycles the permission mode; ctrl+o shows or hides the model's thinking;
       y/a/p/n answer permission prompts (once / this session / this project / deny).
 Your own commands are Markdown files in .switchback/commands/ or
 ~/.config/switchback/commands/.`;

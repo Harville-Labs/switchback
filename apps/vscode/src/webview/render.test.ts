@@ -77,3 +77,21 @@ test('subagents render as nested collapsible sections, depth 2 included', () => 
   expect(outer?.querySelector('summary')?.innerHTML).toContain('&lt;code&gt;');
   expect(el.querySelector('b')).toBeNull();
 });
+
+test('reasoning is a closed Thinking row that opens to paragraphs, kept open by key', () => {
+  const item = {
+    kind: 'assistant' as const,
+    id: 'a0',
+    text: '',
+    reasoning: '**Plan**\n\n\n\nRead <the> parser.',
+  };
+  const view: ViewState = { ...initialView('s'), running: true, items: [item] };
+  const closed = renderItem(item, view, new Set());
+  expect(closed).toContain('<summary>✻ Thinking…</summary>');
+  expect(closed).not.toContain(' open>');
+  const open = renderItem(item, view, new Set(['think:s:a0']));
+  expect(open).toContain('data-think="think:s:a0" open');
+  expect(open).toContain('Plan\n\nRead &#60;the&#62; parser.');
+  const done = renderItem({ ...item, text: 'Done.' }, { ...view, running: false }, new Set());
+  expect(done).toContain('<summary>✻ Thought</summary>');
+});
