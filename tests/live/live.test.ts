@@ -160,7 +160,7 @@ describe.skipIf(!LIVE || !local)('local model', () => {
     TIMEOUT,
   );
 
-  // Small models (like the 1.7B one in nightly CI) rarely delegate; opt in with a stronger model.
+  // Small models (like the 1.7B one in weekly CI) rarely delegate; opt in with a stronger model.
   test.skipIf(!process.env.SWITCHBACK_LIVE_LOCAL_DELEGATION)(
     'delegates to the explore subagent',
     async () => {
