@@ -86,6 +86,8 @@ export function App({
   const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
   const [exitArmedAt, setExitArmedAt] = useState<number | undefined>();
+  /** Reasoning shown in full instead of one line (ctrl+o). */
+  const [showThinking, setShowThinking] = useState(false);
   /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
   const [custom, setCustom] = useState<SlashCommand[]>([]);
 
@@ -223,6 +225,7 @@ export function App({
   useInput((ch, key) => {
     // The picker and the prompt input handle their own keys, Ctrl+C included.
     if (picking || rewinding) return;
+    if (key.ctrl && ch === 'o') return setShowThinking((v) => !v);
     const ctrlC = key.ctrl && ch === 'c';
     if (permission) {
       const answer = permissionKey(permission, ch, key.escape || ctrlC);
@@ -267,13 +270,25 @@ export function App({
               width={width}
             />
           ) : (
-            <Item key={item.id} item={item} hidden={hidden.has(item.id)} width={width} final />
+            <Item
+              key={item.id}
+              item={item}
+              hidden={hidden.has(item.id)}
+              width={width}
+              final
+              showThinking={showThinking}
+            />
           )
         }
       </Static>
       {live.map((item) => (
         <Box key={item.id} flexDirection="column">
-          <Item item={item} hidden={hidden.has(item.id)} width={width} />
+          <Item
+            item={item}
+            hidden={hidden.has(item.id)}
+            width={width}
+            showThinking={showThinking}
+          />
           {item.kind === 'subagent' && item.status === 'running' && view.children[item.id] ? (
             <LiveChild view={view.children[item.id] as ViewState} depth={1} />
           ) : null}

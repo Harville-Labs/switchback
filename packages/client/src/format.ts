@@ -71,6 +71,39 @@ export function formatTodos(todos: readonly TodoItem[]): string[] {
   return todos.map((t) => `${mark[t.status]} ${t.text}`);
 }
 
+/**
+ * Model reasoning as readable paragraphs: Markdown emphasis dropped (models
+ * mark section titles with `**...**`), runs of blank lines collapsed, and
+ * each title set apart from the paragraph before it.
+ */
+export function formatReasoning(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * The last `rows` lines of text wrapped to `width`, for a live preview that
+ * stays the same height while it streams instead of sliding along one line.
+ */
+export function tailLines(text: string, width: number, rows: number): string[] {
+  const out: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      if (line && line.length + 1 + word.length > width) {
+        out.push(line);
+        line = '';
+      }
+      line = line ? `${line} ${word}` : word;
+    }
+    out.push(line);
+  }
+  return out.slice(-rows);
+}
+
 /** Short human label for a tool call, e.g. `read src/app.ts` or `$ bun test`. */
 export function toolLabel(name: string, input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>;

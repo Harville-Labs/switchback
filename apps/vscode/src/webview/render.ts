@@ -3,12 +3,40 @@
  * so it can be tested. All model text is escaped or goes through the
  * sanitizing Markdown renderer.
  */
-import { estimateLabel, formatTodos, isQuietTool, toolLabel } from '@switchback/client/format';
+import {
+  estimateLabel,
+  formatReasoning,
+  formatTodos,
+  isQuietTool,
+  tailLines,
+  toolLabel,
+} from '@switchback/client/format';
 import type { TodoItem, ViewItem, ViewState } from '@switchback/client/view';
 import type { PermissionDecision } from '@switchback/protocol';
 import { esc, renderMarkdown } from './markdown.ts';
 
 export { esc };
+
+/** Lines of a reasoning preview while it streams; the full text shows once it's done. */
+const THINKING_ROWS = 8;
+
+/**
+ * A model's reasoning, closed by default: click to read it. Open while it
+ * streams, it keeps to its last few lines so the chat doesn't jump.
+ */
+function renderThinking(
+  text: string,
+  ctx: ViewState,
+  id: string,
+  streaming: boolean,
+  expanded: ReadonlySet<string>,
+): string {
+  // Item IDs repeat across a session and its subagents; the session ID tells them apart.
+  const key = `think:${ctx.sessionId}:${id}`;
+  const body = formatReasoning(text);
+  const shown = streaming ? tailLines(body, 80, THINKING_ROWS).join('\n') : body;
+  return `<details class="thinking" data-think="${esc(key)}"${expanded.has(key) ? ' open' : ''}><summary>✻ ${streaming ? 'Thinking…' : 'Thought'}</summary><div class="reasoning">${esc(shown)}</div></details>`;
+}
 
 /**
  * One view item as HTML. `ctx` is the view that owns the item (the session or
@@ -30,7 +58,7 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
           ? `<div class="assistant">${esc(item.text)}</div>`
           : `<div class="assistant md">${renderMarkdown(item.text)}</div>`
         : '';
-      return `${item.reasoning && !item.text ? `<div class="reasoning">✻ ${esc(item.reasoning.slice(-300))}</div>` : ''}${body}`;
+      return `${item.reasoning ? renderThinking(item.reasoning, ctx, item.id, streaming && !item.text, expanded) : ''}${body}`;
     }
     case 'tool': {
       if (isQuietTool(item.name)) return '';

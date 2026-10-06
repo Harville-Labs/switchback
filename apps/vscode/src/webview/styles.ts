@@ -32,7 +32,13 @@ export const STYLES = `
   .code-bar { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; font-size: .8em; color: var(--vscode-descriptionForeground); border-bottom: 1px solid var(--vscode-panel-border); }
   .code pre { margin: 0; padding: 8px 10px; overflow-x: auto; } .code pre code { background: none; padding: 0; }
   button.link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
-  .reasoning { color: var(--vscode-descriptionForeground); font-style: italic; white-space: pre-wrap; margin: 6px 0; }
+  details.thinking { margin: 6px 0; color: var(--vscode-descriptionForeground); }
+  details.thinking > summary { cursor: pointer; list-style: none; font-size: .88em; user-select: none; }
+  details.thinking > summary::-webkit-details-marker { display: none; }
+  details.thinking > summary:hover { color: var(--vscode-foreground); }
+  details.thinking > summary::after { content: ' ›'; }
+  details.thinking[open] > summary::after { content: ' ⌄'; }
+  .reasoning { font-style: italic; white-space: pre-wrap; margin: 4px 0 8px 6px; padding-left: 10px; border-left: 2px solid var(--vscode-panel-border); line-height: 1.5; }
   .route { display: inline-flex; align-items: center; gap: 5px; font-size: .8em; color: var(--vscode-descriptionForeground); margin: 8px 0 2px; }
   .route::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
   .route.local::before { background: var(--vscode-charts-green); } .route.remote::before { background: var(--vscode-charts-yellow); }

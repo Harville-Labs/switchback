@@ -91,7 +91,7 @@ const todosEl = $<HTMLDivElement>('todos');
 const menu = $<HTMLDivElement>('menu');
 const slashBtn = $<HTMLButtonElement>('slash');
 
-/** Subagent sections the user opened; kept across re-renders. */
+/** Subagent and reasoning sections the user opened; kept across re-renders. */
 const expanded = new Set<string>();
 const renderItem = (item: ViewItem, ctx: ViewState = view) => renderViewItem(item, ctx, expanded);
 
@@ -150,7 +150,8 @@ log.addEventListener(
   'toggle',
   (e) => {
     const d = e.target as HTMLDetailsElement;
-    const id = d.dataset?.sub;
+    // Subagent rows and reasoning both stay as the user left them.
+    const id = d.dataset?.sub ?? d.dataset?.think;
     if (!id) return;
     if (d.open) expanded.add(id);
     else expanded.delete(id);

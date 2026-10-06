@@ -1,7 +1,9 @@
 /** Transcript rows: one per view item, plus the live view of running subagents. */
 import {
+  formatReasoning,
   isQuietTool,
   reviewLines,
+  tailLines,
   toolLabel,
   type ViewItem,
   type ViewState,
@@ -22,6 +24,48 @@ export function quietRoutes(items: ViewItem[]): Set<string> {
   return quiet;
 }
 
+/** Lines of a reasoning preview while it streams; the full text shows once it's done. */
+const THINKING_ROWS = 8;
+
+/**
+ * A model's reasoning: one line, or (ctrl+o) its paragraphs. While it
+ * streams, the open view keeps to its last few lines so the screen doesn't
+ * jump; finished, it shows everything.
+ */
+function Thinking({
+  text,
+  streaming,
+  open,
+  width,
+  hint,
+}: {
+  text: string;
+  streaming: boolean;
+  open: boolean;
+  width: number;
+  /** Mention the key: only on live rows, which it can still change. */
+  hint: boolean;
+}) {
+  const label = streaming ? 'Thinking…' : 'Thought';
+  const toggle = hint ? ` · ctrl+o to ${open ? 'hide' : 'show'}` : '';
+  const body = formatReasoning(text);
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text dimColor>
+        <Text color="magenta">✻</Text> {label}
+        {toggle}
+      </Text>
+      {open ? (
+        <Box marginLeft={2} flexDirection="column">
+          <Text dimColor italic>
+            {streaming ? tailLines(body, Math.max(20, width - 4), THINKING_ROWS).join('\n') : body}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
 /** A running subagent's latest activity, indented under its row (nested for depth 2). */
 export function LiveChild({ view, depth }: { view: ViewState; depth: number }) {
   const recent = view.items.filter((i) => i.kind !== 'user' && i.kind !== 'info').slice(-3);
@@ -31,7 +75,7 @@ export function LiveChild({ view, depth }: { view: ViewState; depth: number }) {
         <Box key={it.id} flexDirection="column">
           {it.kind === 'assistant' ? (
             <Text dimColor wrap="truncate-end">
-              {(it.text || it.reasoning).replace(/\s+/g, ' ').slice(-160)}
+              {it.text ? it.text.replace(/\s+/g, ' ').slice(-160) : '✻ Thinking…'}
             </Text>
           ) : (
             <Item item={it} hidden={false} width={80} />
@@ -50,12 +94,15 @@ export function Item({
   hidden,
   width,
   final = false,
+  showThinking = false,
 }: {
   item: ViewItem;
   hidden: boolean;
   width: number;
   /** Committed items render Markdown; live ones stay plain while streaming. */
   final?: boolean;
+  /** Reasoning in full (ctrl+o) rather than one line. */
+  showThinking?: boolean;
 }) {
   if (hidden || (item.kind === 'tool' && isQuietTool(item.name))) return null;
   switch (item.kind) {
@@ -80,10 +127,14 @@ export function Item({
     case 'assistant':
       return (
         <Box flexDirection="column">
-          {item.reasoning && !item.text ? (
-            <Text dimColor italic wrap="truncate-end">
-              ✻ {item.reasoning.slice(-200).replace(/\s+/g, ' ')}
-            </Text>
+          {item.reasoning ? (
+            <Thinking
+              text={item.reasoning}
+              streaming={!final && !item.text}
+              open={showThinking}
+              width={width}
+              hint={!final}
+            />
           ) : null}
           {item.text ? (
             <Box marginTop={1}>
