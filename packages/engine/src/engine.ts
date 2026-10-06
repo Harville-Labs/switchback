@@ -396,6 +396,7 @@ export class Engine {
     parentId?: string;
     worktree?: Worktree;
     permissionMode?: PermissionMode;
+    instructions?: string;
   }): SessionSummary {
     const agentName = params.agent ?? this.options.config.defaultAgent;
     if (!params.parentId) this.refreshAgents();
@@ -412,13 +413,14 @@ export class Engine {
       workspaceRoot: this.options.workspaceRoot,
       ...(wt ? { worktree: { path: wt.path, root: wt.root, branch: wt.branch } } : {}),
       createdAt: now,
-      system: systemPrompt(
+      system: systemPrompt({
         agent,
-        this.options.workspaceRoot,
-        wt?.root ?? this.options.workspaceRoot,
-        this.options.instructions,
-        shellOf(this.options.config.bash).name,
-      ),
+        workspaceRoot: this.options.workspaceRoot,
+        root: wt?.root ?? this.options.workspaceRoot,
+        shell: shellOf(this.options.config.bash).name,
+        ...(this.options.instructions ? { project: this.options.instructions } : {}),
+        ...(params.instructions ? { session: params.instructions } : {}),
+      }),
     };
     const live = this.sessions.create(
       header,

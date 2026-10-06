@@ -39,8 +39,17 @@ Options
                      (default: permissions.defaultMode)
   --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
-  --json             run/usage/sessions: machine-readable output
+  --json             usage/sessions: machine-readable output
   --review, --no-review  run: review of local edits (default: review.mode)
+
+run options (scripts and CI; the prompt can also come on stdin)
+  --output <o>             text (default) | json (one result object) | events (NDJSON)
+  --allow <rule>           Allow rule for this run, e.g. "bash(bun test:*)"; repeat
+  --deny <rule>            Deny rule for this run, e.g. "webfetch"; repeat
+  --max-steps <n>          At most n model calls
+  --instructions <text>    Added to this run's system prompt
+  -c, --continue / --session <id>  Continue a saved session
+  Exit codes: 0 done, 1 failed, 2 usage error, 3 finished but a tool call was refused
   --mock             Use scripted mock providers (no models needed)
   -v, --version      Print version
   -h, --help         Print this help
@@ -142,6 +151,11 @@ async function main(argv: string[]): Promise<number> {
       resume: { type: 'boolean', short: 'r', default: false },
       session: { type: 'string' },
       'permission-mode': { type: 'string' },
+      output: { type: 'string' },
+      allow: { type: 'string', multiple: true },
+      deny: { type: 'string', multiple: true },
+      'max-steps': { type: 'string' },
+      instructions: { type: 'string' },
       scope: { type: 'string' },
       'local-url': { type: 'string', multiple: true },
       'local-model': { type: 'string', multiple: true },
@@ -288,13 +302,28 @@ async function main(argv: string[]): Promise<number> {
       const prompt = rest.join(' ').trim() || (process.stdin.isTTY ? '' : await Bun.stdin.text());
       if (!prompt.trim()) throw new UsageError('run needs a prompt');
       const { run } = await import('./commands/run.ts');
+      const output = oneOf('output', values.output, ['text', 'json', 'events'] as const) ?? 'text';
+      const maxSteps = positive('max-steps', values['max-steps']);
+      const allow = values.allow ?? [];
+      const deny = values.deny ?? [];
+      const layers = [
+        ...(allow.length || deny.length ? [{ permissions: { allow, deny } }] : []),
+        ...(maxSteps ? [{ maxStepsPerTurn: maxSteps }] : []),
+      ];
       return run({
         ...common,
+        ...(layers.length ? { layers } : {}),
         prompt,
         route: route.data,
         yes: values.yes,
-        json: values.json,
+        output,
         ...mode,
+        ...(values.instructions ? { instructions: values.instructions } : {}),
+        ...(values.session
+          ? { resume: values.session }
+          : values.continue
+            ? { resume: 'latest' }
+            : {}),
         ...(values.review ? { review: true } : values['no-review'] ? { review: false } : {}),
         ...(values.agent ? { agent: values.agent } : {}),
       });

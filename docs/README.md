@@ -15,6 +15,7 @@
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
 - [Sites](sites.md): your company's site on switchback.harville.ai: seats, members, roles, policy, devices
 - [Terminal UI](clients/tui.md) · [VS Code extension](clients/vscode.md)
+- [Scripts and CI](clients/headless.md): `switchback run`, its output formats, and exit codes
 
 ## Building Switchback
 

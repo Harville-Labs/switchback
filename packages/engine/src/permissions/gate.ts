@@ -44,6 +44,17 @@ export interface GateDeps {
 
 const SESSION = 'this session';
 
+/**
+ * Whether a call may run. `error` is what the model hears when it may not;
+ * `failed` marks a call that would have failed anyway (found while building
+ * the prompt's preview) rather than one the policy or the user refused.
+ */
+export interface GateResult {
+  allowed: boolean;
+  error?: string;
+  failed?: boolean;
+}
+
 /** Switchback's configuration in the workspace: editing it always asks (it could grant more). */
 const PROTECTED_CONFIG = ['.switchback'];
 
@@ -89,7 +100,7 @@ export class PermissionGate {
     signal: AbortSignal,
     /** What PreToolUse hooks decided (deny is handled before the gate). */
     hook?: HookOutcome['decision'],
-  ): Promise<{ allowed: boolean; error?: string }> {
+  ): Promise<GateResult> {
     if (tool.permission === 'none') return { allowed: true };
     const levels = this.host.config().permissions;
     const level = tool.permissionLevel ?? levels[tool.permission];
@@ -177,13 +188,13 @@ export class PermissionGate {
     ctx: ToolContext,
     signal: AbortSignal,
     askRule: string | undefined,
-  ): Promise<{ allowed: boolean; error?: string }> {
+  ): Promise<GateResult> {
     let preview: ToolPreview | undefined;
     try {
       preview = await tool.preview?.(call.input, ctx);
     } catch (err) {
       // The call would fail anyway; the model hears why and the user isn't asked.
-      return { allowed: false, error: (err as Error).message };
+      return { allowed: false, error: (err as Error).message, failed: true };
     }
     const rules = suggestRules(call);
     const answer = await this.prompt(
