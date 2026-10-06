@@ -1,6 +1,7 @@
 /**
- * Hooks in Claude Code's format (`hooks` in settings.json), so hooks written
- * for Claude Code work unchanged: per event, matchers with the commands to run.
+ * Hooks, in the same format as Claude Code's (per event, matchers with the
+ * commands to run), so they're familiar and easy to copy over. Switchback reads
+ * them only from its own config files, never from another agent's.
  */
 import { z } from 'zod';
 

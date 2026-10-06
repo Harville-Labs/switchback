@@ -1,6 +1,8 @@
 # Hooks
 
-Hooks run your own commands when something happens in a session: format a file after an edit, refuse a command, add the current branch to every prompt, tell you when Switchback is waiting. The format is Claude Code's, so hooks written for Claude Code work unchanged, and Switchback reads the `hooks` in a project's `.claude/settings.json` and `.claude/settings.local.json` too.
+Hooks run your own commands when something happens in a session: format a file after an edit, refuse a command, add the current branch to every prompt, tell you when Switchback is waiting. They use the same format as Claude Code's hooks, so one written for Claude Code can be copied into a Switchback config as is. Switchback reads hooks only from its own config files, never from `.claude/settings.json` or another agent's setup.
+
+Hooks aren't skills. A hook is your command, run automatically on an event; the model never chooses it. A skill is instructions the model chooses to load when a task calls for it.
 
 ```jsonc
 "hooks": {
@@ -54,7 +56,7 @@ When several hooks answer, a block from any of them wins, and deny beats ask bea
 
 ## Where hooks come from
 
-Hooks add up across every config layer: your user config, the project's `.switchback/config.json` and `.switchback/config.local.json`, Claude Code's `.claude/settings.json` and `.claude/settings.local.json`, and an organization's policy. All of them run.
+Hooks add up across every config layer: your user config, the project's `.switchback/config.json` and `.switchback/config.local.json`, and an organization's policy. All of them run.
 
 A project's hooks run commands from a checked-out repository, so they wait for your trust, like a project's MCP servers. `switchback hooks` lists the hooks in effect and the ones waiting; read them, then `switchback hooks trust`. Trust covers the exact definition, so a changed hook waits again. `switchback doctor` reports hooks waiting for trust.
 
@@ -62,6 +64,7 @@ An organization can run only its own hooks (`restrictions.allowUserHooks: false`
 
 ## Differences from Claude Code
 
+- Hooks are read only from Switchback's config, not from `.claude/settings.json`.
 - Tool names match both ways: `bash` and `Bash`, `edit` and `Edit`.
 - `transcript_path` isn't sent.
 - Hooks run with your permissions, outside the bash tool's sandbox, as they do in Claude Code. Only trusted ones run.

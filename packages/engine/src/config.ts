@@ -84,13 +84,11 @@ export function loadConfig(
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
   const pp = projectPaths(workspaceRoot);
-  // Claude Code's files sit between the user and project files; only their
-  // MCP servers (.mcp.json) and hooks (.claude/settings*.json) are read.
-  const files: { file: string; project: boolean; only?: 'mcpServers' | 'hooks' }[] = [
+  // Claude Code's .mcp.json sits between the user and project files; only its
+  // `mcpServers` is read.
+  const files: { file: string; project: boolean; only?: 'mcpServers' }[] = [
     { file: switchbackPaths(env).configFile, project: false },
     { file: pp.mcpJson, project: true, only: 'mcpServers' },
-    { file: pp.claudeSettings, project: true, only: 'hooks' },
-    { file: pp.claudeLocalSettings, project: true, only: 'hooks' },
     { file: pp.configFile, project: true },
     { file: pp.localConfigFile, project: true },
   ];

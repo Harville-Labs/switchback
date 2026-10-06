@@ -215,7 +215,7 @@ describe('hooks in a session', () => {
 describe('hooks in config', () => {
   const hook = (command: string) => ({ hooks: { Stop: [{ hooks: [cmd(command)] }] } });
 
-  test("add up across layers; a project's (and Claude Code's) wait for trust", () => {
+  test("add up across layers; a project's wait for trust; another agent's are never read", () => {
     const home = mkdtempSync(join(tmpdir(), 'switchback-hooks-home-'));
     try {
       const env = { SWITCHBACK_HOME: home };
@@ -226,10 +226,8 @@ describe('hooks in config', () => {
       writeFileSync(join(root, '.claude', 'settings.json'), JSON.stringify(hook('echo claude')));
       const before = loadConfig(root, env, [], null);
       expect(before.config.hooks.Stop?.map((m) => m.hooks[0]?.command)).toEqual(['echo user']);
-      expect(before.untrustedHooks.map((h) => h.source)).toEqual([
-        '.claude/settings.json',
-        '.switchback/config.json',
-      ]);
+      // Claude Code's settings are its own; Switchback doesn't run its hooks.
+      expect(before.untrustedHooks.map((h) => h.source)).toEqual(['.switchback/config.json']);
       trust(
         root,
         Object.fromEntries(before.untrustedHooks.map((h) => [hookTrustKey(h), h.matcher])),
@@ -238,7 +236,6 @@ describe('hooks in config', () => {
       const after = loadConfig(root, env, [], null);
       expect(after.config.hooks.Stop?.map((m) => m.hooks[0]?.command)).toEqual([
         'echo user',
-        'echo claude',
         'echo project',
       ]);
     } finally {

@@ -1,6 +1,6 @@
 /**
  * What a project defines that runs commands on this machine (MCP servers in
- * its config or `.mcp.json`, hooks in its config or `.claude/settings.json`)
+ * its config or `.mcp.json`, hooks in its config)
  * comes from a checked-out repository, so it only runs after the user trusts
  * it for that workspace. Trust is keyed by the exact definition: editing one
  * means approving it again. Keys are namespaced: `mcp:<name>`, `hook:<hash>`.
