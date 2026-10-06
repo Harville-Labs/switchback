@@ -79,7 +79,7 @@ import type { Worktree } from './worktree.ts';
 
 export type { EngineOptions } from './engine-options.ts';
 
-export const ENGINE_VERSION = '0.6.0';
+export const ENGINE_VERSION = '0.7.0';
 
 /** The model whose prices define "saved": the first remote model in role order. */
 function referenceModel(config: SwitchbackConfig): string | undefined {

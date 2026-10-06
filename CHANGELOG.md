@@ -4,7 +4,10 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-06
+
 ### Added
+- **Model discovery and Azure OpenAI** (#73): `switchback init` learns more from local model servers and provider model lists, offers OpenRouter during setup, and supports Microsoft Entra ID authentication for Azure OpenAI. TypeSafe Jev can serve as the routing classifier.
 - **Notifications** (#85): when a permission, plan, or escalation prompt is waiting, or a turn of 30 seconds or more finishes, the TUI asks the terminal for a desktop notification (OSC 9, 99, or 777 where the terminal shows them; the bell elsewhere and in tmux), and VS Code shows a notification with **Open Chat** while you can't see the chat. `notifications.mode` (`system`, `bell`, `off`) and `notifications.afterSeconds`; `initialize` reports them to clients. One tracker in `@switchback/client` decides when, for both clients
 - **Custom commands and skills** (#80): Markdown prompts in `.switchback/commands/` or `~/.config/switchback/commands/` run as `/name args` (`$ARGUMENTS`, `$1`…`$9`; `description` and `args` frontmatter), listed under **Custom** in both clients' menus and in `/help`, and expanded by the engine, so `switchback run "/name"` works too. Skills in the open Agent Skills format (`.switchback/skills/<name>/SKILL.md`, or the same under `~/.config/switchback/`): their names and descriptions go in the system prompt, and the new `skill` tool loads one's instructions and files when the model needs them. New protocol method `commands.list`. See docs/commands-and-skills.md
 - **Checklist** (#82): a `todo` tool the model uses to keep a plan for longer tasks (`pending`, `in_progress`, `done`; each call replaces the list). Both clients show it above the input while work is left and keep the calls out of the transcript; it comes back with a resumed session. It comes with every agent. docs/tools.md lists every built-in tool
@@ -45,6 +48,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - `switchback init --yes` without `--remote` lists every supported remote provider in its error
 
 ### Fixed
+- Organization policy role aliases are optional when a member does not define the corresponding model (#71).
 - OpenRouter (#54): structured `reasoning_details` (Claude thinking and Gemini thought signatures, encrypted OpenAI reasoning) are kept and sent back to the same model on tool-call turns, which those models need after a tool result. Server-side failures reported inside a stream are retryable, so the router falls back to the next model, and a stream that ends with `finish_reason: "error"` is a failure rather than an empty answer. `effort` goes out as OpenRouter's `reasoning.effort`
 
 ## [0.6.0] - 2026-10-01
