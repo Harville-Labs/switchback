@@ -289,10 +289,35 @@ export function describeSession(state: ViewState, indent = ''): string {
 export function formatMcpServers(servers: McpServerInfo[]): string {
   if (!servers.length)
     return 'No MCP servers configured. Add them under `mcpServers` (see docs/configuration.md).';
+  const LISTED = 8;
   return servers
     .map((s) => {
       const icon = s.state === 'connected' ? '✓' : s.state === 'disabled' ? '-' : '✗';
-      return `  ${icon} ${s.name}: ${s.state}${s.state === 'connected' ? `, ${s.tools} tools` : ''}${s.error ? ` (${s.error})` : ''}`;
+      const count = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`;
+      const counts = [
+        count(s.tools, 'tool'),
+        s.resources?.length ? count(s.resources.length, 'resource') : '',
+        s.prompts?.length ? count(s.prompts.length, 'prompt') : '',
+      ].filter(Boolean);
+      const head = `  ${icon} ${s.name}: ${s.state}${s.state === 'connected' ? `, ${counts.join(', ')}` : ''}${s.error ? ` (${s.error})` : ''}`;
+      // What can be typed: `@server:uri` for resources, `/server:prompt` for prompts.
+      const more = (n: number) => (n > LISTED ? [`      …and ${n - LISTED} more`] : []);
+      const resources = (s.resources ?? [])
+        .slice(0, LISTED)
+        .map((r) => `      @${s.name}:${r.uri}${r.description ? `  ${r.description}` : ''}`);
+      const prompts = (s.prompts ?? []).slice(0, LISTED).map((p) => {
+        const args = (p.arguments ?? [])
+          .map((a) => (a.required ? ` <${a.name}>` : ` [${a.name}]`))
+          .join('');
+        return `      /${s.name}:${p.name}${args}${p.description ? `  ${p.description}` : ''}`;
+      });
+      return [
+        head,
+        ...resources,
+        ...more(s.resources?.length ?? 0),
+        ...prompts,
+        ...more(s.prompts?.length ?? 0),
+      ].join('\n');
     })
     .join('\n');
 }

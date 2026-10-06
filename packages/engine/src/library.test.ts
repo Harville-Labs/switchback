@@ -123,7 +123,7 @@ describe('the engine', () => {
   test('lists commands and expands one sent as a prompt', async () => {
     put('project/commands/fix.md', '---\ndescription: Fix an issue\n---\nFix issue #$1.');
     const { engine } = setup();
-    expect(engine.listCommands()).toEqual([
+    expect(await engine.listCommands()).toEqual([
       { name: 'fix', description: 'Fix an issue', source: 'project' },
     ]);
     const s = engine.createSession({});

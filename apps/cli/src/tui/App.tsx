@@ -90,6 +90,15 @@ export function App({
   const [showThinking, setShowThinking] = useState(false);
   /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
   const [custom, setCustom] = useState<SlashCommand[]>([]);
+  /** MCP resources, as `server:uri`, for @ completion. */
+  const [resources, setResources] = useState<string[]>([]);
+  useEffect(() => {
+    client.request('mcp.list', {}).then(
+      ({ servers }) =>
+        setResources(servers.flatMap((s) => (s.resources ?? []).map((r) => `${s.name}:${r.uri}`))),
+      () => {},
+    );
+  }, [client]);
 
   useEffect(() => {
     if (exitArmedAt === undefined) return;
@@ -339,6 +348,7 @@ export function App({
         <PromptInput
           focus={!permission && !escalation && !picking && !rewinding}
           custom={custom}
+          resources={resources}
           onInterrupt={interrupt}
           onSubmitNow={(text, images) => send(text, 'interrupt', images)}
           onNoImage={() =>

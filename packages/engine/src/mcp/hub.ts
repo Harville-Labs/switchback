@@ -1,6 +1,8 @@
 /**
  * Connects to the configured MCP servers with the official SDK and exposes
- * their tools as switchback tools named `mcp__<server>__<tool>`.
+ * what they offer: tools (as switchback tools, see tools.ts), resources
+ * (`@server:uri` in a prompt, and a read_resource tool), and prompts (as
+ * `/server:prompt` commands).
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
@@ -10,55 +12,45 @@ import {
 } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { z } from 'zod';
-import { type Tool, ToolError, truncate } from '../tools/tool.ts';
+import type { McpPromptInfo, McpResourceInfo } from '@switchback/protocol';
+import type { Tool } from '../tools/tool.ts';
 import type { McpServerConfig } from './config.ts';
+import { type Converted, fromContent, fromResource } from './content.ts';
+import { readResourceTool, toTool } from './tools.ts';
+
+export { allowsMcpTool, mcpToolName } from './tools.ts';
 
 export interface McpServerStatus {
   name: string;
   state: 'connected' | 'failed' | 'disabled';
   tools: number;
+  resources?: McpResourceInfo[];
+  prompts?: McpPromptInfo[];
   error?: string;
 }
 
 interface Connection {
   client: Client;
+  cfg: McpServerConfig;
   tools: Tool[];
+  resources: McpResourceInfo[];
+  prompts: McpPromptInfo[];
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
-/** Providers limit tool names to 64 characters of [a-zA-Z0-9_-]. */
-const MAX_TOOL_NAME = 64;
 
-export function mcpToolName(server: string, tool: string): string {
-  return `mcp__${server}__${tool}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, MAX_TOOL_NAME);
-}
-
-/** Whether an agent's `tools` entry allows this MCP tool (`mcp__srv__tool` or all of `mcp__srv`). */
-export function allowsMcpTool(allowed: string[], toolName: string): boolean {
-  return allowed.some(
-    (a) => a === toolName || (a.startsWith('mcp__') && toolName.startsWith(`${a}__`)),
-  );
-}
-
-/** Text of an MCP tool result; non-text content is described, not dropped silently. */
-export function resultText(content: unknown): string {
-  if (!Array.isArray(content)) return '';
-  return content
-    .map(
-      (c: {
-        type?: string;
-        text?: string;
-        resource?: { uri?: string; text?: string };
-        mimeType?: string;
-      }) => {
-        if (c.type === 'text') return c.text ?? '';
-        if (c.type === 'resource') return c.resource?.text ?? `[resource ${c.resource?.uri ?? ''}]`;
-        if (c.type === 'resource_link') return `[resource ${(c as { uri?: string }).uri ?? ''}]`;
-        return `[${c.type ?? 'unknown'} content${c.mimeType ? ` (${c.mimeType})` : ''} omitted]`;
-      },
-    )
-    .join('\n');
+/** Every page of a paginated MCP list. */
+async function all<T>(
+  page: (cursor: string | undefined) => Promise<{ items: T[]; nextCursor?: string }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: string | undefined;
+  do {
+    const p = await page(cursor);
+    out.push(...p.items);
+    cursor = p.nextCursor;
+  } while (cursor);
+  return out;
 }
 
 export class McpHub {
@@ -87,9 +79,68 @@ export class McpHub {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /** Whether `name` is a connected server: `@name:…` and `/name:…` refer to it. */
+  has(name: string): boolean {
+    return this.connections.has(name);
+  }
+
+  /** A resource's contents, for `@server:uri`. */
+  async readResource(server: string, uri: string): Promise<Converted> {
+    const c = this.connection(server);
+    const result = await c.client.readResource({ uri }, { timeout: c.cfg.timeoutMs });
+    const parts = result.contents.map((r) => fromResource(r, `${server}:${r.uri}`));
+    return {
+      text: parts
+        .map((p) => p.text)
+        .filter(Boolean)
+        .join('\n'),
+      images: parts.flatMap((p) => p.images),
+    };
+  }
+
+  /**
+   * A prompt filled in from what was typed after its name: words go to its
+   * arguments in order, and the last argument takes the rest of the line.
+   */
+  async getPrompt(server: string, name: string, typed: string): Promise<Converted> {
+    const c = this.connection(server);
+    const prompt = c.prompts.find((p) => p.name === name);
+    if (!prompt) throw new Error(`MCP server "${server}" has no prompt "${name}"`);
+    const declared = prompt.arguments ?? [];
+    const words = typed.trim() ? typed.trim().split(/\s+/) : [];
+    const args: Record<string, string> = {};
+    declared.forEach((a, i) => {
+      const value = i === declared.length - 1 ? words.slice(i).join(' ') : words[i];
+      if (value) args[a.name] = value;
+    });
+    const missing = declared.filter((a) => a.required && !args[a.name]);
+    if (missing.length)
+      throw new Error(
+        `/${server}:${name} needs ${declared.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`)).join(' ')}`,
+      );
+    const result = await c.client.getPrompt(
+      { name, arguments: args },
+      { timeout: c.cfg.timeoutMs },
+    );
+    const parts = result.messages.map((m) => fromContent([m.content], `${server}:${name}`));
+    return {
+      text: parts
+        .map((p) => p.text)
+        .filter(Boolean)
+        .join('\n\n'),
+      images: parts.flatMap((p) => p.images),
+    };
+  }
+
   async close(): Promise<void> {
     await Promise.allSettled([...this.connections.values()].map((c) => c.client.close()));
     this.connections.clear();
+  }
+
+  private connection(server: string): Connection {
+    const c = this.connections.get(server);
+    if (!c) throw new Error(`MCP server "${server}" isn't connected; see /mcp`);
+    return c;
   }
 
   private async connectAll(): Promise<void> {
@@ -102,8 +153,17 @@ export class McpHub {
         try {
           const conn = await this.connect(name, cfg);
           this.connections.set(name, conn);
-          this.statuses.set(name, { name, state: 'connected', tools: conn.tools.length });
-          this.log('info', `MCP server "${name}": ${conn.tools.length} tools`);
+          this.statuses.set(name, {
+            name,
+            state: 'connected',
+            tools: conn.tools.length,
+            ...(conn.resources.length ? { resources: conn.resources } : {}),
+            ...(conn.prompts.length ? { prompts: conn.prompts } : {}),
+          });
+          this.log(
+            'info',
+            `MCP server "${name}": ${conn.tools.length} tools, ${conn.resources.length} resources, ${conn.prompts.length} prompts`,
+          );
         } catch (err) {
           const error = (err as Error).message;
           this.statuses.set(name, { name, state: 'failed', tools: 0, error });
@@ -135,62 +195,51 @@ export class McpHub {
 
   private async connect(name: string, cfg: McpServerConfig): Promise<Connection> {
     const client = new Client({ name: 'switchback', version: '1' });
-    const timeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
-    await client.connect(this.transport(cfg), { signal: timeout, timeout: CONNECT_TIMEOUT_MS });
-    const listed: Awaited<ReturnType<Client['listTools']>>['tools'] = [];
-    let cursor: string | undefined;
-    do {
-      const page = await client.listTools(cursor ? { cursor } : undefined, {
-        signal: timeout,
-      });
-      listed.push(...page.tools);
-      cursor = page.nextCursor;
-    } while (cursor);
-    const tools = listed.map((t) => this.toTool(name, cfg, client, t));
-    return { client, tools };
-  }
-
-  private toTool(
-    server: string,
-    cfg: McpServerConfig,
-    client: Client,
-    t: Awaited<ReturnType<Client['listTools']>>['tools'][number],
-  ): Tool {
-    let schema: z.ZodType;
-    try {
-      schema = z.fromJSONSchema(t.inputSchema as Parameters<typeof z.fromJSONSchema>[0]);
-    } catch {
-      // Unusual schemas: pass arguments through and let the server validate.
-      schema = z.record(z.string(), z.unknown());
-    }
-    const name = mcpToolName(server, t.name);
-    return {
-      name,
-      description: `${t.description ?? t.name} (MCP server "${server}")`,
-      schema,
-      inputSchema: t.inputSchema as Record<string, unknown>,
-      permission: 'mcp',
-      permissionKey: `mcp:${server}`,
-      ...(cfg.permission ? { permissionLevel: cfg.permission } : {}),
-      // Only tools the server marks read-only run in parallel.
-      mutating: t.annotations?.readOnlyHint !== true,
-      summarize: (input) => {
-        const args = JSON.stringify(input ?? {});
-        return `${server}: ${t.name} ${args.length > 100 ? `${args.slice(0, 100)}…` : args}`;
-      },
-      run: async (input, ctx) => {
-        const result = await client.callTool(
-          { name: t.name, arguments: (input ?? {}) as Record<string, unknown> },
-          undefined,
-          { signal: ctx.signal, timeout: cfg.timeoutMs },
-        );
-        const text = truncate(
-          resultText(result.content) ||
-            (result.structuredContent ? JSON.stringify(result.structuredContent) : ''),
-        );
-        if (result.isError) throw new ToolError(text || `${t.name} failed`);
-        return text || '(no output)';
-      },
-    };
+    const signal = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
+    await client.connect(this.transport(cfg), { signal, timeout: CONNECT_TIMEOUT_MS });
+    const caps = client.getServerCapabilities() ?? {};
+    const opts = { signal };
+    const listed = await all(async (cursor) => {
+      const p = await client.listTools(cursor ? { cursor } : undefined, opts);
+      return { items: p.tools, nextCursor: p.nextCursor };
+    });
+    // Resources and prompts are optional capabilities; only ask servers that have them.
+    const resources: McpResourceInfo[] = caps.resources
+      ? await all(async (cursor) => {
+          const p = await client.listResources(cursor ? { cursor } : undefined, opts);
+          return {
+            items: p.resources.map((r) => ({
+              uri: r.uri,
+              name: r.name,
+              ...(r.description ? { description: r.description } : {}),
+              ...(r.mimeType ? { mimeType: r.mimeType } : {}),
+            })),
+            nextCursor: p.nextCursor,
+          };
+        })
+      : [];
+    const prompts: McpPromptInfo[] = caps.prompts
+      ? await all(async (cursor) => {
+          const p = await client.listPrompts(cursor ? { cursor } : undefined, opts);
+          return {
+            items: p.prompts.map((x) => ({
+              name: x.name,
+              ...(x.description ? { description: x.description } : {}),
+              ...(x.arguments?.length
+                ? {
+                    arguments: x.arguments.map((a) => ({
+                      name: a.name,
+                      ...(a.required ? { required: true } : {}),
+                    })),
+                  }
+                : {}),
+            })),
+            nextCursor: p.nextCursor,
+          };
+        })
+      : [];
+    const tools = listed.map((t) => toTool(name, cfg, client, t));
+    if (resources.length) tools.push(readResourceTool(name, cfg, client, resources));
+    return { client, cfg, tools, resources, prompts };
   }
 }

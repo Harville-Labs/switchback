@@ -140,6 +140,7 @@ describe('Ctrl+C in the app', () => {
         if (method === 'usage.get') throw new Error('not needed');
         if (method === 'session.list') return [session('s2', 'fix the parser')];
         if (method === 'commands.list') return [];
+        if (method === 'mcp.list') return { servers: [] };
         return {};
       },
       on: () => () => {},

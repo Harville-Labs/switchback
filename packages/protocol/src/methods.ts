@@ -311,7 +311,8 @@ export interface CustomCommandInfo {
   description: string;
   /** What to type after the name, as shown in menus (`<file> [focus]`). */
   args?: string;
-  source: 'user' | 'project';
+  /** `mcp`: an MCP server's prompt, named `<server>:<prompt>`. */
+  source: 'user' | 'project' | 'mcp';
 }
 
 export const UsagePeriod = z.enum(['today', 'week', 'month']);
@@ -348,7 +349,24 @@ export interface McpServerInfo {
   name: string;
   state: 'connected' | 'failed' | 'disabled' | 'untrusted';
   tools: number;
+  /** What `@<server>:<uri>` can attach. */
+  resources?: McpResourceInfo[];
+  /** What `/<server>:<prompt>` can run. */
+  prompts?: McpPromptInfo[];
   error?: string;
+}
+
+export interface McpResourceInfo {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface McpPromptInfo {
+  name: string;
+  description?: string;
+  arguments?: { name: string; required?: true }[];
 }
 
 export interface McpListResult {
