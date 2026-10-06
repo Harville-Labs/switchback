@@ -189,9 +189,11 @@ function externalTool(name: string): Tool {
     ? 'read'
     : /^(Edit|MultiEdit|Write|NotebookEdit)$/.test(name)
       ? 'edit'
-      : name.startsWith('mcp__')
-        ? 'mcp'
-        : 'bash';
+      : /^(WebFetch|WebSearch)$/.test(name)
+        ? 'web'
+        : name.startsWith('mcp__')
+          ? 'mcp'
+          : 'bash';
   return {
     name,
     description: '',

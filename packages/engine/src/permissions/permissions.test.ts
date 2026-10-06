@@ -27,7 +27,7 @@ describe('rules', () => {
   });
 
   test('explain what is wrong', () => {
-    expect(() => parseRule('webfetch(x)')).toThrow('unknown tool "webfetch"');
+    expect(() => parseRule('fetchurl(x)')).toThrow('unknown tool "fetchurl"');
     expect(() => parseRule('bash()')).toThrow('empty parentheses');
     expect(() => parseRule('mcp__a(x)')).toThrow('MCP rules take no specifier');
     expect(() => parseRule('bash(x')).toThrow('expected Tool or Tool(specifier)');

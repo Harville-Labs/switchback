@@ -112,6 +112,7 @@ See [routing.md](routing.md#configuration-reference).
 | `read` | `allow` | `read`, `glob`, `grep` |
 | `edit` | `ask` | `write`, `edit` |
 | `bash` | `ask` | `bash` |
+| `web` | `ask` | `webfetch`, `websearch` |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
 | `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `plan`, or `bypassPermissions` |
 | `allow`, `ask`, `deny` | `[]` | Rules in Claude Code's syntax, such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
@@ -119,6 +120,16 @@ See [routing.md](routing.md#configuration-reference).
 The levels are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md) for the order rules and modes are applied in and the full rule syntax.
 
 Personal settings for one project go in `.switchback/config.local.json`. It's read after `.switchback/config.json`, and Switchback writes it when you answer a prompt with **Always in this project**, adding it to `.switchback/.gitignore`.
+
+### `web`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `search` | unset | The `websearch` tool's backend: `{ "provider": "brave", "apiKey": "{env:BRAVE_API_KEY}" }`, `{ "provider": "tavily", "apiKey": "{env:TAVILY_API_KEY}" }`, or `{ "provider": "searxng", "baseUrl": "https://search.example.com" }` (a self-hosted SearXNG with the JSON format enabled). Without one, `websearch` tells the model it isn't set up |
+| `maxChars` | `100000` | Most characters of a fetched page returned to the model |
+| `timeoutMs` | `30000` | How long a fetch or search may take |
+
+`webfetch` reads a page as Markdown (HTML is converted; other text is returned as is; binary content is refused). It follows redirects on the same host and reports one to another host instead of following it. Both tools are in the `web` permission category (`permissions.web`, default `ask`), and neither runs in a session holding private content, since a URL or query could carry it out.
 
 ### `bash`
 

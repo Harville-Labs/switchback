@@ -3,10 +3,12 @@ import { editTool, globTool, grepTool, readTool, writeTool } from './fs.ts';
 import { exitPlanModeTool } from './plan.ts';
 import { taskTool } from './task.ts';
 import type { Tool } from './tool.ts';
+import { webFetchTool, webSearchTool } from './web.ts';
 
 export { EXIT_PLAN_MODE } from './plan.ts';
 export { type BackgroundShell, CommandRunner, type CommandSettings } from './process.ts';
 export * from './tool.ts';
+export type { WebSettings } from './web.ts';
 
 /** Fixed order: the tool list is part of the prompt-cache prefix. */
 export const ALL_TOOLS: Tool[] = [
@@ -20,6 +22,8 @@ export const ALL_TOOLS: Tool[] = [
   exitPlanModeTool,
   bashOutputTool,
   killShellTool,
+  webFetchTool,
+  webSearchTool,
 ];
 
 /** Tools that come with another: an agent that may run bash may also read and stop what it started. */
