@@ -4,6 +4,7 @@
  * it), Ctrl+J, or a trailing backslash before Enter. Pastes arrive whole
  * through bracketed paste, so their newlines never submit (see paste.ts).
  * Ctrl+C clears what's typed; on an empty input it goes to `onInterrupt`.
+ * During a turn, Enter queues the prompt and Esc sends it now (interrupt).
  */
 import { statSync } from 'node:fs';
 import { commandQuery, matchCommands, type SlashCommand } from '@switchback/client';
@@ -56,6 +57,14 @@ interface Props {
   onSubmit: (text: string) => void;
   /** Ctrl+C on an empty input (with text in it, Ctrl+C clears it instead). */
   onInterrupt: () => void;
+  /**
+   * While busy: Enter queues the text for the running turn (`onSubmit`), and
+   * Esc sends it now, interrupting the turn. Esc with nothing typed cancels.
+   */
+  onSubmitNow: (text: string) => void;
+  onCancel: () => void;
+  /** ↑ on an empty input: the last queued prompt, taken back to edit. */
+  recall: () => string | undefined;
 }
 
 export function PromptInput({
@@ -66,6 +75,9 @@ export function PromptInput({
   root,
   onSubmit,
   onInterrupt,
+  onSubmitNow,
+  onCancel,
+  recall,
 }: Props) {
   const [state, setState] = useState<EditorState>(empty);
   // Index into history while browsing it; null when editing a fresh prompt.
@@ -157,7 +169,6 @@ export function PromptInput({
         if (key.return && !key.meta && !key.shift && pick) {
           // A command that needs an argument waits for it; the rest run now.
           if (pick.args?.startsWith('<')) return completeCommand(pick);
-          if (busy) return;
           onSubmit(`/${pick.name}`);
           setState(empty);
           setHistIndex(null);
@@ -178,19 +189,31 @@ export function PromptInput({
         if (key.escape) return setMenuClosed(true);
       }
 
+      if (key.escape) {
+        if (busy && state.value.trim()) {
+          onSubmitNow(expandPastes(state.value, pastes));
+          return clear();
+        }
+        if (!state.value) onCancel();
+        return;
+      }
       const newline = (key.return && (key.meta || key.shift)) || (input === '\n' && !key.return);
       if (newline) return edit(insert(state, '\n'));
       if (key.return) {
         if (state.value.slice(0, state.cursor).endsWith('\\')) {
           return edit(insert(backspace(state), '\n'));
         }
-        if (busy || !state.value.trim()) return;
+        if (!state.value.trim()) return;
         onSubmit(expandPastes(state.value, pastes));
         setState(empty);
         setPastes(noPastes);
         setHistIndex(null);
         setDraft('');
         return;
+      }
+      if (key.upArrow && !state.value) {
+        const back = recall();
+        if (back !== undefined) return edit(at(back));
       }
       if (key.upArrow) {
         const moved = moveVertical(state, -1);

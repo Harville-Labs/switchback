@@ -285,7 +285,11 @@ export class EngineConnection implements vscode.Disposable {
           route: this.route,
           ...(this.remoteReview !== undefined ? { review: this.remoteReview } : {}),
           ...(m.attach && this.context ? { attachments: this.context.attachments(m.attach) } : {}),
+          ...(m.delivery ? { delivery: m.delivery } : {}),
         });
+        return;
+      case 'dequeue':
+        await c.request('session.dequeue', { sessionId: this.session.id, id: m.id });
         return;
       case 'cancel':
         await c.request('session.cancel', { sessionId: this.session.id });

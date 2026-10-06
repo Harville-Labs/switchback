@@ -142,3 +142,13 @@ export function permissionAnswer(
       return undefined;
   }
 }
+
+/** Prompts waiting for the running turn's next step, each with a way to take it back. */
+export function renderQueue(queue: readonly { id: string; text: string }[]): string {
+  return queue
+    .map(
+      (q) =>
+        `<div class="queued"><span class="text" title="${esc(q.text)}">⧗ ${esc(q.text)}</span><button class="link" data-dequeue="${esc(q.id)}">Withdraw</button></div>`,
+    )
+    .join('');
+}

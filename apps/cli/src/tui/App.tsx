@@ -18,7 +18,7 @@ import type {
 } from '@switchback/protocol';
 import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
-import { Header, StatusBar, Working } from './Chrome.tsx';
+import { Header, Queue, StatusBar, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
 import { PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
@@ -148,17 +148,33 @@ export function App({
     if (!text) return;
     history.add(raw);
     if (text.startsWith('/')) return runSlashCommand(slash, text);
-    if (view.running) return;
-    setView((v) => addUserPrompt(v, text));
+    send(text, view.running ? 'queue' : undefined);
+  };
+
+  /**
+   * Send a prompt. Idle, it starts a turn; during one, `queue` hands it to the
+   * model at the next step (it shows once delivered) and `interrupt` starts it now.
+   */
+  const send = (text: string, delivery?: 'queue' | 'interrupt') => {
+    if (delivery !== 'queue') setView((v) => addUserPrompt(v, text));
     const params = {
       sessionId: session.id,
       text,
       route,
       ...(review !== undefined ? { review } : {}),
+      ...(delivery ? { delivery } : {}),
     };
     client.request('session.prompt', params).catch((err) => {
       setView((v) => addInfo({ ...v, running: false }, `error: ${(err as Error).message}`));
     });
+  };
+
+  /** The last queued prompt, withdrawn so it can be edited and sent again. */
+  const recall = (): string | undefined => {
+    const last = view.queue?.at(-1);
+    if (!last) return undefined;
+    client.request('session.dequeue', { sessionId: session.id, id: last.id }).catch(() => {});
+    return last.text;
   };
 
   const permission = view.permissions[0];
@@ -192,8 +208,6 @@ export function App({
         .catch((err: Error) => setView((v) => addInfo(v, `mode: ${err.message}`)));
       return;
     }
-    if (key.escape && view.running)
-      client.request('session.cancel', { sessionId: session.id }).catch(() => {});
   });
 
   const hidden = quietRoutes(view.items);
@@ -246,18 +260,25 @@ export function App({
           }}
         />
       ) : null}
+      {view.queue?.length ? <Queue queue={view.queue} /> : null}
       {view.running && !permission && !escalation ? <Working view={view} /> : null}
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
         <PromptInput
           focus={!permission && !escalation && !picking}
           onInterrupt={interrupt}
+          onSubmitNow={(text) => send(text, 'interrupt')}
+          onCancel={() => {
+            if (view.running)
+              client.request('session.cancel', { sessionId: session.id }).catch(() => {});
+          }}
+          recall={recall}
           busy={view.running}
           history={history.list()}
           root={init.workspaceRoot}
           onSubmit={submit}
           placeholder={
             view.running
-              ? 'Type your next message'
+              ? 'Queue a message (enter) · send now (esc)'
               : 'Ask anything · / for commands · @ to mention a file'
           }
         />

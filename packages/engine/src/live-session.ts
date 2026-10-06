@@ -4,10 +4,12 @@
  * receives an `EngineHost` instead of reaching into the engine.
  */
 import type {
+  Attachment,
   EngineEvent,
   Message,
   ModelRef,
   PermissionMode,
+  QueuedPrompt,
   SessionRoles,
   StopReason,
   TextPart,
@@ -61,6 +63,10 @@ export interface LiveSession {
   mode?: PermissionMode;
   /** The mode the model was last told about (plan mode reminders). */
   toldMode?: PermissionMode;
+  /** The running turn, so prompts sent meanwhile can join it or interrupt it. */
+  turn?: { id: string; done: Promise<unknown> };
+  /** Prompts sent during the running turn, delivered at its next step. */
+  queue?: (QueuedPrompt & { attachments: Attachment[] })[];
 }
 
 export interface TurnResult {
