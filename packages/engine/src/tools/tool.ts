@@ -4,9 +4,10 @@ import type { ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
 import type { CommandRunner } from './process.ts';
+import type { WebSettings } from './web.ts';
 
 /** Which permission setting governs a tool. `none` tools never prompt. */
-export type PermissionCategory = 'read' | 'edit' | 'bash' | 'mcp' | 'none';
+export type PermissionCategory = 'read' | 'edit' | 'bash' | 'web' | 'mcp' | 'none';
 
 export interface SubagentResult {
   ok: boolean;
@@ -34,6 +35,10 @@ export interface ToolContext {
    * search tools leave such files out of their results.
    */
   hidden?: (path: string) => boolean;
+  /** Search backend and limits for the web tools. */
+  web?: WebSettings;
+  /** Why this session must stay on this machine, when it must (the web tools refuse then). */
+  privateReason?: string;
   /** Runs shell commands, in the foreground or in the background (the bash tools). */
   commands?: CommandRunner;
   /** Ask the user to approve a plan; only top-level sessions have it (exit_plan_mode). */

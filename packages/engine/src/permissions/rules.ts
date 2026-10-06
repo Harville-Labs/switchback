@@ -13,6 +13,9 @@ export type RuleTarget =
   | { kind: 'bash' }
   | { kind: 'read' }
   | { kind: 'edit' }
+  /** `domain:<host>` specifiers; `*.example.com` covers subdomains. */
+  | { kind: 'webfetch' }
+  | { kind: 'websearch' }
   /** `tool` undefined or `*`: every tool of the server. */
   | { kind: 'mcp'; server: string; tool?: string };
 
@@ -35,6 +38,8 @@ const NAMES: Record<string, Exclude<RuleTarget['kind'], 'mcp'>> = {
   write: 'edit',
   multiedit: 'edit',
   notebookedit: 'edit',
+  webfetch: 'webfetch',
+  websearch: 'websearch',
 };
 
 export class RuleError extends Error {
@@ -62,7 +67,7 @@ export function parseRule(text: string): PermissionRule {
   if (!kind)
     throw new RuleError(
       text,
-      `unknown tool "${name}"; rules name bash, read, edit, or an MCP tool (mcp__<server>[__<tool>])`,
+      `unknown tool "${name}"; rules name bash, read, edit, webfetch, websearch, or an MCP tool (mcp__<server>[__<tool>])`,
     );
   return { text, target: { kind }, ...(specifier ? { specifier } : {}) };
 }

@@ -57,6 +57,8 @@ export class ToolRunner {
       runSubagent: (agent, prompt, description, options) =>
         this.deps.runSubagent(s, agent, prompt, description, signal, options),
       hidden: (path) => policy.hides(path, root),
+      web: this.host.config().web,
+      ...(s.private ? { privateReason: s.private } : {}),
       commands: this.deps.commands,
       ...(s.depth === 0
         ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }

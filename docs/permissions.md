@@ -31,6 +31,7 @@ Every call that passes validation and confinement is decided in this order:
 | `read` | read, glob, grep | `allow` |
 | `edit` | write, edit | `ask` |
 | `bash` | bash | `ask` |
+| `web` | webfetch, websearch | `ask` |
 | `mcp` | tools from MCP servers (`mcp__<server>__<tool>`) | `ask`; a server's `permission` setting overrides it, except that a category-level `deny` always wins |
 | (none) | task, exit_plan_mode, bash_output, kill_shell | always allowed: a subagent's own tools are checked individually, and a background shell's command was checked when it started |
 
@@ -56,6 +57,8 @@ Rules are in Claude Code's syntax, so rules from `.claude/settings.json` can be 
 | `edit(src/**)` | edit and write under `src/` |
 | `edit(/build/)` | under `build/` at the workspace root |
 | `read(~/.ssh/**)`, `read(//etc/hosts)` | absolute paths: home directory, filesystem root |
+| `webfetch(domain:docs.github.com)` | fetches from that host; `domain:*.github.com` covers its subdomains too |
+| `websearch` | every web search |
 | `mcp__github` or `mcp__github__*` | every tool of that server |
 | `mcp__github__create_issue` | one tool |
 
@@ -72,7 +75,7 @@ Claude Code's tool names work too: `Read`, `Grep`, `Glob`, and `LS` are read rul
 With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked.
 
 - **Allow once**: this call only.
-- **Always this session**: allow rules for this call, shown in the prompt (`bash(git status:*)`, `edit`, `mcp__github`), for the rest of the engine's lifetime.
+- **Always this session**: allow rules for this call, shown in the prompt (`bash(git status:*)`, `edit`, `webfetch(domain:bun.sh)`, `mcp__github`), for the rest of the engine's lifetime.
 - **Always in this project**: the same rules, also saved to `.switchback/config.local.json`. Switchback adds that file to `.switchback/.gitignore`, so your personal rules aren't committed.
 - **Deny**: the model is told the call was declined and not to retry.
 

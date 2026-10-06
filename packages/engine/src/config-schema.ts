@@ -10,6 +10,7 @@ import { McpServerConfig, McpServerName } from './mcp/config.ts';
 import { ruleProblem } from './permissions/rules.ts';
 import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
 import { DEFAULT_DENY_READ } from './tools/sandbox.ts';
+import { SearchConfig } from './tools/search.ts';
 
 export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
 export type PermissionLevel = z.infer<typeof PermissionLevel>;
@@ -53,6 +54,8 @@ export const SwitchbackConfig = z.object({
       read: PermissionLevel.default('allow'),
       edit: PermissionLevel.default('ask'),
       bash: PermissionLevel.default('ask'),
+      /** webfetch and websearch. */
+      web: PermissionLevel.default('ask'),
       /** Tools from MCP servers; each server can override it with `permission`. */
       mcp: PermissionLevel.default('ask'),
       /** The mode new sessions start in (docs/permissions.md). */
@@ -61,6 +64,16 @@ export const SwitchbackConfig = z.object({
       allow: PermissionRules,
       ask: PermissionRules,
       deny: PermissionRules,
+    })
+    .prefault({}),
+  /** The web tools (docs/configuration.md#web). */
+  web: z
+    .object({
+      /** The websearch tool's backend; without one, websearch says it isn't set up. */
+      search: SearchConfig.optional(),
+      /** Characters of a fetched page returned at most. */
+      maxChars: z.number().int().positive().default(100_000),
+      timeoutMs: z.number().int().positive().default(30_000),
     })
     .prefault({}),
   /** How the bash tool runs commands. */

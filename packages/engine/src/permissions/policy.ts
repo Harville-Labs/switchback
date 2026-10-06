@@ -100,6 +100,7 @@ export class PermissionPolicy {
 
   private matches(rule: PermissionRule, call: ToolCall, root: string): boolean {
     if (!rule.specifier) return true;
+    if (rule.target.kind === 'webfetch') return domainMatches(rule.specifier, call.input);
     if (rule.target.kind !== 'read' && rule.target.kind !== 'edit') return false;
     const path = resolveToolPath(root, pathInput(call));
     return !!path && pathMatcher(rule.specifier, root, this.home)(path);
@@ -113,7 +114,24 @@ function targets(rule: PermissionRule, call: ToolCall): boolean {
     const [, server, tool] = call.name.split('__');
     return call.category === 'mcp' && server === t.server && (!t.tool || tool === t.tool);
   }
+  if (t.kind === 'webfetch' || t.kind === 'websearch') return t.kind === call.name;
   return t.kind === call.category;
+}
+
+/** `domain:example.com` (or `domain:*.example.com`) against a fetch's URL. */
+function domainMatches(specifier: string, input: unknown): boolean {
+  const m = /^domain:(.+)$/.exec(specifier.trim());
+  const url = (input as { url?: unknown } | undefined)?.url;
+  if (!m?.[1] || typeof url !== 'string') return false;
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  const domain = m[1].toLowerCase();
+  if (domain.startsWith('*.')) return host.endsWith(domain.slice(1)) || host === domain.slice(2);
+  return host === domain;
 }
 
 /** The path a file tool acts on; search tools default to the root. */
@@ -145,6 +163,15 @@ export function suggestRules(call: ToolCall): string[] {
     case 'read':
     case 'edit':
       return [call.category];
+    case 'web': {
+      const url = (call.input as { url?: unknown } | undefined)?.url;
+      if (call.name !== 'webfetch' || typeof url !== 'string') return [call.name];
+      try {
+        return [`webfetch(domain:${new URL(url).hostname})`];
+      } catch {
+        return [];
+      }
+    }
     case 'none':
       return [];
   }

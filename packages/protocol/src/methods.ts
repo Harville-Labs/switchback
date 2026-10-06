@@ -210,7 +210,7 @@ export interface PermissionsListResult {
   mode?: PermissionMode;
   /** Modes this session may switch to (an organization can rule out `bypassPermissions`). */
   modes: PermissionMode[];
-  levels: Record<'read' | 'edit' | 'bash' | 'mcp', 'allow' | 'ask' | 'deny'>;
+  levels: Record<'read' | 'edit' | 'bash' | 'web' | 'mcp', 'allow' | 'ask' | 'deny'>;
   rules: { rule: string; behavior: 'allow' | 'ask' | 'deny'; source: string }[];
   /** Whether bash commands run in the OS sandbox, and if not, why. */
   sandbox: { active: boolean; reason?: string };
