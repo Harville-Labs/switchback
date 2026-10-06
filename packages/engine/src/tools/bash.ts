@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readUntilExit, terminate } from './process.ts';
 import { defineTool, type ToolContext, ToolError, truncate } from './tool.ts';
 
 /** Longest a foreground command may run, whatever it asks for. */
@@ -60,14 +61,14 @@ export const bashTool = defineTool({
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
-      proc.kill();
+      terminate(proc);
     }, timeoutMs);
-    const onAbort = () => proc.kill();
+    const onAbort = () => terminate(proc);
     ctx.signal.addEventListener('abort', onAbort, { once: true });
     try {
       const [stdout, stderr, code] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
+        readUntilExit(proc.stdout, proc.exited),
+        readUntilExit(proc.stderr, proc.exited),
         proc.exited,
       ]);
       const ended = timedOut

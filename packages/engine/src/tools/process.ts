@@ -54,6 +54,54 @@ interface Entry extends BackgroundShell {
   read: number;
 }
 
+/**
+ * Stop a command and everything it started. On Windows killing the shell
+ * leaves its children running (and holding its output pipes open), so the
+ * whole tree goes; elsewhere the shell's signal reaches its foreground job.
+ */
+export function terminate(proc: Subprocess): void {
+  if (process.platform === 'win32')
+    Bun.spawnSync(['taskkill', '/pid', String(proc.pid), '/T', '/F'], {
+      stdout: 'ignore',
+      stderr: 'ignore',
+    });
+  else proc.kill();
+}
+
+/** How long output is still read after a command exits (a child may hold the pipe). */
+const DRAIN_MS = 500;
+
+/**
+ * A stream's text, read until it ends or until `exited` resolves and a short
+ * drain passes: a background child that inherited the pipe can't keep the
+ * call waiting.
+ */
+export async function readUntilExit(
+  stream: ReadableStream<Uint8Array>,
+  exited: Promise<unknown>,
+): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let stop = false;
+  void exited.then(() =>
+    setTimeout(() => {
+      stop = true;
+      void reader.cancel().catch(() => {});
+    }, DRAIN_MS),
+  );
+  try {
+    while (!stop) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } catch {
+    // Cancelled after the drain: what was read is the output.
+  }
+  return text + decoder.decode();
+}
+
 export function shellOf(settings: Pick<CommandSettings, 'shell'>): Shell {
   if (!settings.shell) return currentShell();
   const path = settings.shell;
@@ -172,7 +220,7 @@ export class CommandRunner {
     const e = this.entry(id, sessionId);
     if (e.status === 'running') {
       e.status = 'killed';
-      e.proc.kill();
+      terminate(e.proc);
     }
     return view(e);
   }

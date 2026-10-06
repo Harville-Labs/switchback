@@ -23,7 +23,8 @@ const base = {
   home: '/home/me',
 };
 
-describe('sandbox policy', () => {
+// The sandbox never runs on Windows, and its policy is written in POSIX paths.
+describe.skipIf(process.platform === 'win32')('sandbox policy', () => {
   test('writes go to the workspace, temp, and caches; credentials are unreadable', () => {
     const p = sandboxPolicy(settings(), base);
     expect(p.filesystem.allowWrite).toEqual(

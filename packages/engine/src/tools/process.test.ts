@@ -36,8 +36,17 @@ const until = async (check: () => boolean) => {
 describe('bash', () => {
   test('uses the configured environment and timeout', async () => {
     expect(await bashTool.run({ command: 'echo $GREETING' }, ctx())).toContain('hello');
+    const started = Date.now();
     const slow = await bashTool.run({ command: 'sleep 5' }, ctx());
     expect(slow).toContain('timed out after 1s');
+    expect(Date.now() - started).toBeLessThan(4_000);
+  });
+
+  test('a child left running in the background never holds the call open', async () => {
+    const started = Date.now();
+    const out = await bashTool.run({ command: 'sleep 5 & echo done' }, ctx());
+    expect(out).toContain('done');
+    expect(Date.now() - started).toBeLessThan(4_000);
   });
 
   test('a background shell keeps running; its output is read in pieces', async () => {
