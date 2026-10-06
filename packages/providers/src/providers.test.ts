@@ -250,7 +250,7 @@ describe('model listings', () => {
   test('a token function is asked for a current token on each request', async () => {
     let issued = 0;
     const seen: (string | null)[] = [];
-    const listing = (async (input: string | URL | Request, init?: RequestInit) => {
+    const listing = (async (_input: string | URL | Request, init?: RequestInit) => {
       seen.push(new Headers(init?.headers).get('authorization'));
       return Response.json({ data: [{ id: 'm', context_length: 8192 }] });
     }) as typeof fetch;

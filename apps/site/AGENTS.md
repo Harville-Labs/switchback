@@ -25,7 +25,7 @@ The root `bun run check` runs this app's `check`. CI also runs `bun test` with a
 
 | Path | Owns | Must not |
 |---|---|---|
-| `src/lib/server/model.ts` | Every domain rule: people, sites, seats, roles, SSO, devices, policy, usage, telemetry, the audit log | Know about HTTP or SvelteKit |
+| `src/lib/server/model/` | Every domain rule, one module per area: people, sites, members, managers, SSO, devices, policy, usage and telemetry, the audit log. `model.ts` re-exports what routes may use | Know about HTTP or SvelteKit |
 | `src/lib/server/api.ts` | The Switchback client protocol (`/sites/<site>/v1/...`) and anonymous telemetry, as plain `Request → Response` functions | Hold rules that belong in `model.ts` |
 | `src/lib/server/auth.ts` | Better Auth configuration and plugins | Contain token, hash, or session code of our own |
 | `src/lib/server/auth-schema.ts` | Better Auth's tables | Be edited by hand (`bun run auth:schema` generates it) |
@@ -48,7 +48,7 @@ The root `bun run check` runs this app's `check`. CI also runs `bun test` with a
 
 ## How to make common changes
 
-**Add a console page or action.** Add the route under `src/routes/sites/[site]/`. In `+page.server.ts`, call `siteContext()` from `guards.ts` first, then a function in `model.ts`. Put the rule (and its audit entry) in `model.ts` with a test in `site.test.ts`. Pages style with Tailwind utilities on the shared tokens in `src/app.css`.
+**Add a console page or action.** Add the route under `src/routes/sites/[site]/`. In `+page.server.ts`, call `siteContext()` from `guards.ts` first, then a function from `model.ts`. Put the rule (and its audit entry) in the matching module under `model/`, export it from `model.ts`, and test it in `site.test.ts`. Pages style with Tailwind utilities on the shared tokens in `src/app.css`.
 
 **Add a table or column.** Edit `src/lib/server/schema.ts`, run `bun run db:generate`, commit the generated migration in `drizzle/`, and cover the new data in a test.
 

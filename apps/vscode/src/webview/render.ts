@@ -3,7 +3,8 @@
  * so it can be tested. All model text is escaped or goes through the
  * sanitizing Markdown renderer.
  */
-import { toolLabel, type ViewItem, type ViewState } from '@switchback/client/view';
+import { toolLabel } from '@switchback/client/format';
+import type { ViewItem, ViewState } from '@switchback/client/view';
 import { esc, renderMarkdown } from './markdown.ts';
 
 export { esc };
