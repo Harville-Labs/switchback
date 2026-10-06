@@ -48,8 +48,6 @@ const TOOL_ALIASES: Record<string, string> = {
   BashOutput: 'bash_output',
   KillShell: 'kill_shell',
   KillBash: 'kill_shell',
-  WebFetch: 'webfetch',
-  WebSearch: 'websearch',
 };
 
 export const BUILTIN_AGENTS: AgentDefinition[] = [
