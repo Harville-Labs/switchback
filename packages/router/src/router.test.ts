@@ -197,6 +197,27 @@ describe('context overflow', () => {
     const d = routed(r.decide(input({ estimatedInputTokens: 60_000 })));
     expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'large' }, step: 0 });
   });
+
+  test('with images, a chain prefers a member that can see them', () => {
+    const seeing = { large: { ...MODELS.large, vision: true } as ModelInfo };
+    const r = router({ start: ['fast', 'large'], escalate: ['opus'] }, seeing);
+    expect(routed(r.decide(input({ images: true })))).toMatchObject({
+      rule: 'vision',
+      model: { alias: 'large' },
+      step: 0,
+    });
+    // No images: the first member, as always.
+    expect(routed(r.decide(input())).model.alias).toBe('fast');
+    // Fitting the prompt still comes first: a seeing model that can't hold it isn't chosen.
+    expect(
+      routed(r.decide(input({ images: true, estimatedInputTokens: 200_000 }))).model.alias,
+    ).not.toBe('fast');
+  });
+
+  test('with images and no member that can see them, the chain is unchanged', () => {
+    const r = router({ start: ['fast', 'large'], escalate: ['opus'] });
+    expect(routed(r.decide(input({ images: true }))).model.alias).toBe('fast');
+  });
 });
 
 describe('tier filters and pins', () => {

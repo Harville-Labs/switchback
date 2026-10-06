@@ -32,9 +32,33 @@ export function cleanPaste(text: string): string {
 export interface Pastes {
   next: number;
   texts: Record<number, string>;
+  /** Pasted images (ctrl+v), base64, by chip number. */
+  images: Record<number, string>;
 }
 
-export const noPastes: Pastes = { next: 1, texts: {} };
+export const noPastes: Pastes = { next: 1, texts: {}, images: {} };
+
+const IMAGE_CHIP = /\[Image #(\d+)\]/g;
+
+/** A chip for an image from the clipboard, and the updated store. */
+export function imageInsertion(data: string, pastes: Pastes): { insert: string; pastes: Pastes } {
+  const id = pastes.next;
+  return {
+    insert: `[Image #${id}]`,
+    pastes: { ...pastes, next: id + 1, images: { ...pastes.images, [id]: data } },
+  };
+}
+
+/**
+ * The images whose chips are still in the prompt, named as their chips so
+ * the model can tell which the text means. Deleted chips drop their image.
+ */
+export function attachedImages(value: string, pastes: Pastes): { name: string; data: string }[] {
+  return [...value.matchAll(IMAGE_CHIP)].flatMap(([chip, id]) => {
+    const data = pastes.images[Number(id)];
+    return data ? [{ name: chip.slice(1, -1), data }] : [];
+  });
+}
 
 function describe(text: string): string {
   const lines = text.split('\n').length;
@@ -51,7 +75,7 @@ export function pasteInsertion(text: string, pastes: Pastes): { insert: string; 
   const id = pastes.next;
   return {
     insert: `[Pasted text #${id} · ${describe(text)}]`,
-    pastes: { next: id + 1, texts: { ...pastes.texts, [id]: text } },
+    pastes: { ...pastes, next: id + 1, texts: { ...pastes.texts, [id]: text } },
   };
 }
 
@@ -63,8 +87,10 @@ export function expandPastes(value: string, pastes: Pastes): string {
 /** If the cursor sits right after a chip, where the chip starts (backspace removes it whole). */
 export function chipBefore(value: string, cursor: number, pastes: Pastes): number | undefined {
   const before = value.slice(0, cursor);
-  const m = /\[Pasted text #(\d+) · [^\]]*\]$/.exec(before);
-  return m && pastes.texts[Number(m[1])] !== undefined ? m.index : undefined;
+  const text = /\[Pasted text #(\d+) · [^\]]*\]$/.exec(before);
+  if (text && pastes.texts[Number(text[1])] !== undefined) return text.index;
+  const image = /\[Image #(\d+)\]$/.exec(before);
+  return image && pastes.images[Number(image[1])] !== undefined ? image.index : undefined;
 }
 
 /**

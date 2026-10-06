@@ -45,7 +45,7 @@ Rules 5 and 6 follow `escalation.policy`. Rules 3 to 6 count as escalations. A s
 
 A tier pin in an agent definition (`route: local`) is a preference: if no model of that tier is in a role, the router skips the pin. A user override (`--route local`) with no model of that tier is blocked with a pointer to `switchback init`.
 
-Within a step, the model comes from that step's chain: the first that's reachable and fits. When that isn't the first one listed, the decision says so with `rule: context-fit` or `rule: fallback`, naming both models.
+Within a step, the model comes from that step's chain: the first that's reachable and fits, and when the conversation holds images, the first of those that can see them (`models.<alias>.vision`). When that isn't the first one listed, the decision says so with `rule: context-fit`, `rule: fallback`, or `rule: vision`, naming both models. A chain with no model that sees images is used as usual; the model gets a note in each image's place ([images](#images)).
 
 Then five guards run on the target. They only ever act on remote models; a local model is never redirected for cost or privacy:
 
@@ -214,4 +214,10 @@ Remote calls are cheapest when they reuse the provider's prompt cache, which onl
 The engine also checks it at runtime. When a follow-up call to the same remote model, within five minutes and with at least 4,096 input tokens, reads nothing from the cache, it logs one warning per session: either the provider doesn't cache that model or something is changing the prefix. `switchback usage` reports the remote cache hit rate.
 
 Stickiness (`escalation.stickyTurns`) is a fixed number of model calls, not tied to cache state. We considered extending it while the remote cache is warm and decided against it: a warm cache makes a remote call cheaper, but a local call is still free, and stickiness exists to give a struggling task a few steps on the stronger model, not to save money. When routing returns to `start` and later escalates again, the first remote call may rewrite the cache; that cost is visible per rule in `switchback usage --by rule`.
+
+## Images
+
+Images reach a model when it has vision: `models.<alias>.vision`, or the catalog's answer for the models it lists (Anthropic, OpenAI, and Gemini models do; DeepSeek's V4 models don't). Other models, local ones included unless you set `vision: true`, get a note in each image's place saying one is attached and that they can't see it, so they can ask you to describe it. The transcript keeps the image either way, and the next model with vision sees it.
+
+An image counts as about 1,600 tokens for routing, whatever its file size.
 

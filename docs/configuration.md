@@ -100,6 +100,7 @@ A list inside a role is a chain of alternatives (the first that's up and fits); 
 | `model` | required | The provider's model ID |
 | `contextWindow` | detected / catalog | Tokens the model accepts; used by the context-overflow rule. Setup fills it from the catalog for hosted models. For local models it can be omitted, and the engine asks the server (Ollama, LM Studio, llama.cpp, vLLM), sending the provider's `apiKey`. A proxy in front of the server (LiteLLM, a vLLM router) usually can't say; then it assumes 8,192 and `doctor` flags it. |
 | `maxOutputTokens` | 16000 | `max_tokens` per call, lowered to what the context window (configured or detected) has left after the prompt |
+| `vision` | catalog / `false` | Whether the model can read images. Known for catalog models; set it for local or other models that can (Qwen-VL, Gemma 3, Llama 3.2 Vision, and the like). Without it, images are replaced with a note for this model. See [routing.md](routing.md#images) |
 | `effort` | unset | `none`\|`low`\|`medium`\|`high`\|`xhigh`\|`max`. Sent as `output_config.effort` (Anthropic), `reasoning_effort` (OpenAI and local servers, capped at `high` locally), or thinking plus `reasoning_effort` (DeepSeek, where it turns thinking on). `none` turns thinking off everywhere: no thinking block for Claude, DeepSeek's non-thinking mode, and `reasoning_effort: "none"` plus `chat_template_kwargs.enable_thinking: false` for local servers. |
 | `price` | built-in table | `{ input, output, cacheRead?, cacheWrite? }` in USD per million tokens |
 

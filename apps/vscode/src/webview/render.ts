@@ -7,6 +7,7 @@ import {
   estimateLabel,
   formatReasoning,
   formatTodos,
+  imageLabel,
   isQuietTool,
   tailLines,
   toolLabel,
@@ -16,6 +17,8 @@ import type { PermissionDecision } from '@switchback/protocol';
 import { esc, renderMarkdown } from './markdown.ts';
 
 export { esc };
+
+const IMAGE_SRC = /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
 
 /** Lines of a reasoning preview while it streams; the full text shows once it's done. */
 const THINKING_ROWS = 8;
@@ -48,6 +51,15 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
       return `<div class="user">${esc(item.text)}</div>`;
     case 'info':
       return `<div class="info">${esc(item.text)}</div>`;
+    case 'image': {
+      // Only an image data URL becomes a src; anything else shows as a label.
+      const src = item.src && IMAGE_SRC.test(item.src) ? item.src : undefined;
+      // The thumbnail says enough; without one, the label stands in.
+      const body = src
+        ? `<img src="${src}" alt="${esc(item.name)}">`
+        : `<span>${esc(imageLabel(item.name))}</span>`;
+      return `<div class="image" title="${esc(item.name)}">${body}</div>`;
+    }
     case 'route':
       return `<div class="route ${item.tier}">${esc(item.model.model)} · ${esc(item.reason)}</div>`;
     case 'assistant': {

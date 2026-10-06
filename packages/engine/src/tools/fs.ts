@@ -1,7 +1,9 @@
+import { realpathSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
+import { looksLikeImage, readImage } from '../images.ts';
 import {
   defineTool,
   diffPreview,
@@ -19,7 +21,7 @@ const workspacePath = (root: string, file: string) => toWorkspacePath(root, file
 export const readTool = defineTool({
   name: 'read',
   description:
-    'Read a text file from the workspace. Returns lines prefixed with 1-based line numbers. Use offset/limit for large files.',
+    'Read a file from the workspace. Text comes back as lines prefixed with 1-based line numbers (use offset/limit for large files); a PNG, JPEG, GIF, or WebP image comes back as the image.',
   schema: z.object({
     path: z.string().describe('File path, relative to the workspace root'),
     offset: z.number().int().min(1).optional().describe('First line to return (1-based)'),
@@ -38,6 +40,13 @@ export const readTool = defineTool({
     const info = await stat(file).catch(() => undefined);
     if (!info) throw new ToolError(`${input.path} does not exist`);
     if (info.isDirectory()) throw new ToolError(`${input.path} is a directory; use glob`);
+    if (looksLikeImage(input.path)) {
+      // `file` is canonical (symlinks resolved); so must the root be to relate them.
+      const path = workspacePath(realpathSync(ctx.workspaceRoot), file);
+      const image = await readImage(file, path);
+      if (typeof image === 'string') throw new ToolError(`${input.path}: ${image}`);
+      return { text: `${path}: ${image.mediaType.slice(6).toUpperCase()} image`, images: [image] };
+    }
     const lines = (await readFile(file, 'utf8')).split('\n');
     const start = (input.offset ?? 1) - 1;
     const slice = lines.slice(start, start + (input.limit ?? 2000));

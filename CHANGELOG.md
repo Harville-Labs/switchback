@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **Image input** (#86): paste an image with **ctrl+v** in the TUI (an `[Image #n]` chip) or paste/drop it into the VS Code composer (a thumbnail); `@shot.png` mentions, dragged-in image files, and `read` on an image file attach the image too. A new `image` transcript part (and `images` on tool results), translated by the Anthropic (also Bedrock and Vertex), Chat Completions, Responses, and Gemini adapters. `models.<alias>.vision` says which models can see images (the catalog knows its own); others get a note in each image's place, and within a step the router prefers a member that can see them (rule `vision`). Images are checked by their bytes, limited to 3.75 MB, counted as about 1,600 tokens, and subject to `privacy.localOnlyPaths`. Protocol: an `image` attachment kind
+
 ### Changed
 - A model's thinking no longer streams along one line. The TUI shows `✻ Thinking…` (then `✻ Thought`) and **ctrl+o** opens it as wrapped paragraphs, keeping to the last few lines while it streams; VS Code shows a **Thinking** row you click to open. Both clean up the text the same way (`formatReasoning` in `@switchback/client`)
 

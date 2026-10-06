@@ -16,7 +16,7 @@ import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
 import AnthropicFoundry from '@anthropic-ai/foundry-sdk';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk';
-import type { Message, Part, StopReason, Tier } from '@switchback/protocol';
+import type { ImagePart, Message, Part, StopReason, Tier } from '@switchback/protocol';
 import {
   type ChatEvent,
   type ChatRequest,
@@ -111,6 +111,9 @@ export function toAnthropicMessages(
         case 'text':
           if (p.text) content.push({ type: 'text', text: p.text });
           break;
+        case 'image':
+          content.push(anthropicImage(p));
+          break;
         case 'reasoning': {
           const sameModel = p.origin.provider === providerId && p.origin.model === model;
           const signature = (p.opaque as { signature?: string } | undefined)?.signature;
@@ -131,7 +134,9 @@ export function toAnthropicMessages(
           content.push({
             type: 'tool_result',
             tool_use_id: toolUseId(p.callId),
-            content: p.content,
+            content: p.images?.length
+              ? [{ type: 'text', text: p.content }, ...p.images.map(anthropicImage)]
+              : p.content,
             ...(p.isError ? { is_error: true } : {}),
           });
           break;
@@ -139,6 +144,10 @@ export function toAnthropicMessages(
     }
     return { role: m.role, content };
   });
+}
+
+function anthropicImage(p: ImagePart): Anthropic.ImageBlockParam {
+  return { type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.data } };
 }
 
 /**

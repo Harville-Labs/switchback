@@ -54,7 +54,7 @@ describe('bash', () => {
       { command: 'echo one; sleep 0.2; echo two', background: true },
       ctx(),
     );
-    const id = /sh_\w+/.exec(started)?.[0] as string;
+    const id = /sh_\w+/.exec(started as string)?.[0] as string;
     await until(() => runner.list().some((s) => s.id === id && s.status === 'exited'));
     const first = await bashOutputTool.run({ id }, ctx());
     expect(first).toStartWith('$ echo one; sleep 0.2; echo two');
@@ -66,7 +66,7 @@ describe('bash', () => {
 
   test('kill_shell stops it; other sessions can not see it', async () => {
     const started = await bashTool.run({ command: 'sleep 30', background: true }, ctx());
-    const id = /sh_\w+/.exec(started)?.[0] as string;
+    const id = /sh_\w+/.exec(started as string)?.[0] as string;
     await expect(bashOutputTool.run({ id }, ctx('other'))).rejects.toThrow('no background shell');
     expect(await killShellTool.run({ id }, ctx())).toBe(`${id} stopped`);
     await until(() => changes.some((c) => c.id === id && c.status === 'killed'));

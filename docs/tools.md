@@ -4,7 +4,7 @@ What the model can call, in the fixed order it sees them (the order is part of t
 
 | Tool | Permission | What it does |
 |---|---|---|
-| `read` | read | Read a text file, with line numbers; `offset`/`limit` for large files |
+| `read` | read | Read a text file, with line numbers; `offset`/`limit` for large files. A PNG, JPEG, GIF, or WebP comes back as the image |
 | `glob` | read | Find files by pattern, skipping `node_modules`, `.git`, and build output |
 | `grep` | read | Search file contents with a regular expression (ripgrep when installed) |
 | `edit` | edit | Replace exact text in a file; the prompt shows a diff |

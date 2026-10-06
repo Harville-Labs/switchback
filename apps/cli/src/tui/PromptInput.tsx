@@ -5,11 +5,13 @@
  * through bracketed paste, so their newlines never submit (see paste.ts).
  * Ctrl+C clears what's typed; on an empty input it goes to `onInterrupt`.
  * During a turn, Enter queues the prompt and Esc sends it now (interrupt).
+ * Ctrl+V attaches the clipboard's image as an `[Image #n]` chip.
  */
 import { statSync } from 'node:fs';
 import { commandQuery, matchCommands, type SlashCommand } from '@switchback/client';
 import { Box, Text, useInput, usePaste } from 'ink';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { readClipboardImage } from './clipboard.ts';
 import {
   at,
   backspace,
@@ -30,9 +32,11 @@ import {
 } from './editor.ts';
 import { workspaceFiles } from './files.ts';
 import {
+  attachedImages,
   chipBefore,
   cleanPaste,
   expandPastes,
+  imageInsertion,
   noPastes,
   type Pastes,
   pastedPath,
@@ -56,17 +60,27 @@ interface Props {
   root: string;
   /** Custom commands, listed in the menu after the built-in ones. */
   custom: readonly SlashCommand[];
-  onSubmit: (text: string) => void;
+  /** The prompt, and the images whose chips are still in it. */
+  onSubmit: (text: string, images: PastedImage[]) => void;
   /** Ctrl+C on an empty input (with text in it, Ctrl+C clears it instead). */
   onInterrupt: () => void;
   /**
    * While busy: Enter queues the text for the running turn (`onSubmit`), and
    * Esc sends it now, interrupting the turn. Esc with nothing typed cancels.
    */
-  onSubmitNow: (text: string) => void;
+  onSubmitNow: (text: string, images: PastedImage[]) => void;
   onCancel: () => void;
   /** ↑ on an empty input: the last queued prompt, taken back to edit. */
   recall: () => string | undefined;
+  /** Ctrl+V found no image on the clipboard. */
+  onNoImage?: () => void;
+  /** Where Ctrl+V gets an image (base64); the system clipboard unless a test says otherwise. */
+  clipboardImage?: () => Promise<string | undefined>;
+}
+
+export interface PastedImage {
+  name: string;
+  data: string;
 }
 
 export function PromptInput({
@@ -81,6 +95,8 @@ export function PromptInput({
   onSubmitNow,
   onCancel,
   recall,
+  onNoImage,
+  clipboardImage = readClipboardImage,
 }: Props) {
   const [state, setState] = useState<EditorState>(empty);
   // Index into history while browsing it; null when editing a fresh prompt.
@@ -90,6 +106,9 @@ export function PromptInput({
   const [selected, setSelected] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);
   const [pastes, setPastes] = useState<Pastes>(noPastes);
+  // Ctrl+V reads the clipboard asynchronously; the chip needs the store as it is then.
+  const pastesRef = useRef(pastes);
+  pastesRef.current = pastes;
 
   const mention = mentionAt(state);
   const suggestions = mention && !menuClosed ? rankFiles(files, mention.query) : [];
@@ -164,6 +183,15 @@ export function PromptInput({
         if (state.value) return clear();
         return onInterrupt();
       }
+      if (key.ctrl && input === 'v') {
+        void clipboardImage().then((data) => {
+          if (!data) return onNoImage?.();
+          const r = imageInsertion(data, pastesRef.current);
+          setPastes(r.pastes);
+          setState((s) => insert(s, r.insert));
+        });
+        return;
+      }
       if (commandsOpen) {
         if (key.upArrow) return setSelected((i) => (i + commands.length - 1) % commands.length);
         if (key.downArrow) return setSelected((i) => (i + 1) % commands.length);
@@ -172,7 +200,7 @@ export function PromptInput({
         if (key.return && !key.meta && !key.shift && pick) {
           // A command that needs an argument waits for it; the rest run now.
           if (pick.args?.startsWith('<')) return completeCommand(pick);
-          onSubmit(`/${pick.name}`);
+          onSubmit(`/${pick.name}`, []);
           setState(empty);
           setHistIndex(null);
           setDraft('');
@@ -194,7 +222,7 @@ export function PromptInput({
 
       if (key.escape) {
         if (busy && state.value.trim()) {
-          onSubmitNow(expandPastes(state.value, pastes));
+          onSubmitNow(expandPastes(state.value, pastes), attachedImages(state.value, pastes));
           return clear();
         }
         if (!state.value) onCancel();
@@ -207,7 +235,7 @@ export function PromptInput({
           return edit(insert(backspace(state), '\n'));
         }
         if (!state.value.trim()) return;
-        onSubmit(expandPastes(state.value, pastes));
+        onSubmit(expandPastes(state.value, pastes), attachedImages(state.value, pastes));
         setState(empty);
         setPastes(noPastes);
         setHistIndex(null);

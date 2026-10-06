@@ -34,6 +34,11 @@ export const ModelConfig = z.object({
   contextWindow: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().default(16_000),
   effort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  /**
+   * Whether the model can read images. Known for catalog models; others are
+   * taken to be text-only unless this says so.
+   */
+  vision: z.boolean().optional(),
   price: z
     .object({
       input: z.number(),

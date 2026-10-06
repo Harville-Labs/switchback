@@ -20,6 +20,7 @@ import type { PermissionMode, RoutePreference, SessionRoles } from '@switchback/
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
 import { renderControls as renderControlsHtml } from './controls.ts';
+import { PendingImages } from './images.ts';
 import {
   esc,
   permissionAnswer,
@@ -62,6 +63,7 @@ app.innerHTML = `
 <footer>
   <div class="composer">
     <div id="menu" class="menu" role="listbox" aria-label="Commands" hidden></div>
+    <div id="images" class="images"></div>
     <div id="chips" class="chips"></div>
     <textarea id="input" rows="1" aria-label="Message" placeholder="Ask anything, / for commands"></textarea>
     <div class="toolbar">
@@ -199,6 +201,23 @@ prompts.addEventListener('click', (e) => {
 // visible as a chip); file and problems are opt-in.
 let ctx: EditorContextState = { problems: 0 };
 const attach = { file: false, selection: true, problems: false };
+
+// Images pasted into the composer or dropped on it go with the next prompt.
+const images = new PendingImages(
+  $<HTMLDivElement>('images'),
+  (t) => addNotice(t),
+  () => syncSend(),
+);
+input.addEventListener('paste', (e) => {
+  if (e.clipboardData && images.add(e.clipboardData.files)) e.preventDefault();
+});
+const composer = input.closest('.composer') as HTMLElement;
+composer.addEventListener('dragover', (e) => {
+  if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+});
+composer.addEventListener('drop', (e) => {
+  if (e.dataTransfer && images.add(e.dataTransfer.files)) e.preventDefault();
+});
 const chips = $<HTMLDivElement>('chips');
 
 function renderChips() {
@@ -283,7 +302,7 @@ function runCommand(name: string, args: string[]) {
  * queue when something is (with **Send now** beside it to interrupt).
  */
 function syncSend() {
-  const typed = !!input.value.trim();
+  const typed = !!input.value.trim() || images.count > 0;
   const stop = view.running && !typed;
   sendBtn.innerHTML = stop ? ICONS.stop : ICONS.send;
   sendBtn.title = stop
@@ -299,11 +318,11 @@ function syncSend() {
 
 function send(delivery?: 'interrupt') {
   const text = input.value.trim();
-  if (view.running && !text) {
+  if (view.running && !text && !images.count) {
     vscode.postMessage({ type: 'cancel' });
     return;
   }
-  if (!text || !connected) return;
+  if ((!text && !images.count) || !connected) return;
   input.value = '';
   autosize();
   slash.close();
@@ -324,9 +343,17 @@ function sendPrompt(text: string, delivery?: 'interrupt') {
     file: attach.file && !ctx.selection && !!ctx.file,
     problems: attach.problems && ctx.problems > 0,
   };
+  const sending = images.take();
+  // An image alone still needs words for the model; name what's attached.
+  const prompt = text || `Attached: ${sending.map((i) => i.name).join(', ')}`;
   // A queued prompt shows in the transcript once the model reads it (queue.delivered).
   const queued = view.running && delivery !== 'interrupt';
-  if (!queued) view = addUserPrompt(view, text);
+  if (!queued)
+    view = addUserPrompt(
+      view,
+      prompt,
+      sending.map(({ name, src }) => ({ name, src })),
+    );
   const sent = [
     choice.selection && ctx.selection
       ? `${ctx.selection.path}:${ctx.selection.startLine}-${ctx.selection.endLine}`
@@ -337,8 +364,9 @@ function sendPrompt(text: string, delivery?: 'interrupt') {
   if (sent.length) view = addInfo(view, sent.map((x) => `📎 ${x}`).join('\n'));
   vscode.postMessage({
     type: 'prompt',
-    text,
+    text: prompt,
     attach: choice,
+    ...(sending.length ? { images: sending.map(({ name, data }) => ({ name, data })) } : {}),
     ...(view.running ? { delivery: delivery ?? 'queue' } : {}),
   });
   render();

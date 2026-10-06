@@ -1,5 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import type { ImagePart } from '@switchback/protocol';
 import type { ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
@@ -58,6 +59,12 @@ export interface ToolPreview {
   proposed?: { path: string; content: string };
 }
 
+/** A result with images (`read` on an image file); most tools return just text. */
+export interface ToolOutput {
+  text: string;
+  images: ImagePart[];
+}
+
 export interface Tool<I = unknown> {
   name: string;
   description: string;
@@ -79,7 +86,7 @@ export interface Tool<I = unknown> {
    * nothing useful to show; throw ToolError when the call would fail anyway.
    */
   preview?(input: I, ctx: ToolContext): Promise<ToolPreview | undefined>;
-  run(input: I, ctx: ToolContext): Promise<string>;
+  run(input: I, ctx: ToolContext): Promise<string | ToolOutput>;
 }
 
 export function defineTool<S extends z.ZodType>(tool: Tool<z.infer<S>> & { schema: S }): Tool {

@@ -20,6 +20,8 @@ import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
 
 export type ViewItem =
   | { kind: 'user'; id: string; text: string }
+  /** An image the user sent; `src` is a data URL for clients that can show it. */
+  | { kind: 'image'; id: string; name: string; src?: string }
   | { kind: 'assistant'; id: string; text: string; reasoning: string }
   | { kind: 'route'; id: string; tier: Tier; model: ModelRef; rule: string; reason: string }
   | {
@@ -188,6 +190,13 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
             id: `h${mi}v`,
             text: `↻ ${p.review.model.model}'s review findings went back to the model (round ${p.review.round})`,
           });
+        else if (p.type === 'image')
+          items.push({
+            kind: 'image',
+            id: `h${mi}i${p.attachment?.path ?? ''}`,
+            name: p.attachment?.path ?? 'image',
+            src: `data:${p.mediaType};base64,${p.data}`,
+          });
         else if (p.type === 'text' && p.attachment)
           items.push({
             kind: 'info',
@@ -265,11 +274,21 @@ export function addInfo(state: ViewState, text: string): ViewState {
 }
 
 /** Record a prompt the user just sent (the engine does not echo it). */
-export function addUserPrompt(state: ViewState, text: string): ViewState {
+/** A prompt the user just sent, with the images attached to it. */
+export function addUserPrompt(
+  state: ViewState,
+  text: string,
+  images: { name: string; src?: string }[] = [],
+): ViewState {
+  const n = state.items.length;
   return {
     ...state,
     running: true,
-    items: [...state.items, { kind: 'user', id: `u${state.items.length}`, text }],
+    items: [
+      ...state.items,
+      { kind: 'user', id: `u${n}`, text },
+      ...images.map((i, k) => ({ kind: 'image' as const, id: `u${n}i${k}`, ...i })),
+    ],
   };
 }
 

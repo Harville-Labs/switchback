@@ -1,6 +1,7 @@
 /** Transcript rows: one per view item, plus the live view of running subagents. */
 import {
   formatReasoning,
+  imageLabel,
   isQuietTool,
   reviewLines,
   tailLines,
@@ -113,6 +114,8 @@ export function Item({
           <Text bold>{item.text}</Text>
         </Box>
       );
+    case 'image':
+      return <Text dimColor>{`  ${imageLabel(item.name)}`}</Text>;
     case 'info':
       return <Text dimColor>{item.text}</Text>;
     case 'route': {

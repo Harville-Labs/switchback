@@ -183,3 +183,29 @@ test('typed commands pass their arguments; unknown ones say so', async () => {
   await send({ type: 'info', text: 'MCP servers\n  none' });
   expect($('#log').textContent).toContain('MCP servers');
 });
+
+test('a pasted image waits above the input and goes with the next prompt', async () => {
+  // Idle, so the prompt shows in the transcript at once rather than queueing.
+  await send({
+    type: 'event',
+    event: { type: 'turn.completed', sessionId: 's1', turnId: 't', stopReason: 'end_turn' },
+  });
+  const png = new window.File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'image.png', {
+    type: 'image/png',
+  });
+  const data = new window.DataTransfer();
+  data.items.add(png);
+  const paste = new window.ClipboardEvent('paste', { clipboardData: data, cancelable: true });
+  $('#input').dispatchEvent(paste as unknown as Event);
+  for (let i = 0; i < 20 && !$('#images').innerHTML; i++) await Bun.sleep(5);
+  expect($('#images img').getAttribute('alt')).toBe('image 1');
+  type('');
+  key('Enter');
+  expect(posted.at(-1)).toMatchObject({
+    type: 'prompt',
+    text: 'Attached: image 1',
+    images: [{ name: 'image 1', data: 'iVBORw==' }],
+  });
+  expect($('#images').innerHTML).toBe('');
+  expect($('#log .image img').getAttribute('alt')).toBe('image 1');
+});

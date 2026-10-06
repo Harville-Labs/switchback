@@ -83,6 +83,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `y` / `a` / `p` / `n` | Answer a permission prompt: once, always this session (the rules it grants are shown), always in this project (saved to `.switchback/config.local.json`), deny |
 | `y` / `a` / `n` | Answer a plan: approve, approve and accept edits, keep planning |
 | `y` / `n` | Answer an escalation prompt |
+| `ctrl+v` | Attach the image on the clipboard as an `[Image #n]` chip (deleting the chip drops it). On macOS it reads the clipboard with `osascript`, on Linux with `wl-paste` or `xclip`, and on Windows with PowerShell; over SSH, drag the file in or mention it with `@` instead. Dragged-in image files and `@image.png` mentions attach the image too |
 | `ctrl+o` | Show or hide the model's thinking. Hidden, it's one line (`✻ Thinking…`, then `✻ Thought`); shown, it's paragraphs, keeping to the last few lines while it streams. Turns already scrolled into the transcript keep how they were shown |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
 

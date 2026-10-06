@@ -22,6 +22,8 @@ export interface CatalogModel {
   size: ModelSize;
   contextWindow: number;
   maxOutputTokens: number;
+  /** Reads images. */
+  vision: boolean;
   price: Price;
   note?: string;
 }
@@ -38,6 +40,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'large',
         contextWindow: 1_000_000,
         maxOutputTokens: 32_000,
+        vision: true,
         price: { input: 5, output: 25 },
       },
       {
@@ -46,6 +49,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'medium',
         contextWindow: 1_000_000,
         maxOutputTokens: 32_000,
+        vision: true,
         price: { input: 2, output: 10 },
       },
       {
@@ -54,6 +58,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'small',
         contextWindow: 200_000,
         maxOutputTokens: 16_000,
+        vision: true,
         price: { input: 1, output: 5 },
       },
     ],
@@ -67,6 +72,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'large',
         contextWindow: 1_050_000,
         maxOutputTokens: 32_000,
+        vision: true,
         price: { input: 10, output: 50, cacheRead: 1 },
       },
       {
@@ -75,6 +81,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'medium',
         contextWindow: 1_050_000,
         maxOutputTokens: 32_000,
+        vision: true,
         price: { input: 2, output: 10, cacheRead: 0.2 },
       },
       {
@@ -83,6 +90,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'small',
         contextWindow: 1_050_000,
         maxOutputTokens: 16_000,
+        vision: true,
         price: { input: 0.1, output: 0.5, cacheRead: 0.01 },
       },
     ],
@@ -97,6 +105,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'large',
         contextWindow: 1_000_000,
         maxOutputTokens: 32_000,
+        vision: false,
         price: { input: 1.32, output: 3.96, cacheRead: 0.044 },
         note: 'peak-hour price',
       },
@@ -106,6 +115,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'small',
         contextWindow: 1_000_000,
         maxOutputTokens: 32_000,
+        vision: false,
         price: { input: 0.3, output: 1.2, cacheRead: 0.006 },
         note: 'peak-hour price',
       },
@@ -120,6 +130,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'large',
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
+        vision: true,
         price: { input: 2, output: 12, cacheRead: 0.2 },
         note: 'doubles above 200k-token prompts',
       },
@@ -129,6 +140,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'medium',
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
+        vision: true,
         price: { input: 0.75, output: 3.75, cacheRead: 0.075 },
         note: 'introductory price through 2026; $1.50 / $7.50 from 2027',
       },
@@ -138,6 +150,7 @@ export const CATALOG: Record<HostedProviderKind, { label: string; models: Catalo
         size: 'small',
         contextWindow: 1_048_576,
         maxOutputTokens: 65_536,
+        vision: true,
         price: { input: 0.3, output: 2.5, cacheRead: 0.03 },
       },
     ],
@@ -161,6 +174,19 @@ export function aliasModels(
     medium: pick('medium', 'large', 'small'),
     small: pick('small', 'medium', 'large'),
   };
+}
+
+/**
+ * A catalog model by ID, tolerating platform forms: Bedrock's `anthropic.`
+ * (and regional `us.anthropic.`) prefix and OpenRouter's `vendor/` prefix.
+ */
+export function catalogModel(id: string): CatalogModel | undefined {
+  const bare = id.replace(/^(?:[a-z]+\.)?anthropic\./, '').replace(/^[a-z-]+\//, '');
+  for (const { models } of Object.values(CATALOG)) {
+    const m = models.find((x) => x.id === id || x.id === bare);
+    if (m) return m;
+  }
+  return undefined;
 }
 
 export function catalogPrices(): Record<string, Price> {

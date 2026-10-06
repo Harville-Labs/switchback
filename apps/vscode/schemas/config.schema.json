@@ -311,6 +311,9 @@
             "type": "string",
             "enum": ["none", "low", "medium", "high", "xhigh", "max"]
           },
+          "vision": {
+            "type": "boolean"
+          },
           "price": {
             "type": "object",
             "properties": {

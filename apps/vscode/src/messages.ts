@@ -35,7 +35,14 @@ export type HostToWebview =
 export type WebviewToHost =
   | { type: 'loaded' }
   /** `delivery` while a turn runs: queue for its next step, or interrupt it. */
-  | { type: 'prompt'; text: string; attach?: AttachChoice; delivery?: 'queue' | 'interrupt' }
+  | {
+      type: 'prompt';
+      text: string;
+      attach?: AttachChoice;
+      /** Pasted or dropped images, base64. */
+      images?: { name: string; data: string }[];
+      delivery?: 'queue' | 'interrupt';
+    }
   /** Withdraw a queued prompt. */
   | { type: 'dequeue'; id: string }
   | { type: 'cancel' }

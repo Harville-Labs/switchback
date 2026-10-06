@@ -18,7 +18,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const nonce = crypto.randomUUID().replaceAll('-', '');
     view.webview.html = `<!doctype html>
 <html><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${view.webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src ${view.webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body><div id="app"></div><script nonce="${nonce}" src="${script}"></script></body></html>`;
     view.webview.onDidReceiveMessage((m: WebviewToHost) => {

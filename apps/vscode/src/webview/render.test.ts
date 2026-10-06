@@ -95,3 +95,20 @@ test('reasoning is a closed Thinking row that opens to paragraphs, kept open by 
   const done = renderItem({ ...item, text: 'Done.' }, { ...view, running: false }, new Set());
   expect(done).toContain('<summary>✻ Thought</summary>');
 });
+
+test('an image shows as a thumbnail only from an image data URL', () => {
+  const view = initialView('s');
+  const ok = renderItem(
+    { kind: 'image', id: 'i', name: 'a.png', src: 'data:image/png;base64,iVBORw==' },
+    view,
+    new Set(),
+  );
+  expect(ok).toContain('<img src="data:image/png;base64,iVBORw==" alt="a.png">');
+  const bad = renderItem(
+    { kind: 'image', id: 'i', name: 'x', src: 'javascript:alert(1)" onerror="x' },
+    view,
+    new Set(),
+  );
+  expect(bad).not.toContain('<img');
+  expect(bad).toContain('🖼 x');
+});
