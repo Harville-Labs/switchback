@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ShellInfo } from '@switchback/protocol';
+import { SwitchbackConfig } from '../config.ts';
 import { privatePathMatcher, privateToolUse } from '../privacy.ts';
 import { bashOutputTool, bashTool, killShellTool } from './bash.ts';
 import { toolsFor } from './index.ts';
@@ -10,11 +11,15 @@ import { CommandRunner } from './process.ts';
 import type { ToolContext } from './tool.ts';
 
 const root = mkdtempSync(join(tmpdir(), 'switchback-shell-'));
-afterEach(() => runner.killAll());
+afterEach(() => runner.close());
 
 const changes: ShellInfo[] = [];
 const runner = new CommandRunner(
-  () => ({ timeoutMs: 1_000, env: { GREETING: 'hello' } }),
+  () => ({
+    timeoutMs: 1_000,
+    env: { GREETING: 'hello' },
+    sandbox: SwitchbackConfig.parse({}).bash.sandbox,
+  }),
   (s) => changes.push(s),
 );
 const ctx = (sessionId = 's1'): ToolContext => ({

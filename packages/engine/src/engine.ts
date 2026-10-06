@@ -64,6 +64,7 @@ import { Subagents } from './subagents.ts';
 import { systemPrompt } from './system-prompt.ts';
 import { type Interaction, ToolRunner } from './tool-runner.ts';
 import { CommandRunner, shellOf } from './tools/process.ts';
+import { BashSandbox } from './tools/sandbox.ts';
 import { type TurnOptions, TurnRunner } from './turn-runner.ts';
 import { UsageRecorder } from './usage-recorder.ts';
 import type { Worktree } from './worktree.ts';
@@ -99,6 +100,11 @@ export interface EngineOptions {
   dataDir?: string;
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];
+  /**
+   * The OS sandbox for bash commands (`bash.sandbox`); `false` runs them
+   * unsandboxed whatever the config says (tests that exercise other things).
+   */
+  sandbox?: BashSandbox | false;
   /** Permission rules with their sources (from `loadConfig`); default: the config's, unsourced. */
   rules?: SourcedRule[];
   now?: () => Date;
@@ -166,9 +172,23 @@ export class Engine {
       privatePaths: () => this.privatePaths(),
     };
     this.compactor = new Compactor(this.host, this.models);
+    const paths = switchbackPaths();
+    const dataDir = options.dataDir ?? paths.dataDir;
     this.commands = new CommandRunner(
       () => this.options.config.bash,
       (shell) => this.emit({ type: 'shell.updated', sessionId: shell.sessionId, shell }),
+      options.sandbox === false
+        ? undefined
+        : {
+            runtime: options.sandbox ?? new BashSandbox(dataDir),
+            context: (cwd) => ({
+              workspaceRoot: options.workspaceRoot,
+              sessionRoot: cwd,
+              switchbackDirs: [paths.configDir, dataDir],
+              rules: this.gate.policy().list(),
+            }),
+            notice: (message) => this.notify('warn', message),
+          },
     );
     // Collaborators call each other only after construction, through these closures.
     this.gate = new PermissionGate(this.host, {
@@ -470,9 +490,11 @@ export class Engine {
   }
 
   /** `permissions.list`: the rules in effect, with their sources, and the session's mode. */
-  permissions(sessionId?: string): PermissionsListResult {
+  async permissions(sessionId?: string): Promise<PermissionsListResult> {
     const { read, edit, bash, mcp } = this.options.config.permissions;
+    const sandbox = await this.commands.sandboxState();
     return {
+      sandbox: sandbox.active ? { active: true } : { active: false, reason: sandbox.reason },
       ...(sessionId ? { mode: this.modeOf(this.sessions.live(sessionId)) } : {}),
       modes: allowedModes(this.options.org),
       levels: { read, edit, bash, mcp },
@@ -575,7 +597,7 @@ export class Engine {
   }
 
   async shutdown(): Promise<void> {
-    this.commands.killAll();
+    await this.commands.close();
     for (const s of this.sessions.inMemory()) {
       s.controller?.abort();
       s.bgController?.abort();

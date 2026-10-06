@@ -28,17 +28,34 @@ export const bashTool = defineTool({
       .describe(
         'Start it and return at once; read output with bash_output, stop it with kill_shell',
       ),
+    unsandboxed: z
+      .boolean()
+      .optional()
+      .describe(
+        'Run outside the OS sandbox. Only when the sandbox blocked something the task needs (the error says so); the user is always asked',
+      ),
   }),
   permission: 'bash',
   mutating: true,
-  summarize: (i) => `$ ${i.command}${i.background ? ' (background)' : ''}`,
+  summarize: (i) =>
+    `$ ${i.command}${i.background ? ' (background)' : ''}${i.unsandboxed ? ' (outside the sandbox)' : ''}`,
   async run(input, ctx) {
     const runner = commands(ctx);
     if (input.background) {
-      const shell = runner.start(ctx.sessionId, input.command, ctx.workspaceRoot);
+      const shell = await runner.start(
+        ctx.sessionId,
+        input.command,
+        ctx.workspaceRoot,
+        input.unsandboxed === true,
+      );
       return `started background shell ${shell.id}. Read its output with bash_output({ "id": "${shell.id}" }); stop it with kill_shell.`;
     }
-    const proc = runner.spawn(input.command, ctx.workspaceRoot);
+    const spawned = await runner.spawn(
+      input.command,
+      ctx.workspaceRoot,
+      input.unsandboxed === true,
+    );
+    const { proc } = spawned;
     const timeoutMs = Math.min(input.timeoutMs ?? runner.timeoutMs, MAX_TIMEOUT_MS);
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -58,9 +75,10 @@ export const bashTool = defineTool({
         : proc.signalCode
           ? `killed (${proc.signalCode})`
           : String(code);
+      const explained = runner.explain(spawned, stderr);
       const parts = [
         stdout && `stdout:\n${stdout}`,
-        stderr && `stderr:\n${stderr}`,
+        explained && `stderr:\n${explained}`,
         `exit code: ${ended}`,
       ].filter(Boolean);
       return truncate(parts.join('\n'));

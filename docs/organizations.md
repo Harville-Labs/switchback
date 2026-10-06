@@ -77,6 +77,10 @@ Config layers merge in this order, lowest first:
 
 Then `restrictions` run on the result and *remove* anything not allowed: disallowed providers and the models that use them, remote routing when `allowRemote` is false, and MCP servers the org didn't define when `allowUserMcpServers` is false. To block MCP tools entirely, enforce `permissions.mcp: "deny"`. Budgets are capped. `switchback doctor` and `switchback whoami` list exactly what the policy changed.
 
+### Sandbox
+
+Enforce `"bash": { "sandbox": { "mode": "on", "allowUnsandboxed": false } }` to require the OS sandbox for every command and refuse requests to leave it. Members on a platform without it (Windows, or Linux without bubblewrap) can't run commands until they install what `switchback doctor` names.
+
 ### Permission rules
 
 Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "later layers replace arrays": every layer's rules add up. An organization's deny rules, in `defaults` or `enforced`, join every member's rules as soon as the policy arrives, appear in `/permissions` and `switchback doctor` with the source `organization`, and can't be removed by a member, a project, or an answer at a prompt (deny is checked before anything a session allows). With `allowUserPermissionRules: false`, only the policy's allow and ask rules apply; members' and projects' deny rules still do, since they only tighten. With `allowBypassPermissions: false`, no session can switch to `bypassPermissions`, and a `defaultMode` of `bypassPermissions` becomes `default`. See [permissions.md](permissions.md#rules) for the syntax.

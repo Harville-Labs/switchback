@@ -119,7 +119,7 @@ describe('permission modes', () => {
     expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
   });
 
-  test('an organization can rule out bypass', () => {
+  test('an organization can rule out bypass', async () => {
     const org = {
       id: 'o',
       name: 'Acme',
@@ -132,7 +132,7 @@ describe('permission modes', () => {
     const { engine } = setup([], {}, { org });
     const id = session(engine);
     expect(() => engine.setMode(id, 'bypassPermissions')).toThrow("Acme's policy doesn't allow");
-    expect(engine.permissions(id).modes).not.toContain('bypassPermissions');
+    expect((await engine.permissions(id)).modes).not.toContain('bypassPermissions');
   });
 });
 
@@ -158,7 +158,7 @@ describe('rules at the prompt', () => {
       rules: ['bash(git status:*)'],
     });
     expect(asked).toEqual(['$ git status', '$ ls']);
-    expect(engine.permissions().rules).toContainEqual({
+    expect((await engine.permissions()).rules).toContainEqual({
       rule: 'bash(git status:*)',
       behavior: 'allow',
       source: 'this session',

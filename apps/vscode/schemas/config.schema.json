@@ -537,6 +537,66 @@
         },
         "shell": {
           "type": "string"
+        },
+        "sandbox": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "mode": {
+              "default": "auto",
+              "type": "string",
+              "enum": ["auto", "on", "off"]
+            },
+            "network": {
+              "default": "all",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["all", "none"]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "allowWrite": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "denyRead": {
+              "default": [
+                "~/.ssh",
+                "~/.aws",
+                "~/.gnupg",
+                "~/.azure",
+                "~/.kube",
+                "~/.config/gcloud",
+                "~/.docker/config.json",
+                "~/.netrc"
+              ],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "denyWrite": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "allowUnsandboxed": {
+              "default": true,
+              "type": "boolean"
+            }
+          }
         }
       }
     },

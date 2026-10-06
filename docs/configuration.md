@@ -127,6 +127,12 @@ Personal settings for one project go in `.switchback/config.local.json`. It's re
 | `timeoutMs` | `120000` | How long a foreground command may run before it's killed. A call may ask for up to 10 minutes; longer-running commands belong in the background |
 | `env` | `{}` | Added to every command's environment. Values may be `{env:NAME}` |
 | `shell` | detected | A POSIX shell to run commands with instead of the detected one, such as `/bin/zsh`; run as `<shell> -c <command>` |
+| `sandbox.mode` | `auto` | `auto` (on where supported), `on` (refuse to run commands without it), or `off`. See [permissions.md](permissions.md#sandbox) |
+| `sandbox.network` | `all` | `all`, `none`, or the hosts commands may reach (`*.github.com`) |
+| `sandbox.allowWrite` | `[]` | Writable besides the workspace, temp directories, and package caches (`~` works) |
+| `sandbox.denyRead` | credentials (`~/.ssh`, `~/.aws`, ...) | Never readable; replaces the default list |
+| `sandbox.denyWrite` | `[]` | Never writable, even inside the workspace |
+| `sandbox.allowUnsandboxed` | `true` | Whether a command may ask to run outside the sandbox (you're always asked) |
 
 A command started with `background: true` keeps running after the call returns: dev servers, watchers, long builds. The model reads its new output with `bash_output` and stops it with `kill_shell`; you see them with `/shells` and stop one with `/shells kill <id>`. Background shells end when the engine does. Starting one is a normal `bash` call for permissions; reading and stopping it asks nothing more.
 
