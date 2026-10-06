@@ -122,7 +122,7 @@ describe('hooks in a session', () => {
       ],
     });
     await allowed.e.runTurn(allowed.e.createSession({}).id, 'go');
-    expect(resultOf(allowed.lp).content).toContain('hi');
+    expect(resultOf(allowed.lp).content).toContain('stdout:\nhi');
   });
 
   test('a hook allow never overrides a deny rule', async () => {

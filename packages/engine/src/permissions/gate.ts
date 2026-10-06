@@ -116,6 +116,10 @@ export class PermissionGate {
     const forced = this.mustAsk(tool, input, ctx);
     if ('refused' in forced) return { allowed: false, error: forced.refused };
     if (forced.ask) return this.ask(s, tool, call, ctx, signal, forced.ask);
+    if (hook?.behavior === 'ask')
+      return this.ask(s, tool, call, ctx, signal, `a hook${hook.reason ? `: ${hook.reason}` : ''}`);
+    // A hook's allow skips the prompt a level would show, never an ask rule's.
+    if (hook?.behavior === 'allow' && verdict?.behavior !== 'ask') return { allowed: true };
     if (verdict?.behavior === 'allow') return { allowed: true };
     if (verdict?.behavior !== 'ask') {
       if (mode === 'bypassPermissions') return { allowed: true };
