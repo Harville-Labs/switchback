@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { formatLadder, modeLabel, runningShells, type ViewState } from '@switchback/client';
 import type {
   PermissionMode,
+  QueuedPrompt,
   RoutePreference,
   SessionSummary,
   UsageReport,
@@ -178,6 +179,22 @@ export function Header({ version, root, width }: { version: string; root: string
       <Text dimColor>
         <Text color="white">/</Text> commands · <Text color="white">@</Text> mention a file ·{' '}
         <Text color="white">esc</Text> cancel
+      </Text>
+    </Box>
+  );
+}
+
+/** Prompts waiting for the running turn's next step. */
+export function Queue({ queue }: { queue: QueuedPrompt[] }) {
+  return (
+    <Box flexDirection="column">
+      {queue.map((q) => (
+        <Text key={q.id} dimColor wrap="truncate-end">
+          {'  '}⧗ queued: {q.text.replace(/\s+/g, ' ')}
+        </Text>
+      ))}
+      <Text dimColor>
+        {'  '}↑ to edit the last one · esc on an empty prompt cancels the turn and the queue
       </Text>
     </Box>
   );

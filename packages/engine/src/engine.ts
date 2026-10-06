@@ -24,6 +24,8 @@ import {
   type RoutePreference,
   RpcError,
   type SessionGetResult,
+  type SessionPromptParams,
+  type SessionPromptResult,
   type SessionRoles,
   type SessionSetRolesParams,
   type SessionSummary,
@@ -239,6 +241,10 @@ export class Engine {
       agents: () => [...this.agents.values()],
       mcp: () => this.mcp,
       interaction: () => this.options.interaction ?? 'prompt',
+      beforeStep: (s, turnId) => {
+        this.subagents.drainInbox(s);
+        return s.depth === 0 ? this.turns.deliverQueued(s, turnId) : Promise.resolve();
+      },
     });
     this.turns = new TurnRunner(this.host, {
       loop: this.agentLoop,
@@ -438,14 +444,14 @@ export class Engine {
   }
 
   /** Start a turn and return immediately; progress arrives as events. */
-  prompt(params: {
-    sessionId: string;
-    text: string;
-    route?: RoutePreference;
-    attachments?: Attachment[];
-    review?: boolean;
-  }): { turnId: string } {
-    return this.turns.start(this.sessions.live(params.sessionId), params);
+  prompt(params: SessionPromptParams): SessionPromptResult {
+    const { sessionId, ...rest } = params;
+    return this.turns.start(this.sessions.live(sessionId), rest);
+  }
+
+  /** `session.dequeue`. */
+  dequeue(sessionId: string, id: string): { removed: boolean } {
+    return { removed: this.turns.dequeue(this.sessions.live(sessionId), id) };
   }
 
   /** Run a full user turn to completion. Used directly by headless mode and subagents. */
@@ -471,6 +477,7 @@ export class Engine {
     s.bgController?.abort();
     s.bgController = undefined;
     s.inbox.length = 0;
+    this.turns.clearQueue(s);
     return hadWork;
   }
 

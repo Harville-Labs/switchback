@@ -37,7 +37,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.create` | `agent?`, `title?`, `permissionMode?` | `SessionSummary` (with the mode in `permissionMode`) |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
-| `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`), `review?` (boolean; overrides `review.mode`) | `{ turnId }`, returned immediately; progress arrives as events. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
+| `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`), `review?` (boolean; overrides `review.mode`), `delivery?` (`queue`\|`interrupt`) | `{ turnId, queued? }`, returned immediately; progress arrives as events. While a turn runs, the prompt is queued for the model's next step (`queued` is its ID; anything still queued when the turn ends starts the next one), or with `delivery: "interrupt"` the running turn is cancelled and this prompt starts at once. `session.cancel` drops the queue. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
+| `session.dequeue` | `{ sessionId, id }` | `{ removed }`. Withdraws a queued prompt before it's delivered |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`) | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config |
@@ -63,6 +64,8 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
 | `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step; `step`/`steps` (where the model is on the escalation ladder) and `stickyTurns` |
 | `roles.updated` | A session's roles changed (`session.setRoles`), so every attached client can show them |
+| `queue.updated` | The session's queued prompts changed (`queued`: id and text of each) |
+| `queue.delivered` | A queued prompt reached the model at a step boundary; clients show it as the user's message then |
 | `shell.updated` | A background shell started, exited, or was stopped (`shell`: id, command, status, exit code) |
 | `mode.changed` | A session's permission mode changed (`session.setMode`, or a plan was approved) |
 | `text.delta` / `reasoning.delta` | Streaming output |

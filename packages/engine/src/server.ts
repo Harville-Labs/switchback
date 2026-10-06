@@ -22,6 +22,7 @@ import {
   SessionCancelParams,
   SessionCompactParams,
   SessionCreateParams,
+  SessionDequeueParams,
   SessionGetParams,
   SessionPromptParams,
   SessionRolesParams,
@@ -112,6 +113,10 @@ export function serve(
         return engine.setRoles(parse(SessionSetRolesParams, req.params));
       case 'session.compact':
         return engine.compactSession(parse(SessionCompactParams, req.params).sessionId);
+      case 'session.dequeue': {
+        const p = parse(SessionDequeueParams, req.params);
+        return engine.dequeue(p.sessionId, p.id);
+      }
       case 'session.cancel':
         return { cancelled: engine.cancel(parse(SessionCancelParams, req.params).sessionId) };
       case 'permission.respond': {

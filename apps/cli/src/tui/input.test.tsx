@@ -32,6 +32,9 @@ describe('Ctrl+C in the prompt', () => {
         root="/tmp"
         onSubmit={() => {}}
         onInterrupt={() => interrupts++}
+        onSubmitNow={() => {}}
+        onCancel={() => {}}
+        recall={() => undefined}
       />,
     );
     ui.stdin.write('a long pasted prompt');
@@ -44,6 +47,40 @@ describe('Ctrl+C in the prompt', () => {
     ui.stdin.write(CTRL_C);
     await tick();
     expect(interrupts).toBe(1);
+  });
+});
+
+describe('during a turn', () => {
+  test('Enter queues, Esc sends now, Esc on an empty prompt cancels, ↑ recalls', async () => {
+    const got: string[] = [];
+    const ui = render(
+      <PromptInput
+        focus
+        busy
+        placeholder="Queue"
+        history={[]}
+        root="/tmp"
+        onSubmit={(t) => got.push(`queue:${t}`)}
+        onInterrupt={() => {}}
+        onSubmitNow={(t) => got.push(`now:${t}`)}
+        onCancel={() => got.push('cancel')}
+        recall={() => 'taken back'}
+      />,
+    );
+    ui.stdin.write('later');
+    await tick();
+    ui.stdin.write(ENTER);
+    await tick();
+    ui.stdin.write('right now');
+    await tick();
+    ui.stdin.write('\x1b');
+    await tick();
+    ui.stdin.write('\x1b');
+    await tick();
+    ui.stdin.write('\x1b[A');
+    await tick();
+    expect(got).toEqual(['queue:later', 'now:right now', 'cancel']);
+    expect(ui.lastFrame()).toContain('taken back');
   });
 });
 

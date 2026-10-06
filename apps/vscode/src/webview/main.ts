@@ -9,14 +9,7 @@ import {
   type SlashCommand,
 } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
-import {
-  formatReviewers,
-  formatSteps,
-  formatSubagents,
-  formatUsage,
-  MODE_DESCRIPTIONS,
-  modeLabel,
-} from '@switchback/client/format';
+import { formatSubagents, formatUsage } from '@switchback/client/format';
 import {
   addInfo,
   addUserPrompt,
@@ -31,8 +24,15 @@ import {
 import type { PermissionMode, RoutePreference, SessionRoles } from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
+import { renderControls as renderControlsHtml } from './controls.ts';
 import { renderMenu } from './menu.ts';
-import { esc, permissionAnswer, renderPrompt, renderItem as renderViewItem } from './render.ts';
+import {
+  esc,
+  permissionAnswer,
+  renderPrompt,
+  renderQueue,
+  renderItem as renderViewItem,
+} from './render.ts';
 import { STYLES } from './styles.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
@@ -53,7 +53,7 @@ const ICONS = {
   slash:
     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="1.5" y="1.5" width="13" height="13" rx="3"/><path d="M9.5 4.5l-3 7"/></svg>',
   send: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5"/></svg>',
-  stop: '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg>',
+  stop: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
 };
 
 const app = document.getElementById('app') as HTMLDivElement;
@@ -61,6 +61,7 @@ app.innerHTML = `
 <style>${STYLES}</style>
 <div id="log"></div>
 <div id="prompts"></div>
+<div id="queue"></div>
 <footer>
   <div class="composer">
     <div id="menu" class="menu" role="listbox" aria-label="Commands" hidden></div>
@@ -72,6 +73,7 @@ app.innerHTML = `
       </div>
       <div class="side">
         <span id="status"></span>
+        <button id="now" class="btn secondary now" title="Stop the running turn and send this now" hidden>Send now</button>
         <button id="send" class="send" title="Send (Enter)" aria-label="Send">${ICONS.send}</button>
       </div>
     </div>
@@ -86,6 +88,8 @@ const input = $<HTMLTextAreaElement>('input');
 const controls = $<HTMLDivElement>('controls');
 const statusEl = $<HTMLSpanElement>('status');
 const sendBtn = $<HTMLButtonElement>('send');
+const nowBtn = $<HTMLButtonElement>('now');
+const queueEl = $<HTMLDivElement>('queue');
 const menu = $<HTMLDivElement>('menu');
 const slashBtn = $<HTMLButtonElement>('slash');
 
@@ -105,63 +109,23 @@ function render() {
   prompts.innerHTML = renderPrompt(view);
 
   // One button: send while idle, stop while a turn runs.
-  sendBtn.innerHTML = view.running ? ICONS.stop : ICONS.send;
-  sendBtn.title = view.running ? 'Stop (cancel the running turn)' : 'Send (Enter)';
-  sendBtn.setAttribute('aria-label', view.running ? 'Stop' : 'Send');
-  sendBtn.disabled = !connected;
+  queueEl.innerHTML = renderQueue(view.queue ?? []);
+  syncSend();
   renderControls();
   statusEl.textContent = connected
     ? `${view.private ? '🔒 local only · ' : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
     : 'disconnected';
 }
 
-const ROUTES: { value: RoutePreference; label: string; title: string }[] = [
-  { value: 'auto', label: 'Auto', title: 'Start on the start model; escalate when it struggles' },
-  { value: 'local', label: 'Local', title: 'Only local models for the next prompts' },
-  { value: 'remote', label: 'Remote', title: 'Only hosted models for the next prompts' },
-];
-
-/** Routing, agent, and the models in each role, each one click from its picker. */
+/** Routing, mode, agent, and the models in each role, each one click from its picker. */
 function renderControls() {
-  const pill = (attrs: string, key: string, value: string, title: string) =>
-    `<button class="pill" ${attrs} title="${esc(title)}"><span class="k">${key}</span> ${value}</button>`;
-  const routes = `<span class="segmented">${ROUTES.map(
-    (r) =>
-      `<button class="${r.value === route ? 'on' : ''}" data-route="${r.value}" title="${esc(r.title)}">${r.label}</button>`,
-  ).join('')}</span>`;
-  const parts = [routes];
-  const mode = view.mode ?? sessionMode;
-  parts.push(
-    pill('data-mode', 'Mode', esc(modeLabel(mode)), `${MODE_DESCRIPTIONS[mode]} (click to change)`),
-  );
-  if (agent)
-    parts.push(pill('data-agent', 'Agent', esc(agent), 'Start a new session with another agent'));
-  if (roles) {
-    // The step the last call ran on is highlighted while the session is up the ladder.
-    const here = view.ladder?.step ?? 0;
-    const ladder = roles.escalate
-      .map((step, i) => {
-        const text = esc(formatSteps([step]));
-        return i + 1 === here ? `<span class="here">${text}</span>` : text;
-      })
-      .join(' → ');
-    parts.push(
-      pill(
-        'data-role="start"',
-        'Start',
-        esc(formatSteps([roles.start]) || 'none'),
-        'Where turns start',
-      ),
-      pill(
-        'data-role="escalate"',
-        'Escalate',
-        ladder || 'none',
-        'The escalation ladder, one step per escalation',
-      ),
-      pill('data-role="review"', 'Review', esc(formatReviewers(roles)), 'Who reviews edits'),
-    );
-  }
-  controls.innerHTML = parts.join('');
+  controls.innerHTML = renderControlsHtml({
+    route,
+    mode: view.mode ?? sessionMode,
+    agent,
+    roles,
+    ladderStep: view.ladder?.step ?? 0,
+  });
 }
 
 function setRoute(r: RoutePreference) {
@@ -373,12 +337,31 @@ function runCommand(name: string, args: string[]) {
   }
 }
 
-function send() {
-  if (view.running) {
+/**
+ * One button: send while idle; during a turn, stop when nothing is typed and
+ * queue when something is (with **Send now** beside it to interrupt).
+ */
+function syncSend() {
+  const typed = !!input.value.trim();
+  const stop = view.running && !typed;
+  sendBtn.innerHTML = stop ? ICONS.stop : ICONS.send;
+  sendBtn.title = stop
+    ? 'Stop (cancel the running turn)'
+    : view.running
+      ? 'Queue (Enter): the model reads it at its next step'
+      : 'Send (Enter)';
+  sendBtn.setAttribute('aria-label', stop ? 'Stop' : view.running ? 'Queue' : 'Send');
+  sendBtn.disabled = !connected || (!view.running && !typed);
+  sendBtn.classList.toggle('stop', stop);
+  nowBtn.hidden = !(view.running && typed);
+}
+
+function send(delivery?: 'interrupt') {
+  const text = input.value.trim();
+  if (view.running && !text) {
     vscode.postMessage({ type: 'cancel' });
     return;
   }
-  const text = input.value.trim();
   if (!text || !connected) return;
   input.value = '';
   autosize();
@@ -393,7 +376,9 @@ function send() {
     file: attach.file && !ctx.selection && !!ctx.file,
     problems: attach.problems && ctx.problems > 0,
   };
-  view = addUserPrompt(view, text);
+  // A queued prompt shows in the transcript once the model reads it (queue.delivered).
+  const queued = view.running && delivery !== 'interrupt';
+  if (!queued) view = addUserPrompt(view, text);
   const sent = [
     choice.selection && ctx.selection
       ? `${ctx.selection.path}:${ctx.selection.startLine}-${ctx.selection.endLine}`
@@ -402,7 +387,12 @@ function send() {
     choice.problems ? `problems in ${ctx.file}` : '',
   ].filter(Boolean);
   if (sent.length) view = addInfo(view, sent.map((x) => `📎 ${x}`).join('\n'));
-  vscode.postMessage({ type: 'prompt', text, attach: choice });
+  vscode.postMessage({
+    type: 'prompt',
+    text,
+    attach: choice,
+    ...(view.running ? { delivery: delivery ?? 'queue' } : {}),
+  });
   render();
 }
 
@@ -412,10 +402,16 @@ function autosize() {
   input.style.height = `${input.scrollHeight}px`;
 }
 
-sendBtn.addEventListener('click', send);
+sendBtn.addEventListener('click', () => send());
+nowBtn.addEventListener('click', () => send('interrupt'));
+queueEl.addEventListener('click', (e) => {
+  const id = (e.target as HTMLElement).closest('button')?.dataset.dequeue;
+  if (id) vscode.postMessage({ type: 'dequeue', id });
+});
 input.addEventListener('input', () => {
   autosize();
   syncMenu();
+  syncSend();
 });
 input.addEventListener('blur', () => closeMenu());
 input.addEventListener('keydown', (e) => {

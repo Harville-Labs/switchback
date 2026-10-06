@@ -9,6 +9,7 @@ import type {
   ModelRef,
   PermissionDecision,
   PermissionMode,
+  QueuedPrompt,
   ReviewIssue,
   SessionRoles,
   SessionSummary,
@@ -98,6 +99,8 @@ export interface ViewState {
   mode?: PermissionMode;
   /** Background shells started by this session or its subagents, by ID. */
   shells?: Record<string, ShellInfo>;
+  /** Prompts sent during the running turn, waiting for its next step. */
+  queue?: QueuedPrompt[];
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */
   children: Record<string, ViewState>;
 }
@@ -363,6 +366,12 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       return { ...state, roles: event.roles };
     case 'mode.changed':
       return { ...state, mode: event.mode };
+    case 'queue.updated':
+      return { ...state, queue: event.queued };
+    case 'queue.delivered':
+      // The prompt joins the conversation now, not when it was typed.
+      items.push({ kind: 'user', id: `q${event.prompt.id}`, text: event.prompt.text });
+      return { ...state, items };
     case 'text.delta':
     case 'reasoning.delta': {
       const target =
