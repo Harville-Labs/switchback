@@ -4,7 +4,8 @@
  * 1. A category set to `deny` (or an MCP server's `permission: deny`).
  * 2. Deny rules.
  * 3. Plan mode: no edits.
- * 4. Ask rules: always ask, whatever the mode.
+ * 4. Ask rules, a command that wants to leave the sandbox, and edits to the
+ *    agent's own configuration: always ask, whatever the mode.
  * 5. Allow rules, including what the user allowed this session.
  * 6. The mode: `bypassPermissions` allows the rest; `acceptEdits` allows edits.
  * 7. The category's level: `allow`, or ask.
@@ -12,7 +13,13 @@
 import type { PermissionDecision, PermissionMode } from '@switchback/protocol';
 import { type EngineHost, type LiveSession, scope } from '../live-session.ts';
 import { PendingPrompts } from '../prompts.ts';
-import type { PlanAnswer, Tool, ToolContext, ToolPreview } from '../tools/index.ts';
+import {
+  type PlanAnswer,
+  type Tool,
+  type ToolContext,
+  type ToolPreview,
+  toWorkspacePath,
+} from '../tools/index.ts';
 import { PermissionPolicy, type SourcedRule, suggestRules, type ToolCall } from './policy.ts';
 import { ignoreInGit, saveAllowRules } from './save.ts';
 
@@ -33,6 +40,9 @@ export interface GateDeps {
 }
 
 const SESSION = 'this session';
+
+/** Agent configuration in the workspace: editing it always asks (it could grant more). */
+const PROTECTED_CONFIG = ['.switchback', '.claude', '.mcp.json'];
 
 export class PermissionGate {
   readonly prompts = new PendingPrompts<PermissionAnswer>('permission');
@@ -98,6 +108,9 @@ export class PermissionGate {
         error:
           "Plan mode is on, so files can't be changed yet. Finish the plan and present it with exit_plan_mode.",
       };
+    const forced = this.mustAsk(tool, input, ctx);
+    if ('refused' in forced) return { allowed: false, error: forced.refused };
+    if (forced.ask) return this.ask(s, tool, call, ctx, signal, forced.ask);
     if (verdict?.behavior === 'allow') return { allowed: true };
     if (verdict?.behavior !== 'ask') {
       if (mode === 'bypassPermissions') return { allowed: true };
@@ -105,6 +118,33 @@ export class PermissionGate {
       if (level === 'allow') return { allowed: true };
     }
     return this.ask(s, tool, call, ctx, signal, verdict?.rule.rule);
+  }
+
+  /**
+   * Calls that ask whatever the rules and mode say: a command that wants to
+   * run outside the OS sandbox, and edits to the agent's own configuration
+   * (which could otherwise grant it more).
+   */
+  private mustAsk(
+    tool: Tool,
+    input: unknown,
+    ctx: ToolContext,
+  ): { ask?: string } | { refused: string } {
+    const i = (input ?? {}) as { unsandboxed?: unknown; path?: unknown };
+    if (tool.permission === 'bash' && i.unsandboxed === true) {
+      if (!this.host.config().bash.sandbox.allowUnsandboxed)
+        return {
+          refused:
+            'Running outside the sandbox is turned off (bash.sandbox.allowUnsandboxed). Find a way that works inside it, or ask the user.',
+        };
+      return { ask: 'running outside the OS sandbox' };
+    }
+    if (tool.permission === 'edit' && typeof i.path === 'string') {
+      const rel = toWorkspacePath(ctx.workspaceRoot, i.path);
+      if (rel !== undefined && PROTECTED_CONFIG.some((p) => rel === p || rel.startsWith(`${p}/`)))
+        return { ask: "Switchback's own configuration" };
+    }
+    return {};
   }
 
   /** Ask the user to approve a plan; approving leaves plan mode. */

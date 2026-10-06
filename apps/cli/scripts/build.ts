@@ -3,6 +3,11 @@
  *
  *   bun apps/cli/scripts/build.ts [--target bun-darwin-arm64] [--outfile dist/switchback]
  */
+
+import { copyFileSync, mkdtempSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { stubReactDevtools } from './stub-devtools.ts';
@@ -15,8 +20,26 @@ const { values } = parseArgs({
   },
 });
 
+/**
+ * Linux builds embed the sandbox runtime's seccomp helper for their
+ * architecture, which the engine writes out on first use (tools/sandbox.ts).
+ */
+function seccompHelper(): string[] {
+  const target = values.target ?? `bun-${process.platform}-${process.arch}`;
+  const arch = /^bun-linux-(x64|arm64)/.exec(target)?.[1];
+  if (!arch) return [];
+  const engine = createRequire(
+    fileURLToPath(new URL('../../../packages/engine/package.json', import.meta.url)),
+  );
+  const runtime = dirname(engine.resolve('@anthropic-ai/sandbox-runtime/package.json'));
+  // Its embedded name is how the engine finds it.
+  const copy = join(mkdtempSync(join(tmpdir(), 'switchback-build-')), `apply-seccomp-${arch}`);
+  copyFileSync(join(runtime, 'vendor', 'seccomp', arch, 'apply-seccomp'), copy);
+  return [copy];
+}
+
 const result = await Bun.build({
-  entrypoints: [fileURLToPath(new URL('../src/main.ts', import.meta.url))],
+  entrypoints: [fileURLToPath(new URL('../src/main.ts', import.meta.url)), ...seccompHelper()],
   compile: {
     outfile: values.outfile,
     ...(values.target ? { target: values.target as Bun.Build.CompileTarget } : {}),

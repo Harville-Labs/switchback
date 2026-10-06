@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readUntilExit, terminate } from './process.ts';
 import { defineTool, type ToolContext, ToolError, truncate } from './tool.ts';
 
 /** Longest a foreground command may run, whatever it asks for. */
@@ -28,29 +29,46 @@ export const bashTool = defineTool({
       .describe(
         'Start it and return at once; read output with bash_output, stop it with kill_shell',
       ),
+    unsandboxed: z
+      .boolean()
+      .optional()
+      .describe(
+        'Run outside the OS sandbox. Only when the sandbox blocked something the task needs (the error says so); the user is always asked',
+      ),
   }),
   permission: 'bash',
   mutating: true,
-  summarize: (i) => `$ ${i.command}${i.background ? ' (background)' : ''}`,
+  summarize: (i) =>
+    `$ ${i.command}${i.background ? ' (background)' : ''}${i.unsandboxed ? ' (outside the sandbox)' : ''}`,
   async run(input, ctx) {
     const runner = commands(ctx);
     if (input.background) {
-      const shell = runner.start(ctx.sessionId, input.command, ctx.workspaceRoot);
+      const shell = await runner.start(
+        ctx.sessionId,
+        input.command,
+        ctx.workspaceRoot,
+        input.unsandboxed === true,
+      );
       return `started background shell ${shell.id}. Read its output with bash_output({ "id": "${shell.id}" }); stop it with kill_shell.`;
     }
-    const proc = runner.spawn(input.command, ctx.workspaceRoot);
+    const spawned = await runner.spawn(
+      input.command,
+      ctx.workspaceRoot,
+      input.unsandboxed === true,
+    );
+    const { proc } = spawned;
     const timeoutMs = Math.min(input.timeoutMs ?? runner.timeoutMs, MAX_TIMEOUT_MS);
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
-      proc.kill();
+      terminate(proc);
     }, timeoutMs);
-    const onAbort = () => proc.kill();
+    const onAbort = () => terminate(proc);
     ctx.signal.addEventListener('abort', onAbort, { once: true });
     try {
       const [stdout, stderr, code] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
+        readUntilExit(proc.stdout, proc.exited),
+        readUntilExit(proc.stderr, proc.exited),
         proc.exited,
       ]);
       const ended = timedOut
@@ -58,9 +76,10 @@ export const bashTool = defineTool({
         : proc.signalCode
           ? `killed (${proc.signalCode})`
           : String(code);
+      const explained = runner.explain(spawned, stderr);
       const parts = [
         stdout && `stdout:\n${stdout}`,
-        stderr && `stderr:\n${stderr}`,
+        explained && `stderr:\n${explained}`,
         `exit code: ${ended}`,
       ].filter(Boolean);
       return truncate(parts.join('\n'));

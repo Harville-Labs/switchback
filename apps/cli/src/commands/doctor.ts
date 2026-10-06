@@ -96,7 +96,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   }
   out('\nPermissions');
   out(
-    formatPermissions(engine.permissions())
+    formatPermissions(await engine.permissions())
       .split('\n')
       .map((l) => `  ${l}`)
       .join('\n'),

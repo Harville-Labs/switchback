@@ -19,7 +19,7 @@ Switchback executes model-generated tool calls on the user's machine. We treat t
 
 Known and documented limitations, which are not vulnerabilities but are tracked for hardening:
 
-- Once allowed, `bash` can do anything the user can. OS-level sandboxing is on the roadmap.
+- `bash` runs in an OS sandbox on macOS and Linux (docs/permissions.md#sandbox): writes only to the workspace, temp, and package caches; no reads of common credential directories; network as configured. It is not sandboxed on Windows, or where the sandbox's dependencies are missing and `bash.sandbox.mode` is `auto`. A command the user approves with `unsandboxed: true` runs outside it.
 - Session files and the usage ledger are stored unencrypted under the user's data directory.
 - Organization policy is enforced on the client; a user who controls their machine can sign out. See [docs/organizations.md](docs/organizations.md#security-and-enforcement) for gateway-based hard enforcement.
 

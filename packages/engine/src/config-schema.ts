@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { McpServerConfig, McpServerName } from './mcp/config.ts';
 import { ruleProblem } from './permissions/rules.ts';
 import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
+import { DEFAULT_DENY_READ } from './tools/sandbox.ts';
 
 export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
 export type PermissionLevel = z.infer<typeof PermissionLevel>;
@@ -71,6 +72,17 @@ export const SwitchbackConfig = z.object({
       env: z.record(z.string(), z.string()).default({}),
       /** A POSIX shell to run commands with instead of the detected one (`/bin/zsh`). */
       shell: z.string().optional(),
+      /** OS sandboxing of commands (docs/permissions.md#sandbox). */
+      sandbox: z
+        .object({
+          mode: z.enum(['auto', 'on', 'off']).default('auto'),
+          network: z.union([z.enum(['all', 'none']), z.array(z.string())]).default('all'),
+          allowWrite: z.array(z.string()).default([]),
+          denyRead: z.array(z.string()).default(DEFAULT_DENY_READ),
+          denyWrite: z.array(z.string()).default([]),
+          allowUnsandboxed: z.boolean().default(true),
+        })
+        .prefault({}),
     })
     .prefault({}),
   /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). Same shape as Claude Code's `.mcp.json`. */
