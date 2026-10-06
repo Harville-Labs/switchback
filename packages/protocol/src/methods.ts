@@ -104,6 +104,8 @@ export const SessionCreateParams = z.object({
   title: z.string().optional(),
   /** Defaults to `permissions.defaultMode`. */
   permissionMode: PermissionMode.optional(),
+  /** Added to the session's system prompt (headless runs' `--instructions`). */
+  instructions: z.string().max(20_000).optional(),
 });
 export type SessionCreateParams = z.infer<typeof SessionCreateParams>;
 
@@ -395,6 +397,8 @@ export type EngineEvent =
       name: string;
       output: string;
       isError: boolean;
+      /** Set when the call didn't run because the permission policy, a hook, or the user refused it. */
+      denied?: boolean;
       /** Set when the result carries private content, so the session now stays local. */
       private?: string;
     } & SessionScoped)

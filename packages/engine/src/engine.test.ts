@@ -1065,3 +1065,18 @@ describe('session roles', () => {
     expect(changed).toMatchObject({ subagents: 'local', overridden: ['subagents'] });
   });
 });
+
+describe('headless sessions', () => {
+  test('instructions join the system prompt; a refused call is marked denied', async () => {
+    const { engine, lp, events } = setup(
+      [{ toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] }, { text: 'ok' }],
+      [],
+    );
+    const s = engine.createSession({ instructions: 'Answer in one line.' });
+    await engine.runTurn(s.id, 'go');
+    expect(lp.requests[0]?.system).toContain(
+      '# Instructions for this session\nAnswer in one line.',
+    );
+    expect(events.find((e) => e.type === 'tool.completed')).toMatchObject({ denied: true });
+  });
+});

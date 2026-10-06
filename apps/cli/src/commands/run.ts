@@ -1,20 +1,31 @@
-/** `switchback run "<prompt>"`: one headless turn. Text to stdout, activity to stderr. */
-import { privateLabel, receiptLine, redactedLabel, reviewLines } from '@switchback/client';
-import type { PermissionMode, RoutePreference } from '@switchback/protocol';
+/**
+ * `switchback run "<prompt>"`: one headless turn, for scripts and CI.
+ *
+ * Exit codes: 0 done; 1 the turn failed (an error, a refusal, the step
+ * limit); 3 it finished, but a tool call was refused (by the permission
+ * policy, a hook, or no `--yes`). Usage errors exit 2 before anything runs.
+ */
+import { receiptLine } from '@switchback/client';
+import type { PermissionMode, RoutePreference, StopReason } from '@switchback/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
+import { eventPrinter, type RunOutput } from './run-output.ts';
 
 export interface RunFlags extends CommonFlags {
   prompt: string;
   route: RoutePreference;
   agent?: string;
   yes: boolean;
-  json: boolean;
+  output: RunOutput;
   /** Review of local edits; undefined follows `review.mode`. */
   review?: boolean;
   permissionMode?: PermissionMode;
+  /** Added to this run's system prompt. */
+  instructions?: string;
+  /** Continue a saved session instead of starting one: an ID, or `latest`. */
+  resume?: string;
 }
 
-const dim = (s: string) => (process.stderr.isTTY ? `\x1b[2m${s}\x1b[0m` : s);
+export const EXIT = { done: 0, failed: 1, usage: 2, denied: 3 } as const;
 
 export async function run(flags: RunFlags): Promise<number> {
   const { client } = await connectInProcess(
@@ -22,57 +33,69 @@ export async function run(flags: RunFlags): Promise<number> {
     flags.yes ? 'approve' : 'deny',
     'switchback-run',
   );
-  const session = await client.request('session.create', {
-    ...(flags.agent ? { agent: flags.agent } : {}),
-    ...(flags.permissionMode ? { permissionMode: flags.permissionMode } : {}),
-  });
+  const sessionId = await session(client, flags);
+  if (!sessionId) {
+    process.stderr.write('switchback run: no saved session in this workspace to continue\n');
+    await client.request('shutdown', {});
+    return EXIT.usage;
+  }
 
-  let pinned = false;
-  const finished = new Promise<number>((resolve) => {
+  const print = eventPrinter(flags.output, sessionId);
+  let denied = false;
+  let answer = '';
+  const finished = new Promise<StopReason>((resolve) => {
     client.on((e) => {
-      if (flags.json) {
-        process.stdout.write(`${JSON.stringify(e)}\n`);
-      } else if (e.type === 'config.updated') {
-        process.stderr.write(
-          dim(`[${e.org ? `${e.org.name} policy updated` : 'config updated'}]\n`),
-        );
-      } else if (e.type !== 'log' && e.sessionId === session.id) {
-        if (e.type === 'text.delta') process.stdout.write(e.text);
-        else if (e.type === 'route.decided')
-          process.stderr.write(dim(`[${e.tier} · ${e.model.model} · ${e.reason}]\n`));
-        else if (e.type === 'tool.started') process.stderr.write(dim(`\n▸ ${e.name}\n`));
-        else if (e.type === 'tool.completed' && e.isError)
-          process.stderr.write(dim(`  ✗ ${e.output.split('\n')[0]}\n`));
-        if (e.type === 'tool.completed' && e.private && !pinned) {
-          pinned = true;
-          process.stderr.write(dim(`${privateLabel(e.private)}\n`));
-        } else if (e.type === 'review.completed')
-          process.stderr.write(
-            dim(`${reviewLines({ ...e, kind: 'review', id: e.turnId }).join('\n')}\n`),
-          );
-        else if (e.type === 'secrets.redacted')
-          process.stderr.write(dim(`${redactedLabel(e.kinds, e.model)}\n`));
-        else if (e.type === 'subagent.started')
-          process.stderr.write(dim(`↳ ${e.agent}: ${e.task}\n`));
-        else if (e.type === 'error') process.stderr.write(`error: ${e.message}\n`);
-      }
-      if (e.type === 'turn.completed' && e.sessionId === session.id) {
-        if (!flags.json) process.stdout.write('\n');
-        resolve(e.stopReason === 'end_turn' ? 0 : 1);
-      }
+      print(e);
+      if (e.type === 'log' || e.type === 'config.updated' || e.sessionId !== sessionId) return;
+      if (e.type === 'text.delta') answer += e.text;
+      if (e.type === 'turn.started') answer = '';
+      if (e.type === 'tool.completed' && e.denied) denied = true;
+      if (e.type === 'turn.completed') resolve(e.stopReason);
     });
   });
   await client.request('session.prompt', {
-    sessionId: session.id,
+    sessionId,
     text: flags.prompt,
     route: flags.route,
     ...(flags.review !== undefined ? { review: flags.review } : {}),
   });
-  const code = await finished;
-  if (!flags.json) {
-    const u = await client.request('usage.get', { sessionId: session.id });
-    process.stderr.write(dim(`${receiptLine(u)}\n`));
-  }
+  const stopReason = await finished;
+  const code = stopReason !== 'end_turn' ? EXIT.failed : denied ? EXIT.denied : EXIT.done;
+  const usage = await client.request('usage.get', { sessionId });
+  if (flags.output === 'text') process.stdout.write('\n');
+  if (flags.output === 'text') process.stderr.write(`${receiptLine(usage)}\n`);
+  if (flags.output === 'json')
+    process.stdout.write(
+      `${JSON.stringify({
+        sessionId,
+        result: answer,
+        stopReason,
+        denied,
+        exitCode: code,
+        costUsd: usage.byTier.remote.costUsd,
+        savingsUsd: usage.estimatedSavingsUsd,
+        usage: usage.byTier,
+      })}\n`,
+    );
   await client.request('shutdown', {});
   return code;
+}
+
+/** The session the prompt goes to: a saved one to continue, or a new one. */
+async function session(
+  client: Awaited<ReturnType<typeof connectInProcess>>['client'],
+  flags: RunFlags,
+): Promise<string | undefined> {
+  if (flags.resume) {
+    const id =
+      flags.resume === 'latest' ? (await client.request('session.list', {}))[0]?.id : flags.resume;
+    if (id) await client.request('session.get', { sessionId: id });
+    return id;
+  }
+  const s = await client.request('session.create', {
+    ...(flags.agent ? { agent: flags.agent } : {}),
+    ...(flags.permissionMode ? { permissionMode: flags.permissionMode } : {}),
+    ...(flags.instructions ? { instructions: flags.instructions } : {}),
+  });
+  return s.id;
 }

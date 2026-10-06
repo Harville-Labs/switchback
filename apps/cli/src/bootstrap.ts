@@ -26,6 +26,8 @@ export const CLI_VERSION = pkg.version;
 export interface CommonFlags {
   cwd: string;
   mock: boolean;
+  /** Config layers from the command line (a run's `--allow`, `--max-steps`, ...). */
+  layers?: Record<string, unknown>[];
 }
 
 /**
@@ -64,7 +66,7 @@ export function mockify(config: SwitchbackConfig): SwitchbackConfig {
 }
 
 function load(flags: CommonFlags) {
-  const loaded = loadConfig(flags.cwd, process.env);
+  const loaded = loadConfig(flags.cwd, process.env, flags.layers ?? []);
   if (flags.mock) loaded.config = mockify(loaded.config);
   return loaded;
 }

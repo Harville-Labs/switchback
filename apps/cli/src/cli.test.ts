@@ -2,7 +2,7 @@
  * End-to-end: the real CLI binary, spawned the same way the VS Code extension
  * spawns it, driven over stdio with the real client.
  */
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -126,3 +126,51 @@ test('agents new writes a valid file that a running engine picks up without a re
   // Windows keeps the directory busy until the engine process has exited.
   rmSync(ws, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }, 30_000);
+
+describe('switchback run for scripts', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'switchback-run-'));
+  afterAll(() => rmSync(workspace, { recursive: true, force: true }));
+  const bash = 'mock:tool {"name":"bash","input":{"command":"echo hi"}}';
+  const runCli = async (...args: string[]) => {
+    const proc = Bun.spawn([process.execPath, main, 'run', '--mock', '--cwd', workspace, ...args], {
+      env: { ...process.env, SWITCHBACK_HOME: home },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { stdout, stderr, code };
+  };
+
+  test('--output json prints one result object', async () => {
+    const r = await runCli('--output', 'json', 'hello');
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.stdout)).toMatchObject({
+      result: '[mock mock-local] You said: hello',
+      stopReason: 'end_turn',
+      denied: false,
+      exitCode: 0,
+    });
+  });
+
+  test('a refused tool call exits 3; --deny refuses even with --yes', async () => {
+    expect((await runCli(bash)).code).toBe(3);
+    const r = await runCli('--yes', '--deny', 'bash', '--output', 'events', bash);
+    expect(r.code).toBe(3);
+    const completed = r.stdout
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as EngineEvent)
+      .find((e) => e.type === 'tool.completed');
+    expect(completed).toMatchObject({ denied: true });
+  });
+
+  test('a bad rule is a usage error', async () => {
+    const r = await runCli('--deny', 'bash(', 'x');
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('permission rule "bash("');
+  });
+});

@@ -155,6 +155,7 @@ export class ToolRunner {
     const permission = hookDenied
       ? { allowed: false, error: `Blocked by a PreToolUse hook: ${hookDenied}` }
       : await this.gate.check(s, tool, parsed.data, callCtx, signal, pre.decision);
+    const denied = !permission.allowed && !permission.failed;
     if (!permission.allowed) {
       output =
         permission.error ??
@@ -194,6 +195,7 @@ export class ToolRunner {
       name: call.name,
       output,
       isError,
+      ...(denied ? { denied } : {}),
       ...(priv ? { private: priv } : {}),
     });
     return {
