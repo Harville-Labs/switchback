@@ -14,7 +14,7 @@ import {
 } from '@switchback/client';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
-import { chooseAgent, chooseMode, chooseModels, chooseRole } from './pickers.ts';
+import { chooseAgent, chooseMode, chooseModels, chooseRewind, chooseRole } from './pickers.ts';
 
 export async function runChatCommand(
   engine: EngineConnection,
@@ -43,6 +43,8 @@ export async function runChatCommand(
     case 'sessions':
     case 'resume':
       return engine.openSession();
+    case 'rewind':
+      return chooseRewind(engine);
     case 'compact':
       return engine.compact();
     case 'models':

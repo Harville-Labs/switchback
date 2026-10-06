@@ -49,6 +49,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: 'Session',
     description: 'summarize earlier messages now (also automatic)',
   },
+  {
+    name: 'rewind',
+    group: 'Session',
+    description: 'go back to before a prompt: files, the conversation, or both',
+  },
   { name: 'subagents', group: 'Session', description: "list this session's subagents as a tree" },
   {
     name: 'subagent',

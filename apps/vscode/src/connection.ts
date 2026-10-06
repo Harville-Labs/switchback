@@ -211,8 +211,14 @@ export class EngineConnection implements vscode.Disposable {
       })),
       { title: 'Switchback sessions', matchOnDescription: true },
     );
-    if (!pick) return;
-    const { session, messages } = await c.request('session.get', { sessionId: pick.id });
+    if (pick) await this.showSession(pick.id);
+  }
+
+  /** Make a saved session the chat's session and show its history. */
+  async showSession(sessionId: string): Promise<void> {
+    const c = this.client;
+    if (!c) return;
+    const { session, messages } = await c.request('session.get', { sessionId });
     this.session = session;
     this.updateStatus(session.costUsd);
     this.broadcast({ type: 'history', session, messages });

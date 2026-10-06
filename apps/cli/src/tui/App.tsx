@@ -10,9 +10,11 @@ import {
   type ViewState,
 } from '@switchback/client';
 import type {
+  CheckpointInfo,
   InitializeResult,
   PermissionMode,
   RoutePreference,
+  SessionRewindParams,
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
@@ -22,6 +24,7 @@ import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
 import { PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
+import { RewindPicker } from './RewindPicker.tsx';
 import { Item, LiveChild, quietRoutes } from './Rows.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
 import { resume, runSlashCommand, type SlashContext } from './slash.ts';
@@ -74,6 +77,8 @@ export function App({
   const mode = view.mode ?? session.permissionMode ?? 'default';
   /** Saved sessions while the picker is open. */
   const [picking, setPicking] = useState<SessionSummary[] | undefined>();
+  /** Checkpoints while the rewind picker is open. */
+  const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
   const [exitArmedAt, setExitArmedAt] = useState<number | undefined>();
 
@@ -131,6 +136,24 @@ export function App({
     writeRaw: (s) => stdout.write(s),
     exit,
     openPicker,
+    openRewind: async () => {
+      const checkpoints = await client
+        .request('session.checkpoints', { sessionId: session.id })
+        .catch(() => []);
+      setRewinding(checkpoints);
+    },
+  };
+
+  const rewind = async (turnId: string, restore: SessionRewindParams['restore']) => {
+    setRewinding(undefined);
+    try {
+      const r = await client.request('session.rewind', { sessionId: session.id, turnId, restore });
+      const files = r.files.length ? `Put back ${r.files.join(', ')}.` : 'No files to put back.';
+      setView((v) => addInfo(v, restore === 'conversation' ? 'Rewound the conversation.' : files));
+      if (r.session) await resume(slash, r.session.id);
+    } catch (err) {
+      setView((v) => addInfo(v, `rewind: ${(err as Error).message}`));
+    }
   };
 
   /** Ctrl+C with nothing typed: cancel the turn, or quit on a second press. */
@@ -182,7 +205,7 @@ export function App({
 
   useInput((ch, key) => {
     // The picker and the prompt input handle their own keys, Ctrl+C included.
-    if (picking) return;
+    if (picking || rewinding) return;
     const ctrlC = key.ctrl && ch === 'c';
     if (permission) {
       const answer = permissionKey(permission, ch, key.escape || ctrlC);
@@ -262,10 +285,17 @@ export function App({
       ) : null}
       {view.todos?.some((t) => t.status !== 'done') ? <Todos todos={view.todos} /> : null}
       {view.queue?.length ? <Queue queue={view.queue} /> : null}
+      {rewinding ? (
+        <RewindPicker
+          checkpoints={rewinding}
+          onCancel={() => setRewinding(undefined)}
+          onRewind={(turnId, restore) => void rewind(turnId, restore)}
+        />
+      ) : null}
       {view.running && !permission && !escalation ? <Working view={view} /> : null}
       <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
         <PromptInput
-          focus={!permission && !escalation && !picking}
+          focus={!permission && !escalation && !picking && !rewinding}
           onInterrupt={interrupt}
           onSubmitNow={(text) => send(text, 'interrupt')}
           onCancel={() => {

@@ -176,6 +176,56 @@ export async function chooseMode(engine: EngineConnection): Promise<void> {
       .catch((err: Error) => vscode.window.showErrorMessage(`Switchback: ${err.message}`));
 }
 
+/** Go back to before a prompt: pick the checkpoint, then what to put back. */
+export async function chooseRewind(engine: EngineConnection): Promise<void> {
+  const { client, session } = engine;
+  if (!client || !session) return;
+  const checkpoints = await client.request('session.checkpoints', { sessionId: session.id });
+  if (!checkpoints.length) {
+    void vscode.window.showInformationMessage(
+      'No checkpoints yet: each prompt you send makes one.',
+    );
+    return;
+  }
+  const at = await vscode.window.showQuickPick(
+    [...checkpoints].reverse().map((c) => ({
+      label: c.prompt,
+      description: new Date(c.at).toLocaleTimeString(),
+      detail: c.files.length ? `changed ${c.files.join(', ')}` : 'changed no files',
+      turnId: c.turnId,
+    })),
+    { title: 'Switchback: Rewind to Before…' },
+  );
+  if (!at) return;
+  const how = await vscode.window.showQuickPick(
+    [
+      { label: 'Files and conversation', restore: 'both' as const },
+      { label: 'Files only', restore: 'files' as const },
+      { label: 'Conversation only', restore: 'conversation' as const },
+    ].map((o) => ({
+      ...o,
+      detail:
+        o.restore === 'conversation'
+          ? 'Continue from there in a new session; this one is kept'
+          : "Files changed since then go back; changes made by shell commands aren't tracked",
+    })),
+    { title: `Switchback: Rewind to before "${at.label}"` },
+  );
+  if (!how) return;
+  try {
+    const r = await client.request('session.rewind', {
+      sessionId: session.id,
+      turnId: at.turnId,
+      restore: how.restore,
+    });
+    if (r.files.length)
+      void vscode.window.showInformationMessage(`Switchback put back ${r.files.join(', ')}.`);
+    if (r.session) await engine.showSession(r.session.id);
+  } catch (err) {
+    void vscode.window.showErrorMessage(`Switchback: ${(err as Error).message}`);
+  }
+}
+
 /** Start a new session with an agent the user picks. */
 export async function chooseAgent(engine: EngineConnection): Promise<void> {
   const agents = engine.init?.agents ?? [];

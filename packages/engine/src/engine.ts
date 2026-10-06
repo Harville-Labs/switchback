@@ -10,9 +10,11 @@
  * the agent loop itself (`agent-loop.ts`).
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   type AgentSummary,
   type Attachment,
+  type CheckpointInfo,
   type EngineEvent,
   ErrorCode,
   type InitializeResult,
@@ -26,6 +28,8 @@ import {
   type SessionGetResult,
   type SessionPromptParams,
   type SessionPromptResult,
+  type SessionRewindParams,
+  type SessionRewindResult,
   type SessionRoles,
   type SessionSetRolesParams,
   type SessionSummary,
@@ -33,13 +37,15 @@ import {
   type UsagePeriod,
   type UsageReport,
 } from '@switchback/protocol';
-import type { Price, Provider } from '@switchback/providers';
+import type { Price } from '@switchback/providers';
 import { budgetReached, Router, roleAliases } from '@switchback/router';
 import { AgentLoop } from './agent-loop.ts';
 import { type AgentDefinition, loadAgents, summarize } from './agents.ts';
 import { type AgentSpec, draftAgentPrompt } from './authoring.ts';
+import { Checkpoints, FileCheckpointStore, MemoryCheckpointStore } from './checkpoints.ts';
 import { Compactor } from './compactor.ts';
 import { type SwitchbackConfig, tierOfModel } from './config.ts';
+import type { EngineOptions } from './engine-options.ts';
 import { ExternalRuntimes } from './external-runtime.ts';
 import { HookRunner } from './hooks/runner.ts';
 import { TurnHooks } from './hooks/turn-hooks.ts';
@@ -50,74 +56,36 @@ import { ModelDirectory } from './model-directory.ts';
 import type { OrgStatus } from './org/policy.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { PermissionGate } from './permissions/gate.ts';
-import { allowedModes, assertModeAllowed } from './permissions/modes.ts';
+import { assertModeAllowed } from './permissions/modes.ts';
 import { configRules, type SourcedRule } from './permissions/policy.ts';
 import { type PrivatePathMatcher, privatePathMatcher } from './privacy.ts';
 import { ReviewRunner } from './review-runner.ts';
-import type { AgentRuntime } from './runtimes/runtime.ts';
+import { SessionControls } from './session-controls.ts';
 import { SessionRegistry } from './session-registry.ts';
 import { changeRoles, effectiveRoles, rolesLayer } from './session-roles.ts';
 import { writeConfigLayer } from './setup.ts';
-import {
-  FileSessionStore,
-  MemorySessionStore,
-  type SessionHeader,
-  type SessionStore,
-} from './store.ts';
+import { FileSessionStore, MemorySessionStore, type SessionHeader } from './store.ts';
 import { Subagents } from './subagents.ts';
 import { systemPrompt } from './system-prompt.ts';
-import { type Interaction, ToolRunner } from './tool-runner.ts';
+import { ToolRunner } from './tool-runner.ts';
 import { CommandRunner, shellOf } from './tools/process.ts';
 import { BashSandbox } from './tools/sandbox.ts';
 import { type TurnOptions, TurnRunner } from './turn-runner.ts';
 import { UsageRecorder } from './usage-recorder.ts';
 import type { Worktree } from './worktree.ts';
 
-export const ENGINE_VERSION = '0.6.0';
+export type { EngineOptions } from './engine-options.ts';
 
-export interface EngineOptions {
-  workspaceRoot: string;
-  config: SwitchbackConfig;
-  prices?: Record<string, Price>;
-  /** Override provider construction (tests, embedding). Keyed by provider id. */
-  providers?: Map<string, Provider>;
-  store?: SessionStore;
-  /** Where saving a session's roles writes; default: the user config. */
-  userConfigFile?: string;
-  ledgerFile?: string;
-  agents?: Map<string, AgentDefinition>;
-  /** External agent runtimes by name, overriding `runtimes` in config (tests, embedding). */
-  runtimes?: Map<string, AgentRuntime>;
-  /** Where agent files live; rescanned so new agents appear without a restart. */
-  agentDirs?: { dir: string; source: AgentDefinition['source'] }[];
-  /** Project instructions (the workspace's AGENTS.md). */
-  instructions?: string;
-  /**
-   * How to resolve `ask` permissions and escalations when no client answers.
-   * `prompt` emits events and waits (interactive clients); `approve` / `deny`
-   * decide immediately (headless runs).
-   */
-  interaction?: Interaction;
-  /** Organization policy in effect, reported to clients. */
-  org?: OrgStatus;
-  /** Where engine-owned files live (worktrees). Defaults to the switchback data directory. */
-  dataDir?: string;
-  /** Project MCP servers held back until trusted (from `loadConfig`). */
-  untrustedMcp?: { name: string; source: string }[];
-  /**
-   * The OS sandbox for bash commands (`bash.sandbox`); `false` runs them
-   * unsandboxed whatever the config says (tests that exercise other things).
-   */
-  sandbox?: BashSandbox | false;
-  /** Permission rules with their sources (from `loadConfig`); default: the config's, unsourced. */
-  rules?: SourcedRule[];
-  now?: () => Date;
-}
+export const ENGINE_VERSION = '0.6.0';
 
 /** The model whose prices define "saved": the first remote model in role order. */
 function referenceModel(config: SwitchbackConfig): string | undefined {
   const alias = roleAliases(config.routing).find((a) => tierOfModel(config, a) === 'remote');
   return alias ? config.models[alias]?.model : undefined;
+}
+
+function newSessionId(): string {
+  return `ses_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`;
 }
 
 export class Engine {
@@ -142,6 +110,7 @@ export class Engine {
   private readonly external: ExternalRuntimes;
   private readonly agentLoop: AgentLoop;
   private readonly turns: TurnRunner;
+  private readonly controls: SessionControls;
 
   constructor(private readonly options: EngineOptions) {
     const { config } = options;
@@ -177,6 +146,15 @@ export class Engine {
       privatePaths: () => this.privatePaths(),
     };
     this.compactor = new Compactor(this.host, this.models);
+    this.controls = new SessionControls(this.host, {
+      sessions: this.sessions,
+      checkpoints: new Checkpoints(options.checkpoints ?? new MemoryCheckpointStore()),
+      gate: () => this.gate,
+      commands: () => this.commands,
+      summary: (s) => this.summary(s),
+      newSessionId,
+      now: this.now,
+    });
     const paths = switchbackPaths();
     const dataDir = options.dataDir ?? paths.dataDir;
     this.hooks = new HookRunner({
@@ -205,9 +183,9 @@ export class Engine {
     this.gate = new PermissionGate(this.host, {
       interaction: () => this.options.interaction ?? 'prompt',
       rules: () => (this.options.rules ??= configRules(this.options.config)),
-      mode: (s) => this.modeOf(s),
+      mode: (s) => this.controls.modeOf(s),
       // exit_plan_mode's result tells the model about the change itself.
-      setMode: (s, mode) => this.changeMode(this.sessions.top(s), mode, true),
+      setMode: (s, mode) => this.controls.changeMode(this.sessions.top(s), mode, true),
       saveTo: {
         project: projectPaths(options.workspaceRoot).localConfigFile,
         user: options.userConfigFile ?? switchbackPaths().configFile,
@@ -219,7 +197,10 @@ export class Engine {
       hookPayload: (s) => this.hookPayload(s),
       runSubagent: (parent, agent, prompt, description, signal, opts) =>
         this.subagents.run(parent, agent, prompt, description, signal, opts),
-      noteEdit: (s, path, writer) => this.reviews.noteEdit(s, path, writer),
+      noteEdit: (s, path, writer) => {
+        this.reviews.noteEdit(s, path, writer);
+        this.controls.noteCheckpoint(s, path);
+      },
     });
     this.external = new ExternalRuntimes(this.host, {
       injected: options.runtimes,
@@ -261,7 +242,8 @@ export class Engine {
       loop: this.agentLoop,
       hooks: new TurnHooks(this.hooks, (s) => this.hookPayload(s)),
       reviews: this.reviews,
-      mode: (s) => this.modeOf(s),
+      mode: (s) => this.controls.modeOf(s),
+      checkpoint: (s, turnId, prompt) => this.controls.beginCheckpoint(s, turnId, prompt),
     });
   }
 
@@ -316,6 +298,7 @@ export class Engine {
       ...(instructions ? { instructions } : {}),
       ledgerFile: hp.usageFile,
       store: new FileSessionStore(hp.sessionsDir),
+      checkpoints: new FileCheckpointStore(join(hp.dataDir, 'checkpoints')),
       ...extra,
     });
     return { engine, agentErrors: errors };
@@ -349,7 +332,7 @@ export class Engine {
 
   /** What every hook hears about the session. */
   private hookPayload(s: LiveSession): Record<string, unknown> {
-    return { session_id: s.header.id, permission_mode: this.modeOf(s) };
+    return { session_id: s.header.id, permission_mode: this.controls.modeOf(s) };
   }
 
   // -------------------------------------------------------------------------
@@ -406,7 +389,7 @@ export class Engine {
     const now = this.now().toISOString();
     const wt = params.worktree;
     const header: SessionHeader = {
-      id: `ses_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`,
+      id: newSessionId(),
       title: params.title ?? '',
       agent: agent.name,
       ...(params.parentId ? { parentId: params.parentId } : {}),
@@ -476,6 +459,16 @@ export class Engine {
     return this.turns.start(this.sessions.live(sessionId), rest);
   }
 
+  /** `session.checkpoints`. */
+  listCheckpoints(sessionId: string): CheckpointInfo[] {
+    return this.controls.listCheckpoints(sessionId);
+  }
+
+  /** `session.rewind`. */
+  rewind(params: SessionRewindParams): SessionRewindResult {
+    return this.controls.rewind(params);
+  }
+
   /** `session.dequeue`. */
   dequeue(sessionId: string, id: string): { removed: boolean } {
     return { removed: this.turns.dequeue(this.sessions.live(sessionId), id) };
@@ -516,24 +509,14 @@ export class Engine {
     this.gate.prompts.answer(requestId, { decision, ...(save ? { save } : {}) });
   }
 
-  /** `session.setMode`. Subagents follow their top-level session, so this changes the tree. */
+  /** `session.setMode`. */
   setMode(sessionId: string, mode: PermissionMode): { mode: PermissionMode } {
-    assertModeAllowed(mode, this.options.org);
-    this.changeMode(this.sessions.top(this.sessions.live(sessionId)), mode, false);
-    return { mode };
+    return this.controls.setMode(sessionId, mode);
   }
 
-  /** `permissions.list`: the rules in effect, with their sources, and the session's mode. */
-  async permissions(sessionId?: string): Promise<PermissionsListResult> {
-    const { read, edit, bash, web, mcp } = this.options.config.permissions;
-    const sandbox = await this.commands.sandboxState();
-    return {
-      sandbox: sandbox.active ? { active: true } : { active: false, reason: sandbox.reason },
-      ...(sessionId ? { mode: this.modeOf(this.sessions.live(sessionId)) } : {}),
-      modes: allowedModes(this.options.org),
-      levels: { read, edit, bash, web, mcp },
-      rules: this.gate.policy().list(),
-    };
+  /** `permissions.list`. */
+  permissions(sessionId?: string): Promise<PermissionsListResult> {
+    return this.controls.permissions(sessionId);
   }
 
   respondEscalation(requestId: string, approve: boolean): void {
@@ -648,17 +631,6 @@ export class Engine {
   // -------------------------------------------------------------------------
   // Sessions and what the collaborators borrow (`EngineHost`)
   // -------------------------------------------------------------------------
-
-  private modeOf(s: LiveSession): PermissionMode {
-    return this.sessions.top(s).mode ?? this.options.config.permissions.defaultMode;
-  }
-
-  /** `told`: the model already knows; otherwise it hears with the next prompt. */
-  private changeMode(top: LiveSession, mode: PermissionMode, told: boolean): void {
-    top.mode = mode;
-    if (told) top.toldMode = mode;
-    this.emit({ type: 'mode.changed', ...scope(top), mode });
-  }
 
   private rolesOf(s: LiveSession): SessionRoles {
     return effectiveRoles(this.options.config, this.sessions.top(s).roles);

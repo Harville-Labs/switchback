@@ -64,6 +64,8 @@ export interface SlashContext {
   writeRaw(s: string): void;
   /** Show the session picker. */
   openPicker(): Promise<void>;
+  /** Show the checkpoint picker. */
+  openRewind(): Promise<void>;
   exit(): void;
 }
 
@@ -273,6 +275,7 @@ const HANDLERS: Record<string, Handler> = {
     say(ctx, `MCP servers\n${formatMcpServers(servers)}`);
   },
   copy,
+  rewind: (ctx) => ctx.openRewind(),
   shells: async (ctx, args) => {
     if (args[0] === 'kill') {
       if (!args[1]) return say(ctx, 'usage: /shells kill <id>');

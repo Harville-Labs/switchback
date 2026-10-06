@@ -4,6 +4,7 @@ import type { InitializeResult, SessionSummary } from '@switchback/protocol';
 import { render } from 'ink-testing-library';
 import { App } from './App.tsx';
 import { PromptInput } from './PromptInput.tsx';
+import { RewindPicker } from './RewindPicker.tsx';
 import { filterSessions, SessionPicker } from './SessionPicker.tsx';
 
 const CTRL_C = '\x03';
@@ -169,5 +170,42 @@ describe('session picker', () => {
     ui.stdin.write('\x1b');
     await tick();
     expect(cancelled).toBe(true);
+  });
+});
+
+describe('rewind picker', () => {
+  test('choose a checkpoint, then what to put back', async () => {
+    const chosen: string[] = [];
+    const ui = render(
+      <RewindPicker
+        checkpoints={[
+          {
+            turnId: 't1',
+            index: 0,
+            at: '2026-10-06T00:00:00Z',
+            prompt: 'add a parser',
+            files: ['a.ts'],
+          },
+          {
+            turnId: 't2',
+            index: 4,
+            at: '2026-10-06T00:01:00Z',
+            prompt: 'fix the bug',
+            files: ['a.ts', 'b.ts'],
+          },
+        ]}
+        onRewind={(turnId, restore) => chosen.push(`${turnId}:${restore}`)}
+        onCancel={() => {}}
+      />,
+    );
+    expect(ui.lastFrame()).toContain('fix the bug');
+    ui.stdin.write('\x1b[B');
+    await tick();
+    ui.stdin.write(ENTER);
+    await tick();
+    expect(ui.lastFrame()).toContain('2 file(s) changed since then');
+    ui.stdin.write('f');
+    await tick();
+    expect(chosen).toEqual(['t1:files']);
   });
 });
