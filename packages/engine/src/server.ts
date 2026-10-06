@@ -20,11 +20,13 @@ import {
   PROTOCOL_VERSION,
   RpcError,
   SessionCancelParams,
+  SessionCheckpointsParams,
   SessionCompactParams,
   SessionCreateParams,
   SessionDequeueParams,
   SessionGetParams,
   SessionPromptParams,
+  SessionRewindParams,
   SessionRolesParams,
   SessionSetModeParams,
   SessionSetRolesParams,
@@ -113,6 +115,10 @@ export function serve(
         return engine.setRoles(parse(SessionSetRolesParams, req.params));
       case 'session.compact':
         return engine.compactSession(parse(SessionCompactParams, req.params).sessionId);
+      case 'session.checkpoints':
+        return engine.listCheckpoints(parse(SessionCheckpointsParams, req.params).sessionId);
+      case 'session.rewind':
+        return engine.rewind(parse(SessionRewindParams, req.params));
       case 'session.dequeue': {
         const p = parse(SessionDequeueParams, req.params);
         return engine.dequeue(p.sessionId, p.id);

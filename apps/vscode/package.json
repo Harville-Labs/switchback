@@ -137,6 +137,12 @@
         "icon": "$(history)"
       },
       {
+        "command": "switchback.rewind",
+        "title": "Rewind…",
+        "category": "Switchback",
+        "icon": "$(discard)"
+      },
+      {
         "command": "switchback.acceptEdit",
         "title": "Accept Proposed Edit",
         "category": "Switchback",

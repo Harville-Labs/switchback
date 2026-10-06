@@ -55,6 +55,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
 | `/shells` · `/shells kill <id>` | Background shells the model started (dev servers, watchers), and stopping one. The status bar counts the running ones |
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
+| `/rewind` | Go back to before a prompt: pick it, then `b` (files and conversation), `f` (files only), or `c` (conversation only). Files changed since then by edit or write go back and files created since are removed; changes made by shell commands aren't tracked. The conversation continues in a new session, and this one is kept |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |

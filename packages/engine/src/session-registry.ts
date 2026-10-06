@@ -32,6 +32,23 @@ export class SessionRegistry {
     });
   }
 
+  /**
+   * A new top-level session with the first `upTo` messages of another. The
+   * original is untouched (transcripts are append-only); the copy keeps its
+   * system prompt and prefix, so prompt caches still hit.
+   */
+  fork(source: LiveSession, upTo: number, id: string, now: string): LiveSession {
+    const { parentId: _p, worktree: _w, ...header } = source.header;
+    const copy = this.create({
+      ...header,
+      id,
+      title: `${source.header.title || 'session'} (rewound)`,
+      createdAt: now,
+    });
+    for (const m of source.messages.slice(0, upTo)) this.append(copy, m);
+    return copy;
+  }
+
   /** A session in memory, or loaded from the store; throws when there's neither. */
   live(sessionId: string): LiveSession {
     const existing = this.sessions.get(sessionId);

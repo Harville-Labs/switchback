@@ -3,7 +3,7 @@
  * held before a turn changed it, ask a reviewer about the diff, and hand
  * `revise` findings back to the model.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { type RoutePreference, type StopReason, textOf } from '@switchback/protocol';
 import type { ChatEvent } from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
@@ -47,7 +47,7 @@ export class ReviewRunner {
       return; // the tool will report the bad path
     }
     const entry = top.turnEdits.get(file) ?? {
-      path: toWorkspacePath(this.host.rootOf(top), file) ?? file,
+      path: toWorkspacePath(realpathSync(this.host.rootOf(top)), file) ?? file,
       before: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
       writers: new Set<string>(),
     };

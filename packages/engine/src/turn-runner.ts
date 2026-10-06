@@ -37,6 +37,8 @@ export interface TurnRunnerDeps {
   hooks: TurnHooks;
   reviews: ReviewRunner;
   mode(s: LiveSession): PermissionMode;
+  /** A top-level turn with a prompt starts: the checkpoint it can be rewound to. */
+  checkpoint(s: LiveSession, turnId: string, prompt: string): void;
 }
 
 export class TurnRunner {
@@ -159,6 +161,7 @@ export class TurnRunner {
 
     this.host.emit({ type: 'turn.started', ...scope(session), turnId });
     // An empty prompt continues the session with whatever reports are waiting.
+    if (text && session.depth === 0) this.deps.checkpoint(session, turnId, text);
     const blocked = text
       ? await this.appendPrompt(session, text, extra, options.private)
       : undefined;

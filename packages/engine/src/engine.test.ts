@@ -1080,3 +1080,32 @@ describe('headless sessions', () => {
     expect(events.find((e) => e.type === 'tool.completed')).toMatchObject({ denied: true });
   });
 });
+
+test('session.checkpoints and session.rewind round-trip', async () => {
+  const { engine } = setup(
+    [
+      { toolCalls: [{ name: 'write', input: { path: 'hello.txt', content: 'changed\n' } }] },
+      { text: 'ok' },
+    ],
+    [],
+  );
+  const [serverSide, clientSide] = createTransportPair();
+  serve(engine, serverSide);
+  const client = new SwitchbackClient(clientSide);
+  await client.initialize({ name: 'test', version: '0' }, root);
+  const session = await client.request('session.create', {});
+  const done = new Promise<void>((resolve) =>
+    client.on((e) => e.type === 'turn.completed' && resolve()),
+  );
+  await client.request('session.prompt', { sessionId: session.id, text: 'change hello' });
+  await done;
+  const [checkpoint] = await client.request('session.checkpoints', { sessionId: session.id });
+  expect(checkpoint).toMatchObject({ prompt: 'change hello', files: ['hello.txt'] });
+  const r = await client.request('session.rewind', {
+    sessionId: session.id,
+    turnId: checkpoint?.turnId as string,
+    restore: 'files',
+  });
+  expect(r).toEqual({ files: ['hello.txt'] });
+  expect(readFileSync(join(root, 'hello.txt'), 'utf8')).toBe('hello world\n');
+});

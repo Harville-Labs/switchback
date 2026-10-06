@@ -38,6 +38,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
 | `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`), `review?` (boolean; overrides `review.mode`), `delivery?` (`queue`\|`interrupt`) | `{ turnId, queued? }`, returned immediately; progress arrives as events. While a turn runs, the prompt is queued for the model's next step (`queued` is its ID; anything still queued when the turn ends starts the next one), or with `delivery: "interrupt"` the running turn is cancelled and this prompt starts at once. `session.cancel` drops the queue. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine) or `{kind: "text", label, text}`. These, and `@path` mentions in the text, become user-message text parts marked `attachment`. |
+| `session.checkpoints` | `{ sessionId }` | `CheckpointInfo[]`, oldest first: each turn's `turnId`, its prompt, when, and the files it changed with edit or write |
+| `session.rewind` | `{ sessionId, turnId, restore: files\|conversation\|both }` | `{ files, session? }`: the files put back or removed, and with the conversation, the new session holding the history before that turn (the original is untouched) |
 | `session.dequeue` | `{ sessionId, id }` | `{ removed }`. Withdraws a queued prompt before it's delivered |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |

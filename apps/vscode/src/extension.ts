@@ -11,7 +11,7 @@ import { ChatViewProvider } from './chat-view.ts';
 import { EngineConnection, NoEngineError, resolveEngine } from './connection.ts';
 import { type AttachChoice, EditorContext } from './context.ts';
 import { installerShell } from './engine-binary.ts';
-import { chooseModels, chooseReview } from './pickers.ts';
+import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
 /** Returned from activate() for the integration tests; not a public API. */
@@ -142,6 +142,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
   context.subscriptions.push(
     vscode.commands.registerCommand('switchback.newSession', () => engine?.newSession()),
     vscode.commands.registerCommand('switchback.openSession', () => engine?.openSession()),
+    vscode.commands.registerCommand('switchback.rewind', () => engine && chooseRewind(engine)),
     vscode.commands.registerCommand('switchback.acceptEdit', answerEdit('allow_once')),
     vscode.commands.registerCommand('switchback.rejectEdit', answerEdit('deny')),
     vscode.commands.registerCommand('switchback.cancel', () => engine?.handle({ type: 'cancel' })),

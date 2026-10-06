@@ -178,6 +178,37 @@ export interface QueuedPrompt {
   text: string;
 }
 
+/** The start of a turn, which a session can rewind to. */
+export interface CheckpointInfo {
+  turnId: string;
+  /** Where the turn's prompt is in the transcript. */
+  index: number;
+  at: string;
+  /** The prompt, shortened. */
+  prompt: string;
+  /** Files the turn changed with edit or write (workspace-relative). */
+  files: string[];
+}
+
+export const SessionCheckpointsParams = z.object({ sessionId: z.string() });
+export type SessionCheckpointsParams = z.infer<typeof SessionCheckpointsParams>;
+
+export const SessionRewindParams = z.object({
+  sessionId: z.string(),
+  /** The checkpoint: the turn to go back to the start of. */
+  turnId: z.string(),
+  /** Files, the conversation (as a new session), or both. */
+  restore: z.enum(['files', 'conversation', 'both']),
+});
+export type SessionRewindParams = z.infer<typeof SessionRewindParams>;
+
+export interface SessionRewindResult {
+  /** Files put back or removed. */
+  files: string[];
+  /** With the conversation: the new session, holding the history before the checkpoint. */
+  session?: SessionSummary;
+}
+
 export const SessionDequeueParams = z.object({ sessionId: z.string(), id: z.string() });
 export type SessionDequeueParams = z.infer<typeof SessionDequeueParams>;
 
@@ -317,6 +348,10 @@ export interface Methods {
   'session.prompt': { params: SessionPromptParams; result: SessionPromptResult };
   /** Stop the running turn and its background subagents, and drop queued prompts. */
   'session.cancel': { params: SessionCancelParams; result: { cancelled: boolean } };
+  /** The session's checkpoints, oldest first. */
+  'session.checkpoints': { params: SessionCheckpointsParams; result: CheckpointInfo[] };
+  /** Go back to a checkpoint: files, the conversation (forked; the original stays), or both. */
+  'session.rewind': { params: SessionRewindParams; result: SessionRewindResult };
   /** Withdraw a queued prompt before it's delivered; `removed: false` if it already was. */
   'session.dequeue': { params: SessionDequeueParams; result: { removed: boolean } };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
