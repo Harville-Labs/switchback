@@ -96,7 +96,7 @@ Escalation is normally reactive: the start model has to struggle first. The opti
 - It follows `escalation.policy`: `ask` prompts first, and `off` ignores the rating.
 - The rating call is recorded in the usage ledger as `classify`, and the escalated call as `classifier`, so `switchback usage --by rule` shows what each costs.
 
-`bun scripts/eval-classifier.ts --model <name>` (add `--typesafe` for Jev) measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The nightly live workflow runs it and posts the numbers in the job summary.
+`bun scripts/eval-classifier.ts --model <name>` (add `--typesafe` for Jev) measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The weekly live workflow runs it and posts the numbers in the job summary.
 
 ## Quality signals
 
