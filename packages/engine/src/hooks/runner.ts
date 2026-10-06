@@ -13,6 +13,8 @@
  * `hookSpecificOutput.additionalContext`; `continue: false` with
  * `stopReason`; `systemMessage` (shown to the user).
  */
+
+import { readUntilExit, terminate } from '../tools/process.ts';
 import type { HookEvent, HookMatcher, HooksConfig } from './schema.ts';
 
 export interface HookOutcome {
@@ -86,11 +88,13 @@ export class HookRunner {
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      proc.kill();
+      terminate(proc);
     }, seconds * 1000);
+    // A child the hook left running (`sleep` under a killed shell) can hold
+    // the pipes open; stop reading soon after the hook itself exits.
     const [stdout, stderr, code] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
+      readUntilExit(proc.stdout, proc.exited),
+      readUntilExit(proc.stderr, proc.exited),
       proc.exited,
     ]).finally(() => clearTimeout(timer));
     const name = hook.command.length > 60 ? `${hook.command.slice(0, 60)}…` : hook.command;

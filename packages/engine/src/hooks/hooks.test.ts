@@ -7,6 +7,7 @@ import { type Script, ScriptedProvider } from '@switchback/providers';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
 import type { OrgPolicy } from '../org/policy.ts';
+import { currentShell } from '../tools/shell.ts';
 import { trust } from '../trust.ts';
 import { hookTrustKey } from './layers.ts';
 import { HookRunner } from './runner.ts';
@@ -16,7 +17,9 @@ let root: string;
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'switchback-hooks-'));
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+// Windows can't remove a directory a hook process (Notification runs in the
+// background) still has open; give it a moment.
+afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
 const cmd = (command: string, timeout?: number) => ({
   type: 'command' as const,
@@ -29,7 +32,8 @@ function runner(hooks: HooksConfig) {
   const r = new HookRunner({
     hooks: () => hooks,
     workspaceRoot: root,
-    argv: (c) => ['/bin/sh', '-c', c],
+    // The engine's own shell: bash, or Git Bash on Windows.
+    argv: (c) => currentShell().argv(c),
     notify: (_level, m) => notes.push(m),
   });
   return { r, notes };
