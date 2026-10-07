@@ -206,11 +206,13 @@ const SCENES: Scene[] = [
           '+++ src/upload.ts',
           '@@ -12,6 +12,11 @@ export async function upload(file, attempt = 0) {',
           '   const res = await fetch(url, { method: "PUT", body: file });',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: diff text shown in the screenshot, not a template
           '-  if (!res.ok) throw new Error(`upload: ${res.status}`);',
           '+  if (res.status === 503 && attempt < 3) {',
           '+    await sleep(2 ** attempt * 500);',
           '+    return upload(file, attempt + 1);',
           '+  }',
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: diff text shown in the screenshot, not a template
           '+  if (!res.ok) throw new Error(`upload: ${res.status}`);',
           '   return res.json();',
         ].join('\n'),

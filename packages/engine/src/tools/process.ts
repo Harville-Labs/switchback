@@ -7,7 +7,7 @@ import { basename } from 'node:path';
 import type { ShellInfo } from '@switchback/protocol';
 import type { Subprocess } from 'bun';
 import {
-  type BashSandbox,
+  BashSandbox,
   type SandboxContext,
   type SandboxSettings,
   type SandboxState,
@@ -106,6 +106,36 @@ export function shellOf(settings: Pick<CommandSettings, 'shell'>): Shell {
   if (!settings.shell) return currentShell();
   const path = settings.shell;
   return { name: basename(path), argv: (c) => [path, '-c', c] };
+}
+
+/** A command runner for an engine: sandboxed as `bash.sandbox` says, unless the embedder turned the sandbox off (`false`). */
+export function createCommandRunner(o: {
+  settings: () => CommandSettings;
+  onChange: (shell: BackgroundShell) => void;
+  sandbox: BashSandbox | false | undefined;
+  workspaceRoot: string;
+  /** Switchback's own config and data directories, which commands may never write. */
+  switchbackDirs: string[];
+  dataDir: string;
+  rules: () => SandboxContext['rules'];
+  notice: (message: string) => void;
+}): CommandRunner {
+  return new CommandRunner(
+    o.settings,
+    o.onChange,
+    o.sandbox === false
+      ? undefined
+      : {
+          runtime: o.sandbox ?? new BashSandbox(o.dataDir),
+          context: (cwd) => ({
+            workspaceRoot: o.workspaceRoot,
+            sessionRoot: cwd,
+            switchbackDirs: o.switchbackDirs,
+            rules: o.rules(),
+          }),
+          notice: o.notice,
+        },
+  );
 }
 
 export class CommandRunner {

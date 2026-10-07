@@ -2,7 +2,7 @@
  * Append-only compaction (ADR 0008): when a prompt grows past the threshold,
  * summarize older history into a marker appended to the transcript.
  */
-import type { Message } from '@switchback/protocol';
+import { ErrorCode, type Message, RpcError } from '@switchback/protocol';
 import type { ChatEvent, Provider } from '@switchback/providers';
 import { type ModelInfo, roleAliases } from '@switchback/router';
 import {
@@ -23,6 +23,19 @@ export class Compactor {
     private readonly host: EngineHost,
     private readonly models: ModelDirectory,
   ) {}
+
+  /** `session.compact`: compact now, whatever the prompt size; refused while a turn runs. */
+  async compactNow(s: LiveSession, toolSpecsJson: () => string): Promise<boolean> {
+    if (s.controller) throw new RpcError(ErrorCode.SessionBusy, 'session is running a turn');
+    const controller = new AbortController();
+    s.controller = controller;
+    try {
+      await this.models.refreshHealth(controller.signal);
+      return await this.compact(s, toolSpecsJson(), controller.signal, true);
+    } finally {
+      s.controller = undefined;
+    }
+  }
 
   /**
    * Summarize older history into an appended marker when the prompt passes the

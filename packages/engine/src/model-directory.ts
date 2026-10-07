@@ -72,6 +72,15 @@ export class ModelDirectory {
     return pc ? tierOf(pc) : (this.providers.get(providerId)?.tier ?? 'remote');
   }
 
+  /** Every configured model, as `initialize` reports them. */
+  summaries(): { alias: string; ref: { provider: string; model: string }; tier: Tier }[] {
+    return Object.entries(this.config.models).map(([alias, m]) => ({
+      alias,
+      ref: { provider: m.provider, model: m.model },
+      tier: this.tierOfProvider(m.provider),
+    }));
+  }
+
   info(alias: string): ModelInfo | undefined {
     const m = this.config.models[alias];
     if (!m) return undefined;

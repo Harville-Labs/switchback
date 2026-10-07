@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, relative, sep } from 'node:path';
 import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
 import { isDecisionOnly, type Price, tierOf } from '@switchback/providers';
+import { roleAliases } from '@switchback/router';
 
 export { roleAliases } from '@switchback/router';
 
@@ -373,4 +374,10 @@ export function redactConfig(value: unknown): unknown {
     );
   }
   return value;
+}
+
+/** The model whose prices define "saved": the first remote model in role order. */
+export function referenceModel(config: SwitchbackConfig): string | undefined {
+  const alias = roleAliases(config.routing).find((a) => tierOfModel(config, a) === 'remote');
+  return alias ? config.models[alias]?.model : undefined;
 }

@@ -12,7 +12,12 @@ import {
 } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { McpPromptInfo, McpResourceInfo } from '@switchback/protocol';
+import type {
+  CustomCommandInfo,
+  McpListResult,
+  McpPromptInfo,
+  McpResourceInfo,
+} from '@switchback/protocol';
 import type { Tool } from '../tools/tool.ts';
 import type { McpServerConfig } from './config.ts';
 import { type Converted, fromContent, fromResource } from './content.ts';
@@ -51,6 +56,39 @@ async function all<T>(
     cursor = p.nextCursor;
   } while (cursor);
   return out;
+}
+
+/** `mcp.list`: waits briefly for servers still connecting; project servers awaiting trust are listed too. */
+export async function mcpList(
+  hub: McpHub | undefined,
+  untrusted: { name: string; source: string }[] = [],
+): Promise<McpListResult> {
+  if (hub) await Promise.race([hub.ready, Bun.sleep(5_000)]);
+  return {
+    servers: [
+      ...(hub?.status() ?? []),
+      ...untrusted.map((u) => ({
+        name: u.name,
+        state: 'untrusted' as const,
+        tools: 0,
+        error: `defined in ${u.source}; run \`switchback mcp trust\` to allow it`,
+      })),
+    ],
+  };
+}
+
+/** Every connected server's prompts as commands, named `<server>:<prompt>`. */
+export function promptCommands(servers: McpServerStatus[]): CustomCommandInfo[] {
+  return servers.flatMap((s) =>
+    (s.prompts ?? []).map((p) => ({
+      name: `${s.name}:${p.name}`,
+      description: p.description ?? `${s.name} prompt`,
+      ...(p.arguments?.length
+        ? { args: p.arguments.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`)).join(' ') }
+        : {}),
+      source: 'mcp' as const,
+    })),
+  );
 }
 
 export class McpHub {

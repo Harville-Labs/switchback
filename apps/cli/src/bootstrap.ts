@@ -1,8 +1,9 @@
 import { connectDaemon, SwitchbackClient } from '@switchback/client';
 import {
   ConfigError,
-  Engine,
+  type Engine,
   type EngineOptions,
+  engineFromWorkspace,
   loadConfig,
   OrgSync,
   optIn,
@@ -78,7 +79,7 @@ export function createEngine(
 ) {
   try {
     const loaded = load(flags);
-    const { engine, agentErrors } = Engine.fromWorkspace(flags.cwd, loaded.config, {
+    const { engine, agentErrors } = engineFromWorkspace(flags.cwd, loaded.config, {
       prices: loaded.prices,
       untrustedMcp: loaded.untrustedMcp,
       rules: loaded.rules,

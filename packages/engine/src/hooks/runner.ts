@@ -13,6 +13,7 @@
  * `hookSpecificOutput.additionalContext`; `continue: false` with
  * `stopReason`; `systemMessage` (shown to the user).
  */
+import type { EngineEvent } from '@switchback/protocol';
 
 import { readUntilExit, terminate } from '../tools/process.ts';
 import type { HookEvent, HookMatcher, HooksConfig } from './schema.ts';
@@ -40,6 +41,17 @@ const TOOL_EVENTS = new Set<HookEvent>(['PreToolUse', 'PostToolUse']);
 
 export class HookRunner {
   constructor(private readonly deps: HookRunnerDeps) {}
+
+  /** Notification hooks: Switchback is waiting on the user (a permission or escalation prompt). */
+  notifyFor(event: EngineEvent): void {
+    if (event.type !== 'permission.requested' && event.type !== 'escalation.requested') return;
+    if (!this.has('Notification')) return;
+    const message =
+      event.type === 'permission.requested'
+        ? `Switchback needs your permission: ${event.summary}`
+        : `Switchback asks to escalate to ${event.target.model}`;
+    void this.run('Notification', { session_id: event.sessionId, message });
+  }
 
   /** Whether any hook is configured for the event (calls stay cheap without hooks). */
   has(event: HookEvent): boolean {

@@ -1,6 +1,10 @@
 /** Drafting a system prompt for a new agent (`switchback agents new`). */
+
 import type { Usage } from '@switchback/protocol';
 import type { ChatEvent, Provider } from '@switchback/providers';
+import type { Compactor } from './compactor.ts';
+import type { UsageLedger } from './ledger.ts';
+import type { ModelDirectory } from './model-directory.ts';
 
 export interface AgentSpec {
   name: string;
@@ -42,4 +46,30 @@ export async function draftAgentPrompt(
     .trim();
   // Empty or not, the call was made and is billed.
   return { text, usage: done.usage };
+}
+
+/**
+ * Draft on the same model choice as summaries (local when reachable, remote
+ * only when routing and budget allow), and record the call.
+ */
+export async function draftWithSummarizer(
+  deps: {
+    models: Pick<ModelDirectory, 'refreshHealth' | 'provider'>;
+    compactor: Pick<Compactor, 'summarizerModel'>;
+    ledger: Pick<UsageLedger, 'record'>;
+  },
+  spec: AgentSpec,
+): Promise<string> {
+  const controller = new AbortController();
+  await deps.models.refreshHealth(controller.signal);
+  const model = deps.compactor.summarizerModel(0);
+  const provider = model && deps.models.provider(model.ref.provider);
+  if (!model || !provider) throw new Error('no model is available to draft the prompt');
+  const draft = await draftAgentPrompt(provider, model.ref.model, spec, controller.signal);
+  deps.ledger.record('authoring', model.tier, model.ref, draft.usage, {
+    rule: 'authoring',
+    agent: spec.name,
+  });
+  if (!draft.text) throw new Error('the model returned an empty draft');
+  return draft.text;
 }
