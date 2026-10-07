@@ -24,7 +24,8 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `switchb
 - **Privacy and savings**: tool rows that brought in private content show `🔒 stays local`, and the status line shows `🔒 local only` once a session is pinned ([privacy.md](../privacy.md)); it also shows what the session has saved so far.
 - **Telemetry**: Switchback telemetry is off unless you opt in with `switchback telemetry on`, and VS Code's own `telemetry.telemetryLevel: off` keeps it off regardless ([telemetry.md](../telemetry.md)).
 - **Choose Models for This Session…** (command palette) does the same for every role, including the subagent model and going back to your config. The status bar shows where the session is on the ladder (`step 1/2 qwen3-coder-480b`).
-- Commands: Set Up Models, Install Terminal Command, New Session, Cancel, Choose Models for This Session, Show Usage and Savings, Show Session Receipt, Set Review of Local Edits, Compact Conversation, Restart Engine, Show Engine Logs.
+- **Get started**: a walkthrough (**Switchback: Get Started**, also offered when no local model is configured) covers opening the chat, choosing models, a first prompt, routing, edit review, and the terminal UI.
+- Commands: Get Started, Set Up Models, Install Terminal Command, New Session, Cancel, Choose Models for This Session, Show Usage and Savings, Show Session Receipt, Set Review of Local Edits, Compact Conversation, Restart Engine, Show Engine Logs.
 
 ## Settings
 
@@ -59,6 +60,8 @@ Project behavior (models, routing, permissions, agents) comes from the same `.sw
 Run the integration tests (a real VS Code instance with the extension, talking to the engine in `--mock` mode) with `bun run --cwd apps/vscode test`. CI runs them on every push.
 
 Build a `.vsix` with `bun run --cwd apps/vscode package`.
+
+The screenshots in the extension's README and walkthrough come from `bun apps/vscode/scripts/screenshots.ts`: the real webview, fed scripted engine events, captured by headless Chrome (set `CHROME_PATH` if it isn't in the usual place). Change the scenes there and rerun it rather than editing the images.
 
 ## Distribution
 

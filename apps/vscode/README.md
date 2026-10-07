@@ -2,11 +2,15 @@
 
 A local-first coding agent from Harville Labs. Most turns run on a model on your own machine. When the local model needs help, Switchback escalates that turn to the hosted provider you choose (OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, or any OpenAI-compatible API) and tells you why.
 
+![The Switchback chat: the local model that answered, why, and how fast, its tool calls, and the answer](https://raw.githubusercontent.com/Harville-Labs/switchback/main/apps/vscode/media/screenshots/vscode-chat.png)
+
 ## Get started
 
 1. Install the extension. It includes the Switchback engine for macOS (Apple silicon and Intel), Linux (x64 and arm64), and Windows (x64), so there is nothing else to install.
 2. Open the **Switchback** view in the activity bar.
 3. Run **Switchback: Set Up Models** from the command palette. Point it at a local model server (Ollama, LM Studio, llama.cpp, or vLLM), add an API key for a hosted provider, or both.
+
+**Switchback: Get Started** opens a short walkthrough of these steps.
 
 On other platforms, install the `switchback` CLI and the extension uses it from your PATH (or set `switchback.executablePath`).
 
@@ -21,6 +25,11 @@ On other platforms, install the `switchback` CLI and the extension uses it from 
 - **Config validation** and autocomplete for `.switchback/config.json`
 
 The extension is a thin client of the same engine as the `switchback` terminal UI, so both behave the same, read the same config, and can share live sessions in a workspace.
+
+<p>
+  <img alt="An escalation prompt: the reason, the hosted model, and its estimated cost" src="https://raw.githubusercontent.com/Harville-Labs/switchback/main/apps/vscode/media/screenshots/vscode-escalation.png" width="49%">
+  <img alt="A proposed edit's diff, waiting for approval" src="https://raw.githubusercontent.com/Harville-Labs/switchback/main/apps/vscode/media/screenshots/vscode-review.png" width="49%">
+</p>
 
 ## Settings
 
@@ -41,5 +50,5 @@ Prompts and code go only to the models your config and routing allow. Switchback
 ## Links
 
 - [Documentation](https://github.com/Harville-Labs/switchback/tree/main/docs)
-- [Report an issue](https://github.com/Harville-Labs/switchback/issues)
+- [Questions and issues](https://github.com/Harville-Labs/switchback/issues)
 - [Source](https://github.com/Harville-Labs/switchback) (Apache-2.0)
