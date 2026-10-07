@@ -9,7 +9,8 @@
     "./view": "./src/view.ts",
     "./format": "./src/format.ts",
     "./copy": "./src/copy.ts",
-    "./commands": "./src/commands.ts"
+    "./commands": "./src/commands.ts",
+    "./tool-display": "./src/tool-display.ts"
   },
   "dependencies": {
     "@switchback/protocol": "workspace:*",

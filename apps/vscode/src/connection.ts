@@ -314,6 +314,7 @@ export class EngineConnection implements vscode.Disposable {
           requestId: m.requestId,
           decision: m.decision,
           ...(m.save ? { save: m.save } : {}),
+          ...(m.feedback ? { feedback: m.feedback } : {}),
         });
         return;
       case 'escalation':

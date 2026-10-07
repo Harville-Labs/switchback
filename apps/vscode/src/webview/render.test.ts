@@ -68,14 +68,15 @@ test('subagents render as nested collapsible sections, depth 2 included', () => 
   const el = html(view, ['c1']);
   const outer = el.querySelector('details[data-sub="c1"]');
   expect(outer?.hasAttribute('open')).toBe(true);
-  expect(outer?.querySelector('.children .tool')?.textContent).toContain('grep');
+  expect(outer?.querySelector('.children .tool')?.textContent).toContain('Search "x"');
   const inner = outer?.querySelector('details[data-sub="g1"]');
   expect(inner).toBeTruthy();
   expect(inner?.hasAttribute('open')).toBe(false);
   expect(inner?.querySelector('.route')?.textContent).toContain('explore runs local');
   // Model and task text are escaped, never markup.
   expect(outer?.querySelector('summary')?.innerHTML).toContain('&lt;code&gt;');
-  expect(el.querySelector('b')).toBeNull();
+  // Only the tool's verb is bold; the model's own markup never is.
+  expect([...el.querySelectorAll('b')].map((b) => b.textContent)).toEqual(['Search']);
 });
 
 test('reasoning is a closed Thinking row that opens to paragraphs, kept open by key', () => {

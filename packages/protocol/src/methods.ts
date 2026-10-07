@@ -248,6 +248,8 @@ export const PermissionRespondParams = z.object({
    * project's personal config (`.switchback/config.local.json`) or the user config.
    */
   save: z.enum(['project', 'user']).optional(),
+  /** With `deny`: what to do instead, passed to the model with the refusal. */
+  feedback: z.string().max(4_000).optional(),
 });
 export type PermissionRespondParams = z.infer<typeof PermissionRespondParams>;
 

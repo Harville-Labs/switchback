@@ -36,6 +36,10 @@ export type ViewItem =
       output?: string;
       /** The result carried private content (`privacy.localOnlyPaths`). */
       private?: string;
+      /** The call never ran: the user, a rule, or a hook refused it. */
+      denied?: boolean;
+      /** What an edit or write changed (unified diff). */
+      diff?: string;
     }
   | {
       kind: 'subagent';
@@ -112,6 +116,8 @@ export interface ViewState {
   /** Saved versus running this session all-remote (this session only, not its subagents). */
   savingsUsd: number;
   lastTier?: Tier;
+  /** How full the last call's context was, when the engine knew the window. */
+  context?: { tokens: number; window: number };
   /** The last call's speed, for status lines. */
   speed?: { model: string; tokensPerSecond: number };
   /** Where the last call ran on the escalation ladder (`step` 0 is the start model). */

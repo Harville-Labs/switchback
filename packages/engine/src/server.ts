@@ -128,7 +128,7 @@ export function serve(
         return { cancelled: engine.cancel(parse(SessionCancelParams, req.params).sessionId) };
       case 'permission.respond': {
         const p = parse(PermissionRespondParams, req.params);
-        engine.respondPermission(p.requestId, p.decision, p.save);
+        engine.respondPermission(p.requestId, p.decision, p.save, p.feedback);
         return { ok: true };
       }
       case 'session.escalate':

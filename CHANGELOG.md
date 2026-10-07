@@ -5,6 +5,14 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Added
+- **Full-screen terminal UI**: the TUI takes over the terminal like an editor, with the transcript above and the input fixed at the bottom; Page Up/Down and the mouse wheel scroll it, and quitting restores the shell and prints how to resume. Hold Shift (Option in macOS Terminal and iTerm2) to select text
+- **Tool calls say what they did**, in both clients: lines read, files listed, matches found, the first lines a command printed (with its exit code when it failed), and an edit's size and diff, with line numbers and tinted bands in the TUI. Runs of reading and searching fold into one **Explored** block. `ctrl+o` expands thinking, output, diffs, and explored calls in full
+- **"No, and tell it what to do instead"** on permission prompts (**Deny with a note…** in VS Code): the model gets the note with the refusal. Protocol: `permission.respond` takes `feedback`
+- **Prompts as lists** in the TUI: arrows and Enter, or the option's number; the old letters still work
+- **Status bar**: how much of the model's context is left, the mode as a badge, and cost only once there is one. The working line shows tokens written and the model working
+- **Themes**: `/theme dark|light|plain`, remembered between sessions
+- Protocol (additive): `tool.completed` carries `diff` for edits and writes (display only); `route.decided` carries the model's `contextWindow`
+- The mock provider's `mock:tool` takes an array of calls, for demos of parallel tool use
 - **Default permissions**: `switchback init` writes a starting set of rules into a new user config: read-only commands (`find`, `grep`, `rg`, `git log`, `git diff`, ...) run without asking; commits, pushes, history rewrites, and package publishes ask. Setup also offers test, build, and lint presets per ecosystem, preselected from the workspace. See docs/permissions.md#default-rules
 - **Organizations hand out permissions**: `switchback login` replaces the member's permissions with the policy's
 - **Windows command sandbox** (alpha): commands run as a separate account, fenced by file ACLs and a network filter, through the sandbox runtime's Windows backend. One-time setup with one administrator prompt: `switchback init` offers it, or `switchback sandbox install`

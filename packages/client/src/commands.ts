@@ -139,6 +139,13 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'copy the last reply, its nth code block, the last tool output, or everything',
   },
   { name: 'help', group: 'Tools', description: 'list commands' },
+  {
+    name: 'theme',
+    args: '[dark|light|plain]',
+    group: 'Extension',
+    description: 'colors for the terminal UI',
+    clients: ['tui'],
+  },
   { name: 'setup', group: 'Extension', description: 'set up models', clients: ['vscode'] },
   { name: 'logs', group: 'Extension', description: 'show engine logs', clients: ['vscode'] },
   { name: 'restart', group: 'Extension', description: 'restart the engine', clients: ['vscode'] },

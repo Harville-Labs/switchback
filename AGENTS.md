@@ -2,7 +2,7 @@
 
 Guide for AI coding agents (Claude Code, Switchback itself, Codex, Cursor, and others) and for the humans reviewing their work. Read this before changing anything.
 
-Harville Labs' org-wide standards ([Harville-Labs/agents](https://github.com/Harville-Labs/agents)) apply too; where they disagree, this file wins. Everything you need to work in this repository is here, so outside contributors don't need them.
+Harville Labs' org-wide standards ([Harville-Labs/agents](https://github.com/Harville-Labs/agents/blob/main/AGENTS.md)) apply too. This file adds to them and can tighten them; it departs from one only where an ADR in `docs/adr/` says so. Everything you need to work in this repository is here, so outside contributors don't need them.
 
 ## What this repo is
 

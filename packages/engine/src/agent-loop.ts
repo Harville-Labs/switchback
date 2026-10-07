@@ -144,6 +144,7 @@ export class AgentLoop {
         rule,
         reason,
         inputTokens,
+        contextWindow: model.contextWindow,
         step: decision.step,
         steps: this.host.rolesOf(s).escalate.length,
         ...(decision.step > 0 && !escalated ? { stickyTurns: signals.stickyTurns } : {}),

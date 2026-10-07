@@ -463,6 +463,34 @@ describe('Engine', () => {
   });
 });
 
+describe('what clients show', () => {
+  test('an edit reports its diff to clients, never to the model', async () => {
+    const { engine, lp, events } = setup(
+      [
+        {
+          toolCalls: [
+            { name: 'edit', input: { path: 'hello.txt', oldString: 'world', newString: 'there' } },
+          ],
+        },
+        { text: 'done' },
+      ],
+      [],
+    );
+    await engine.runTurn(engine.createSession({}).id, 'edit it');
+    const done = events.find((e) => e.type === 'tool.completed');
+    expect(done).toMatchObject({ name: 'edit', isError: false });
+    expect(done?.type === 'tool.completed' && done.diff).toContain('-hello world\n+hello there');
+    const sent = JSON.stringify(lp.requests[1]?.messages.at(-1));
+    expect(sent).not.toContain('+hello there');
+  });
+
+  test("routing says how big the chosen model's context is", async () => {
+    const { engine, events } = setup([{ text: 'hi' }], []);
+    await engine.runTurn(engine.createSession({}).id, 'hello');
+    expect(events.find((e) => e.type === 'route.decided')).toMatchObject({ contextWindow: 8_000 });
+  });
+});
+
 describe('escalation cost and routing analytics', () => {
   test('an escalation prompt carries a cost estimate and the ledger records the rule', async () => {
     const { engine, events } = setup(

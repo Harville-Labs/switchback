@@ -30,6 +30,8 @@ import { ignoreInGit, saveAllowRules } from './save.ts';
 export interface PermissionAnswer {
   decision: PermissionDecision;
   save?: 'project' | 'user';
+  /** With a deny: what the user wants instead. */
+  feedback?: string;
 }
 
 export interface GateDeps {
@@ -216,6 +218,11 @@ export class PermissionGate {
     );
     if (answer.decision === 'allow_always' && !askRule && !this.host.org()?.userPermissionsDisabled)
       this.remember(rules, answer.save);
+    if (answer.decision === 'deny' && answer.feedback)
+      return {
+        allowed: false,
+        error: `The user declined this and said what to do instead:\n${answer.feedback}`,
+      };
     return { allowed: answer.decision !== 'deny' };
   }
 

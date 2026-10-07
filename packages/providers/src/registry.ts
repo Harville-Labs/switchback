@@ -325,8 +325,9 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
 
 /**
  * The mock provider echoes prompts. For demos and client development it can
- * also call a tool: a prompt of `mock:tool {"name": "...", "input": {...}}`
- * makes one tool call, then reports the result.
+ * also call tools: a prompt of `mock:tool {"name": "...", "input": {...}}`
+ * makes one tool call, then reports the result; an array of them makes
+ * several at once.
  */
 function mockTurn(id: string, messages: ChatRequest['messages']): ScriptedTurn {
   const last = messages.at(-1);
@@ -337,11 +338,14 @@ function mockTurn(id: string, messages: ChatRequest['messages']): ScriptedTurn {
     };
   }
   const text = lastUserText(messages);
-  const call = /^mock:tool\s+(\{[\s\S]*\})\s*$/.exec(text);
+  const call = /^mock:tool\s+([[{][\s\S]*[\]}])\s*$/.exec(text);
   if (call?.[1]) {
     try {
-      const { name, input } = JSON.parse(call[1]) as { name: string; input: unknown };
-      return { toolCalls: [{ name, input }] };
+      const parsed = JSON.parse(call[1]) as
+        | { name: string; input: unknown }
+        | { name: string; input: unknown }[];
+      const calls = Array.isArray(parsed) ? parsed : [parsed];
+      return { toolCalls: calls.map(({ name, input }) => ({ name, input })) };
     } catch {
       return { text: `[mock ${id}] could not parse mock:tool JSON` };
     }

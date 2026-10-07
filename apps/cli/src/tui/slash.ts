@@ -36,6 +36,7 @@ import type {
 } from '@switchback/protocol';
 import { copyText } from './clipboard.ts';
 import { ago } from './SessionPicker.tsx';
+import { THEME_NAMES, type ThemeName } from './theme.ts';
 
 export const helpText = (custom: readonly SlashCommand[]) => `Commands
 ${formatCommands('tui', custom)}
@@ -45,9 +46,10 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
-      shift+tab cycles the permission mode; ctrl+o shows or hides the model's thinking;
+      shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
       alt+↑ escalates (a stronger model takes over, like /up);
-      y/a/p/n answer permission prompts (once / this session / this project / deny).
+      PgUp/PgDn or the mouse wheel scroll (hold shift or option to select text);
+      prompts: ↑↓ and enter, or the option's number (y/a/p/n still work).
 Your own commands are Markdown files in .switchback/commands/ or
 ~/.switchback/commands/.`;
 
@@ -73,6 +75,9 @@ export interface SlashContext {
   openPicker(): Promise<void>;
   /** Show the checkpoint picker. */
   openRewind(): Promise<void>;
+  /** The color theme, and a way to change it (saved for next time). */
+  theme: ThemeName;
+  setTheme(name: ThemeName): void;
   exit(): void;
 }
 
@@ -347,6 +352,18 @@ const HANDLERS: Record<string, Handler> = {
     if (!compacted) say(ctx, 'Nothing to compact yet.');
   },
   help: (ctx) => say(ctx, helpText(ctx.custom)),
+  theme: (ctx, args) => {
+    const name = args[0]?.toLowerCase();
+    if (!name)
+      return say(
+        ctx,
+        `${THEME_NAMES.map((n) => `${n === ctx.theme ? '●' : ' '} ${n}`).join('\n')}\n/theme <name> to switch`,
+      );
+    if (!THEME_NAMES.includes(name as ThemeName))
+      return say(ctx, `usage: /theme ${THEME_NAMES.join('|')}`);
+    ctx.setTheme(name as ThemeName);
+    say(ctx, `theme: ${name}`);
+  },
   exit: (ctx) => ctx.exit(),
   quit: (ctx) => ctx.exit(),
 };

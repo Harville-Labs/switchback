@@ -185,7 +185,7 @@ test('init gives a new user config the default permissions, once', () => {
       { env: { ...process.env, SWITCHBACK_HOME: fresh }, stdout: 'pipe', stderr: 'pipe' },
     );
   try {
-    expect(init().stdout.toString()).toContain('Permissions in');
+    expect(init().stdout.toString()).toContain('run without asking');
     const config = () => parseJsonc(readFileSync(join(fresh, 'config.json'), 'utf8'));
     const { permissions } = config() as { permissions: { allow: string[]; ask: string[] } };
     expect(permissions.ask).toContain('bash(git commit:*)');
@@ -197,3 +197,11 @@ test('init gives a new user config the default permissions, once', () => {
     rmSync(ws, { recursive: true, force: true });
   }
 }, 30_000);
+
+test('setup names the commands a preset allows', async () => {
+  const { presetCommands } = await import('./commands/init-permissions.ts');
+  expect(presetCommands(['bash(bun test:*)', 'bash(bun run test:*)', 'bash(bun run lint:*)'])).toBe(
+    'bun test, bun run test/lint',
+  );
+  expect(presetCommands(['bash(go test:*)', 'bash(go vet:*)'])).toBe('go test, go vet');
+});

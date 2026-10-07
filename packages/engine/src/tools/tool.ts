@@ -63,6 +63,8 @@ export interface ToolPreview {
 export interface ToolOutput {
   text: string;
   images: ImagePart[];
+  /** What an edit changed, as a unified diff: shown to the user, never sent to the model. */
+  diff?: string;
 }
 
 export interface Tool<I = unknown> {
