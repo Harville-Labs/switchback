@@ -1,3 +1,8 @@
+/**
+ * The terminal UI, full screen: the transcript fills the window above a dock
+ * (prompts, the working line, the input, the status bar) that stays put at
+ * the bottom. The transcript scrolls with Page Up/Down and the mouse wheel.
+ */
 import {
   AttentionTracker,
   addInfo,
@@ -19,20 +24,23 @@ import type {
   PermissionMode,
   RoutePreference,
   SessionRewindParams,
+  SessionRoles,
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
-import { Box, Static, Text, useApp, useInput, useStdout } from 'ink';
-import { useCallback, useEffect, useState } from 'react';
+import { Box, Text, useApp, useBoxMetrics, useInput, useStdout, useWindowSize } from 'ink';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
+import type { MouseInput } from './mouse.ts';
 import { terminalNotification } from './notify.ts';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
-import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx';
+import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
-import { Item, LiveChild, quietRoutes } from './Rows.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
 import { escalateNow, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
+import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
 
 interface Props {
   client: SwitchbackClient;
@@ -44,6 +52,11 @@ interface Props {
   warnings: string[];
   /** Open the session picker first (`switchback --resume`). */
   pickSession?: boolean;
+  initialTheme?: ThemeName;
+  /** Wheel events, when the terminal reports them. */
+  mouse?: MouseInput;
+  /** Told which session was open when the app quits, for the resume hint. */
+  onSession?: (session: SessionSummary) => void;
 }
 
 /** A second Ctrl+C within this long quits; one press alone never does. */
@@ -57,10 +70,18 @@ export function App({
   initialRoute,
   warnings,
   pickSession = false,
+  initialTheme = 'dark',
+  mouse,
+  onSession,
 }: Props) {
   const { exit } = useApp();
   const { stdout } = useStdout();
+  const size = useWindowSize();
+  // A terminal that doesn't say how big it is (tests, some multiplexers) gets the classic size.
+  const columns = size.columns || 80;
+  const rows = size.rows || 24;
   const [session, setSession] = useState(initialSession);
+  useEffect(() => onSession?.(session), [session, onSession]);
   const [view, setView] = useState<ViewState>(() =>
     warnings.reduce(
       (v, w) => addInfo(v, w),
@@ -70,7 +91,7 @@ export function App({
     ),
   );
   const [listed, setListed] = useState<SessionSummary[]>([]);
-  // Items before this index are final and rendered once via <Static>.
+  // Items before this index are finished: their Markdown is rendered and cached.
   const [committed, setCommitted] = useState(0);
   const [route, setRoute] = useState<RoutePreference>(initialRoute);
   /** Review of local edits; undefined follows `review.mode` in config. */
@@ -80,14 +101,17 @@ export function App({
   /** Modes this session may cycle through; an organization can rule out bypass. */
   const [modes, setModes] = useState<PermissionMode[]>(['default', 'acceptEdits', 'plan']);
   const mode = view.mode ?? session.permissionMode ?? 'default';
+  const [roles, setRoles] = useState<SessionRoles | undefined>();
   /** Saved sessions while the picker is open. */
   const [picking, setPicking] = useState<SessionSummary[] | undefined>();
   /** Checkpoints while the rewind picker is open. */
   const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
   const [exitArmedAt, setExitArmedAt] = useState<number | undefined>();
-  /** Reasoning shown in full instead of one line (ctrl+o). */
-  const [showThinking, setShowThinking] = useState(false);
+  /** ctrl+o: reasoning, command output, and diffs in full. */
+  const [expanded, setExpanded] = useState(false);
+  const [themeName, setThemeName] = useState<ThemeName>(initialTheme);
+  const theme = THEMES[themeName];
   /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
   const [custom, setCustom] = useState<SlashCommand[]>([]);
   /** MCP resources, as `server:uri`, for @ completion. */
@@ -120,6 +144,7 @@ export function App({
       (p) => setModes(p.modes),
       () => {},
     );
+    client.request('session.roles', { sessionId: session.id }).then(setRoles, () => {});
   }, [client, session.id]);
 
   const refreshUsage = useCallback(() => {
@@ -143,10 +168,25 @@ export function App({
     });
   }, [client, session.id, refreshUsage, attention, init.notifications, stdout]);
 
-  // Commit finished turns so Ink stops re-rendering them.
+  // A finished turn's items are final: render their Markdown once.
   useEffect(() => {
     if (!view.running) setCommitted(view.items.length);
   }, [view.running, view.items.length]);
+
+  const width = Math.max(40, columns - 2);
+  const viewport = useRef(null);
+  const { height } = useBoxMetrics(viewport);
+  const lines = useTranscriptLines({
+    view,
+    committed,
+    width,
+    theme,
+    expanded,
+    header: <Header init={init} roles={view.roles ?? roles} mode={mode} width={width} />,
+    headerKey: `${mode}|${JSON.stringify(view.roles ?? roles ?? null)}`,
+  });
+  const scroll = useScroll(lines.length, height);
+  useEffect(() => mouse?.onWheel((d) => scroll.by(d)), [mouse, scroll.by]);
 
   const slash: SlashContext = {
     client,
@@ -169,6 +209,11 @@ export function App({
         .request('session.checkpoints', { sessionId: session.id })
         .catch(() => []);
       setRewinding(checkpoints);
+    },
+    theme: themeName,
+    setTheme: (name) => {
+      setThemeName(name);
+      saveTheme(name);
     },
   };
 
@@ -198,6 +243,7 @@ export function App({
     const text = raw.trim();
     if (!text) return;
     history.add(raw);
+    scroll.toEnd();
     if (text.startsWith('/') && !isCustomCommand(text, custom)) return runSlashCommand(slash, text);
     send(text, view.running ? 'queue' : undefined, images);
   };
@@ -241,154 +287,126 @@ export function App({
   const permission = view.permissions[0];
   const escalation = view.escalations[0];
 
+  const answerPermission = (answer: PermissionAnswer) => {
+    if (!permission) return;
+    client
+      .request('permission.respond', { requestId: permission.requestId, ...answer })
+      .catch(() => {});
+    setView((v) => resolvePermission(v, permission.requestId, answer.decision));
+  };
+  const answerEscalation = (approve: boolean) => {
+    if (!escalation) return;
+    client
+      .request('escalation.respond', { requestId: escalation.requestId, approve })
+      .catch(() => {});
+    setView((v) => resolveEscalation(v, escalation.requestId));
+  };
+
   useInput((ch, key) => {
-    // The picker and the prompt input handle their own keys, Ctrl+C included.
-    if (picking || rewinding) return;
-    if (key.ctrl && ch === 'o') return setShowThinking((v) => !v);
+    // Scrolling works whatever has focus.
+    if (key.pageUp) return scroll.page(-1);
+    if (key.pageDown) return scroll.page(1);
+    // The pickers, the prompts, and the input handle their own keys, Ctrl+C included.
+    if (picking || rewinding || permission || escalation) return;
+    if (key.ctrl && ch === 'o') return setExpanded((v) => !v);
     if (key.meta && key.upArrow) return void escalateNow(slash);
-    const ctrlC = key.ctrl && ch === 'c';
-    if (permission) {
-      const answer = permissionKey(permission, ch, key.escape || ctrlC);
-      if (!answer) return;
-      client
-        .request('permission.respond', { requestId: permission.requestId, ...answer })
-        .catch(() => {});
-      setView((v) => resolvePermission(v, permission.requestId, answer.decision));
-      return;
-    }
-    if (escalation) {
-      const approve = ch === 'y' ? true : ch === 'n' || key.escape || ctrlC ? false : undefined;
-      if (approve === undefined) return;
-      client
-        .request('escalation.respond', { requestId: escalation.requestId, approve })
-        .catch(() => {});
-      setView((v) => resolveEscalation(v, escalation.requestId));
-      return;
-    }
     if (key.tab && key.shift) {
       client
         .request('session.setMode', { sessionId: session.id, mode: nextMode(mode, modes) })
         .catch((err: Error) => setView((v) => addInfo(v, `mode: ${err.message}`)));
-      return;
     }
   });
 
-  const hidden = quietRoutes(view.items);
-  const width = Math.max(40, Math.min(120, (stdout.columns ?? 80) - 2));
-  const done = view.items.slice(0, committed);
-  const live = view.items.slice(committed);
-
   return (
-    <Box flexDirection="column">
-      <Static items={[{ kind: 'header' as const, id: 'header' }, ...done]}>
-        {(item) =>
-          item.kind === 'header' ? (
-            <Header
-              key="header"
-              version={init.engineVersion}
-              root={init.workspaceRoot}
-              width={width}
-            />
-          ) : (
-            <Item
-              key={item.id}
-              item={item}
-              hidden={hidden.has(item.id)}
-              width={width}
-              final
-              showThinking={showThinking}
-            />
-          )
-        }
-      </Static>
-      {live.map((item) => (
-        <Box key={item.id} flexDirection="column">
-          <Item
-            item={item}
-            hidden={hidden.has(item.id)}
-            width={width}
-            showThinking={showThinking}
-          />
-          {item.kind === 'subagent' && item.status === 'running' && view.children[item.id] ? (
-            <LiveChild view={view.children[item.id] as ViewState} depth={1} />
-          ) : null}
+    <ThemeContext.Provider value={theme}>
+      <Box flexDirection="column" height={rows} width={columns}>
+        <Box ref={viewport} flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
+          <Viewport lines={lines} height={height} scroll={scroll.scroll} unseen={scroll.unseen} />
         </Box>
-      ))}
-
-      {permission && (
-        <PermissionPrompt
-          permission={permission}
-          maxLines={Math.max(6, (stdout.rows ?? 30) - 12)}
-          width={width}
-        />
-      )}
-      {escalation && !permission && <EscalationPrompt escalation={escalation} />}
-
-      {picking ? (
-        <SessionPicker
-          sessions={picking}
-          current={session.id}
-          onCancel={() => setPicking(undefined)}
-          onPick={(id) => {
-            setPicking(undefined);
-            void resume(slash, id);
-          }}
-        />
-      ) : null}
-      {view.todos?.some((t) => t.status !== 'done') ? <Todos todos={view.todos} /> : null}
-      {view.queue?.length ? <Queue queue={view.queue} /> : null}
-      {rewinding ? (
-        <RewindPicker
-          checkpoints={rewinding}
-          onCancel={() => setRewinding(undefined)}
-          onRewind={(turnId, restore) => void rewind(turnId, restore)}
-        />
-      ) : null}
-      {view.running && !permission && !escalation ? <Working view={view} /> : null}
-      <Box borderStyle="round" borderColor={view.running ? 'gray' : 'cyan'} paddingX={1}>
-        <PromptInput
-          focus={!permission && !escalation && !picking && !rewinding}
-          custom={custom}
-          resources={resources}
-          onInterrupt={interrupt}
-          onSubmitNow={(text, images) => send(text, 'interrupt', images)}
-          onNoImage={() =>
-            setView((v) =>
-              addInfo(
-                v,
-                'No image on the clipboard. To attach an image file, drag it in or mention it with @.',
-              ),
-            )
-          }
-          onCancel={() => {
-            if (view.running)
-              client.request('session.cancel', { sessionId: session.id }).catch(() => {});
-          }}
-          recall={recall}
-          busy={view.running}
-          history={history.list()}
-          root={init.workspaceRoot}
-          onSubmit={submit}
-          placeholder={
-            view.running
-              ? 'Queue a message (enter) · send now (esc)'
-              : 'Ask anything · / for commands · @ to mention a file'
-          }
-        />
+        <Box flexDirection="column" flexShrink={0}>
+          {view.todos?.some((t) => t.status !== 'done') ? <Todos todos={view.todos} /> : null}
+          {view.queue?.length ? <Queue queue={view.queue} /> : null}
+          {permission ? (
+            <PermissionPrompt
+              key={permission.requestId}
+              permission={permission}
+              maxLines={Math.max(6, Math.floor(rows / 2) - 8)}
+              width={width}
+              onAnswer={answerPermission}
+            />
+          ) : null}
+          {escalation && !permission ? (
+            <EscalationPrompt
+              key={escalation.requestId}
+              escalation={escalation}
+              onAnswer={answerEscalation}
+            />
+          ) : null}
+          {picking ? (
+            <SessionPicker
+              sessions={picking}
+              current={session.id}
+              onCancel={() => setPicking(undefined)}
+              onPick={(id) => {
+                setPicking(undefined);
+                void resume(slash, id);
+              }}
+            />
+          ) : null}
+          {rewinding ? (
+            <RewindPicker
+              checkpoints={rewinding}
+              onCancel={() => setRewinding(undefined)}
+              onRewind={(turnId, restore) => void rewind(turnId, restore)}
+            />
+          ) : null}
+          {view.running && !permission && !escalation ? <Working view={view} /> : null}
+          <Box borderStyle="round" borderColor={view.running ? 'gray' : theme.brand} paddingX={1}>
+            <PromptInput
+              focus={!permission && !escalation && !picking && !rewinding}
+              custom={custom}
+              resources={resources}
+              onInterrupt={interrupt}
+              onSubmitNow={(text, images) => send(text, 'interrupt', images)}
+              onNoImage={() =>
+                setView((v) =>
+                  addInfo(
+                    v,
+                    'No image on the clipboard. To attach an image file, drag it in or mention it with @.',
+                  ),
+                )
+              }
+              onCancel={() => {
+                if (view.running)
+                  client.request('session.cancel', { sessionId: session.id }).catch(() => {});
+              }}
+              recall={recall}
+              busy={view.running}
+              history={history.list()}
+              root={init.workspaceRoot}
+              onSubmit={submit}
+              placeholder={
+                view.running
+                  ? 'Queue a message (enter) · send now (esc)'
+                  : 'Ask anything · / for commands · @ to mention a file'
+              }
+            />
+          </Box>
+          {exitArmedAt !== undefined ? (
+            <Text color={theme.warning} dimColor>
+              {'  '}Press Ctrl+C again to exit
+            </Text>
+          ) : null}
+          <StatusBar
+            session={session}
+            route={route}
+            review={review}
+            view={view}
+            usage={usage}
+            mode={mode}
+          />
+        </Box>
       </Box>
-      {exitArmedAt !== undefined ? (
-        <Text color="yellow" dimColor>
-          {'  '}Press Ctrl+C again to exit
-        </Text>
-      ) : null}
-      <StatusBar
-        session={session}
-        route={route}
-        review={review}
-        view={view}
-        usage={usage}
-        mode={mode}
-      />
-    </Box>
+    </ThemeContext.Provider>
   );
 }

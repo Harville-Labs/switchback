@@ -3,6 +3,8 @@ import type { PermissionMode, RoutePreference, SessionSummary } from '@switchbac
 import { render } from 'ink';
 import { type CommonFlags, connectShared } from '../bootstrap.ts';
 import { App } from './App.tsx';
+import { mouseInput } from './mouse.ts';
+import { savedTheme } from './theme.ts';
 
 export async function tui(
   opts: CommonFlags & {
@@ -43,6 +45,8 @@ export async function tui(
   });
   if (opts.permissionMode && session.permissionMode !== opts.permissionMode)
     await client.request('session.setMode', { sessionId: session.id, mode: opts.permissionMode });
+  const mouse = mouseInput();
+  let open = session;
   const app = render(
     <App
       client={client}
@@ -52,11 +56,29 @@ export async function tui(
       initialRoute={opts.route}
       pickSession={opts.pickSession ?? false}
       warnings={warnings}
+      initialTheme={savedTheme()}
+      mouse={mouse}
+      onSession={(s) => {
+        open = s;
+      }}
     />,
-    // Ctrl+C clears the prompt or cancels a turn; quitting takes a second press (App.tsx).
-    { exitOnCtrlC: false },
+    {
+      // Ctrl+C clears the prompt or cancels a turn; quitting takes a second press (App.tsx).
+      exitOnCtrlC: false,
+      // Full screen, like an editor: the shell's scrollback is back as it was on exit.
+      alternateScreen: true,
+      stdin: mouse.stdin,
+    },
   );
-  await app.waitUntilExit();
+  try {
+    await app.waitUntilExit();
+  } finally {
+    mouse.dispose();
+  }
   await client.request('shutdown', {}).catch(() => {});
+  // The full-screen view is gone; say how to get back to it.
+  process.stdout.write(
+    `Session ${open.title ? `"${open.title}" ` : ''}saved · resume with switchback --resume ${open.id}\n`,
+  );
   return 0;
 }
