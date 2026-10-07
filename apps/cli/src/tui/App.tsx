@@ -32,7 +32,7 @@ import { EscalationPrompt, PermissionPrompt, permissionKey } from './Prompts.tsx
 import { RewindPicker } from './RewindPicker.tsx';
 import { Item, LiveChild, quietRoutes } from './Rows.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
-import { resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { escalateNow, resume, runSlashCommand, type SlashContext } from './slash.ts';
 
 interface Props {
   client: SwitchbackClient;
@@ -245,6 +245,7 @@ export function App({
     // The picker and the prompt input handle their own keys, Ctrl+C included.
     if (picking || rewinding) return;
     if (key.ctrl && ch === 'o') return setShowThinking((v) => !v);
+    if (key.meta && key.upArrow) return void escalateNow(slash);
     const ctrlC = key.ctrl && ch === 'c';
     if (permission) {
       const answer = permissionKey(permission, ch, key.escape || ctrlC);

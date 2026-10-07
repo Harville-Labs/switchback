@@ -61,6 +61,10 @@ export function renderControls({ route, mode, agent, roles, ladderStep }: Contro
       ),
       pill('data-role="review"', 'Review', esc(formatReviewers(roles)), 'Who reviews edits'),
     );
+    if (roles.escalate.length)
+      parts.push(
+        `<button class="pill up" data-escalate-now title="A stronger model takes over: the next step of this turn, or your next prompt (/up)">↑ Escalate now</button>`,
+      );
   }
   return parts.join('');
 }

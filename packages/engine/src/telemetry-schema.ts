@@ -39,7 +39,6 @@ export const DailyReport = z.object({
     localModels: z.number(),
     remoteModels: z.number(),
     escalationPolicy: z.string(),
-    classifier: z.boolean(),
     compaction: z.boolean(),
     privatePaths: z.boolean(),
     secrets: z.string(),

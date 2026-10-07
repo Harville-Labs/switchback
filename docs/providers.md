@@ -177,18 +177,6 @@ OpenRouter (a base URL on `openrouter.ai`) gets two things other compatible APIs
 
 Gateways report upstream failures inside an already-successful stream. Server-side failures, like a provider disconnecting or a rate limit, count as retryable, so the router falls back to the next model in the chain; client errors don't.
 
-### TypeSafe Jev (the routing classifier)
-
-```jsonc
-"providers": { "typesafe": { "type": "typesafe" } },
-"models": { "jev": { "provider": "typesafe", "model": "jev-latest" } },
-"routing": { "classifier": { "model": "jev" } }
-```
-
-[Jev](https://docs.typesafe.ai) is TypeSafe AI's decision model: it answers typed questions about text with calibrated values instead of prose, in about 100 ms. It can't hold a conversation, so it can only be the router's [classifier](routing.md#pre-routing-classifier); config naming it in any other role is an error. Switchback asks it a Score question with three levels (easy, medium, hard, described as in the chat classifier's prompt) and rounds the probability-weighted score to a level.
-
-It uses TypeSafe's SDK (`@typesafe-ai/sdk`). The key comes from `apiKey` or `TYPESAFE_API_KEY`. List price is $0.042 per million input tokens, output free (checked 2026-10-04), and each rating is recorded under the `classify` rule. Jev is hosted, so it follows the remote rules: it never sees a private session or runs with `allowRemote: false`. Servers that speak the same API, such as [OpenJev](https://github.com/razorback16/openjev) or [LocalJev](https://github.com/githubnext/localjev), work with `baseUrl` and `"tier": "local"`. `switchback init` offers it when there's an escalation ladder (`--classifier jev` unattended).
-
 ### Behavior common to every remote
 
 - Streaming output and tool calls, normalized into one transcript format, so a session can move between providers mid-turn.

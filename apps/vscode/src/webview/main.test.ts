@@ -209,3 +209,9 @@ test('a pasted image waits above the input and goes with the next prompt', async
   expect($('#images').innerHTML).toBe('');
   expect($('#log .image img').getAttribute('alt')).toBe('image 1');
 });
+
+test('Escalate now asks the host to escalate', async () => {
+  await send({ type: 'roles', roles: { ...roles, escalate: [['large']] } });
+  $('[data-escalate-now]').click();
+  expect(posted.at(-1)).toEqual({ type: 'command', name: 'up', args: [] });
+});

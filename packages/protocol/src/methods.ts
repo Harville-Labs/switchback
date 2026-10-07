@@ -251,6 +251,14 @@ export const PermissionRespondParams = z.object({
 });
 export type PermissionRespondParams = z.infer<typeof PermissionRespondParams>;
 
+export const SessionEscalateParams = z.object({ sessionId: z.string() });
+export type SessionEscalateParams = z.infer<typeof SessionEscalateParams>;
+
+export interface SessionEscalateResult {
+  /** `next-step`: the running turn's next model call climbs; `next-prompt`: the next prompt starts higher. */
+  when: 'next-step' | 'next-prompt';
+}
+
 export const SessionCompactParams = z.object({ sessionId: z.string() });
 export type SessionCompactParams = z.infer<typeof SessionCompactParams>;
 
@@ -405,6 +413,8 @@ export interface Methods {
   'session.rewind': { params: SessionRewindParams; result: SessionRewindResult };
   /** Withdraw a queued prompt before it's delivered; `removed: false` if it already was. */
   'session.dequeue': { params: SessionDequeueParams; result: { removed: boolean } };
+  /** Move the session one step up the escalation ladder: now, or for the next prompt. */
+  'session.escalate': { params: SessionEscalateParams; result: SessionEscalateResult };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
   'session.compact': { params: SessionCompactParams; result: { compacted: boolean } };
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };

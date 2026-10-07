@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, relative, sep } from 'node:path';
 import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
-import { isDecisionOnly, type Price, tierOf } from '@switchback/providers';
+import { type Price, tierOf } from '@switchback/providers';
 import { roleAliases } from '@switchback/router';
 
 export { roleAliases } from '@switchback/router';
@@ -258,7 +258,6 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
         a,
       ]),
     ),
-    ['routing.classifier.model', routing.classifier?.model],
     ...config.review.models.flatMap((step, i) =>
       step.map((a): [string, string] => [`review.models[${i}]`, a]),
     ),
@@ -268,9 +267,6 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
     if (!alias) continue;
     const m = config.models[alias];
     if (!m) return `${key} references unknown model "${alias}"; add it under models or remove it`;
-    const pc = config.providers[m.provider];
-    if (pc && isDecisionOnly(pc) && key !== 'routing.classifier.model')
-      return `${key}: "${alias}" is a decision model (${pc.type}), which can only be routing.classifier.model`;
   }
   return undefined;
 }

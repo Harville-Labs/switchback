@@ -43,7 +43,7 @@ The engine is the product. Clients are views. That split is what lets the termin
 
 | Module | Does |
 |---|---|
-| `agent-loop.ts` | One turn's loop: route, call the model, run tools, repeat; escalation prompts and the classifier |
+| `agent-loop.ts` | One turn's loop: route, call the model, run tools, repeat; escalation prompts |
 | `tool-runner.ts` | Validates tool calls, applies the permission policy, runs them (in parallel when nothing mutates) |
 | `review-runner.ts` | Review of edits by another model |
 | `compactor.ts` | Append-only compaction ([ADR 0008](adr/0008-append-only-compaction.md)) |

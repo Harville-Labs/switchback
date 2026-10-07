@@ -9,6 +9,11 @@ export const REMOVED_KEYS: {
   when?: (value: unknown) => boolean;
 }[] = [
   {
+    path: ['routing', 'classifier'],
+    message:
+      'routing.classifier was removed: escalation is automatic when a model struggles, and /up (alt+↑) or Escalate now in VS Code moves a turn up the ladder on demand (docs/routing.md)',
+  },
+  {
     path: ['routing', 'local'],
     message: 'routing.local was renamed routing.start: the models turns begin on (docs/routing.md)',
   },

@@ -264,7 +264,7 @@ describe('buildSetupConfig', () => {
     ).toMatchObject({ where: 'OpenRouter', inputPrice: 2 });
   });
 
-  test('Azure OpenAI with Entra ID, and Jev as the classifier', () => {
+  test('Azure OpenAI with Entra ID', () => {
     const parsed = SwitchbackConfig.parse(
       buildSetupConfig({
         locals: [local],
@@ -278,38 +278,10 @@ describe('buildSetupConfig', () => {
           },
         ],
         escalationPolicy: 'auto',
-        classifier: 'jev',
       }),
     );
     expect(parsed.providers['azure-openai']).toMatchObject({ auth: 'entra' });
-    expect(parsed.providers.typesafe).toMatchObject({ type: 'typesafe', tier: 'remote' });
-    expect(parsed.models.jev).toEqual(
-      expect.objectContaining({ provider: 'typesafe', model: 'jev-latest' }),
-    );
-    expect(parsed.routing.classifier?.model).toBe('jev');
     expect(referenceProblem(parsed)).toBeUndefined();
-    // A chosen model can classify too; anything else is refused.
-    const local2 = buildSetupConfig({
-      locals: [local],
-      remotes: [{ kind: 'openai', model: 'gpt-6-sol' }],
-      escalationPolicy: 'auto',
-      classifier: 'coder-7b',
-    });
-    expect((local2.routing as { classifier: unknown }).classifier).toEqual({ model: 'coder-7b' });
-    expect(() =>
-      buildSetupConfig({ locals: [local], remotes: [], escalationPolicy: 'auto', classifier: 'x' }),
-    ).toThrow('classifier names "x"');
-  });
-
-  test('a decision model can only be the classifier', () => {
-    const config = SwitchbackConfig.parse({
-      providers: { typesafe: { type: 'typesafe' } },
-      models: { jev: { provider: 'typesafe', model: 'jev-latest' } },
-      routing: { start: ['jev'] },
-    });
-    expect(referenceProblem(config)).toBe(
-      'routing.start[0]: "jev" is a decision model (typesafe), which can only be routing.classifier.model',
-    );
   });
 
   test('azure-openai without a resource or URL is a config error', () => {

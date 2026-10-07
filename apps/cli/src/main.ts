@@ -83,7 +83,6 @@ init options (all optional; prompts cover anything not given)
   --resource <name>        Resource name (Microsoft Foundry, Azure OpenAI)
   --deployment <name>      Azure OpenAI deployment, per --remote-model (default: the model ID)
   --azure-auth <key|entra> Azure OpenAI: API key (default) or Microsoft Entra ID
-  --classifier <c>         Rate prompts before routing: jev (TypeSafe Jev), a model, or off
   --policy <p>             Escalation: auto | ask | off
   --telemetry <on|off>     Anonymous usage statistics (default: off; always your user config)
   --daily-budget <usd>     --monthly-budget <usd>
@@ -177,7 +176,6 @@ async function main(argv: string[]): Promise<number> {
       resource: { type: 'string' },
       deployment: { type: 'string' },
       'azure-auth': { type: 'string' },
-      classifier: { type: 'string' },
       policy: { type: 'string' },
       'daily-budget': { type: 'string' },
       'monthly-budget': { type: 'string' },
@@ -285,7 +283,6 @@ async function main(argv: string[]): Promise<number> {
         ...(values['azure-auth']
           ? { azureAuth: oneOf('azure-auth', values['azure-auth'], ['key', 'entra'] as const) }
           : {}),
-        ...(values.classifier ? { classifier: values.classifier } : {}),
         ...(policy ? { policy } : {}),
         ...(dailyBudget ? { dailyBudget } : {}),
         ...(monthlyBudget ? { monthlyBudget } : {}),

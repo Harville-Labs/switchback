@@ -119,15 +119,7 @@ export interface SetupAnswers {
   roles?: Roles;
   escalationPolicy: 'auto' | 'ask' | 'off';
   budget?: { dailyUsd?: number; monthlyUsd?: number };
-  /**
-   * Rate prompts before routing (docs/routing.md): `jev` for TypeSafe Jev, or
-   * the alias of a chosen model.
-   */
-  classifier?: string;
 }
-
-/** Setup's name for TypeSafe Jev as the classifier. */
-export const JEV = 'jev';
 
 /** A model setup will configure, with the alias it gets. */
 export interface PlannedModel {
@@ -376,13 +368,6 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   if (Array.isArray(roles.review))
     for (const step of roles.review) for (const alias of step) check(alias, 'review');
   if (roles.subagents) check(roles.subagents, 'subagents');
-  let classifier = a.classifier;
-  if (classifier === JEV) {
-    const id = unique('typesafe', providers);
-    providers[id] = { type: 'typesafe' };
-    classifier = unique(JEV, models);
-    models[classifier] = { provider: id, model: 'jev-latest' };
-  } else if (classifier) check(classifier, 'classifier');
 
   // Every role is written in full, so re-running setup replaces earlier choices.
   const routing: Record<string, unknown> = {
@@ -390,7 +375,6 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
     escalate: roles.escalate,
     escalation: { policy: a.escalationPolicy },
   };
-  if (classifier) routing.classifier = { model: classifier };
   if (a.budget?.dailyUsd || a.budget?.monthlyUsd) {
     routing.budget = {
       ...(a.budget.dailyUsd ? { dailyUsd: a.budget.dailyUsd } : {}),

@@ -9,4 +9,3 @@ export * from './pricing.ts';
 export * from './registry.ts';
 export * from './scripted.ts';
 export * from './types.ts';
-export * from './typesafe.ts';

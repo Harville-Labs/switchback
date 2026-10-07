@@ -19,7 +19,7 @@ import { doctor } from './doctor.ts';
 import { type InitFlags, SetupError } from './init-flags.ts';
 import { chooseLocals } from './init-local.ts';
 import { chooseRemotes } from './init-remote.ts';
-import { chooseClassifier, chooseRoles } from './init-roles.ts';
+import { chooseRoles } from './init-roles.ts';
 import { setTelemetry, TELEMETRY_PROMPT } from './telemetry.ts';
 
 export type { InitFlags } from './init-flags.ts';
@@ -113,8 +113,6 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
         ])
       : 'auto');
 
-  const classifier = await chooseClassifier(flags, p, plan, roles);
-
   let budget: SetupAnswers['budget'];
   if (flags.dailyBudget || flags.monthlyBudget) {
     budget = {
@@ -137,7 +135,6 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
     roles,
     escalationPolicy,
     ...(budget ? { budget } : {}),
-    ...(classifier ? { classifier } : {}),
   };
   const layer = buildSetupConfig(answers);
 

@@ -66,36 +66,6 @@ export interface Provider {
    * estimate.
    */
   countTokens?(model: string, text: string, signal?: AbortSignal): Promise<number | undefined>;
-  /**
-   * Place `text` on an ordered rubric, for decision models that answer typed
-   * questions instead of chatting (TypeSafe Jev). Providers with `rate` and
-   * `decisionOnly` can't `stream`.
-   */
-  rate?(request: RateRequest): Promise<RateResult>;
-  /** True for providers that only answer `rate`; config keeps them out of chat roles. */
-  readonly decisionOnly?: boolean;
-}
-
-export interface RateRequest {
-  model: string;
-  /** The question. */
-  instructions: string;
-  /** Rubric levels from low to high, at least two. */
-  levels: readonly [string, string, ...string[]];
-  /** What is being rated. */
-  text: string;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-}
-
-export interface RateResult {
-  /** Index into `levels`: the expected score, rounded. */
-  level: number;
-  /** Probability-weighted score, from 0 to `levels.length - 1`. */
-  score: number;
-  /** 0 to 1; 1 when the probability sits on one level. */
-  confidence: number;
-  usage: Usage;
 }
 
 /** Thrown for failures the router may recover from by falling back to another model. */

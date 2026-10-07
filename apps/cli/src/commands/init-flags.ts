@@ -37,8 +37,6 @@ export interface InitFlags {
   deployment?: string;
   /** Azure OpenAI sign-in. */
   azureAuth?: 'key' | 'entra';
-  /** `jev`, a model alias, or `off`. */
-  classifier?: string;
   policy?: 'auto' | 'ask' | 'off';
   dailyBudget?: number;
   monthlyBudget?: number;

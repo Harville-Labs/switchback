@@ -104,6 +104,13 @@ export function tailLines(text: string, width: number, rows: number): string[] {
   return out.slice(-rows);
 }
 
+/** What `session.escalate` means for the user, by when it takes effect. */
+export function escalateNotice(when: 'next-step' | 'next-prompt'): string {
+  return when === 'next-step'
+    ? '↑ Escalating: the next step of this turn goes one step up the ladder.'
+    : '↑ Your next prompt starts one step up the ladder.';
+}
+
 /** `52 tok/s`, or `1.2k tok/s` for very fast servers. */
 export function speedLabel(tokensPerSecond: number): string {
   const n =

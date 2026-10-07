@@ -1,8 +1,8 @@
-/** `switchback init`: which model does what (ADR 0015), and the optional classifier. */
+/** `switchback init`: which model does what (ADR 0015). */
 import { formatRoles, formatSteps } from '@switchback/client';
-import { defaultRoles, JEV, type PlannedModel, type Roles } from '@switchback/engine';
+import { defaultRoles, type PlannedModel, type Roles } from '@switchback/engine';
 import type { SessionRoles } from '@switchback/protocol';
-import { bold, dim, type Prompter } from '../prompt.ts';
+import { bold, type Prompter } from '../prompt.ts';
 import { type InitFlags, SetupError } from './init-flags.ts';
 
 /** A role reference (`alias` or model ID) to the alias setup gives that model. */
@@ -13,34 +13,6 @@ export function resolveAlias(plan: PlannedModel[], ref: string, flag: string): s
       `${flag} "${ref}" isn't one of the chosen models (${plan.map((m) => m.alias).join(', ')})`,
     );
   return hit.alias;
-}
-
-/** Optional pre-routing classifier: only useful when there's a ladder to start higher on. */
-export async function chooseClassifier(
-  flags: InitFlags,
-  p: Prompter | undefined,
-  plan: PlannedModel[],
-  roles: Roles,
-): Promise<string | undefined> {
-  if (flags.classifier) return flags.classifier === 'off' ? undefined : flags.classifier;
-  if (!p || !roles.escalate.length) return undefined;
-  console.log(
-    dim(
-      '\nA classifier rates each prompt first, so obviously hard ones start one step up the ladder.',
-    ),
-  );
-  const choice = await p.select('Rate prompts before routing?', [
-    { label: 'No', value: '' },
-    {
-      label: 'TypeSafe Jev',
-      value: JEV,
-      hint: `hosted decision model, about 100 ms, $0.042 per M input tokens${process.env.TYPESAFE_API_KEY ? '' : '; needs TYPESAFE_API_KEY'}`,
-    },
-    ...plan
-      .filter((m) => m.tier === 'local')
-      .map((m) => ({ label: m.alias, value: m.alias, hint: `${m.model} · local, free` })),
-  ]);
-  return choice || undefined;
 }
 
 /** Which model does what: flags unattended, else defaults the user can change. */

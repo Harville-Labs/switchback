@@ -52,20 +52,6 @@ export const RoutingConfig = z.object({
   /** False: never call a remote model, even one configured in a role. */
   allowRemote: z.boolean().default(true),
   escalation: EscalationConfig.prefault({}),
-  /**
-   * Optional pre-routing classifier: a small model rates each new prompt, and
-   * prompts rated `escalateOn` or harder start one step up the ladder
-   * (subject to `escalation.policy`). Off unless configured.
-   */
-  classifier: z
-    .object({
-      /** Model alias; any model, though a small local one keeps it free and fast. */
-      model: z.string(),
-      escalateOn: z.enum(['medium', 'hard']).default('hard'),
-      /** Skip the rating if the model hasn't answered by then. */
-      timeoutMs: z.number().int().positive().default(1_500),
-    })
-    .optional(),
   budget: BudgetConfig.prefault({}),
   /**
    * When every model on the chosen step is down: `nearest` uses the nearest

@@ -24,6 +24,7 @@ import {
   SessionCompactParams,
   SessionCreateParams,
   SessionDequeueParams,
+  SessionEscalateParams,
   SessionGetParams,
   SessionPromptParams,
   SessionRewindParams,
@@ -130,6 +131,8 @@ export function serve(
         engine.respondPermission(p.requestId, p.decision, p.save);
         return { ok: true };
       }
+      case 'session.escalate':
+        return engine.escalate(parse(SessionEscalateParams, req.params).sessionId);
       case 'session.setMode': {
         const p = parse(SessionSetModeParams, req.params);
         return engine.setMode(p.sessionId, p.mode);

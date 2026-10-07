@@ -49,8 +49,6 @@ function filterRoles(
   routing.escalate = routing.escalate
     .map((step) => step.filter((a) => keep(a, 'routing.escalate')))
     .filter((step) => step.length);
-  if (routing.classifier && !keep(routing.classifier.model, 'routing.classifier'))
-    delete routing.classifier;
   const review = {
     ...config.review,
     models: config.review.models

@@ -47,6 +47,7 @@ Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most re
 | Input | Effect |
 |---|---|
 | `/local`, `/remote`, `/auto` | Route the following prompts |
+| `/up` (alt+↑) | Escalate: the turn's next step, or your next prompt, goes one step up the ladder ([routing.md](../routing.md#escalating-yourself)). On macOS Terminal, alt needs "Use Option as Meta key"; `/up` always works |
 | `/agent <name>` | New session with that agent |
 | `/agents` | List agents and where they came from |
 | `/new` | New session with the default agent |

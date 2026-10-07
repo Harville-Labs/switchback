@@ -226,28 +226,6 @@
             "properties": {
               "type": {
                 "type": "string",
-                "const": "typesafe"
-              },
-              "apiKey": {
-                "type": "string"
-              },
-              "baseUrl": {
-                "type": "string",
-                "format": "uri"
-              },
-              "tier": {
-                "default": "remote",
-                "type": "string",
-                "enum": ["local", "remote"]
-              }
-            },
-            "required": ["type"]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
                 "const": "gemini"
               },
               "apiKey": {
@@ -419,26 +397,6 @@
               "maximum": 9007199254740991
             }
           }
-        },
-        "classifier": {
-          "type": "object",
-          "properties": {
-            "model": {
-              "type": "string"
-            },
-            "escalateOn": {
-              "default": "hard",
-              "type": "string",
-              "enum": ["medium", "hard"]
-            },
-            "timeoutMs": {
-              "default": 1500,
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            }
-          },
-          "required": ["model"]
         },
         "budget": {
           "default": {},
