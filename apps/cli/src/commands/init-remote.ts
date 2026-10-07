@@ -12,6 +12,7 @@ import {
   CREDENTIAL_ENV,
   type HostedProviderKind,
   hasAnthropicCredentials,
+  type ListedModel,
   listModels,
 } from '@switchback/providers';
 import { bold, dim, type Prompter, yellow } from '../prompt.ts';
@@ -129,13 +130,15 @@ async function chooseRemote(
     });
     const model =
       modelFlag ??
-      (p
-        ? await p.text(
-            listed.length
-              ? `Model ID (${listed.length} available, e.g. ${listed[0]?.id})`
-              : 'Model ID',
+      (p && listed.length
+        ? await p.search(
+            `Which model? ${dim(`${listed.length} available; type to filter`)}`,
+            listed.map((m) => ({ label: m.id, value: m.id, hint: listedHint(m) })),
+            { freeText: true },
           )
-        : undefined);
+        : p
+          ? await p.text('Model ID')
+          : undefined);
     if (!model) throw new SetupError(`--remote-model is required for ${kind}`);
     const found = listed.find((m) => m.id === model);
     if (listed.length && !found)
@@ -285,4 +288,15 @@ async function chooseRemote(
       return { kind, model, resource };
     }
   }
+}
+
+/** What the endpoint said about a model, for the picker. */
+function listedHint(m: ListedModel): string {
+  return [
+    m.contextWindow ? `ctx ${m.contextWindow.toLocaleString('en-US')}` : undefined,
+    m.price ? `$${m.price.input} / $${m.price.output} per M` : undefined,
+    m.tools === false ? 'no tool calling' : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
