@@ -25,7 +25,6 @@ switchback init --yes --local-model <name> --remote anthropic   # unattended
 switchback init --yes --no-local --remote openrouter --remote-model qwen/qwen3-coder
 switchback init --yes --no-local --remote azure-openai --resource acme-ai \
   --remote-model gpt-6-sol --deployment prod-gpt --azure-auth entra
-switchback init --yes --local-model <name> --remote openai --classifier jev
 switchback config path       # where config files live and which exist
 switchback config show       # effective merged config (secrets redacted)
 switchback config edit       # open the user config in $EDITOR (--scope project for the project file)
@@ -89,7 +88,6 @@ A list inside a role is a chain of alternatives (the first that's up and fits); 
 | `anthropic-aws` | `region`, `workspaceId`, `profile`, `refusalFallback` (Claude Platform on AWS) |
 | `foundry` | `resource` or `baseUrl`, `apiKey` (default `$ANTHROPIC_FOUNDRY_API_KEY`) (Microsoft Foundry) |
 | `azure-openai` | `resource` or `baseUrl` (one is required), `apiKey` (default `$AZURE_OPENAI_API_KEY`), `auth` (`key` \| `entra`, default `key`), `api` (`responses` \| `chat`, default `responses`); models are deployment names |
-| `typesafe` | `apiKey` (default `$TYPESAFE_API_KEY`), `baseUrl` (default TypeSafe's), `tier` (default `remote`); for `routing.classifier` only |
 | `mock` | `tier` |
 
 ### `models.<alias>`

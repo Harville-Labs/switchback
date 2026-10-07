@@ -4,15 +4,8 @@
  */
 import type { Message, ModelRef, RoutePreference, StopReason } from '@switchback/protocol';
 import { type ChatEvent, type Provider, ProviderError, type ToolSpec } from '@switchback/providers';
-import {
-  type Difficulty,
-  ladderSteps,
-  type ModelInfo,
-  type Router,
-  stepOf,
-} from '@switchback/router';
+import { ladderSteps, type ModelInfo, type Router, stepOf } from '@switchback/router';
 import type { AgentDefinition } from './agents.ts';
-import { classifyPrompt } from './classifier.ts';
 import { contextOf } from './compaction.ts';
 import type { Compactor } from './compactor.ts';
 import { estimateEscalationCost } from './estimate.ts';
@@ -69,8 +62,6 @@ export class AgentLoop {
     /** Remote aliases that refused this turn, and whether the next call retries one. */
     const refused: string[] = [];
     let refusalRetry = false;
-    /** Used by the first routing decision of the turn only. */
-    let difficulty = await this.classify(s, preference, agent, signal);
     let failures = 0;
 
     for (let step = 0; step < config().maxStepsPerTurn; step++) {
@@ -95,7 +86,8 @@ export class AgentLoop {
         escalationDeclined: forceLocal,
         refused,
         refusalRetry,
-        ...(difficulty ? { difficulty } : {}),
+        // The user's "escalate now" (session.escalate), for the top-level session's next call.
+        ...(s.depth === 0 && s.escalateNow ? { escalateNow: true } : {}),
         ...(await this.privacyOf(s)),
         ...(budget ? { invocationBudget: budget } : {}),
         agent: { name: agent.name, route: agent.route, ...this.pinnedModel(s, agent) },
@@ -136,7 +128,7 @@ export class AgentLoop {
       }
 
       refusalRetry = false;
-      difficulty = undefined;
+      s.escalateNow = false;
       const { model, rule, reason, escalated } = decision;
       this.host.emit({
         type: 'route.decided',
@@ -337,59 +329,6 @@ export class AgentLoop {
     if (agent.model) return { model: agent.model };
     const fallback = this.host.rolesOf(s).subagents;
     return s.depth > 0 && agent.route === 'auto' && fallback ? { model: fallback } : {};
-  }
-
-  /**
-   * Rate the new prompt with the configured classifier, when its answer could
-   * change anything: automatic routing, no pins, not already sticky, and a
-   * step to escalate to. A remote classifier follows the remote rules.
-   */
-  private async classify(
-    s: LiveSession,
-    preference: RoutePreference,
-    agent: AgentDefinition,
-    signal: AbortSignal,
-  ): Promise<Difficulty | undefined> {
-    const config = this.host.config();
-    const c = config.routing.classifier;
-    if (!c || preference !== 'auto') return undefined;
-    if (agent.model || agent.route !== 'auto' || s.signals.snapshot().stickyTurns > 0)
-      return undefined;
-    // Nothing to escalate to.
-    const ladder = this.host.rolesOf(s).escalate.flat();
-    if (!ladder.some((a) => config.models[a])) return undefined;
-    const model = this.deps.models.info(c.model);
-    if (!model) {
-      this.host.notify('warn', `routing.classifier.model "${c.model}" is not a configured model`);
-      return undefined;
-    }
-    // A remote classifier reads the prompt, so the remote rules apply to it.
-    if (model.tier === 'remote' && this.host.remoteBlocked(s)) return undefined;
-    if (!model.available) return undefined;
-    const provider = this.deps.models.provider(model.ref.provider);
-    const typed = (p: Message['parts'][number]) =>
-      p.type === 'text' && !p.attachment && !p.reminder;
-    const prompt = s.messages.findLast((m) => m.role === 'user' && m.parts.some(typed));
-    if (!provider || !prompt) return undefined;
-    const text = prompt.parts
-      .flatMap((p) => (typed(p) && p.type === 'text' ? [p.text] : []))
-      .join('\n');
-    const r = await classifyPrompt(provider, model.ref.model, text, {
-      signal,
-      timeoutMs: c.timeoutMs,
-    });
-    if (r.usage)
-      this.host.recordUsage(s, model.tier, model.ref, r.usage, {
-        rule: 'classify',
-        agent: agent.name,
-      });
-    this.host.notify(
-      'debug',
-      r.difficulty
-        ? `classifier: ${r.difficulty.level} in ${Math.round(r.ms)}ms (${r.difficulty.reason})`
-        : `classifier: no rating in ${Math.round(r.ms)}ms`,
-    );
-    return r.difficulty;
   }
 
   private async askEscalation(

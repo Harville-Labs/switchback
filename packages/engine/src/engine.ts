@@ -24,6 +24,7 @@ import {
   type PermissionsListResult,
   PROTOCOL_VERSION,
   type RoutePreference,
+  type SessionEscalateResult,
   type SessionGetResult,
   type SessionPromptParams,
   type SessionPromptResult,
@@ -212,6 +213,17 @@ export class Engine {
     save?: 'project' | 'user',
   ): void {
     this.p.gate.prompts.answer(requestId, { decision, ...(save ? { save } : {}) });
+  }
+
+  /**
+   * `session.escalate`: the user asked for a stronger model. The running
+   * turn's next call climbs one step, or the next prompt starts one step up;
+   * escalation's stickiness keeps the session there for a while after.
+   */
+  escalate(sessionId: string): SessionEscalateResult {
+    const s = this.p.sessions.top(this.p.sessions.live(sessionId));
+    s.escalateNow = true;
+    return { when: s.controller ? 'next-step' : 'next-prompt' };
   }
 
   /** `session.setMode`. */

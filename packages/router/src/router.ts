@@ -14,108 +14,27 @@
  * Pipeline: the first matching rule picks a target, then guards may redirect
  * it. See docs/routing.md.
  */
-import type { ModelRef, RoutePreference, Tier } from '@switchback/protocol';
+import type { Tier } from '@switchback/protocol';
 import type { RoutingConfig } from './config.ts';
+import { type Choice, type Context, Ladder, type Rung } from './ladder.ts';
 import { budgetReached, ladderSteps, stepOf } from './roles.ts';
+import type { ModelInfo, RouteDecision, RouteInput } from './route-types.ts';
 import type { SignalSnapshot } from './signals.ts';
 
-export interface ModelInfo {
-  alias: string;
-  ref: ModelRef;
-  tier: Tier;
-  contextWindow: number;
-  available: boolean;
-  /** Can read images (`models.<alias>.vision`, or known from the catalog). */
-  vision?: boolean;
-}
-
-/** A classifier's rating of the user's prompt. */
-export interface Difficulty {
-  level: 'easy' | 'medium' | 'hard';
-  reason: string;
-}
-
-const LEVEL = { easy: 0, medium: 1, hard: 2 } as const;
-
-export interface RouteInput {
-  /** Per-turn override from the user (`/remote`, `--route local`, VS Code toggle): a tier filter. */
-  preference: RoutePreference;
-  /** From the active agent's definition. */
-  agent: { name: string; route: RoutePreference; model?: string };
-  estimatedInputTokens: number;
-  /** The conversation holds images: among a step's alternatives, prefer one that can see them. */
-  images?: boolean;
-  signals: SignalSnapshot;
-  spend: { todayUsd: number; monthUsd: number };
-  /** Set when the user already approved an escalation for this turn. */
-  escalationApproved?: boolean;
-  /** Set when an escalation was just declined (by the user, or because the run is headless). */
-  escalationDeclined?: boolean;
-  /** Aliases that refused a request this turn; they're skipped until the next prompt. */
-  refused?: string[];
-  /** The last call was refused: retry on another model now. */
-  refusalRetry?: boolean;
-  /** The classifier's rating of this turn's prompt (first call of a turn only). */
-  difficulty?: Difficulty;
-  /** A subagent invocation's own budget and what it (and its subagents) spent so far. */
-  invocationBudget?: { agent: string; limitUsd: number; spentUsd: number };
-  /**
-   * The session holds content that must never reach a remote model (a
-   * `privacy.localOnlyPaths` match, or a secret under `privacy.secrets:
-   * block`). Wins over every rule, including an explicit remote request.
-   */
-  privacy?: { reason: string };
-}
-
-export type RouteDecision =
-  | {
-      kind: 'route';
-      model: ModelInfo;
-      rule: string;
-      reason: string;
-      /** True when this decision moves the turn up the escalation ladder. */
-      escalated: boolean;
-      /**
-       * The step the model is on: 0 for `routing.start`, k for the k-th
-       * `routing.escalate` step. The engine reports it back through
-       * `SignalTracker` so stickiness knows where the session is.
-       */
-      step: number;
-    }
-  | { kind: 'ask'; target: ModelInfo; rule: string; reason: string }
-  | { kind: 'block'; rule: string; reason: string };
+export type { ModelInfo, RouteDecision, RouteInput } from './route-types.ts';
 
 type Routed = Extract<RouteDecision, { kind: 'route' }>;
 type Blocked = Extract<RouteDecision, { kind: 'block' }>;
 
-/** What `choose` picked from a chain, and why if it wasn't the first entry. */
-interface Choice {
-  model: ModelInfo | undefined;
-  detour?: { rule: string; reason: string };
-  fits: boolean;
-}
-
-/** A model on a step of the ladder. */
-interface Rung {
-  choice: Choice;
-  step: number;
-}
-
-/** One decision's inputs, with refused aliases already removed from every step. */
-interface Context {
-  input: RouteInput;
-  tokens: number;
-  images: boolean;
-  steps: string[][];
-  /** Remote models may be used: `allowRemote` and no private content. */
-  remoteOk: boolean;
-}
-
 export class Router {
+  private readonly ladder: Ladder;
+
   constructor(
     private readonly config: RoutingConfig,
     private readonly models: (alias: string) => ModelInfo | undefined,
-  ) {}
+  ) {
+    this.ladder = new Ladder(config, models);
+  }
 
   decide(input: RouteInput): RouteDecision {
     const refused = new Set(input.refused ?? []);
@@ -129,111 +48,6 @@ export class Router {
     const picked = input.refusalRetry ? this.retryAfterRefusal(ctx) : this.pick(ctx);
     if (picked.kind !== 'route') return picked;
     return this.guard(ctx, picked);
-  }
-
-  /**
-   * The first model in a chain that is reachable and fits the prompt (and,
-   * when the conversation holds images, can see them); else the first that
-   * is reachable and fits; else the first reachable one; else the first
-   * configured one (which the availability guard then handles). Aliases with
-   * no model are skipped.
-   */
-  private choose(aliases: string[], ctx: Pick<Context, 'tokens' | 'images'>): Choice {
-    const { tokens, images } = ctx;
-    const chain = aliases.flatMap((a) => this.models(a) ?? []);
-    const primary = chain[0];
-    if (!primary) return { model: undefined, fits: false };
-    const up = chain.filter((m) => m.available);
-    const fitting = up.filter((m) => this.fits(m, tokens));
-    const model =
-      (images ? fitting.find((m) => m.vision) : undefined) ?? fitting[0] ?? up[0] ?? primary;
-    const fits = this.fits(model, tokens);
-    if (model === primary) return { model, fits };
-    const detour = !primary.available
-      ? { rule: 'fallback', reason: `${primary.alias} is unavailable; using ${model.alias}` }
-      : !this.fits(primary, tokens)
-        ? {
-            rule: 'context-fit',
-            reason: `~${tokens} tokens exceeds ${primary.alias}'s window; using ${model.alias} (${model.contextWindow})`,
-          }
-        : {
-            rule: 'vision',
-            reason: `${primary.alias} can't see images; using ${model.alias}`,
-          };
-    return { model, detour, fits };
-  }
-
-  private fits(m: ModelInfo, tokens: number): boolean {
-    return tokens <= m.contextWindow * this.config.escalation.contextHeadroom;
-  }
-
-  /** `choose` among the aliases of a step that the guards would allow. */
-  private chooseAllowed(ctx: Context, step: number, tier?: Tier): Choice {
-    const aliases = (ctx.steps[step] ?? []).filter((a) => {
-      const m = this.models(a);
-      return m && (m.tier === 'local' || ctx.remoteOk) && (!tier || m.tier === tier);
-    });
-    return this.choose(aliases, ctx);
-  }
-
-  /**
-   * The next step above `from` with an allowed model that's up and fits.
-   * Steps that are down, too small, or remote when remote isn't allowed are skipped.
-   */
-  private climb(ctx: Context, from: number, remoteOk = ctx.remoteOk): Rung | undefined {
-    const scoped = { ...ctx, remoteOk };
-    for (let step = from + 1; step < ctx.steps.length; step++) {
-      const choice = this.chooseAllowed(scoped, step);
-      if (choice.model?.available && choice.fits) return { choice, step };
-    }
-    return undefined;
-  }
-
-  /** The allowed, available model above `from` with the largest context window. */
-  private largestAbove(ctx: Context, from: number): Rung | undefined {
-    let best: Rung | undefined;
-    for (let step = from + 1; step < ctx.steps.length; step++)
-      for (const alias of ctx.steps[step] ?? []) {
-        const m = this.models(alias);
-        if (!m?.available || (m.tier === 'remote' && !ctx.remoteOk)) continue;
-        if (!best?.choice.model || m.contextWindow > best.choice.model.contextWindow)
-          best = { choice: { model: m, fits: false }, step };
-      }
-    return best;
-  }
-
-  /** The model on a step the session is already on, if it's allowed and up. */
-  private rungAt(ctx: Context, step: number): Choice | undefined {
-    const choice = this.chooseAllowed(ctx, step);
-    return choice.model?.available ? choice : undefined;
-  }
-
-  /** The first model of a tier in role order: up and fitting, else up, else configured. */
-  private ofTier(ctx: Context, tier: Tier): Rung | undefined {
-    const all = ctx.steps.flatMap((chain, step) =>
-      chain.flatMap((a) => {
-        const m = this.models(a);
-        return m && m.tier === tier ? [{ m, step }] : [];
-      }),
-    );
-    const hit =
-      all.find((x) => x.m.available && this.fits(x.m, ctx.tokens)) ??
-      all.find((x) => x.m.available) ??
-      all[0];
-    return hit && { choice: { model: hit.m, fits: this.fits(hit.m, ctx.tokens) }, step: hit.step };
-  }
-
-  /** The local model nearest `from`: that step, then lower steps, then higher ones. */
-  private nearestLocal(ctx: Context, from: number): Rung | undefined {
-    const order = [
-      ...Array.from({ length: from + 1 }, (_, i) => from - i),
-      ...Array.from({ length: Math.max(0, ctx.steps.length - from - 1) }, (_, i) => from + 1 + i),
-    ];
-    for (const step of order) {
-      const choice = this.chooseAllowed({ ...ctx, remoteOk: false }, step, 'local');
-      if (choice.model?.available) return { choice, step };
-    }
-    return undefined;
   }
 
   private route(
@@ -268,8 +82,10 @@ export class Router {
   private retryAfterRefusal(ctx: Context): RouteDecision {
     const declined = ctx.input.refused?.at(-1) ?? 'the model';
     const from = stepOf(this.config, declined);
-    const same = this.chooseAllowed(ctx, from);
-    const rung = same.model?.available ? { choice: same, step: from } : this.climb(ctx, from);
+    const same = this.ladder.chooseAllowed(ctx, from);
+    const rung = same.model?.available
+      ? { choice: same, step: from }
+      : this.ladder.climb(ctx, from);
     if (!rung?.choice.model)
       return {
         kind: 'block',
@@ -287,10 +103,10 @@ export class Router {
 
   private pick(ctx: Context): RouteDecision {
     const { input } = ctx;
-    const start = this.choose(ctx.steps[0] ?? [], ctx);
+    const start = this.ladder.choose(ctx.steps[0] ?? [], ctx);
     const at = input.signals.stickyTurns > 0 ? input.signals.escalationStep : 0;
     const byTier = (tier: Tier, rule: string, reason: string): Routed | Blocked => {
-      const rung = this.ofTier(ctx, tier);
+      const rung = this.ladder.ofTier(ctx, tier);
       if (!rung)
         return {
           kind: 'block',
@@ -304,7 +120,7 @@ export class Router {
     if (input.preference === 'local')
       return byTier('local', 'user-override', 'user requested local');
     if (input.escalationDeclined) {
-      const here = at > 0 ? this.rungAt(ctx, at) : undefined;
+      const here = at > 0 ? this.ladder.rungAt(ctx, at) : undefined;
       const stay = here ?? start;
       return this.route(
         stay,
@@ -332,16 +148,16 @@ export class Router {
     // A tier pin is a preference: if no model of that tier is in a role, route
     // normally rather than failing (e.g. `explore` on an all-remote setup).
     for (const tier of ['local', 'remote'] as const)
-      if (input.agent.route === tier && this.ofTier(ctx, tier))
+      if (input.agent.route === tier && this.ladder.ofTier(ctx, tier))
         return byTier(tier, 'agent-pin', `agent "${input.agent.name}" runs ${tier}`);
 
-    // 3-6. Context overflow, stickiness, the classifier, and quality signals.
+    // 3-6. Context overflow, the user's escalation, stickiness, and quality signals.
     const escalated = this.escalate(ctx, start, at);
     if (escalated) return escalated;
 
     // 7. Default: the start chain, or the first step if there is none.
     if (start.model) return this.route(start, 'default', 'the start model');
-    const first = this.climb(ctx, 0);
+    const first = this.ladder.climb(ctx, 0);
     if (first)
       return this.route(
         first.choice,
@@ -383,18 +199,18 @@ export class Router {
     };
     /** Climb from `from`; with only remote steps above, a private session explains why it stays. */
     const next = (from: number, rule: string, reason: string) => {
-      const rung = this.climb(ctx, from);
+      const rung = this.ladder.climb(ctx, from);
       if (rung) return go(rung, rule, reason);
-      if (input.privacy && this.config.allowRemote && this.climb(ctx, from, true))
+      if (input.privacy && this.config.allowRemote && this.ladder.climb(ctx, from, true))
         return this.privateLocal(ctx, from, reason);
       return undefined;
     };
 
     // 3. Hard limits: the model the session is on can't take this prompt at all.
-    const current = at > 0 ? this.rungAt(ctx, at) : start;
+    const current = at > 0 ? this.ladder.rungAt(ctx, at) : start;
     if (current?.model && !current.fits) {
       const reason = `~${tokens} tokens exceeds ${Math.round(this.config.escalation.contextHeadroom * 100)}% of ${current.model.alias}'s window (${current.model.contextWindow})`;
-      const rung = this.climb(ctx, at);
+      const rung = this.ladder.climb(ctx, at);
       if (rung)
         return this.route(
           { ...rung.choice, detour: undefined },
@@ -404,7 +220,7 @@ export class Router {
           rung.step,
         );
       // Nothing above fits: the biggest window above is still the best chance.
-      const biggest = this.largestAbove(ctx, at);
+      const biggest = this.ladder.largestAbove(ctx, at);
       if (biggest?.choice.model && biggest.choice.model.contextWindow > current.model.contextWindow)
         return this.route(
           biggest.choice,
@@ -413,21 +229,32 @@ export class Router {
           true,
           biggest.step,
         );
-      if (input.privacy && this.config.allowRemote && this.climb(ctx, at, true))
+      if (input.privacy && this.config.allowRemote && this.ladder.climb(ctx, at, true))
+        return this.privateLocal(ctx, at, reason);
+    }
+
+    // 4. The user asked to escalate: one step up from where the session is. It's
+    // their request, so a remote step doesn't ask; budgets and privacy still apply.
+    if (input.escalateNow) {
+      const reason = 'you asked to escalate';
+      const rung = this.ladder.climb(ctx, at);
+      if (rung)
+        return this.route(rung.choice, 'user-escalation', where(rung, reason), true, rung.step);
+      if (input.privacy && this.config.allowRemote && this.ladder.climb(ctx, at, true))
         return this.privateLocal(ctx, at, reason);
     }
 
     const s = input.signals;
     const why = this.qualityProblem(s);
 
-    // 4. Stickiness: stay on the step the last escalation reached, unless the
+    // 5. Stickiness: stay on the step the last escalation reached, unless the
     // model there is struggling too and there's a step above it.
     if (at > 0) {
       if (why && policy !== 'off') {
         const higher = next(at, 'escalation', why);
         if (higher) return higher;
       }
-      const here = this.rungAt(ctx, at);
+      const here = this.ladder.rungAt(ctx, at);
       if (here)
         return this.route(
           here,
@@ -436,15 +263,6 @@ export class Router {
           false,
           at,
         );
-    }
-
-    // 5. The classifier rated the prompt too hard for the start model.
-    const d = input.difficulty;
-    const c = this.config.classifier;
-    if (d && c && LEVEL[d.level] >= LEVEL[c.escalateOn]) {
-      const reason = `classifier rated the prompt ${d.level}${d.reason ? `: ${d.reason}` : ''}`;
-      const decision = next(0, 'classifier', reason);
-      if (decision) return decision;
     }
 
     // 6. Quality signals from the model that ran the last call.
@@ -456,7 +274,7 @@ export class Router {
   private privateLocal(ctx: Context, from: number, why?: string): Routed | Blocked {
     const privacy = ctx.input.privacy ?? { reason: 'private content' };
     const reason = `${why ? `${why}, but ` : ''}this session holds private content (${privacy.reason}), which never leaves this machine`;
-    const local = this.nearestLocal(ctx, from);
+    const local = this.ladder.nearestLocal(ctx, from);
     if (!local?.choice.model)
       return {
         kind: 'block',
@@ -489,7 +307,7 @@ export class Router {
     let d = decision;
     /** Redirect a remote decision to the nearest local model, or block. */
     const toLocal = (rule: string, reason: string, block: boolean): Routed | Blocked => {
-      const local = block ? undefined : this.nearestLocal(ctx, d.step);
+      const local = block ? undefined : this.ladder.nearestLocal(ctx, d.step);
       if (!local?.choice.model) return { kind: 'block', rule, reason };
       return {
         kind: 'route',
@@ -536,13 +354,13 @@ export class Router {
       const unavailable = `${d.model.alias} is unavailable`;
       if (this.config.fallback === 'none')
         return { kind: 'block', rule: 'fallback', reason: unavailable };
-      const other = this.nearestUp(ctx, d.step);
+      const other = this.ladder.nearestUp(ctx, d.step);
       if (!other?.choice.model) {
         // Only a remote model could take it: say that privacy is why it can't.
         if (
           input.privacy &&
           this.config.allowRemote &&
-          this.nearestUp({ ...ctx, remoteOk: true }, d.step)
+          this.ladder.nearestUp({ ...ctx, remoteOk: true }, d.step)
         )
           return this.privateLocal(ctx, d.step, unavailable);
         return { kind: 'block', rule: 'fallback', reason: unavailable };
@@ -557,23 +375,5 @@ export class Router {
       };
     }
     return d;
-  }
-
-  /**
-   * For an outage: the nearest other step with an allowed model that's up,
-   * higher steps first, then lower. Remote models over budget don't count.
-   */
-  private nearestUp(ctx: Context, from: number): Rung | undefined {
-    const over = budgetReached(this.config.budget, ctx.input.spend) !== undefined;
-    const scoped = { ...ctx, remoteOk: ctx.remoteOk && !over };
-    const order = [
-      ...Array.from({ length: Math.max(0, ctx.steps.length - from - 1) }, (_, i) => from + 1 + i),
-      ...Array.from({ length: from }, (_, i) => from - 1 - i),
-    ];
-    for (const step of order) {
-      const choice = this.chooseAllowed(scoped, step);
-      if (choice.model?.available) return { choice: { ...choice, detour: undefined }, step };
-    }
-    return undefined;
   }
 }

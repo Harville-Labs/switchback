@@ -16,7 +16,6 @@
     "@azure/identity": "^4.13.3",
     "@google/genai": "^2.24.0",
     "@switchback/protocol": "workspace:*",
-    "@typesafe-ai/sdk": "0.6.0",
     "openai": "^7.23.0",
     "zod": "^4.6.5"
   }

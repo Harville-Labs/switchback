@@ -173,8 +173,6 @@ export class ModelDirectory {
         if (m.contextWindow || this.detectedContext.has(alias)) return;
         if (!this.health.get(m.provider)?.ok) return;
         const provider = this.providers.get(m.provider);
-        // Decision models (the classifier) never hold a prompt that could overflow.
-        if (provider?.decisionOnly) return;
         const found = await provider?.contextWindow?.(m.model).catch(() => undefined);
         this.detectedContext.set(alias, found?.contextWindow ?? null);
         this.emit({

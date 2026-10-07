@@ -643,7 +643,6 @@ function telemetryReport(installId: string) {
       localModels: 1,
       remoteModels: 1,
       escalationPolicy: 'auto',
-      classifier: false,
       compaction: true,
       privatePaths: false,
       secrets: 'redact',

@@ -4,6 +4,7 @@
  * as the command palette, since a picker beats typing model names.
  */
 import {
+  escalateNotice,
   formatMcpServers,
   formatModels,
   formatPermissions,
@@ -93,6 +94,10 @@ export async function runChatCommand(
         return info(`${shell.id} ${shell.status === 'killed' ? 'stopped' : 'had already exited'}`);
       }
       return info(formatShells(await c.request('shells.list', {})));
+    }
+    case 'up': {
+      const { when } = await c.request('session.escalate', { sessionId: session.id });
+      return info(escalateNotice(when));
     }
     case 'mcp': {
       const { servers } = await c.request('mcp.list', {});

@@ -48,6 +48,8 @@ export interface LiveSession {
    * the first edit, and which models (aliases) edited it. For review.
    */
   turnEdits?: Map<string, { path: string; before: string | undefined; writers: Set<string> }>;
+  /** The user asked to escalate (`session.escalate`): the next model call climbs one step. */
+  escalateNow?: boolean;
   /** Why the session holds private content and must stay local; never cleared. */
   private?: string;
   /** Roles this session changed (`session.setRoles`); its subagents follow them. */

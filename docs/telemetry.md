@@ -30,7 +30,7 @@ One report per complete day, only for days after you opted in (and, on the day y
 | `byRule` | Calls per routing rule (`default`, `escalation`, `privacy`, ...) by tier, with cost. Rules are names Switchback defines; anything else is `other` |
 | `remoteModels` | Remote calls per model, for models in the public catalog (`claude-opus-5`, `gpt-6-sol`, ...). Any other model is `custom` |
 | `providerTypes` | Configured provider types (`ollama`, `anthropic`, `openai-compatible`, ...) |
-| `features` | How Switchback is set up: counts of local and remote models, escalation policy, whether the classifier, compaction, private paths, budgets, and an organization are in use, the secret-scanning mode, and counts of MCP servers and runtimes |
+| `features` | How Switchback is set up: counts of local and remote models, escalation policy, whether compaction, private paths, budgets, and an organization are in use, the secret-scanning mode, and counts of MCP servers and runtimes |
 | `turns` | How top-level turns ended (`end_turn`, `error`, `cancelled`, ...) |
 | `errors` | Number of error events |
 | `crashes` | Up to 5 crashes: error class, a scrubbed message (paths, URLs, quoted strings, and long numbers removed; 200 characters at most), and stack frames reduced to function names and Switchback's own source file names |

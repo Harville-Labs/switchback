@@ -34,6 +34,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'auto', group: 'Routing', description: 'start on the start model; escalate when stuck' },
   { name: 'local', group: 'Routing', description: 'only local models for the next prompts' },
   { name: 'remote', group: 'Routing', description: 'only hosted models for the next prompts' },
+  {
+    name: 'up',
+    group: 'Routing',
+    description: 'escalate: a stronger model takes over now, or from the next prompt (alt+↑)',
+  },
   { name: 'new', group: 'Session', description: 'start a new session' },
   {
     name: 'agent',

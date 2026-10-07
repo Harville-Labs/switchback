@@ -6,6 +6,7 @@ import {
   addInfo,
   childView,
   describeSession,
+  escalateNotice,
   formatCommands,
   formatMcpServers,
   formatModels,
@@ -45,6 +46,7 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o shows or hides the model's thinking;
+      alt+↑ escalates (a stronger model takes over, like /up);
       y/a/p/n answer permission prompts (once / this session / this project / deny).
 Your own commands are Markdown files in .switchback/commands/ or
 ~/.config/switchback/commands/.`;
@@ -100,6 +102,16 @@ async function changeRoles(
     );
   } catch (err) {
     say(ctx, `roles: ${(err as Error).message}`);
+  }
+}
+
+/** `/up` and alt+↑: a stronger model takes over (`session.escalate`). */
+export async function escalateNow(ctx: SlashContext): Promise<void> {
+  try {
+    const { when } = await ctx.client.request('session.escalate', { sessionId: ctx.session.id });
+    say(ctx, escalateNotice(when));
+  } catch (err) {
+    say(ctx, `escalate: ${(err as Error).message}`);
   }
 }
 
@@ -202,6 +214,7 @@ const routeTo =
   };
 
 const HANDLERS: Record<string, Handler> = {
+  up: escalateNow,
   local: routeTo('local'),
   remote: routeTo('remote'),
   auto: routeTo('auto'),

@@ -143,6 +143,8 @@ controls.addEventListener('click', (e) => {
     render();
   } else if (btn.hasAttribute('data-agent')) vscode.postMessage({ type: 'chooseAgent' });
   else if (btn.hasAttribute('data-mode')) vscode.postMessage({ type: 'chooseMode' });
+  else if (btn.hasAttribute('data-escalate-now'))
+    vscode.postMessage({ type: 'command', name: 'up', args: [] });
   else if (btn.dataset.role)
     vscode.postMessage({ type: 'chooseRole', role: btn.dataset.role as RoleName });
 });

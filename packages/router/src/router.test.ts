@@ -163,19 +163,33 @@ describe('escalation ladder', () => {
     expect(small.model.alias).toBe('opus');
   });
 
-  test('the classifier climbs one step', () => {
-    const d = routed(
-      router({ ...LADDER, classifier: { model: 'fast' } }).decide(
-        input({ difficulty: { level: 'hard', reason: 'large refactor' } }),
-      ),
+  test('escalating now climbs one step from where the session is, without asking', () => {
+    const ask = { ...LADDER, escalation: { policy: 'ask' } };
+    // From the start model to the first step.
+    expect(routed(router(ask).decide(input({ escalateNow: true })))).toMatchObject({
+      rule: 'user-escalation',
+      model: { alias: 'large' },
+      step: 1,
+      escalated: true,
+    });
+    // From step 1 to the remote step: the user asked, so no approval prompt.
+    expect(routed(router(ask).decide(input({ escalateNow: true, signals: on(1) })))).toMatchObject({
+      rule: 'user-escalation',
+      model: { alias: 'opus' },
+      step: 2,
+    });
+    // Budgets still apply.
+    const spent = router({ ...LADDER, budget: { dailyUsd: 1 } }).decide(
+      input({ escalateNow: true, signals: on(1), spend: { todayUsd: 2, monthUsd: 2 } }),
     );
-    expect(d).toMatchObject({ rule: 'classifier', model: { alias: 'large' }, step: 1 });
-    const easy = routed(
-      router({ ...LADDER, classifier: { model: 'fast' } }).decide(
-        input({ difficulty: { level: 'easy', reason: '' } }),
-      ),
+    expect(spent).not.toMatchObject({ model: { alias: 'opus' } });
+  });
+
+  test('escalating now from a private session stays local', () => {
+    const d = router().decide(
+      input({ escalateNow: true, signals: on(1), privacy: { reason: 'read .env' } }),
     );
-    expect(easy.model.alias).toBe('fast');
+    expect(d).toMatchObject({ rule: 'privacy' });
   });
 });
 

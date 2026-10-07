@@ -249,6 +249,8 @@ export function PromptInput({
         setDraft('');
         return;
       }
+      // alt+↑ escalates (the app handles it); it isn't a history step.
+      if (key.meta && key.upArrow) return;
       if (key.upArrow && !state.value) {
         const back = recall();
         if (back !== undefined) return edit(at(back));

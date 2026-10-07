@@ -42,6 +42,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.rewind` | `{ sessionId, turnId, restore: files\|conversation\|both }` | `{ files, session? }`: the files put back or removed, and with the conversation, the new session holding the history before that turn (the original is untouched) |
 | `session.dequeue` | `{ sessionId, id }` | `{ removed }`. Withdraws a queued prompt before it's delivered |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
+| `session.escalate` | `sessionId` | `{ when }`: the next model call climbs one step up the ladder (`next-step` during a turn, `next-prompt` otherwise); rule `user-escalation` |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`) | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |

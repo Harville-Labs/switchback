@@ -4,7 +4,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Removed
+- The pre-routing classifier (`routing.classifier`) and the TypeSafe Jev provider, which existed only to serve as it. Whether a prompt is "hard" depends on which model starts it, so a fixed rating couldn't be trusted. Escalation stays automatic when a model struggles or a prompt outgrows it; a config that still sets `routing.classifier` is told what replaced it
+
 ### Added
+- **Escalate now**: `/up` (alt+↑ in the TUI, **↑ Escalate now** in VS Code) moves the session one step up the ladder: the running turn's next call, or your next prompt. It's your request, so it doesn't ask first; budgets and privacy still apply, and stickiness keeps the session there for a few calls. Protocol: `session.escalate`; rule `user-escalation`
 - **Docs site** (#36): each release attaches its user docs (`switchback-docs-<version>.json`: the pages under "Using Switchback", rendered with GitHub's heading anchors; ADRs, architecture, the protocol, and the roadmap stay on GitHub) and tells harville.ai to publish them at harville.ai/switchback/docs, with a version picker and search. A test fails on any broken link between published pages
 - VS Code: a **Get Started** walkthrough (open the chat, choose models, first prompt, routing, edit review, the terminal UI), offered from the "no local model" notice and the command palette; screenshots in the Marketplace listing, made reproducibly by `apps/vscode/scripts/screenshots.ts`; Marketplace questions go to GitHub issues; `install.sh --help` links the extension listings (#49)
 - **More external runtimes** (#43): `claude-managed-agents` (an agent in a Claude Managed Agents sandbox; tool calls its policy marks `ask` go to Switchback's policy), `codex` (OpenAI Codex in this workspace through the Codex SDK; approved once per run and bounded by its sandbox mode, and refused while `privacy.localOnlyPaths` is set), and `bedrock-agentcore` (an agent deployed to AgentCore Runtime). Each streams progress to the subagent row; Managed Agents and Codex usage is priced from the catalog. See docs/subagents.md

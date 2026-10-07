@@ -36,12 +36,12 @@ The reviewer of local edits (`review.model`, [review.md](review.md)) and the def
 | 1 | `escalation-declined` | An `ask` escalation was just declined (or the run is headless) | The step the session is on |
 | 2 | `agent-pin` | The agent names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model, or the first of that tier in role order |
 | 3 | `context-overflow` | The prompt exceeds `escalation.contextHeadroom` × the window of the model the session is on (see [Counting tokens](#counting-tokens)) | The first step up whose window fits, else the largest window above |
-| 4 | `sticky` | The session escalated within the last `escalation.stickyTurns` calls | The step it reached; one step higher if the model there is struggling too |
-| 5 | `classifier` | `routing.classifier` rated the turn's prompt `escalateOn` or harder | One step up |
+| 4 | `user-escalation` | You asked to escalate (`/up`, alt+↑ in the TUI, **Escalate now** in VS Code) | One step up from where the session is |
+| 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` calls | The step it reached; one step higher if the model there is struggling too |
 | 6 | `escalation` | A quality signal crossed its threshold (below) | One step up |
 | 7 | `default` | Nothing else matched | The `start` chain (the first step if `start` is empty) |
 
-Rules 5 and 6 follow `escalation.policy`. Rules 3 to 6 count as escalations. A step that's down, too small for the prompt, or remote when remote isn't allowed is skipped on the way up.
+Rule 6 follows `escalation.policy`; rule 4 doesn't, since you asked. Rules 3 to 6 count as escalations. A step that's down, too small for the prompt, or remote when remote isn't allowed is skipped on the way up.
 
 A tier pin in an agent definition (`route: local`) is a preference: if no model of that tier is in a role, the router skips the pin. A user override (`--route local`) with no model of that tier is blocked with a pointer to `switchback init`.
 
@@ -80,23 +80,13 @@ Then five guards run on the target. They only ever act on remote models; a local
 
 A session can change its own roles without touching any file: `/start`, `/escalate`, `/review with`, and `/subagent-model` in the TUI ([clients/tui.md](clients/tui.md)), or **Choose Models for This Session** in VS Code. Changes apply to that session and its subagents, show as `(this session)` in `/roles`, and are shared with every client attached to the session. Add `--save` (or **Save as Default**) to write them to your user config as the default for new sessions. Keys an organization enforces through its policy can't be changed. The protocol methods are `session.roles` and `session.setRoles` ([protocol.md](protocol.md)).
 
-## Pre-routing classifier
+## Escalating yourself
 
-Escalation is normally reactive: the start model has to struggle first. The optional classifier lets obviously hard prompts start one step up. Before the first call of a turn, a small model rates the prompt `easy`, `medium`, or `hard` with a short reason, and the router's `classifier` rule escalates ratings at or above `escalateOn`.
+Escalation is automatic when the model struggles (the quality signals below) or the prompt outgrows it, but you don't have to wait for either. `/up` (alt+↑ in the TUI, **Escalate now** in VS Code, `session.escalate` in the protocol) moves the session one step up the ladder:
 
-```jsonc
-"routing": {
-  "classifier": { "model": "tiny", "escalateOn": "hard", "timeoutMs": 1500 }
-}
-```
-
-- Off unless configured. `model` can be any alias; a small, fast, non-thinking local model keeps rating every prompt free. A decision model such as [TypeSafe Jev](providers.md#typesafe-jev-the-routing-classifier) answers the same question as a three-level rubric and returns a calibrated score instead of parsed text; its reason shows the score and confidence. A remote classifier reads the prompt, so it follows the remote rules: never for a private session or with `allowRemote: false`, and its calls are billed.
-- It runs only when its answer could change anything: automatic routing, no agent pin, not already sticky, and an escalation step to go to.
-- A classifier that doesn't answer within `timeoutMs`, errors, or gives an unreadable answer is ignored for that turn.
-- It follows `escalation.policy`: `ask` prompts first, and `off` ignores the rating.
-- The rating call is recorded in the usage ledger as `classify`, and the escalated call as `classifier`, so `switchback usage --by rule` shows what each costs.
-
-`bun scripts/eval-classifier.ts --model <name>` (add `--typesafe` for Jev) measures precision and recall on the labeled prompts in `tests/classifier/labeled.jsonl`. The weekly live workflow runs it and posts the numbers in the job summary.
+- During a turn, the turn's next model call goes one step up; between turns, your next prompt starts there.
+- It's your request, so a remote step doesn't ask first, whatever `escalation.policy` says. Budgets and private content still apply: a private session stays local and says why.
+- Like any escalation, the session stays on the new step for `escalation.stickyTurns` calls, then comes back down. `/up` again climbs another step.
 
 ## Quality signals
 
@@ -179,7 +169,6 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
     "contextHeadroom": 0.85,
     "stickyTurns": 2
   },
-  "classifier": { "model": "tiny", "escalateOn": "hard", "timeoutMs": 1500 },
   "budget": { "dailyUsd": 5, "monthlyUsd": 50, "onExceeded": "local" },
   "fallback": "nearest"           // nearest | none
 }

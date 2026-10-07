@@ -19,8 +19,6 @@ export const DEFAULT_PRICES: Record<string, Price> = {
   ...catalogPrices(),
   'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.25 },
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2 },
-  // TypeSafe Jev, checked 2026-10-04: output tokens are free.
-  'jev-latest': { input: 0.042, output: 0 },
 };
 
 /** Look up a price, tolerating platform prefixes such as Bedrock's `anthropic.`. */
