@@ -21,7 +21,7 @@
     },
     "apps/cli": {
       "name": "@switchback/cli",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "bin": {
         "switchback": "./src/main.ts",
       },
@@ -40,6 +40,7 @@
       "devDependencies": {
         "@types/marked-terminal": "^6.1.1",
         "@types/react": "^19.3.0",
+        "@xterm/headless": "^6.0.0",
         "ink-testing-library": "^4.0.0",
       },
     },
@@ -73,7 +74,7 @@
     },
     "apps/vscode": {
       "name": "switchback",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "dependencies": {
         "@switchback/client": "workspace:*",
         "@switchback/protocol": "workspace:*",
@@ -920,6 +921,8 @@
     "@xmldom/is-dom-node": ["@xmldom/is-dom-node@1.0.1", "", {}, "sha512-CJDxIgE5I0FH+ttq/Fxy6nRpxP70+e2O048EPe85J2use3XKdatVM7dDVvFNjQudd9B49NPoZ+8PG49zj4Er8Q=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.9.12", "", {}, "sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A=="],
+
+    "@xterm/headless": ["@xterm/headless@6.0.0", "", {}, "sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw=="],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 
