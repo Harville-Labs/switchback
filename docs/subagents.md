@@ -106,6 +106,25 @@ isolation: worktree
 - It uses Claude Code's credentials (`ANTHROPIC_API_KEY` or a Claude login). Claude Code itself isn't bundled with Switchback: install it so `claude` is on `PATH`, or set `runtimes.<name>.executable`.
 - Only the final report returns to the parent, like any subagent. `isolation: worktree` works as usual.
 
+Every runtime is remote spend under the same rules (routing, organization policy, budgets, private sessions), shows its progress on the subagent row, and reports to the parent the same way. They differ in where they work and what Switchback can approve:
+
+| `type` | Where it works | Approval | Cost in the ledger |
+|---|---|---|---|
+| `claude-agent-sdk` | This workspace (Claude Code) | Every tool call, as above | Reported by the SDK |
+| `claude-managed-agents` | A [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview) environment: a hosted sandbox, not this workspace | Tool calls the agent's permission policy marks `ask` come to Switchback's policy; set the agent's policy to `always_ask` for Switchback to decide them all | Tokens, priced from the catalog; sandbox time is billed separately |
+| `codex` | This workspace ([OpenAI Codex](https://developers.openai.com/codex/sdk), through the Codex SDK) | Codex can't stop to ask, so the whole run is approved once, as a command (`bash`), and runs in the sandbox you chose: `read-only` or `workspace-write`, with `network` off by default. Because it reads files without asking, it won't run while `privacy.localOnlyPaths` is set | Tokens, priced from the catalog for `model` |
+| `bedrock-agentcore` | An agent you deployed to [Amazon Bedrock AgentCore Runtime](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-invoke-agent.html), in AWS | Nothing local to approve: it uses its own tools and IAM permissions | Not reported by AgentCore, so not ledgered |
+
+```jsonc
+"runtimes": {
+  "hosted": { "type": "claude-managed-agents", "agent": "agent_01…", "environment": "env_01…" },
+  "codex": { "type": "codex", "model": "gpt-6-sol", "sandbox": "workspace-write" },
+  "aws": { "type": "bedrock-agentcore", "arn": "arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/my-agent-AbCd" }
+}
+```
+
+Credentials: Managed Agents uses `ANTHROPIC_API_KEY` (or `apiKey`); Codex uses its own sign-in (`codex login`), `OPENAI_API_KEY`, or `apiKey`, and runs `codex` from `PATH` unless `executable` is set; AgentCore uses the AWS credential chain (environment, profile, SSO, role) and the region in the ARN. AgentCore sends the task as `{"prompt": "…"}` and shows whatever the agent streams back (server-sent events or JSON).
+
 ### Worktree isolation
 
 With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the agent file), the subagent works in its own git worktree on a new branch, `switchback/<id>`, created from `HEAD`. Its file tools, shell, and `@` mentions operate there, so parallel editing subagents never touch each other or your working tree.
