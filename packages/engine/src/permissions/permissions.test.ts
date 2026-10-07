@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { commandMatches, parseCommand, suggestBashRules } from './bash-match.ts';
+import { defaultPermissions, setupPermissions } from './defaults.ts';
 import { RuleLayers } from './layers.ts';
 import { pathMatcher } from './path-match.ts';
 import { PermissionPolicy, type SourcedRule, suggestRules } from './policy.ts';
@@ -168,6 +169,58 @@ describe('policy', () => {
     expect(suggestRules({ name: 'write', category: 'edit', input: { path: 'a' } })).toEqual([
       'edit',
     ]);
+  });
+});
+
+describe('default rules', () => {
+  const bash = (command: string) => ({
+    name: 'bash',
+    category: 'bash' as const,
+    input: { command },
+  });
+  const { allow, ask } = defaultPermissions();
+  const p = new PermissionPolicy([
+    ...ask.map((rule) => ({ rule, behavior: 'ask' as const, source: 'test' })),
+    ...allow.map((rule) => ({ rule, behavior: 'allow' as const, source: 'test' })),
+  ]);
+  const verdict = (command: string) => p.evaluate(bash(command), root)?.behavior;
+
+  test('allow exploring, ask before publishing or rewriting history', () => {
+    for (const c of [
+      'find . -name "*.ts"',
+      'grep -rn foo src',
+      'git log --oneline -5',
+      'ls | wc -l',
+    ])
+      expect(verdict(c)).toBe('allow');
+    for (const c of [
+      'git commit -m x',
+      'git push origin main',
+      'GIT_X=1 git commit',
+      'git reset --hard',
+    ])
+      expect(verdict(c)).toBe('ask');
+    expect(verdict('npm install')).toBeUndefined();
+  });
+
+  test('flags that write or run programs ask', () => {
+    for (const c of [
+      'find . -exec rm {} ;',
+      'find . -name x -delete',
+      'rg --pre ./x foo',
+      'git log --output=/tmp/x',
+    ])
+      expect(verdict(c)).toBe('ask');
+    expect(verdict('grep x a > out')).toBeUndefined();
+  });
+
+  test('setup writes them into a new config only, and adds presets to what is there', () => {
+    expect(setupPermissions({}, [])).toEqual({ allow, ask });
+    expect(setupPermissions({ deny: ['read(.env)'] }, [])).toBeUndefined();
+    expect(setupPermissions({ allow: ['bash(make:*)'] }, ['go'])).toEqual({
+      allow: ['bash(make:*)', 'bash(go test:*)', 'bash(go build:*)', 'bash(go vet:*)'],
+      ask: [],
+    });
   });
 });
 

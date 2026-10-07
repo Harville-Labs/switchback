@@ -1,6 +1,6 @@
 # Examples
 
-`switchback init` writes an equivalent config for you. Copy any of these to `.switchback/config.json` (project) or `~/.config/switchback/config.json` (user) and adjust.
+`switchback init` writes an equivalent config for you. Copy any of these to `.switchback/config.json` (project) or `~/.switchback/config.json` (user) and adjust.
 
 | File | Setup |
 |---|---|

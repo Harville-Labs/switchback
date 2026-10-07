@@ -121,10 +121,15 @@ async function manualLocal(flags: InitFlags, p: Prompter): Promise<LocalAnswer> 
   const [probe] = await detectLocalServers({ extra: [baseUrl] }).then((s) =>
     s.filter((x) => x.baseUrl === baseUrl),
   );
-  if (probe?.models.length)
-    console.log(dim(`  Models on this server: ${probe.models.map((m) => m.id).join(', ')}`));
-  else console.log(yellow('  Could not list models at that URL; continuing anyway.'));
-  const model = await p.text('Model name', probe?.models[0]?.id);
+  if (!probe?.models.length)
+    console.log(yellow('  Could not list models at that URL; continuing anyway.'));
+  const model = probe?.models.length
+    ? await p.search(
+        'Model name',
+        probe.models.map((m) => ({ label: m.id, value: m.id })),
+        { freeText: true },
+      )
+    : await p.text('Model name');
   if (!model) throw new SetupError('a model name is required');
   const contextWindow =
     (await p.number('Context window (tokens) the server loads', 32_768)) ?? 32_768;

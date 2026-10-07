@@ -1028,6 +1028,7 @@ describe('session roles', () => {
         enforcedKeys: ['routing.escalate'],
         remoteDisabled: false,
         bypassDisabled: false,
+        userPermissionsDisabled: false,
       },
     });
     const o = org.engine.createSession({});

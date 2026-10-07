@@ -23,7 +23,7 @@
     "test:live": "SWITCHBACK_LIVE=1 bun test tests/live --timeout 600000"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14",
+    "@biomejs/biome": "^2.5.15",
     "@types/bun": "^1.4.2",
     "@types/mocha": "^10.0.10",
     "@types/vscode": "1.95.0",

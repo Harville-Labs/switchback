@@ -2,6 +2,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  adoptOrgPermissions,
   clearAuth,
   loadConfig,
   OrgAuthError,
@@ -52,6 +53,8 @@ export function describeRestrictions(policy: OrgPolicy): string[] {
   if (r.allowedProviderTypes)
     lines.push(`allowed provider types: ${r.allowedProviderTypes.join(', ')}`);
   if (!r.allowUserProviders) lines.push('only organization-defined providers');
+  if (!r.allowUserPermissions) lines.push('permissions set by the organization only');
+  if (!r.allowBypassPermissions) lines.push('bypassPermissions mode disabled');
   if (r.maxDailyUsd) lines.push(`remote spend capped at $${r.maxDailyUsd}/day`);
   if (r.maxMonthlyUsd) lines.push(`remote spend capped at $${r.maxMonthlyUsd}/month`);
   const enforced = Object.keys(policy.enforced);
@@ -120,6 +123,11 @@ export async function login(flags: LoginFlags): Promise<number> {
     console.log(
       `${green('✓')} Signed in to ${bold(policy.org.name)}${auth.user.email ? ` as ${auth.user.email}` : ''}`,
     );
+    const adopted = adoptOrgPermissions(switchbackPaths().configFile, policy);
+    if (adopted)
+      console.log(
+        `  Your permissions are now ${policy.org.name}'s, in ${adopted.file}${adopted.backup ? dim(` (previous version: ${adopted.backup})`) : ''}${policy.restrictions.allowUserPermissions ? '; you can edit them' : ''}`,
+      );
     const lines = describeRestrictions(policy);
     console.log(
       lines.length

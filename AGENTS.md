@@ -23,7 +23,7 @@ bun run dev -- doctor            # show effective config and provider health
 bun run format                   # apply Biome formatting
 ```
 
-Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so you never touch the real `~/.config/switchback` or usage ledger.
+Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so you never touch the real `~/.switchback` or usage ledger.
 
 ## Layout
 

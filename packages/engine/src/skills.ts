@@ -3,7 +3,7 @@
  * frontmatter has a `name` and a `description`, and whose body (with any
  * other files in the folder) is what the model reads when it needs it. They
  * live in `.switchback/skills/` (the project) or
- * `~/.config/switchback/skills/` (you); a project's skill overrides yours.
+ * `~/.switchback/skills/` (you); a project's skill overrides yours.
  *
  * Only names and descriptions go in the system prompt; the `skill` tool loads
  * the rest on demand, so unused skills cost a line each.

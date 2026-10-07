@@ -1,5 +1,5 @@
 /**
- * Layered configuration: built-in defaults <- user (~/.config/switchback/config.json)
+ * Layered configuration: built-in defaults <- user (~/.switchback/config.json)
  * <- project (.switchback/config.json). Later layers deep-merge over earlier ones.
  * String values of the form `{env:NAME}` are replaced with the environment
  * variable so secrets never need to live in a config file.
@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, relative, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
 import { type Price, tierOf } from '@switchback/providers';
 import { roleAliases } from '@switchback/router';
@@ -85,19 +85,32 @@ export function loadConfig(
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
   const pp = projectPaths(workspaceRoot);
+  const userFile = switchbackPaths(env).configFile;
+  // In the home directory, the project's `.switchback/` is the user's own.
+  const atHome = resolve(pp.configFile) === resolve(userFile);
   const files: { file: string; project: boolean }[] = [
-    { file: switchbackPaths(env).configFile, project: false },
-    { file: pp.configFile, project: true },
-    { file: pp.localConfigFile, project: true },
+    { file: userFile, project: false },
+    ...(atHome
+      ? []
+      : [
+          { file: pp.configFile, project: true },
+          { file: pp.localConfigFile, project: true },
+        ]),
   ];
   const rules = new RuleLayers();
   const hookLayers = new HookLayers();
+  const orgPermissionsOnly = org ? !org.restrictions.allowUserPermissions : false;
+  const ignoredLevels: string[] = [];
   /** A layer with its rules and hooks taken out, to add up rather than replace. */
   const additive = (
     layer: Record<string, unknown>,
     source: string,
     where: { project?: boolean; org?: boolean } = {},
-  ) => hookLayers.take(rules.take(layer, source, where.org), source, where);
+  ) => {
+    const own =
+      orgPermissionsOnly && !where.org ? withoutLevels(layer, source, ignoredLevels) : layer;
+    return hookLayers.take(rules.take(own, source, where.org), source, where);
+  };
   /** Where each MCP server's effective definition came from. */
   const mcpSource = new Map<string, { project: boolean; file: string }>();
   const noteMcp = (layer: unknown, project: boolean, file: string) => {
@@ -146,7 +159,7 @@ export function loadConfig(
     merged = deepMerge(merged, additive(org.enforced, ORG_SOURCE, { org: true }));
     noteMcp(org.enforced, false, 'organization policy');
   }
-  const ruleSet = rules.result(org ? !org.restrictions.allowUserPermissionRules : false);
+  const ruleSet = rules.result(orgPermissionsOnly);
   const hookSet = hookLayers.result(
     workspaceRoot,
     env,
@@ -203,10 +216,12 @@ export function loadConfig(
           (r) =>
             `${r.behavior} rule "${r.rule}" from ${r.source} ignored: only organization rules apply`,
         ),
+        ...ignoredLevels,
       ],
       enforcedKeys: leafPaths(org.enforced),
       remoteDisabled: !org.restrictions.allowRemote,
       bypassDisabled: !org.restrictions.allowBypassPermissions,
+      userPermissionsDisabled: orgPermissionsOnly,
     };
   }
   const prices: Record<string, Price> = {};
@@ -222,7 +237,28 @@ export function loadConfig(
   };
 }
 
-/** A config file as people know it: `.switchback/config.json`, `~/.config/switchback/config.json`. */
+const LEVELS = ['read', 'edit', 'bash', 'web', 'mcp'];
+
+/** A member's layer without the permission levels an organization keeps for itself. */
+function withoutLevels(
+  layer: Record<string, unknown>,
+  source: string,
+  notes: string[],
+): Record<string, unknown> {
+  const permissions = layer.permissions as Record<string, unknown> | undefined;
+  if (!permissions || typeof permissions !== 'object') return layer;
+  const rest = { ...permissions };
+  for (const level of LEVELS)
+    if (level in rest) {
+      delete rest[level];
+      notes.push(
+        `permissions.${level} from ${source} ignored: only organization permissions apply`,
+      );
+    }
+  return { ...layer, permissions: rest };
+}
+
+/** A config file as people know it: `.switchback/config.json`, `~/.switchback/config.json`. */
 function sourceLabel(file: string, workspaceRoot: string): string {
   const inProject = relative(workspaceRoot, file);
   if (!inProject.startsWith('..') && !isAbsolute(inProject)) return inProject.split(sep).join('/');

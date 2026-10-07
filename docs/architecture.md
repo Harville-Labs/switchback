@@ -76,16 +76,16 @@ The `task` tool creates a child session (`parentId` set) running a named agent w
 
 | What | Where | Format |
 |---|---|---|
-| User config | `~/.config/switchback/config.json` | JSONC |
+| User config | `~/.switchback/config.json` | JSONC |
 | Project config | `.switchback/config.json` | JSONC |
-| Agent definitions | `~/.config/switchback/agents/`, `.switchback/agents/` | Markdown + YAML frontmatter |
-| Sessions | `~/.local/share/switchback/sessions/<id>.jsonl` | Header line, then one message per line, append-only. Written on the first message, so the header has the title and unused sessions leave no file. |
-| Usage ledger | `~/.local/share/switchback/usage.jsonl` | One entry per model call |
-| Checkpoints | `~/.local/share/switchback/checkpoints/<session>.jsonl`, `checkpoints/blobs/<sha256>` | A line per turn and per file a turn first changed; file contents stored once by hash |
-| Organization sign-in | `~/.config/switchback/auth.json` | Credentials, mode 0600 |
-| Organization policy cache | `~/.local/share/switchback/org-policy.json` | Last policy received, mode 0600 ([organizations.md](organizations.md)) |
+| Agent definitions | `~/.switchback/agents/`, `.switchback/agents/` | Markdown + YAML frontmatter |
+| Sessions | `~/.switchback/data/sessions/<id>.jsonl` | Header line, then one message per line, append-only. Written on the first message, so the header has the title and unused sessions leave no file. |
+| Usage ledger | `~/.switchback/data/usage.jsonl` | One entry per model call |
+| Checkpoints | `~/.switchback/data/checkpoints/<session>.jsonl`, `checkpoints/blobs/<sha256>` | A line per turn and per file a turn first changed; file contents stored once by hash |
+| Organization sign-in | `~/.switchback/auth.json` | Credentials, mode 0600 |
+| Organization policy cache | `~/.switchback/data/org-policy.json` | Last policy received, mode 0600 ([organizations.md](organizations.md)) |
 
-`SWITCHBACK_HOME` relocates everything (tests and development). `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are respected.
+Everything lives under `~/.switchback` on every platform, laid out like a project's `.switchback/`. `SWITCHBACK_HOME` relocates it (tests and development).
 
 Append-only files make crash recovery trivial: a torn final line is ignored and everything before it is intact. More importantly, append-only history is required for provider prompt caching and for Claude's thinking-block validation ([ADR 0003](adr/0003-neutral-append-only-transcript.md)).
 

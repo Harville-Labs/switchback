@@ -166,3 +166,20 @@ describe('agent files', () => {
     );
   });
 });
+
+test('a workspace at the home directory reads ~/.switchback once, as the user config', () => {
+  const home = mkdtempSync(join(tmpdir(), 'switchback-athome-'));
+  try {
+    const dir = join(home, '.switchback');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'config.json'),
+      JSON.stringify({ permissions: { deny: ['read(.env)'] } }),
+    );
+    const loaded = loadConfig(home, { SWITCHBACK_HOME: dir }, [], null);
+    expect(loaded.sources).toEqual([join(dir, 'config.json')]);
+    expect(loaded.rules.filter((r) => r.rule === 'read(.env)')).toHaveLength(1);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

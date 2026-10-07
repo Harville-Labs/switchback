@@ -260,7 +260,7 @@ describe('hooks in config', () => {
           allowRemote: true,
           allowUserProviders: true,
           allowUserMcpServers: true,
-          allowUserPermissionRules: true,
+          allowUserPermissions: true,
           allowUserHooks: false,
           allowBypassPermissions: true,
         },

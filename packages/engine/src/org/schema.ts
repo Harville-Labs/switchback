@@ -39,10 +39,12 @@ export const OrgPolicy = z.object({
       /** false: only MCP servers defined by the org policy may run. */
       allowUserMcpServers: z.boolean().default(true),
       /**
-       * false: only the organization's allow and ask rules apply. Users' and
-       * projects' deny rules still do, since they only tighten.
+       * false: members can't set their own permissions. Only the policy's
+       * levels (`permissions.bash`, ...) and allow and ask rules apply, and
+       * prompts offer no "always". Members' and projects' deny rules still
+       * apply, since they only tighten.
        */
-      allowUserPermissionRules: z.boolean().default(true),
+      allowUserPermissions: z.boolean().default(true),
       /** false: only hooks defined by the org policy run. */
       allowUserHooks: z.boolean().default(true),
       /** false: sessions can't use the `bypassPermissions` mode. */

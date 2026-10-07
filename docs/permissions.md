@@ -19,10 +19,11 @@ Every call that passes validation and confinement is decided in this order:
 1. **A category set to `deny`** (`permissions.bash: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off.
 2. **Deny rules.** The call is refused, and the model is told which rule refused it and where the rule came from.
 3. **Plan mode.** Edits are refused until the user approves a plan.
-4. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/`): the user is asked, in every mode, including `bypassPermissions` and `acceptEdits`.
-5. **Allow rules,** including what the user allowed earlier in the session.
-6. **The mode.** `bypassPermissions` allows the rest; `acceptEdits` allows edits.
-7. **The category's level:** `allow`, or ask.
+4. **Bypass.** In `bypassPermissions`, everything else runs without a prompt.
+5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/`): the user is asked, including in `acceptEdits`.
+6. **Allow rules,** including what the user allowed earlier in the session.
+7. **The mode.** `acceptEdits` allows edits.
+8. **The category's level:** `allow`, or ask.
 
 ### Levels
 
@@ -70,6 +71,15 @@ Tool names are case-insensitive (`Bash` is `bash`); `glob` and `grep` are read r
 
 **Where rules come from.** Rule lists add up across config layers instead of replacing each other: the user config, the project config, the project's personal file `.switchback/config.local.json`, and an organization's policy. A project can't remove a user's deny rules, and nobody can remove an organization's. `/permissions` (both clients) and `switchback doctor` list every rule in effect and where each came from.
 
+### Default rules
+
+`switchback init` gives a new user config a starting set of rules, which are then yours to edit like any other:
+
+- **Allow:** read-only commands: `ls`, `pwd`, `cat`, `head`, `tail`, `wc`, `stat`, `du`, `diff`, `which`, `find`, `grep`, `rg`, and `git status`, `log`, `diff`, `show`, `blame`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, and plain `git branch`.
+- **Ask:** options that make those write or run other programs (`find -exec`, `-ok`, `-delete`, `-fprint`, `-fls`; `rg --pre`; `git ... --output`), which beat the allows, and commands that publish work or rewrite history, so they ask even with `permissions.bash: "allow"`: `git commit`, `git push`, `git rebase`, `git reset --hard`, `git clean`, `gh pr create`, `gh pr merge`, `gh release`, and `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`.
+
+Setup also offers presets for test, build, and lint commands (Bun, npm, pnpm, Cargo, Go, Python), checking the ones the workspace's files point to. Re-running setup adds presets to your rules and never removes one; the defaults are written only into a config that has no rules yet. When you sign in to an organization, its permissions replace these ([organizations.md](organizations.md#permissions)).
+
 ### Answering a prompt
 
 With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked.
@@ -88,21 +98,21 @@ A call an ask rule caught offers no "always": the rule says to ask every time. C
 | `default` | Nothing: the levels and rules decide |
 | `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
 | `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
-| `bypassPermissions` | Everything goes ahead except what a category `deny`, a deny rule, or an ask rule stops |
+| `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, and edits to `.switchback/` included. Only a category `deny`, a deny rule, and `bash.sandbox.allowUnsandboxed: false` stop a call |
 
 New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
 
-An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and keep only its own allow and ask rules (`restrictions.allowUserPermissionRules: false`); see [organizations.md](organizations.md).
+An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
 
 ## Sandbox
 
-Bash commands, foreground and background, run in an OS sandbox through Anthropic's [sandbox runtime](https://github.com/anthropics/sandbox-runtime): Seatbelt (`sandbox-exec`) on macOS, bubblewrap and seccomp on Linux. Inside it:
+Bash commands, foreground and background, run in an OS sandbox through Anthropic's [sandbox runtime](https://github.com/anthropics/sandbox-runtime): Seatbelt (`sandbox-exec`) on macOS, bubblewrap and seccomp on Linux, and on Windows a separate `srt-sandbox` account fenced by file ACLs and a Windows Filtering Platform network filter. Inside it:
 
 - **Writes** go only to the workspace (and a subagent's worktree), temp directories, package caches (`~/.npm`, `~/.bun/install/cache`, `~/.cache`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, `~/.m2/repository`, `~/Library/Caches`, ...), and `bash.sandbox.allowWrite`. Never to Switchback's own configuration (`.switchback/`) or to `.git/hooks` and `.git/config`, which would let a command run code outside the sandbox the next time you use git.
 - **Reads** are open except credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.azure`, `~/.kube`, `~/.config/gcloud`, `~/.docker/config.json`, `~/.netrc`; set `bash.sandbox.denyRead` to change the list), Switchback's config and data directories, and files your `read(...)` deny rules name. `edit(...)` deny rules become write denies. So `read(.env)` holds for `cat .env` too.
 - **Network** is open by default (`bash.sandbox.network: "all"`), so installs and `git fetch` work. Use a list of hosts (`["registry.npmjs.org", "*.github.com"]`) to allow only those, or `"none"`. Commands can listen on local ports (dev servers).
 
-When the sandbox blocks something, the command's error says what was blocked, so the model can explain or find another way. If it needs to step outside, it can ask to run one command with `unsandboxed: true`; that always asks you, in every mode, and `bash.sandbox.allowUnsandboxed: false` refuses it.
+When the sandbox blocks something, the command's error says what was blocked, so the model can explain or find another way. If it needs to step outside, it can ask to run one command with `unsandboxed: true`; that asks you in every mode but `bypassPermissions`, and `bash.sandbox.allowUnsandboxed: false` refuses it.
 
 `bash.sandbox.mode` is `auto` by default: on where the platform supports it, off with a one-time notice where it can't run. `on` refuses to run commands without it; `off` turns it off. `/permissions` and `switchback doctor` say whether it's on and, if not, why.
 
@@ -110,13 +120,15 @@ When the sandbox blocks something, the command's error says what was blocked, so
 |---|---|
 | macOS | `ripgrep` (`brew install ripgrep`) |
 | Linux | `bubblewrap`, `socat`, and `ripgrep` (`apt-get install bubblewrap socat ripgrep`). On Ubuntu 24.04 and later, unprivileged user namespaces must be allowed (`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or an AppArmor profile) |
-| Windows | Not sandboxed. The runtime's Windows support is in alpha and needs an elevated install, so `auto` runs commands unsandboxed and `on` refuses to run them |
+| Windows (alpha) | A one-time setup with one administrator prompt: `switchback init` offers it, or run `switchback sandbox install` (`uninstall` removes it). Until then, `auto` runs commands unsandboxed and `on` refuses to run them |
 
 Known limits:
 
 - Commands that push over SSH can't read `~/.ssh` in the default policy; use an HTTPS remote, take `~/.ssh` out of `denyRead`, or approve the one command unsandboxed.
 - `git config` and anything else that writes `.git/config` fails inside the sandbox.
 - On Linux, write paths are literal (no globs) and read-deny globs cover only the files that exist when the command starts.
+- On Windows, write grants are set when the sandbox starts: the workspace and every subagent worktree. Changes to `bash.sandbox` or deny rules apply after a restart.
+- On Windows, commands run as the sandbox account: tools installed only in your own profile (nvm, per-user Scoop or winget, `pip install --user`) can't run unless their paths are readable; prefer machine-wide installs. Commands get a fresh environment, so `bash.env` doesn't reach them. Tools that check certificate revocation through schannel fail behind the network filter (`git -c http.schannelCheckRevoke=false`, `curl --ssl-no-revoke`).
 
 An organization can enforce `bash.sandbox.mode: "on"` and `bash.sandbox.allowUnsandboxed: false` in its policy ([organizations.md](organizations.md)).
 

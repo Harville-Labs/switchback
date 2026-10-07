@@ -51,7 +51,7 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
     "allowedProviderTypes": ["openai-compatible", "openai"],
     "allowUserProviders": false,                    // only providers defined in this policy
     "allowUserMcpServers": false,                   // only MCP servers defined in this policy
-    "allowUserPermissionRules": false,              // only this policy's allow/ask rules (members' deny rules still apply)
+    "allowUserPermissions": false,                  // members can't set their own permissions (their deny rules still apply)
     "allowBypassPermissions": false,                // no bypassPermissions mode
     "allowUserHooks": false,                        // only this policy's hooks run
     "maxDailyUsd": 10,                              // users may set lower budgets, never higher
@@ -71,7 +71,7 @@ Config layers merge in this order, lowest first:
 
 1. built-in defaults (none)
 2. org `defaults`
-3. user config (`~/.config/switchback/config.json`)
+3. user config (`~/.switchback/config.json`)
 4. project config (`.switchback/config.json`), then the project's personal file (`.switchback/config.local.json`)
 5. command-line layers
 6. org `enforced`
@@ -86,9 +86,16 @@ Enforce `"bash": { "sandbox": { "mode": "on", "allowUnsandboxed": false } }` to 
 
 Hooks in a policy's `defaults` or `enforced` run for every member, alongside their own, and need no trust. With `allowUserHooks: false`, only the policy's hooks run; members' and projects' are ignored, and `switchback whoami` lists what was left out. Enforce an audit hook with `"hooks": { "PostToolUse": [ ... ] }` in `enforced` ([hooks.md](hooks.md)).
 
-### Permission rules
+### Permissions
 
-Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "later layers replace arrays": every layer's rules add up. An organization's deny rules, in `defaults` or `enforced`, join every member's rules as soon as the policy arrives, appear in `/permissions` and `switchback doctor` with the source `organization`, and can't be removed by a member, a project, or an answer at a prompt (deny is checked before anything a session allows). With `allowUserPermissionRules: false`, only the policy's allow and ask rules apply; members' and projects' deny rules still do, since they only tighten. With `allowBypassPermissions: false`, no session can switch to `bypassPermissions`, and a `defaultMode` of `bypassPermissions` becomes `default`. See [permissions.md](permissions.md#rules) for the syntax.
+**At sign-in**, `switchback login` writes the policy's `permissions` (`defaults` and `enforced` together, rule lists added up) over the `permissions` section of the member's user config, keeping the old file as `.bak`. Members start from the organization's levels and rules instead of the [defaults setup writes](permissions.md#default-rules). A policy without `permissions` leaves members' own alone.
+
+**Whether members may change them** is `restrictions.allowUserPermissions`:
+
+- `true` (the default): what login wrote is the member's to edit, and prompts offer **Always**.
+- `false`: the policy's permissions are the only ones that apply, whatever the member's files say. Members' and projects' levels (`permissions.bash`, ...) and allow and ask rules are ignored (`switchback whoami` lists what was left out), and prompts offer no **Always**. Their deny rules still apply, since they only tighten.
+
+Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "later layers replace arrays": every layer's rules add up. An organization's deny rules, in `defaults` or `enforced`, join every member's rules as soon as the policy arrives, appear in `/permissions` and `switchback doctor` with the source `organization`, and can't be removed by a member, a project, or an answer at a prompt (deny is checked before anything a session allows). With `allowBypassPermissions: false`, no session can switch to `bypassPermissions`, and a `defaultMode` of `bypassPermissions` becomes `default`. See [permissions.md](permissions.md#rules) for the syntax.
 
 ## Server API
 
@@ -109,7 +116,7 @@ Usage reports contain only token counts and costs per model per day, never promp
 ## Security and enforcement
 
 - Put `privacy.localOnlyPaths` and `privacy.secrets` in `enforced` to guarantee that matching files never reach a remote model on any member's machine, whatever their own settings say ([privacy.md](privacy.md)). An enforced list replaces the user's list rather than adding to it; put the org's paths in `defaults` instead if users should be able to extend it (they can then also shorten it).
-- Credentials live in `~/.config/switchback/auth.json` and the cached policy in the data directory, both readable only by the user (mode 0600).
+- Credentials live in `~/.switchback/auth.json` and the cached policy in the data directory, both readable only by the user (mode 0600).
 - If a policy can't be refreshed (server down, token revoked), the last cached policy keeps applying. It's removed only by `switchback logout`.
 - **Enforcement happens on the client.** It reliably governs cooperative users and every Switchback client, but someone with control of their own machine can sign out or modify the binary. For hard guarantees:
   - Point hosted providers at an **org gateway** (`baseUrl` in `defaults`/`enforced`) that holds the real API keys and enforces spend server-side. Users then never have provider keys at all.

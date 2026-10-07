@@ -59,8 +59,7 @@ export function canAttach(info: DaemonInfo, version: string): boolean {
 
 /** Mirrors switchbackPaths() in @switchback/engine (kept in sync by a test). */
 export function dataDir(env: Env = process.env): string {
-  if (env.SWITCHBACK_HOME) return join(env.SWITCHBACK_HOME, 'data');
-  return join(env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'switchback');
+  return join(env.SWITCHBACK_HOME ?? join(homedir(), '.switchback'), 'data');
 }
 
 export function daemonPaths(workspaceRoot: string, env: Env = process.env) {

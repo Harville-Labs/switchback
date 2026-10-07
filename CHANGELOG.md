@@ -4,6 +4,18 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **Default permissions**: `switchback init` writes a starting set of rules into a new user config: read-only commands (`find`, `grep`, `rg`, `git log`, `git diff`, ...) run without asking; commits, pushes, history rewrites, and package publishes ask. Setup also offers test, build, and lint presets per ecosystem, preselected from the workspace. See docs/permissions.md#default-rules
+- **Organizations hand out permissions**: `switchback login` replaces the member's permissions with the policy's
+- **Windows command sandbox** (alpha): commands run as a separate account, fenced by file ACLs and a network filter, through the sandbox runtime's Windows backend. One-time setup with one administrator prompt: `switchback init` offers it, or `switchback sandbox install`
+- **Setup prompts** use the arrow keys, and model lists from an endpoint (OpenRouter, OpenAI-compatible, local servers) filter as you type
+
+### Changed
+- **Breaking:** everything of Switchback's now lives in `~/.switchback` on every platform (config, agents, commands, skills, and `data/` for sessions and the ledger), instead of `~/.config/switchback` and `~/.local/share/switchback`. `XDG_CONFIG_HOME` and `XDG_DATA_HOME` no longer apply; move your files, or re-run `switchback init`
+- `bypassPermissions` never asks: ask rules, running outside the sandbox, and edits to `.switchback/` all go ahead. Deny rules still stop a call
+- `restrictions.allowUserPermissionRules` is now `allowUserPermissions`, and with `false` it also ignores members' permission levels and turns off **Always** at prompts
+- `/permissions` and `switchback doctor` group rules by where they came from
+
 ## [1.0.0] - 2026-10-07
 
 ### Removed

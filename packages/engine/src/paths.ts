@@ -1,13 +1,18 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-/** XDG-style locations. `SWITCHBACK_HOME` relocates everything (used by tests). */
+/**
+ * Everything of Switchback's lives in `~/.switchback`, laid out like a
+ * project's `.switchback/` with its state under `data/`, on every platform.
+ * `SWITCHBACK_HOME` relocates it (tests, development).
+ */
+export function switchbackHome(env: Record<string, string | undefined> = process.env): string {
+  return env.SWITCHBACK_HOME ?? join(homedir(), '.switchback');
+}
+
 export function switchbackPaths(env: Record<string, string | undefined> = process.env) {
-  const home = env.SWITCHBACK_HOME;
-  const config = home ?? join(env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'switchback');
-  const data = home
-    ? join(home, 'data')
-    : join(env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'switchback');
+  const config = switchbackHome(env);
+  const data = join(config, 'data');
   return {
     configDir: config,
     configFile: join(config, 'config.json'),

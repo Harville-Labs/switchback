@@ -108,7 +108,7 @@ async function interview(flags: AgentNewFlags, p: Prompter | undefined): Promise
           {
             label: 'All my projects',
             value: 'user' as const,
-            hint: '~/.config/switchback/agents/',
+            hint: '~/.switchback/agents/',
           },
         ])
       : 'project');
