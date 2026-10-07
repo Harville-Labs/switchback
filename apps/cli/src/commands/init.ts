@@ -18,6 +18,7 @@ import { bold, dim, green, Prompter } from '../prompt.ts';
 import { doctor } from './doctor.ts';
 import { type InitFlags, SetupError } from './init-flags.ts';
 import { chooseLocals } from './init-local.ts';
+import { setupUserPermissions } from './init-permissions.ts';
 import { chooseRemotes } from './init-remote.ts';
 import { chooseRoles } from './init-roles.ts';
 import { setTelemetry, TELEMETRY_PROMPT } from './telemetry.ts';
@@ -151,6 +152,7 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   console.log(
     `${green('✓')} Wrote ${result.file}${result.backup ? dim(` (previous version: ${result.backup})`) : ''}\n`,
   );
+  await setupUserPermissions(flags, p);
   const share =
     flags.telemetry ??
     (p && !telemetryChosen()

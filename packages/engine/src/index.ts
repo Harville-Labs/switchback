@@ -9,6 +9,7 @@ export * from './mcp/config.ts';
 export * from './mcp/hub.ts';
 export * from './org/index.ts';
 export * from './paths.ts';
+export * from './permissions/defaults.ts';
 export * from './privacy.ts';
 export * from './runtimes/claude-agent-sdk.ts';
 export { createRuntime, type RuntimeConfig } from './runtimes/index.ts';

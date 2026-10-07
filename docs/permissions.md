@@ -71,6 +71,15 @@ Tool names are case-insensitive (`Bash` is `bash`); `glob` and `grep` are read r
 
 **Where rules come from.** Rule lists add up across config layers instead of replacing each other: the user config, the project config, the project's personal file `.switchback/config.local.json`, and an organization's policy. A project can't remove a user's deny rules, and nobody can remove an organization's. `/permissions` (both clients) and `switchback doctor` list every rule in effect and where each came from.
 
+### Default rules
+
+`switchback init` gives a new user config a starting set of rules, which are then yours to edit like any other:
+
+- **Allow:** read-only commands: `ls`, `pwd`, `cat`, `head`, `tail`, `wc`, `stat`, `du`, `diff`, `which`, `find`, `grep`, `rg`, and `git status`, `log`, `diff`, `show`, `blame`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, and plain `git branch`.
+- **Ask:** options that make those write or run other programs (`find -exec`, `-ok`, `-delete`, `-fprint`, `-fls`; `rg --pre`; `git ... --output`), which beat the allows, and commands that publish work or rewrite history, so they ask even with `permissions.bash: "allow"`: `git commit`, `git push`, `git rebase`, `git reset --hard`, `git clean`, `gh pr create`, `gh pr merge`, `gh release`, and `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`.
+
+Setup also offers presets for test, build, and lint commands (Bun, npm, pnpm, Cargo, Go, Python), checking the ones the workspace's files point to. Re-running setup adds presets to your rules and never removes one; the defaults are written only into a config that has no rules yet. When you sign in to an organization, its permissions replace these ([organizations.md](organizations.md#permissions)).
+
 ### Answering a prompt
 
 With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked.

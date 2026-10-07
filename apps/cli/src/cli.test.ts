@@ -7,6 +7,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SwitchbackClient, spawnEngine } from '@switchback/client';
+import { parseJsonc } from '@switchback/engine';
 import type { EngineEvent } from '@switchback/protocol';
 
 const home = mkdtempSync(join(tmpdir(), 'switchback-home-'));
@@ -174,3 +175,25 @@ describe('switchback run for scripts', () => {
     expect(r.stderr).toContain('permission rule "bash("');
   });
 });
+
+test('init gives a new user config the default permissions, once', () => {
+  const fresh = mkdtempSync(join(tmpdir(), 'switchback-init-'));
+  const ws = mkdtempSync(join(tmpdir(), 'switchback-init-ws-'));
+  const init = () =>
+    Bun.spawnSync(
+      [process.execPath, main, 'init', '--yes', '--cwd', ws, '--no-local', '--remote', 'deepseek'],
+      { env: { ...process.env, SWITCHBACK_HOME: fresh }, stdout: 'pipe', stderr: 'pipe' },
+    );
+  try {
+    expect(init().stdout.toString()).toContain('Permissions in');
+    const config = () => parseJsonc(readFileSync(join(fresh, 'config.json'), 'utf8'));
+    const { permissions } = config() as { permissions: { allow: string[]; ask: string[] } };
+    expect(permissions.ask).toContain('bash(git commit:*)');
+    expect(permissions.allow).toContain('bash(git log:*)');
+    init();
+    expect(config()).toMatchObject({ permissions });
+  } finally {
+    rmSync(fresh, { recursive: true, force: true });
+    rmSync(ws, { recursive: true, force: true });
+  }
+}, 30_000);
