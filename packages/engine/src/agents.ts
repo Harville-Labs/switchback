@@ -4,7 +4,7 @@
  * session or as a subagent spawned through the `task` tool.
  *
  * Definitions are Markdown files with YAML frontmatter. Lookup order (later
- * wins): built-in, user (~/.config/switchback/agents), project
+ * wins): built-in, user (~/.switchback/agents), project
  * (.switchback/agents).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

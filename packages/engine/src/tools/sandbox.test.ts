@@ -18,7 +18,7 @@ const settings = (over: Partial<SandboxSettings> = {}): SandboxSettings => ({
 const base = {
   workspaceRoot: '/work/repo',
   sessionRoot: '/work/repo',
-  switchbackDirs: ['/home/me/.config/switchback'],
+  switchbackDirs: ['/home/me/.switchback'],
   rules: [],
   home: '/home/me',
 };
@@ -31,7 +31,7 @@ describe.skipIf(process.platform === 'win32')('sandbox policy', () => {
       expect.arrayContaining(['/work/repo', '/tmp', '/home/me/.npm', '/home/me/.cargo/registry']),
     );
     expect(p.filesystem.denyRead).toEqual(
-      expect.arrayContaining(['/home/me/.ssh', '/home/me/.aws', '/home/me/.config/switchback']),
+      expect.arrayContaining(['/home/me/.ssh', '/home/me/.aws', '/home/me/.switchback']),
     );
     expect(DEFAULT_DENY_READ).toContain('~/.ssh');
     expect(p.network.allowedDomains).toEqual(['*']);

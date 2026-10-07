@@ -312,7 +312,7 @@ export interface AgentSummary {
   budgetUsd?: number;
 }
 
-/** A slash command defined in a Markdown file (`.switchback/commands/`, `~/.config/switchback/commands/`). */
+/** A slash command defined in a Markdown file (`.switchback/commands/`, `~/.switchback/commands/`). */
 export interface CustomCommandInfo {
   name: string;
   description: string;

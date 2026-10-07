@@ -6,7 +6,7 @@ Layers deep-merge in this order, with later layers winning:
 
 1. Built-in defaults (below)
 2. Organization policy `defaults`, when signed in ([organizations.md](organizations.md))
-3. `~/.config/switchback/config.json` (user; respects `XDG_CONFIG_HOME`)
+3. `~/.switchback/config.json` (user; `SWITCHBACK_HOME` moves the whole directory)
 4. `.switchback/config.json` in the workspace (project)
 5. Organization policy `enforced`, then its `restrictions`
 6. `--mock` (any command) then swaps every provider for a scripted mock
@@ -248,7 +248,6 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 |---|---|
 | `SWITCHBACK_HOME` | Relocate all config and data |
 | `SWITCHBACK_ORG_SERVER`, `SWITCHBACK_ORG_TOKEN` | Organization sign-in without `switchback login` (CI, managed installs) |
-| `XDG_CONFIG_HOME`, `XDG_DATA_HOME` | Standard base directories |
 | `DO_NOT_TRACK=1`, `SWITCHBACK_TELEMETRY=0` | Telemetry off, whatever the config says |
 | `OPENAI_API_KEY` | OpenAI credentials |
 | `DEEPSEEK_API_KEY` | DeepSeek credentials |

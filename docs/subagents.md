@@ -21,7 +21,7 @@ Subagents are both a quality feature and a cost feature:
 
 ## Defining agents
 
-Agents are Markdown files with YAML frontmatter in `.switchback/agents/` (the project) or `~/.config/switchback/agents/` (you). Switchback doesn't read other agents' folders ([ADR 0016](adr/0016-open-conventions.md)); to reuse an agent written for another tool, copy it into one of these and adjust it.
+Agents are Markdown files with YAML frontmatter in `.switchback/agents/` (the project) or `~/.switchback/agents/` (you). Switchback doesn't read other agents' folders ([ADR 0016](adr/0016-open-conventions.md)); to reuse an agent written for another tool, copy it into one of these and adjust it.
 
 ```markdown
 ---
@@ -48,7 +48,7 @@ The body is the system prompt. Switchback appends an environment section and the
 
 ### Creating one
 
-`switchback agents new` interviews you for the name, a description (what the agent does and when the parent should use it), tools, where it runs, an optional budget, and worktree isolation. It can draft the system prompt with your model (the local one when available), then validates the file and writes it to `.switchback/agents/` or `~/.config/switchback/agents/`. New and edited agent files are picked up without restarting: `/agents`, `switchback agents`, and new sessions see them right away. Every question has a flag for scripted use:
+`switchback agents new` interviews you for the name, a description (what the agent does and when the parent should use it), tools, where it runs, an optional budget, and worktree isolation. It can draft the system prompt with your model (the local one when available), then validates the file and writes it to `.switchback/agents/` or `~/.switchback/agents/`. New and edited agent files are picked up without restarting: `/agents`, `switchback agents`, and new sessions see them right away. Every question has a flag for scripted use:
 
 ```sh
 switchback agents new --yes --name reviewer --tools read,grep,glob --model local \
@@ -61,7 +61,7 @@ switchback agents new --yes --name reviewer --tools read,grep,glob --model local
 Later locations override earlier ones by name:
 
 1. Built-ins
-2. `~/.config/switchback/agents/*.md` (user)
+2. `~/.switchback/agents/*.md` (user)
 3. `.switchback/agents/*.md` (project)
 
 Files that fail to parse are skipped and reported by `switchback doctor` and at startup. They never prevent the engine from starting.
@@ -132,7 +132,7 @@ With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the
 - **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. The parent (or you) decides whether to merge, e.g. `git merge switchback/<id>`. A subagent that changed nothing leaves no branch behind.
 - **On failure**, the worktree is kept for inspection and its path is in the report.
 - It needs a git repository with at least one commit. Uncommitted changes in your working tree aren't in the worktree, since it starts from `HEAD`.
-- Worktrees live in the Switchback data directory (`~/.local/share/switchback/worktrees/`), outside your repository. Commits use your git identity, or `Switchback <switchback@localhost>` when none is set.
+- Worktrees live in the Switchback data directory (`~/.switchback/data/worktrees/`), outside your repository. Commits use your git identity, or `Switchback <switchback@localhost>` when none is set.
 
 ### Background tasks
 

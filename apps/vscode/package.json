@@ -246,8 +246,7 @@
     "jsonValidation": [
       {
         "fileMatch": [
-          "**/.switchback/config.json",
-          "**/.config/switchback/config.json"
+          "**/.switchback/config.json"
         ],
         "url": "./schemas/config.schema.json"
       }

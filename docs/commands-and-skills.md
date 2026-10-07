@@ -12,7 +12,7 @@ Both live in Switchback's own folders, in the project (shared with your team thr
 | Where | Scope |
 |---|---|
 | `.switchback/commands/<name>.md` | This project |
-| `~/.config/switchback/commands/<name>.md` | You, everywhere |
+| `~/.switchback/commands/<name>.md` | You, everywhere |
 
 The file name is the command: lowercase letters, digits, and dashes. The body is the prompt. Frontmatter is optional:
 
@@ -44,7 +44,7 @@ Skills use the open [Agent Skills](https://agentskills.io) format: a folder with
 | Where | Scope |
 |---|---|
 | `.switchback/skills/<name>/SKILL.md` | This project |
-| `~/.config/switchback/skills/<name>/SKILL.md` | You, everywhere |
+| `~/.switchback/skills/<name>/SKILL.md` | You, everywhere |
 
 ```markdown
 ---

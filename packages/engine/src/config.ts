@@ -1,5 +1,5 @@
 /**
- * Layered configuration: built-in defaults <- user (~/.config/switchback/config.json)
+ * Layered configuration: built-in defaults <- user (~/.switchback/config.json)
  * <- project (.switchback/config.json). Later layers deep-merge over earlier ones.
  * String values of the form `{env:NAME}` are replaced with the environment
  * variable so secrets never need to live in a config file.
@@ -7,7 +7,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, relative, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import type { InitializeResult, SessionRoles, Tier } from '@switchback/protocol';
 import { type Price, tierOf } from '@switchback/providers';
 import { roleAliases } from '@switchback/router';
@@ -85,10 +85,17 @@ export function loadConfig(
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
   const pp = projectPaths(workspaceRoot);
+  const userFile = switchbackPaths(env).configFile;
+  // In the home directory, the project's `.switchback/` is the user's own.
+  const atHome = resolve(pp.configFile) === resolve(userFile);
   const files: { file: string; project: boolean }[] = [
-    { file: switchbackPaths(env).configFile, project: false },
-    { file: pp.configFile, project: true },
-    { file: pp.localConfigFile, project: true },
+    { file: userFile, project: false },
+    ...(atHome
+      ? []
+      : [
+          { file: pp.configFile, project: true },
+          { file: pp.localConfigFile, project: true },
+        ]),
   ];
   const rules = new RuleLayers();
   const hookLayers = new HookLayers();
@@ -222,7 +229,7 @@ export function loadConfig(
   };
 }
 
-/** A config file as people know it: `.switchback/config.json`, `~/.config/switchback/config.json`. */
+/** A config file as people know it: `.switchback/config.json`, `~/.switchback/config.json`. */
 function sourceLabel(file: string, workspaceRoot: string): string {
   const inProject = relative(workspaceRoot, file);
   if (!inProject.startsWith('..') && !isAbsolute(inProject)) return inProject.split(sep).join('/');

@@ -49,7 +49,7 @@ Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       alt+↑ escalates (a stronger model takes over, like /up);
       y/a/p/n answer permission prompts (once / this session / this project / deny).
 Your own commands are Markdown files in .switchback/commands/ or
-~/.config/switchback/commands/.`;
+~/.switchback/commands/.`;
 
 /** What a command can see and change in the app. */
 export interface SlashContext {

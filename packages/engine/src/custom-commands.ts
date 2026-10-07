@@ -1,6 +1,6 @@
 /**
  * Custom slash commands: Markdown files in `.switchback/commands/` (the
- * project) or `~/.config/switchback/commands/` (you). The file name is the
+ * project) or `~/.switchback/commands/` (you). The file name is the
  * command; the body is a prompt template. `$ARGUMENTS` is everything after
  * the name, `$1` to `$9` its words. Frontmatter is optional: `description`
  * and `args` (a hint shown in menus). A project's command overrides yours of

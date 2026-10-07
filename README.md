@@ -73,7 +73,7 @@ Budget and availability guards then apply. Over budget means staying local; a pr
 
 ## Configuration
 
-`switchback init` writes `~/.config/switchback/config.json` (this machine) or `.switchback/config.json` (this project). You can also edit these files directly: `switchback config edit` opens one, `switchback config show` prints the merged result, and the VS Code extension validates and autocompletes both. A typical file:
+`switchback init` writes `~/.switchback/config.json` (this machine) or `.switchback/config.json` (this project). You can also edit these files directly: `switchback config edit` opens one, `switchback config show` prints the merged result, and the VS Code extension validates and autocompletes both. A typical file:
 
 ```jsonc
 {

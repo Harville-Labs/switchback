@@ -71,7 +71,7 @@ Config layers merge in this order, lowest first:
 
 1. built-in defaults (none)
 2. org `defaults`
-3. user config (`~/.config/switchback/config.json`)
+3. user config (`~/.switchback/config.json`)
 4. project config (`.switchback/config.json`), then the project's personal file (`.switchback/config.local.json`)
 5. command-line layers
 6. org `enforced`
@@ -109,7 +109,7 @@ Usage reports contain only token counts and costs per model per day, never promp
 ## Security and enforcement
 
 - Put `privacy.localOnlyPaths` and `privacy.secrets` in `enforced` to guarantee that matching files never reach a remote model on any member's machine, whatever their own settings say ([privacy.md](privacy.md)). An enforced list replaces the user's list rather than adding to it; put the org's paths in `defaults` instead if users should be able to extend it (they can then also shorten it).
-- Credentials live in `~/.config/switchback/auth.json` and the cached policy in the data directory, both readable only by the user (mode 0600).
+- Credentials live in `~/.switchback/auth.json` and the cached policy in the data directory, both readable only by the user (mode 0600).
 - If a policy can't be refreshed (server down, token revoked), the last cached policy keeps applying. It's removed only by `switchback logout`.
 - **Enforcement happens on the client.** It reliably governs cooperative users and every Switchback client, but someone with control of their own machine can sign out or modify the binary. For hard guarantees:
   - Point hosted providers at an **org gateway** (`baseUrl` in `defaults`/`enforced`) that holds the real API keys and enforces spend server-side. Users then never have provider keys at all.
