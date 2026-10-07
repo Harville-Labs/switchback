@@ -182,6 +182,24 @@ describe('external runtime as a subagent', () => {
     expect(report?.type === 'tool_result' && report.content).toContain('allowRemote');
   });
 
+  test('Codex, which reads files unasked, refuses to run while private paths are set', async () => {
+    const { e, calls } = engine({
+      interaction: 'approve',
+      config: {
+        runtimes: { claude: { type: 'codex' } },
+        privacy: { localOnlyPaths: ['secrets/'] },
+      },
+    });
+    const s = e.createSession({});
+    await e.runTurn(s.id, 'go');
+    expect(calls).toHaveLength(0);
+    const report = e
+      .getSession(s.id)
+      .messages.flatMap((m) => m.parts)
+      .find((p) => p.type === 'tool_result');
+    expect(report?.type === 'tool_result' && report.content).toContain('privacy.localOnlyPaths');
+  });
+
   test('a runtime may not touch private files, whatever the permission policy', async () => {
     const { e } = engine({
       interaction: 'approve',

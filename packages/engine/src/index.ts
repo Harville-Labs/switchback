@@ -12,6 +12,7 @@ export * from './org/index.ts';
 export * from './paths.ts';
 export * from './privacy.ts';
 export * from './runtimes/claude-agent-sdk.ts';
+export { createRuntime, type RuntimeConfig } from './runtimes/index.ts';
 export * from './runtimes/runtime.ts';
 export * from './server.ts';
 export * from './setup.ts';

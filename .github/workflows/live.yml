@@ -37,6 +37,13 @@ jobs:
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # External runtimes (tests/live/runtimes.test.ts); each runs only when its secrets are set.
+      SWITCHBACK_LIVE_MANAGED_AGENT: ${{ secrets.SWITCHBACK_LIVE_MANAGED_AGENT }}
+      SWITCHBACK_LIVE_MANAGED_ENVIRONMENT: ${{ secrets.SWITCHBACK_LIVE_MANAGED_ENVIRONMENT }}
+      SWITCHBACK_LIVE_CODEX: ${{ secrets.OPENAI_API_KEY && '1' || '' }}
+      SWITCHBACK_LIVE_AGENTCORE_ARN: ${{ secrets.SWITCHBACK_LIVE_AGENTCORE_ARN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2

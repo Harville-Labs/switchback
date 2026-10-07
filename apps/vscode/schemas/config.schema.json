@@ -849,6 +849,86 @@
               }
             },
             "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "claude-managed-agents"
+              },
+              "agent": {
+                "type": "string",
+                "minLength": 1
+              },
+              "environment": {
+                "type": "string",
+                "minLength": 1
+              },
+              "model": {
+                "type": "string"
+              },
+              "apiKey": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "agent", "environment"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "codex"
+              },
+              "model": {
+                "type": "string"
+              },
+              "sandbox": {
+                "default": "workspace-write",
+                "type": "string",
+                "enum": ["read-only", "workspace-write"]
+              },
+              "network": {
+                "default": false,
+                "type": "boolean"
+              },
+              "effort": {
+                "type": "string",
+                "enum": ["minimal", "low", "medium", "high", "xhigh"]
+              },
+              "executable": {
+                "type": "string"
+              },
+              "apiKey": {
+                "type": "string"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "bedrock-agentcore"
+              },
+              "arn": {
+                "type": "string",
+                "format": "starts_with",
+                "pattern": "^arn:.*"
+              },
+              "qualifier": {
+                "type": "string"
+              },
+              "region": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "required": ["type", "arn"]
           }
         ]
       }

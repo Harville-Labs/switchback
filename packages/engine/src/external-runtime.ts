@@ -8,7 +8,7 @@ import { z } from 'zod';
 import type { AgentDefinition } from './agents.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { privateToolUse } from './privacy.ts';
-import { ClaudeAgentSdkRuntime } from './runtimes/claude-agent-sdk.ts';
+import { createRuntime, readsWorkspaceUnasked } from './runtimes/index.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
 import type { InvocationBudget } from './subagents.ts';
 import type { Tool, ToolContext } from './tools/index.ts';
@@ -77,6 +77,11 @@ export class ExternalRuntimes {
         `agent "${agent.name}" names runtime "${name}", which isn't configured under runtimes`,
       );
     if (blocked) return fail(`${blocked}; external runtimes are remote`);
+    const cfg = this.host.config().runtimes[name];
+    if (cfg && readsWorkspaceUnasked(cfg) && this.host.config().privacy.localOnlyPaths.length)
+      return fail(
+        `${runtime.label} reads the workspace without asking about each file, so it can't run while privacy.localOnlyPaths is set`,
+      );
     if (budget && budget.spentUsd >= budget.limitUsd)
       return fail(`subagent "${budget.agent}" has spent its $${budget.limitUsd.toFixed(2)} budget`);
 
@@ -168,13 +173,7 @@ export class ExternalRuntimes {
     const injected = this.deps.injected?.get(name);
     if (injected) return injected;
     const cfg = this.host.config().runtimes[name];
-    if (!cfg) return undefined;
-    return new ClaudeAgentSdkRuntime({
-      name,
-      ...(cfg.model ? { model: cfg.model } : {}),
-      ...(cfg.maxTurns ? { maxTurns: cfg.maxTurns } : {}),
-      ...(cfg.executable ? { executable: cfg.executable } : {}),
-    });
+    return cfg ? createRuntime(name, cfg) : undefined;
   }
 }
 

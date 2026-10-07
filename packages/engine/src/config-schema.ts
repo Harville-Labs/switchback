@@ -121,6 +121,44 @@ export const SwitchbackConfig = z.object({
           /** Path to Claude Code; defaults to `claude` on PATH. */
           executable: z.string().optional(),
         }),
+        z.object({
+          /** Claude Managed Agents: an agent you defined, in a hosted sandbox (not this workspace). */
+          type: z.literal('claude-managed-agents'),
+          /** The agent's ID (`agent_…`). */
+          agent: z.string().min(1),
+          /** The environment's ID (`env_…`) its sessions run in. */
+          environment: z.string().min(1),
+          /** For pricing and display; looked up from the agent when left out. */
+          model: z.string().optional(),
+          /** Default: `ANTHROPIC_API_KEY`. */
+          apiKey: z.string().optional(),
+        }),
+        z.object({
+          /** OpenAI Codex, through the Codex SDK, working in this workspace. */
+          type: z.literal('codex'),
+          model: z.string().optional(),
+          /** What it may change: `read-only`, or files in the workspace (`workspace-write`). */
+          sandbox: z.enum(['read-only', 'workspace-write']).default('workspace-write'),
+          /** Network access for its commands. */
+          network: z.boolean().default(false),
+          effort: z.enum(['minimal', 'low', 'medium', 'high', 'xhigh']).optional(),
+          /** Path to the Codex CLI; defaults to `codex` on PATH, then the SDK's own. */
+          executable: z.string().optional(),
+          /** Default: Codex's own sign-in (`codex login`) or `OPENAI_API_KEY`. */
+          apiKey: z.string().optional(),
+        }),
+        z.object({
+          /** An agent deployed to Amazon Bedrock AgentCore Runtime (it works in AWS, not here). */
+          type: z.literal('bedrock-agentcore'),
+          /** The agent runtime's ARN. */
+          arn: z.string().startsWith('arn:'),
+          /** Endpoint qualifier; default `DEFAULT`. */
+          qualifier: z.string().optional(),
+          /** Default: from the ARN. */
+          region: z.string().optional(),
+          /** For display; AgentCore doesn't report model usage, so these runs aren't costed. */
+          model: z.string().optional(),
+        }),
       ]),
     )
     .default({}),
