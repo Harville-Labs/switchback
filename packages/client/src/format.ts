@@ -439,12 +439,41 @@ export function formatPermissions(p: PermissionsListResult): string {
   ];
   if (!p.rules.length) lines.push('rules  none (see docs/permissions.md)');
   else {
-    const width = Math.max(...p.rules.map((r) => r.rule.length));
     lines.push('rules');
-    for (const r of p.rules)
-      lines.push(`  ${r.behavior.padEnd(5)} ${r.rule.padEnd(width)}  ${r.source}`);
+    // Grouped by where they came from, then by behavior: a config holds dozens.
+    const sources = [...new Set(p.rules.map((r) => r.source))];
+    for (const source of sources) {
+      lines.push(`  ${source}`);
+      for (const behavior of ['deny', 'ask', 'allow'] as const) {
+        const rules = p.rules.filter((r) => r.source === source && r.behavior === behavior);
+        if (rules.length)
+          lines.push(
+            ...wrapList(
+              `    ${behavior.padEnd(6)}`,
+              rules.map((r) => r.rule),
+            ),
+          );
+      }
+    }
   }
   return lines.join('\n');
+}
+
+/** Items joined with commas, wrapped under the label at 100 columns. */
+function wrapList(label: string, items: string[]): string[] {
+  const indent = ' '.repeat(label.length);
+  const lines: string[] = [];
+  let line = '';
+  for (const [i, item] of items.entries()) {
+    const text = i < items.length - 1 ? `${item},` : item;
+    const prefix = lines.length ? indent : label;
+    if (line && prefix.length + line.length + 1 + text.length > 100) {
+      lines.push(prefix + line);
+      line = text;
+    } else line = line ? `${line} ${text}` : text;
+  }
+  lines.push((lines.length ? indent : label) + line);
+  return lines;
 }
 
 /** The conversation as Markdown: prompts, replies, and tool calls, for `/copy all`. */
