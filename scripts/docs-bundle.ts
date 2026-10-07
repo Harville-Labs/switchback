@@ -73,11 +73,14 @@ export function rewriteLink(
   return `${REPO}/blob/v${version}/${repoPath}${hash}`;
 }
 
+/** A docs file with Unix line endings, whatever the checkout used (Windows: CRLF). */
+const read = (file: string) => readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+
 export function buildBundle(version: string): DocsBundle {
-  const listed = userPages(readFileSync(join(DOCS, 'README.md'), 'utf8'));
+  const listed = userPages(read(join(DOCS, 'README.md')));
   const included = new Set(listed.map((p) => p.slug));
   const pages = listed.map(({ slug, summary }) => {
-    const source = readFileSync(join(DOCS, `${slug}.md`), 'utf8');
+    const source = read(join(DOCS, `${slug}.md`));
     const headings: DocsPage['headings'] = [];
     const marked = new Marked(gfmHeadingId(), {
       walkTokens(token: Token) {
