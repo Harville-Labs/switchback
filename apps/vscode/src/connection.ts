@@ -289,6 +289,8 @@ export class EngineConnection implements vscode.Disposable {
     if (!c || !this.session) return;
     switch (m.type) {
       case 'prompt':
+        // The walkthrough's "Ask something" step completes on this.
+        void vscode.commands.executeCommand('setContext', 'switchback.prompted', true);
         await c.request('session.prompt', {
           sessionId: this.session.id,
           text: m.text,

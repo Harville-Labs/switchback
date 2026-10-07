@@ -15,6 +15,9 @@ import { installerShell } from './engine-binary.ts';
 import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 
+/** The getting-started walkthrough (`contributes.walkthroughs`), as `<publisher>.<name>#<id>`. */
+const WALKTHROUGH = 'isaiah-harville.switchback#gettingStarted';
+
 /** Returned from activate() for the integration tests; not a public API. */
 export interface SwitchbackTestApi {
   connected(): boolean;
@@ -95,10 +98,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
         void vscode.window
           .showInformationMessage(
             'Switchback has no local model configured, so every turn runs remotely.',
+            'Get Started',
             'Set Up Models',
           )
           .then((pick) => {
-            if (pick) void vscode.commands.executeCommand('switchback.runSetup');
+            if (pick === 'Set Up Models')
+              void vscode.commands.executeCommand('switchback.runSetup');
+            else if (pick)
+              void vscode.commands.executeCommand(
+                'workbench.action.openWalkthrough',
+                WALKTHROUGH,
+                false,
+              );
           });
       }
     } catch (err) {
@@ -164,6 +175,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
       engine?.compact().catch((err: Error) => vscode.window.showErrorMessage(err.message)),
     ),
     vscode.commands.registerCommand('switchback.restartEngine', start),
+    vscode.commands.registerCommand('switchback.getStarted', () =>
+      vscode.commands.executeCommand('workbench.action.openWalkthrough', WALKTHROUGH, false),
+    ),
     vscode.commands.registerCommand('switchback.installCli', () => {
       // The same installer as the website, so the CLI has one update path. It runs
       // where the extension runs (including remote hosts and containers); the

@@ -38,6 +38,9 @@ Install Switchback: curl -fsSL https://switchback.harville.ai/install.sh | sh -s
   --dir <path>        where to put `switchback` (default: ~/.local/bin) SWITCHBACK_INSTALL_DIR
   --vscode            also install the VS Code extension
   -h, --help          show this help
+
+VS Code extension: https://marketplace.visualstudio.com/items?itemName=isaiah-harville.switchback
+              or: https://open-vsx.org/extension/isaiah-harville/switchback
 EOF
 }
 

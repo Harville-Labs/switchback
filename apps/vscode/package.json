@@ -20,6 +20,7 @@
   "bugs": {
     "url": "https://github.com/Harville-Labs/switchback/issues"
   },
+  "qna": "https://github.com/Harville-Labs/switchback/issues",
   "keywords": [
     "agent",
     "local",
@@ -153,6 +154,11 @@
         "title": "Reject Proposed Edit",
         "category": "Switchback",
         "icon": "$(close)"
+      },
+      {
+        "command": "switchback.getStarted",
+        "title": "Get Started",
+        "category": "Switchback"
       }
     ],
     "menus": {
@@ -244,6 +250,86 @@
           "**/.config/switchback/config.json"
         ],
         "url": "./schemas/config.schema.json"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "gettingStarted",
+        "title": "Get started with Switchback",
+        "description": "A local-first coding agent that escalates to a hosted model only when a turn needs it.",
+        "steps": [
+          {
+            "id": "openChat",
+            "title": "Open the chat",
+            "description": "Switchback lives in its own view in the activity bar.\n[Open Chat](command:switchback.chat.focus)",
+            "media": {
+              "image": "media/screenshots/vscode-chat.png",
+              "altText": "The Switchback chat: a prompt, the local model that answered and its speed, tool calls, and the answer"
+            },
+            "completionEvents": [
+              "onView:switchback.chat"
+            ]
+          },
+          {
+            "id": "setUp",
+            "title": "Choose your models",
+            "description": "Pick where turns start and what they escalate to: local, hosted, or both.\n[Set Up Models](command:switchback.runSetup)",
+            "media": {
+              "markdown": "media/walkthrough/setup.md"
+            },
+            "completionEvents": [
+              "onCommand:switchback.runSetup"
+            ]
+          },
+          {
+            "id": "firstPrompt",
+            "title": "Ask something",
+            "description": "Type a question or a task and press Enter. Each answer shows which model ran it, why, and how fast. Mention files with @, run commands with /, and paste images.\n[Open Chat](command:switchback.chat.focus)",
+            "media": {
+              "image": "media/screenshots/vscode-chat.png",
+              "altText": "The Switchback chat: a prompt, the local model that answered and its speed, tool calls, and the answer"
+            },
+            "completionEvents": [
+              "onContext:switchback.prompted"
+            ]
+          },
+          {
+            "id": "route",
+            "title": "Decide where turns run",
+            "description": "Auto starts locally and escalates when the model is stuck, asking first when it costs money. Local and Remote pin the next prompts to one side.\n[Choose a Route](command:switchback.setRoute)",
+            "media": {
+              "image": "media/screenshots/vscode-escalation.png",
+              "altText": "An escalation prompt asking whether to move a turn to a hosted model, with the reason and estimated cost"
+            },
+            "completionEvents": [
+              "onCommand:switchback.setRoute"
+            ]
+          },
+          {
+            "id": "review",
+            "title": "Review edits before they land",
+            "description": "Edits open in the diff editor with Accept and Reject; Always this session or Always in this project remembers your answer for similar calls.",
+            "media": {
+              "image": "media/screenshots/vscode-review.png",
+              "altText": "A permission prompt showing the diff of a proposed edit, with Allow and Deny buttons"
+            },
+            "completionEvents": [
+              "onCommand:switchback.acceptEdit",
+              "onCommand:switchback.rejectEdit"
+            ]
+          },
+          {
+            "id": "terminal",
+            "title": "Use the terminal too",
+            "description": "The `switchback` terminal UI runs the same engine and shares live sessions with this window.\n[Install Terminal Command](command:switchback.installCli)",
+            "media": {
+              "markdown": "media/walkthrough/terminal.md"
+            },
+            "completionEvents": [
+              "onCommand:switchback.installCli"
+            ]
+          }
+        ]
       }
     ]
   },
