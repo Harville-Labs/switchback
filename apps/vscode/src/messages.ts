@@ -46,7 +46,14 @@ export type WebviewToHost =
   /** Withdraw a queued prompt. */
   | { type: 'dequeue'; id: string }
   | { type: 'cancel' }
-  | { type: 'permission'; requestId: string; decision: PermissionDecision; save?: 'project' }
+  | {
+      type: 'permission';
+      requestId: string;
+      decision: PermissionDecision;
+      save?: 'project';
+      /** With a deny: what the model should do instead. */
+      feedback?: string;
+    }
   | { type: 'escalation'; requestId: string; approve: boolean }
   | { type: 'setRoute'; route: RoutePreference }
   | { type: 'newSession'; agent?: string }

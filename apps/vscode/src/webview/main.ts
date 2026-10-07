@@ -13,7 +13,6 @@ import {
   reduce,
   resolveEscalation,
   resolvePermission,
-  type ViewItem,
   type ViewState,
 } from '@switchback/client/view';
 import type { PermissionMode, RoutePreference, SessionRoles } from '@switchback/protocol';
@@ -26,8 +25,8 @@ import {
   permissionAnswer,
   renderPrompt,
   renderQueue,
+  renderRows,
   renderTodos,
-  renderItem as renderViewItem,
 } from './render.ts';
 import { SlashMenu } from './slash-menu.ts';
 import { STYLES } from './styles.ts';
@@ -95,7 +94,6 @@ const slashBtn = $<HTMLButtonElement>('slash');
 
 /** Subagent and reasoning sections the user opened; kept across re-renders. */
 const expanded = new Set<string>();
-const renderItem = (item: ViewItem, ctx: ViewState = view) => renderViewItem(item, ctx, expanded);
 
 const WELCOME = `<div class="welcome">${ICONS.mark}<h1>Switchback</h1><p>Runs on your local model and escalates to a hosted one only when a turn needs it.</p><div class="keys"><span><kbd>/</kbd> commands</span><span><kbd>Enter</kbd> send</span><span><kbd>Shift</kbd>+<kbd>Enter</kbd> new line</span></div></div>`;
 
@@ -103,7 +101,7 @@ function render() {
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   // Until the first prompt the session only has notices, so lead with the welcome.
   const fresh = !view.items.some((i) => i.kind !== 'info');
-  log.innerHTML = (fresh ? WELCOME : '') + view.items.map((i) => renderItem(i)).join('');
+  log.innerHTML = (fresh ? WELCOME : '') + renderRows(view.items, view, expanded);
   if (nearBottom) log.scrollTop = log.scrollHeight;
 
   prompts.innerHTML = renderPrompt(view);
@@ -179,11 +177,37 @@ log.addEventListener('click', (e) => {
   if (button.hasAttribute('data-insert')) vscode.postMessage({ type: 'insert', text: code });
 });
 
+prompts.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const perm = view.permissions[0];
+  const input = (e.target as HTMLFormElement).querySelector('input');
+  if (!perm) return;
+  const feedback = input?.value.trim();
+  vscode.postMessage({
+    type: 'permission',
+    requestId: perm.requestId,
+    decision: 'deny',
+    ...(feedback ? { feedback } : {}),
+  });
+  view = resolvePermission(view, perm.requestId, 'deny');
+  render();
+});
+
 prompts.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest('button');
   if (!btn) return;
   const perm = view.permissions[0];
   const escl = view.escalations[0];
+  if (btn.dataset.perm === 'tell') {
+    // Swap the buttons for a line to say what to do instead.
+    const form = prompts.querySelector<HTMLFormElement>('form.feedback');
+    if (form) {
+      form.hidden = false;
+      form.querySelector('input')?.focus();
+    }
+    return;
+  }
+  if (btn.type === 'submit') return;
   const answer = btn.dataset.perm ? permissionAnswer(btn.dataset.perm) : undefined;
   if (answer && perm) {
     vscode.postMessage({ type: 'permission', requestId: perm.requestId, ...answer });

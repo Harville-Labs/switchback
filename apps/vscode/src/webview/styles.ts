@@ -52,6 +52,17 @@ export const STYLES = `
   .detail { color: var(--vscode-descriptionForeground); margin-left: 1.4em; white-space: pre-wrap; }
   .info { color: var(--vscode-descriptionForeground); white-space: pre-wrap; font-family: var(--vscode-editor-font-family); font-size: .88em; margin: 6px 0; padding: 2px 0 2px 10px; border-left: 2px solid var(--vscode-panel-border); }
   .tool .private { color: var(--vscode-charts-blue); font-size: 0.9em; }
+  .tool + .detail { margin-left: 1.4em; font-size: .85em; }
+  .output { font-family: var(--vscode-editor-font-family); font-size: .82em; white-space: pre; overflow-x: auto; color: var(--vscode-descriptionForeground); margin: 2px 0 4px 2.4em; }
+  details.tool-diff { margin-left: 1.4em; font-size: .85em; }
+  details.tool-diff > summary, details.explore > summary { cursor: pointer; color: var(--vscode-descriptionForeground); }
+  details.explore { font-family: var(--vscode-editor-font-family); font-size: .88em; margin: 3px 0; }
+  details.explore > summary { list-style: none; color: inherit; }
+  details.explore > summary::-webkit-details-marker { display: none; }
+  details.explore ul { margin: 2px 0 6px 1.4em; padding: 0; list-style: none; }
+  .detail-inline { color: var(--vscode-descriptionForeground); }
+  .prompt .feedback { display: flex; gap: 6px; margin-top: 8px; }
+  .prompt .feedback input { flex: 1; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); border-radius: 6px; padding: 4px 8px; }
   .review { margin: 6px 0; }
   .review.skipped { color: var(--vscode-descriptionForeground); }
   .review ul { margin: 2px 0 2px 1.4em; padding: 0; }

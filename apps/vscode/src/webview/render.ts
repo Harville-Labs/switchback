@@ -11,8 +11,14 @@ import {
   isQuietTool,
   speedLabel,
   tailLines,
-  toolLabel,
 } from '@switchback/client/format';
+import {
+  type DisplayRow,
+  displayRows,
+  exploreSummary,
+  toolResult,
+  toolTitle,
+} from '@switchback/client/tool-display';
 import type { TodoItem, ViewItem, ViewState } from '@switchback/client/view';
 import type { PermissionDecision } from '@switchback/protocol';
 import { esc, renderMarkdown } from './markdown.ts';
@@ -81,14 +87,24 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
     case 'tool': {
       if (isQuietTool(item.name)) return '';
       const icon = item.status === 'running' ? '●' : item.status === 'ok' ? '✓' : '✗';
-      const detail =
-        item.status === 'error' && item.output
-          ? `<div class="detail error">${esc(item.output.split('\n')[0] ?? '')}</div>`
-          : '';
+      const title = toolTitle(item.name, item.input);
+      const result = toolResult(item, OUTPUT_ROWS);
       const lock = item.private
         ? ` <span class="private" title="${esc(item.private)}: this session now stays on local models">🔒 stays local</span>`
         : '';
-      return `<div class="tool"><span class="${item.status}">${icon}</span> ${esc(toolLabel(item.name, item.input))}${lock}</div>${detail}`;
+      const summary = result.summary
+        ? `<div class="detail${result.tone === 'error' ? ' error' : ''}">⎿ ${esc(result.summary)}</div>`
+        : '';
+      const output = result.body.length
+        ? `<div class="output">${esc(result.body.join('\n'))}${result.more ? `\n… +${result.more} lines` : ''}</div>`
+        : '';
+      // Diffs fold so a long edit doesn't push the conversation away; open them to read.
+      const diffKey = `diff:${ctx.sessionId}:${item.id}`;
+      const diff =
+        item.diff && item.status === 'ok'
+          ? `<details class="tool-diff" data-think="${esc(diffKey)}"${expanded.has(diffKey) ? ' open' : ''}><summary>Show diff</summary>${renderDiff(item.diff)}</details>`
+          : '';
+      return `<div class="tool"><span class="${item.status}">${icon}</span> <b>${esc(title.verb)}</b> ${esc(title.target)}${lock}</div>${summary}${output}${diff}`;
     }
     case 'subagent': {
       const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
@@ -104,10 +120,13 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
       const child = ctx.children[item.id];
       if (!child) return `<div class="subagent">${summary}</div>`;
       // Expanded state lives in \`expanded\` so re-rendering doesn't collapse it.
-      const body = child.items
-        .filter((i) => !(i.kind === 'tool' && i.name === 'task' && i.status !== 'error'))
-        .map((i) => renderItem(i, child, expanded))
-        .join('');
+      const body = renderRows(
+        child.items.filter(
+          (i) => !(i.kind === 'tool' && i.name === 'task' && i.status !== 'error'),
+        ),
+        child,
+        expanded,
+      );
       return `<details class="subagent" data-sub="${esc(item.id)}"${expanded.has(item.id) ? ' open' : ''}><summary>${summary}</summary><div class="children">${body || '<div class="detail">starting…</div>'}</div></details>`;
     }
     case 'review': {
@@ -129,6 +148,34 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
     case 'error':
       return `<div class="error">error: ${esc(item.message)}</div>`;
   }
+}
+
+/** Lines of a command's output shown under it. */
+const OUTPUT_ROWS = 3;
+
+/** Items as HTML, with runs of reading and searching folded into one "Explored" block. */
+export function renderRows(
+  items: readonly ViewItem[],
+  ctx: ViewState,
+  expanded: ReadonlySet<string>,
+): string {
+  return displayRows(items)
+    .map((row) => renderRow(row, ctx, expanded))
+    .join('');
+}
+
+function renderRow(row: DisplayRow, ctx: ViewState, expanded: ReadonlySet<string>): string {
+  if (row.kind === 'item') return renderItem(row.item, ctx, expanded);
+  const key = `explore:${ctx.sessionId}:${row.id}`;
+  const running = row.calls.some((c) => c.status === 'running');
+  const calls = row.calls
+    .map((c) => {
+      const t = toolTitle(c.name, c.input);
+      const s = toolResult(c).summary;
+      return `<li>${esc(t.verb)} <code>${esc(t.target)}</code>${s ? ` <span class="detail-inline">· ${esc(s)}</span>` : ''}</li>`;
+    })
+    .join('');
+  return `<details class="explore" data-think="${esc(key)}"${expanded.has(key) ? ' open' : ''}><summary><span class="${running ? 'running' : 'ok'}">${running ? '●' : '✓'}</span> <b>${running ? 'Exploring' : 'Explored'}</b> <span class="detail-inline">· ${esc(exploreSummary(row.calls))}</span></summary><ul>${calls}</ul></details>`;
 }
 
 export function renderDiff(diff: string): string {
@@ -164,7 +211,7 @@ export function renderPrompt(view: ViewState): string {
     const why = perm.askRule
       ? `<div class="hint">The rule ${esc(perm.askRule)} asks every time.</div>`
       : '';
-    return `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${why}${perm.preview ? renderDiff(perm.preview) : ''}<div class="actions"><button class="btn" data-perm="once">Allow once</button>${always}<button class="btn secondary" data-perm="deny">Deny</button></div></div>`;
+    return `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${why}${perm.preview ? renderDiff(perm.preview) : ''}<div class="actions"><button class="btn" data-perm="once">Allow once</button>${always}<button class="btn secondary" data-perm="deny">Deny</button><button class="btn secondary" data-perm="tell" title="Decline, and tell the model what to do instead">Deny with a note…</button></div><form class="feedback" hidden><input name="feedback" placeholder="What should it do instead?" autocomplete="off"><button class="btn" type="submit">Send</button></form></div>`;
   }
   const escl = view.escalations[0];
   if (escl)
