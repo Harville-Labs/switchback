@@ -402,7 +402,7 @@ export const MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
   default: 'ask before edits and commands, as the permission levels say',
   acceptEdits: 'edits in the workspace go ahead; commands still ask',
   plan: 'read and plan only; nothing changes until you approve the plan',
-  bypassPermissions: 'everything goes ahead except what deny and ask rules stop',
+  bypassPermissions: 'everything goes ahead without asking; only deny rules stop a call',
 };
 
 export function modeLabel(mode: PermissionMode): string {

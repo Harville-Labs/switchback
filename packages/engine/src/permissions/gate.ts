@@ -4,13 +4,14 @@
  * 1. A category set to `deny` (or an MCP server's `permission: deny`).
  * 2. Deny rules.
  * 3. Plan mode: no edits.
- * 4. Ask rules, a command that wants to leave the sandbox, and edits to the
- *    agent's own configuration: always ask, whatever the mode.
- * 5. A PreToolUse hook's decision (its deny is applied before the gate, its
+ * 4. `bypassPermissions`: everything else runs, without a prompt.
+ * 5. Ask rules, a command that wants to leave the sandbox, and edits to the
+ *    agent's own configuration: always ask in the other modes.
+ * 6. A PreToolUse hook's decision (its deny is applied before the gate, its
  *    ask asks, its allow skips a level's prompt), then allow rules, including
  *    what the user allowed this session.
- * 6. The mode: `bypassPermissions` allows the rest; `acceptEdits` allows edits.
- * 7. The category's level: `allow`, or ask.
+ * 7. The mode: `acceptEdits` allows edits.
+ * 8. The category's level: `allow`, or ask.
  */
 import type { PermissionDecision, PermissionMode } from '@switchback/protocol';
 import type { HookOutcome } from '../hooks/runner.ts';
@@ -126,6 +127,8 @@ export class PermissionGate {
       };
     const forced = this.mustAsk(tool, input, ctx);
     if ('refused' in forced) return { allowed: false, error: forced.refused };
+    // Bypass never prompts; only the denials above stop a call.
+    if (mode === 'bypassPermissions') return { allowed: true };
     if (forced.ask) return this.ask(s, tool, call, ctx, signal, forced.ask);
     if (hook?.behavior === 'ask')
       return this.ask(s, tool, call, ctx, signal, `a hook${hook.reason ? `: ${hook.reason}` : ''}`);
@@ -133,7 +136,6 @@ export class PermissionGate {
     if (hook?.behavior === 'allow' && verdict?.behavior !== 'ask') return { allowed: true };
     if (verdict?.behavior === 'allow') return { allowed: true };
     if (verdict?.behavior !== 'ask') {
-      if (mode === 'bypassPermissions') return { allowed: true };
       if (mode === 'acceptEdits' && tool.permission === 'edit') return { allowed: true };
       if (level === 'allow') return { allowed: true };
     }

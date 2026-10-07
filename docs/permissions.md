@@ -19,10 +19,11 @@ Every call that passes validation and confinement is decided in this order:
 1. **A category set to `deny`** (`permissions.bash: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off.
 2. **Deny rules.** The call is refused, and the model is told which rule refused it and where the rule came from.
 3. **Plan mode.** Edits are refused until the user approves a plan.
-4. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/`): the user is asked, in every mode, including `bypassPermissions` and `acceptEdits`.
-5. **Allow rules,** including what the user allowed earlier in the session.
-6. **The mode.** `bypassPermissions` allows the rest; `acceptEdits` allows edits.
-7. **The category's level:** `allow`, or ask.
+4. **Bypass.** In `bypassPermissions`, everything else runs without a prompt.
+5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/`): the user is asked, including in `acceptEdits`.
+6. **Allow rules,** including what the user allowed earlier in the session.
+7. **The mode.** `acceptEdits` allows edits.
+8. **The category's level:** `allow`, or ask.
 
 ### Levels
 
@@ -88,7 +89,7 @@ A call an ask rule caught offers no "always": the rule says to ask every time. C
 | `default` | Nothing: the levels and rules decide |
 | `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
 | `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
-| `bypassPermissions` | Everything goes ahead except what a category `deny`, a deny rule, or an ask rule stops |
+| `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, and edits to `.switchback/` included. Only a category `deny`, a deny rule, and `bash.sandbox.allowUnsandboxed: false` stop a call |
 
 New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
 
@@ -102,7 +103,7 @@ Bash commands, foreground and background, run in an OS sandbox through Anthropic
 - **Reads** are open except credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.azure`, `~/.kube`, `~/.config/gcloud`, `~/.docker/config.json`, `~/.netrc`; set `bash.sandbox.denyRead` to change the list), Switchback's config and data directories, and files your `read(...)` deny rules name. `edit(...)` deny rules become write denies. So `read(.env)` holds for `cat .env` too.
 - **Network** is open by default (`bash.sandbox.network: "all"`), so installs and `git fetch` work. Use a list of hosts (`["registry.npmjs.org", "*.github.com"]`) to allow only those, or `"none"`. Commands can listen on local ports (dev servers).
 
-When the sandbox blocks something, the command's error says what was blocked, so the model can explain or find another way. If it needs to step outside, it can ask to run one command with `unsandboxed: true`; that always asks you, in every mode, and `bash.sandbox.allowUnsandboxed: false` refuses it.
+When the sandbox blocks something, the command's error says what was blocked, so the model can explain or find another way. If it needs to step outside, it can ask to run one command with `unsandboxed: true`; that asks you in every mode but `bypassPermissions`, and `bash.sandbox.allowUnsandboxed: false` refuses it.
 
 `bash.sandbox.mode` is `auto` by default: on where the platform supports it, off with a one-time notice where it can't run. `on` refuses to run commands without it; `off` turns it off. `/permissions` and `switchback doctor` say whether it's on and, if not, why.
 

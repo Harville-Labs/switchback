@@ -100,7 +100,7 @@ describe('permission modes', () => {
     expect(engine.getSession(id).session.permissionMode).toBe('default');
   });
 
-  test('bypass allows everything except deny and ask rules', async () => {
+  test('bypass allows everything except deny rules, without asking', async () => {
     const calls = [
       { name: 'bash', input: { command: 'echo ok' } },
       { name: 'bash', input: { command: 'git push origin main' } },
@@ -114,7 +114,7 @@ describe('permission modes', () => {
     await engine.runTurn(session(engine, 'bypassPermissions'), 'go');
     const [echo, push, rm] = results(lp);
     expect(echo?.content).toContain('ok');
-    expect(push?.isError).toBe(true); // asked, and the headless run said no
+    expect(push?.isError).toBeFalsy(); // the ask rule doesn't hold in bypass
     expect(rm?.content).toContain('Denied by the permission rule bash(rm:*) (config)');
     expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
   });

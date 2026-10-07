@@ -174,18 +174,26 @@ describe('asking to leave the sandbox', () => {
     return { e, lp, events };
   }
 
-  test('always asks, even when bash is allowed and in bypass mode', async () => {
+  test('asks even when bash is allowed', async () => {
     const { e, events } = engine([
       { name: 'bash', input: { command: 'echo hi', unsandboxed: true } },
     ]);
     e.subscribe((ev) => {
       if (ev.type === 'permission.requested') e.respondPermission(ev.requestId, 'deny');
     });
-    const id = e.createSession({ permissionMode: PermissionMode.enum.bypassPermissions }).id;
-    await e.runTurn(id, 'go');
+    await e.runTurn(e.createSession({}).id, 'go');
     expect(events.find((ev) => ev.type === 'permission.requested')).toMatchObject({
       askRule: 'running outside the OS sandbox',
     });
+  });
+
+  test("doesn't ask in bypass mode", async () => {
+    const { e, events } = engine([
+      { name: 'bash', input: { command: 'echo hi', unsandboxed: true } },
+    ]);
+    const id = e.createSession({ permissionMode: PermissionMode.enum.bypassPermissions }).id;
+    await e.runTurn(id, 'go');
+    expect(events.some((ev) => ev.type === 'permission.requested')).toBe(false);
   });
 
   test('is refused when allowUnsandboxed is off', async () => {
