@@ -1,5 +1,6 @@
 import type { Tier } from '@switchback/protocol';
 import { z } from 'zod';
+import { AgentCliProvider } from './agent-cli.ts';
 import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
 import { flavorForUrl, OpenAICompatibleProvider } from './openai-compatible.ts';
@@ -102,6 +103,31 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     location: z.string().default('global'),
   }),
   z.object({
+    /**
+     * Claude Code, as the user is signed in to it (their subscription or key).
+     * A model on it runs whole turns there, with Claude Code's own tools.
+     */
+    type: z.literal('claude-code'),
+    /** Default: `claude` on PATH. */
+    executable: z.string().optional(),
+    /**
+     * `subscription`: turns are covered by the user's plan and recorded as
+     * free. `api`: Claude Code bills an API key, and its reported cost counts.
+     */
+    billing: z.enum(['subscription', 'api']).default('subscription'),
+  }),
+  z.object({
+    /** Codex, as the user is signed in to it (ChatGPT plan or key), running whole turns here. */
+    type: z.literal('codex'),
+    /** Default: `codex` on PATH. */
+    executable: z.string().optional(),
+    billing: z.enum(['subscription', 'api']).default('subscription'),
+    /** What it may change: `read-only`, or files in the workspace. */
+    sandbox: z.enum(['read-only', 'workspace-write']).default('workspace-write'),
+    /** Network access for its commands. */
+    network: z.boolean().default(false),
+  }),
+  z.object({
     type: z.literal('mock'),
     tier: z.enum(['local', 'remote']).default('local'),
   }),
@@ -183,6 +209,9 @@ function openAIFamily(
 
 export function createProvider(id: string, config: ProviderConfig): Provider {
   switch (config.type) {
+    case 'claude-code':
+    case 'codex':
+      return new AgentCliProvider(id, config.type, config.executable);
     case 'openai-compatible':
       return new OpenAICompatibleProvider({
         id,

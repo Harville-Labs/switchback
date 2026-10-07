@@ -22,15 +22,16 @@ export interface CodexRuntimeOptions {
   executable?: string;
   apiKey?: string;
   /** Injected for tests; defaults to the SDK's `Codex`. */
-  codex?: Pick<Codex, 'startThread'>;
+  codex?: Pick<Codex, 'startThread' | 'resumeThread'>;
 }
 
 export class CodexRuntime implements AgentRuntime {
   readonly label = 'OpenAI Codex';
+  readonly unaskedReads = true;
 
   constructor(private readonly options: CodexRuntimeOptions) {}
 
-  private async codex(): Promise<Pick<Codex, 'startThread'>> {
+  private async codex(): Promise<Pick<Codex, 'startThread' | 'resumeThread'>> {
     if (this.options.codex) return this.options.codex;
     // Loaded on first use: most sessions never start an external runtime.
     const { Codex } = await import('@openai/codex-sdk');
@@ -44,12 +45,20 @@ export class CodexRuntime implements AgentRuntime {
 
   async run(task: RuntimeTask): Promise<RuntimeResult> {
     const { sandbox, network, model } = this.options;
-    // One decision for the whole run: Codex can't stop to ask.
+    // One decision for the whole run, as a command line so rules can match it
+    // (`bash(codex:*)`): Codex can't stop to ask about each command.
     const approval = await task.canUseTool('codex', {
-      command: `codex (${sandbox}${network ? ', network' : ''}): ${task.prompt.slice(0, 200)}`,
+      command: `codex exec --sandbox ${sandbox}${network ? ' --network' : ''}`,
+      prompt: task.prompt.slice(0, 200),
     });
     if (!approval.allowed)
-      return { ok: false, text: approval.message ?? 'The user denied running Codex.', calls: [] };
+      return {
+        ok: false,
+        text:
+          approval.message ??
+          "Codex wasn't approved to run. It works without asking about each command, so it's approved per run (choose Always to stop being asked); headless runs need --allow 'bash(codex:*)'.",
+        calls: [],
+      };
     try {
       const codex = await this.codex();
       const options: ThreadOptions = {
@@ -62,13 +71,19 @@ export class CodexRuntime implements AgentRuntime {
         ...(model ? { model } : {}),
         ...(this.options.effort ? { modelReasoningEffort: this.options.effort } : {}),
       };
-      const { events } = await codex
-        .startThread(options)
-        .runStreamed(task.prompt, { signal: task.signal });
+      const thread = task.resume
+        ? codex.resumeThread(task.resume, options)
+        : codex.startThread(options);
+      const { events } = await thread.runStreamed(task.prompt, { signal: task.signal });
       let last = '';
+      let sessionId: string | undefined;
       for await (const event of events) {
+        if (event.type === 'thread.started') sessionId = event.thread_id;
         const done = this.handle(event, task, (t) => (last = t));
-        if (done) return done.ok ? { ...done, text: last } : done;
+        if (!done) continue;
+        // The thread to resume next time: from its start event, else the SDK's handle.
+        const id = sessionId ?? thread.id ?? undefined;
+        return { ...done, ...(done.ok ? { text: last } : {}), ...(id ? { sessionId: id } : {}) };
       }
       return { ok: false, text: 'Codex ended without finishing', calls: [] };
     } catch (err) {

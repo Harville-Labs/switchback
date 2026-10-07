@@ -246,6 +246,51 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "claude-code"
+              },
+              "executable": {
+                "type": "string"
+              },
+              "billing": {
+                "default": "subscription",
+                "type": "string",
+                "enum": ["subscription", "api"]
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "codex"
+              },
+              "executable": {
+                "type": "string"
+              },
+              "billing": {
+                "default": "subscription",
+                "type": "string",
+                "enum": ["subscription", "api"]
+              },
+              "sandbox": {
+                "default": "workspace-write",
+                "type": "string",
+                "enum": ["read-only", "workspace-write"]
+              },
+              "network": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "mock"
               },
               "tier": {

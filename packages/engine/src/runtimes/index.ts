@@ -1,4 +1,5 @@
 /** Builds the configured external agent runtimes (ADR 0009). */
+import type { ProviderConfig } from '@switchback/providers';
 import type { SwitchbackConfig } from '../config.ts';
 import { AgentCoreRuntime } from './bedrock-agentcore.ts';
 import { ClaudeAgentSdkRuntime } from './claude-agent-sdk.ts';
@@ -45,11 +46,23 @@ export function createRuntime(name: string, cfg: RuntimeConfig): AgentRuntime {
   }
 }
 
-/**
- * Runtimes that read this workspace without asking about each file. With
- * `privacy.localOnlyPaths` set, nothing could keep them from sending private
- * files to their remote model, so they don't run.
- */
-export function readsWorkspaceUnasked(cfg: RuntimeConfig): boolean {
-  return cfg.type === 'codex';
+/** The provider types whose models are coding agent CLIs the user is signed in to. */
+export type AgentCliConfig = Extract<ProviderConfig, { type: 'claude-code' | 'codex' }>;
+
+/** The runtime that runs a CLI model's turns: `model` is the CLI's own name for the model. */
+export function runtimeForModel(
+  providerId: string,
+  cfg: AgentCliConfig,
+  model: string,
+): AgentRuntime {
+  const executable = cfg.executable ? { executable: cfg.executable } : {};
+  return cfg.type === 'claude-code'
+    ? new ClaudeAgentSdkRuntime({ name: providerId, model, ...executable })
+    : new CodexRuntime({
+        name: providerId,
+        model,
+        sandbox: cfg.sandbox,
+        network: cfg.network,
+        ...executable,
+      });
 }

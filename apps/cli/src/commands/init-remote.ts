@@ -24,6 +24,14 @@ export const remoteLabel = (kind: RemoteKind) => {
 
 export function credentialHint(kind: RemoteKind): string {
   switch (kind) {
+    case 'claude-code':
+      return Bun.which('claude')
+        ? 'uses your `claude` sign-in'
+        : 'install Claude Code and sign in with `claude`';
+    case 'codex':
+      return Bun.which('codex')
+        ? 'uses your `codex` sign-in'
+        : 'install Codex and sign in with `codex login`';
     case 'anthropic':
       return hasAnthropicCredentials()
         ? 'credentials found'
@@ -175,7 +183,7 @@ async function chooseRemote(
     );
   }
   const hint = credentialHint(kind);
-  if (hint.startsWith('needs'))
+  if (hint.startsWith('needs') || hint.startsWith('install'))
     console.log(yellow(`  ${remoteLabel(kind)} ${hint} before Switchback can use it.`));
 
   switch (kind) {
@@ -183,6 +191,8 @@ async function chooseRemote(
     case 'openai':
     case 'deepseek':
     case 'gemini':
+    case 'claude-code':
+    case 'codex':
       return { kind, model };
     case 'bedrock': {
       const region =

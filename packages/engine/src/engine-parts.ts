@@ -173,6 +173,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     agentLoop.run(s, route, turnId, signal),
   );
   const agentLoop: AgentLoop = new AgentLoop(host, {
+    external,
     models: models,
     tools: tools,
     compactor: compactor,

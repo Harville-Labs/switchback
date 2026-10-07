@@ -68,11 +68,14 @@ export class ClaudeAgentSdkRuntime implements AgentRuntime {
           settingSources: [],
           ...(this.options.model ? { model: this.options.model } : {}),
           ...(this.options.maxTurns ? { maxTurns: this.options.maxTurns } : {}),
+          ...(task.resume ? { resume: task.resume } : {}),
           ...(task.budgetUsd !== undefined ? { maxBudgetUsd: task.budgetUsd } : {}),
           ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
         },
       });
+      let sessionId: string | undefined;
       for await (const msg of stream) {
+        sessionId ??= (msg as { session_id?: string }).session_id;
         if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
           for (const block of msg.message.content) {
             if (block.type === 'text' && block.text)
@@ -116,15 +119,16 @@ export class ClaudeAgentSdkRuntime implements AgentRuntime {
             },
             costUsd: u.costUSD,
           }));
+          const session = sessionId ? { sessionId } : {};
           if (msg.subtype === 'success' && !msg.is_error)
-            return { ok: true, text: msg.result, calls };
+            return { ok: true, text: msg.result, calls, ...session };
           const why =
             msg.subtype === 'success'
               ? msg.result
               : msg.subtype === 'error_max_budget_usd'
                 ? `stopped at its $${task.budgetUsd?.toFixed(2) ?? '?'} budget`
                 : [msg.subtype, ...msg.errors].join(': ');
-          return { ok: false, text: why, calls };
+          return { ok: false, text: why, calls, ...session };
         }
       }
       return { ok: false, text: 'the runtime ended without a result', calls: [] };

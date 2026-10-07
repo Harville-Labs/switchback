@@ -48,6 +48,10 @@ export interface LiveSession {
    * the first edit, and which models (aliases) edited it. For review.
    */
   turnEdits?: Map<string, { path: string; before: string | undefined; writers: Set<string> }>;
+  /** Each coding agent CLI model's own session (by alias), to resume on the session's next turn there. */
+  agentSessions?: Record<string, string>;
+  /** How much of the transcript each CLI model has seen (a message count), so it's told only what's new. */
+  agentSeen?: Record<string, number>;
   /** The user asked to escalate (`session.escalate`): the next model call climbs one step. */
   escalateNow?: boolean;
   /** Why the session holds private content and must stay local; never cleared. */

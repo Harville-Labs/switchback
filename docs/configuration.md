@@ -88,6 +88,8 @@ A list inside a role is a chain of alternatives (the first that's up and fits); 
 | `anthropic-aws` | `region`, `workspaceId`, `profile`, `refusalFallback` (Claude Platform on AWS) |
 | `foundry` | `resource` or `baseUrl`, `apiKey` (default `$ANTHROPIC_FOUNDRY_API_KEY`) (Microsoft Foundry) |
 | `azure-openai` | `resource` or `baseUrl` (one is required), `apiKey` (default `$AZURE_OPENAI_API_KEY`), `auth` (`key` \| `entra`, default `key`), `api` (`responses` \| `chat`, default `responses`); models are deployment names |
+| `claude-code` | `executable` (default `claude` on PATH), `billing` (`subscription` \| `api`, default `subscription`). Claude Code as you're signed in to it; see [providers.md](providers.md#claude-code-and-codex-with-your-own-sign-in) |
+| `codex` | `executable` (default `codex` on PATH), `billing`, `sandbox` (`read-only` \| `workspace-write`, default `workspace-write`), `network` (default `false`) |
 | `mock` | `tier` |
 
 ### `models.<alias>`

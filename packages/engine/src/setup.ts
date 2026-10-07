@@ -38,6 +38,8 @@ export {
 
 /** Hosted providers setup offers, in the order shown. All are treated the same. */
 export const REMOTE_KINDS = [
+  'claude-code',
+  'codex',
   'anthropic',
   'openai',
   'deepseek',
@@ -52,8 +54,14 @@ export const REMOTE_KINDS = [
 ] as const;
 export type RemoteKind = (typeof REMOTE_KINDS)[number];
 
+/** Kinds that run a coding agent CLI the user is signed in to; a subscription covers them. */
+export const AGENT_CLI_KINDS = ['claude-code', 'codex'] as const;
+const isAgentCliKind = (kind: RemoteKind) => (AGENT_CLI_KINDS as readonly string[]).includes(kind);
+
 /** Which catalog a remote kind draws its models from. */
 export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
+  if (kind === 'claude-code') return 'anthropic';
+  if (kind === 'codex') return 'openai';
   if (kind === 'bedrock' || kind === 'vertex' || kind === 'anthropic-aws' || kind === 'foundry')
     return 'anthropic';
   if (kind === 'azure-openai') return 'openai';
@@ -73,7 +81,10 @@ export interface LocalAnswer {
 }
 
 export type RemoteAnswer =
-  | { kind: 'anthropic' | 'openai' | 'deepseek' | 'gemini'; model: string }
+  | {
+      kind: 'anthropic' | 'openai' | 'deepseek' | 'gemini' | 'claude-code' | 'codex';
+      model: string;
+    }
   | { kind: 'bedrock'; model: string; region: string; profile?: string }
   | { kind: 'vertex'; model: string; projectId: string; region: string }
   | { kind: 'anthropic-aws'; model: string; region: string; workspaceId: string; profile?: string }
@@ -155,6 +166,8 @@ export function aliasFor(model: string): string {
 
 /** How setup names each hosted provider: a short name, and what it serves when that helps. */
 export const REMOTE_PROVIDERS: Record<RemoteKind, { name: string; detail?: string }> = {
+  'claude-code': { name: 'Claude Code', detail: 'your Claude login or subscription' },
+  codex: { name: 'Codex', detail: 'your ChatGPT login or subscription' },
   anthropic: { name: 'Anthropic API', detail: 'Claude' },
   openai: { name: 'OpenAI API', detail: 'GPT' },
   deepseek: { name: 'DeepSeek API' },
@@ -193,7 +206,8 @@ export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): Planned
     const entry = catalog ? CATALOG[catalog].models.find((m) => m.id === r.model) : undefined;
     const compat = r.kind === 'openai-compatible' || r.kind === 'openrouter';
     const contextWindow = compat ? r.contextWindow : entry?.contextWindow;
-    const inputPrice = compat ? r.price?.input : entry?.price.input;
+    // A subscription covers CLI models, so they cost nothing per token here.
+    const inputPrice = isAgentCliKind(r.kind) ? 0 : compat ? r.price?.input : entry?.price.input;
     plan.push({
       alias,
       tier: 'remote',
@@ -329,6 +343,8 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       maxOutputTokens: m.maxOutputTokens,
       // DeepSeek only thinks (and handles tools well) with an effort set.
       ...(catalog === 'deepseek' ? { effort: 'high' } : {}),
+      // A subscription covers CLI models: no per-token price, so estimates don't show one.
+      ...(isAgentCliKind(r.kind) ? { price: { input: 0, output: 0 } } : {}),
     });
     const chosen = CATALOG[catalog].models.find((m) => m.id === r.model);
     if (r.kind === 'azure-openai') {

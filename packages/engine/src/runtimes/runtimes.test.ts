@@ -183,16 +183,27 @@ describe('external runtime as a subagent', () => {
   });
 
   test('Codex, which reads files unasked, refuses to run while private paths are set', async () => {
-    const { e, calls } = engine({
+    let ran = false;
+    const { e } = engine({
       interaction: 'approve',
-      config: {
-        runtimes: { claude: { type: 'codex' } },
-        privacy: { localOnlyPaths: ['secrets/'] },
-      },
+      config: { privacy: { localOnlyPaths: ['secrets/'] } },
+      runtimes: new Map([
+        [
+          'claude',
+          {
+            label: 'OpenAI Codex',
+            unaskedReads: true,
+            run: async () => {
+              ran = true;
+              return { ok: true, text: '', calls: [] };
+            },
+          },
+        ],
+      ]),
     });
     const s = e.createSession({});
     await e.runTurn(s.id, 'go');
-    expect(calls).toHaveLength(0);
+    expect(ran).toBe(false);
     const report = e
       .getSession(s.id)
       .messages.flatMap((m) => m.parts)

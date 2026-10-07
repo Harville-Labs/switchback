@@ -6,7 +6,7 @@ These pages are published for each release at [harville.ai/switchback/docs](http
 
 
 - [Configuration](configuration.md): every config key, file locations, environment variables
-- [Providers](providers.md): local servers (Ollama, llama.cpp, vLLM, LM Studio, SGLang, KoboldCpp, Jan, TGI), OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, and any OpenAI-compatible API
+- [Providers](providers.md): local servers (Ollama, llama.cpp, vLLM, LM Studio, SGLang, KoboldCpp, Jan, TGI), OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, any OpenAI-compatible API, and Claude Code or Codex on your own sign-in
 - [Routing and escalation](routing.md): how local vs. remote is decided, budgets, tuning
 - [Built-in tools](tools.md): what the model can call, and the todo checklist
 - [Agents and subagents](subagents.md): built-in agents, writing your own

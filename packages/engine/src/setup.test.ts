@@ -541,3 +541,25 @@ test('writing a section migrates every removed key in it, review.model included'
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('Claude Code and Codex logins are models like any other, free on a subscription', () => {
+  const answers = {
+    locals: [],
+    remotes: [
+      { kind: 'claude-code' as const, model: 'claude-sonnet-5' },
+      { kind: 'codex' as const, model: 'gpt-6-sol' },
+    ],
+    escalationPolicy: 'auto' as const,
+  };
+  const parsed = SwitchbackConfig.parse(buildSetupConfig(answers));
+  expect(parsed.providers['claude-code']).toMatchObject({
+    type: 'claude-code',
+    billing: 'subscription',
+  });
+  expect(parsed.providers.codex).toMatchObject({ type: 'codex', sandbox: 'workspace-write' });
+  const cc = Object.values(parsed.models).find((m) => m.provider === 'claude-code');
+  expect(cc).toMatchObject({ model: 'claude-sonnet-5', price: { input: 0, output: 0 } });
+  expect(referenceProblem(parsed)).toBeUndefined();
+  // They can start turns or be escalated to, like any model.
+  expect(parsed.routing.start.length + parsed.routing.escalate.length).toBe(2);
+});
