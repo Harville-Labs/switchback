@@ -249,6 +249,9 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         ...state,
         items,
         lastTier: event.tier,
+        ...(event.inputTokens !== undefined && event.contextWindow
+          ? { context: { tokens: event.inputTokens, window: event.contextWindow } }
+          : {}),
         ...(event.step !== undefined
           ? {
               ladder: {
@@ -303,14 +306,19 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         status: event.isError ? ('error' as const) : ('ok' as const),
         output: event.output,
       };
+      const extra = {
+        ...(event.private ? { private: event.private } : {}),
+        ...(event.denied ? { denied: true } : {}),
+        ...(event.diff ? { diff: event.diff } : {}),
+      };
       if (i >= 0)
         items[i] = {
           ...(items[i] as Extract<ViewItem, { kind: 'tool' }>),
           status: updated.status,
           output: event.output,
-          ...(event.private ? { private: event.private } : {}),
+          ...extra,
         };
-      else items.push({ ...updated, ...(event.private ? { private: event.private } : {}) });
+      else items.push({ ...updated, ...extra });
       if (event.private && !state.private) {
         items.push({ kind: 'info', id: `p${items.length}`, text: privateLabel(event.private) });
         return { ...state, items, private: event.private };

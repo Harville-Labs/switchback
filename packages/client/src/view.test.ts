@@ -450,3 +450,47 @@ test('a call’s speed lands on its route row and the status', () => {
   expect(speedLabel(52.4)).toBe('52 tok/s');
   expect(speedLabel(1_840)).toBe('1.8k tok/s');
 });
+
+test('the view keeps what clients show: context fill, diffs, and refusals', () => {
+  const s = { sessionId: 's' };
+  const view = [
+    { type: 'turn.started', ...s, turnId: 't' },
+    {
+      type: 'route.decided',
+      ...s,
+      turnId: 't',
+      tier: 'local',
+      model: { provider: 'p', model: 'm' },
+      rule: 'default',
+      reason: 'start',
+      inputTokens: 2_000,
+      contextWindow: 8_000,
+    },
+    { type: 'tool.started', ...s, turnId: 't', callId: 'c1', name: 'edit', input: {} },
+    {
+      type: 'tool.completed',
+      ...s,
+      turnId: 't',
+      callId: 'c1',
+      name: 'edit',
+      output: 'edited x',
+      isError: false,
+      diff: '@@ -1 +1 @@\n-a\n+b',
+    },
+    { type: 'tool.started', ...s, turnId: 't', callId: 'c2', name: 'bash', input: {} },
+    {
+      type: 'tool.completed',
+      ...s,
+      turnId: 't',
+      callId: 'c2',
+      name: 'bash',
+      output: 'denied',
+      isError: true,
+      denied: true,
+    },
+  ].reduce((v, e) => reduce(v, e as EngineEvent), initialView('s'));
+  expect(view.context).toEqual({ tokens: 2_000, window: 8_000 });
+  const tools = view.items.filter((i) => i.kind === 'tool');
+  expect(tools[0]).toMatchObject({ diff: '@@ -1 +1 @@\n-a\n+b' });
+  expect(tools[1]).toMatchObject({ denied: true });
+});

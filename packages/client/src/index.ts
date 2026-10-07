@@ -6,4 +6,5 @@ export * from './daemon.ts';
 export * from './format.ts';
 export * from './install.ts';
 export * from './spawn.ts';
+export * from './tool-display.ts';
 export * from './view.ts';
