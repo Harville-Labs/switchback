@@ -29,7 +29,7 @@ export class RuleLayers {
 
   /**
    * Every rule once, first source wins. With `orgOnly` (an organization's
-   * `allowUserPermissionRules: false`), allow and ask rules from other layers
+   * `allowUserPermissions: false`), allow and ask rules from other layers
    * are left out; deny rules only ever tighten, so they stay.
    */
   result(orgOnly: boolean): {

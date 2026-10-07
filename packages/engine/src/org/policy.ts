@@ -28,6 +28,8 @@ export interface OrgStatus {
   remoteDisabled: boolean;
   /** Sessions can't use the `bypassPermissions` mode. */
   bypassDisabled: boolean;
+  /** Members can't set their own permissions (`allowUserPermissions: false`). */
+  userPermissionsDisabled: boolean;
 }
 
 /** Dotted paths of every leaf set by a layer, e.g. `routing.budget.dailyUsd`. */

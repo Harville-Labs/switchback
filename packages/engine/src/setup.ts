@@ -440,6 +440,8 @@ export function writeConfigLayer(
      * another file, an org policy, or the project config).
      */
     references?: boolean;
+    /** Top-level sections to replace whole rather than merge into. */
+    replace?: string[];
   } = {},
 ): WriteResult {
   let text = '{}';
@@ -454,6 +456,8 @@ export function writeConfigLayer(
   // failing on it.
   for (const { path } of removedKeysIn(parseJsonc(text)))
     if (path[0] && path[0] in layer) text = applyEdits(text, modify(text, path, undefined, {}));
+  for (const key of options.replace ?? [])
+    text = applyEdits(text, modify(text, [key], undefined, {}));
   const existing = parseJsonc(text) as Record<string, unknown>;
   const merged = deepMerge(existing, layer);
   const check = SwitchbackConfig.safeParse(deepMerge(defaultConfig(), merged));

@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EngineEvent } from '@switchback/protocol';
 import { ScriptedProvider } from '@switchback/providers';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
+import { adoptOrgPermissions } from './adopt.ts';
 import { OrgClient, toAuth } from './client.ts';
 import { startDevOrgServer } from './dev-server.ts';
 import { applyRestrictions, OrgPolicy } from './policy.ts';
@@ -253,5 +254,55 @@ describe('with an organization server', () => {
     } finally {
       server.stop();
     }
+  });
+});
+
+describe('permissions', () => {
+  test('signing in replaces the member config permissions with the policy', () => {
+    const file = join(home, 'config.json');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        telemetry: { enabled: false },
+        permissions: { bash: 'allow', allow: ['bash(curl:*)'] },
+      }),
+    );
+    const p = policy({
+      defaults: { permissions: { edit: 'allow', allow: ['bash(git log:*)'] } },
+      enforced: { permissions: { allow: ['bash(make:*)'], deny: ['read(.env)'] } },
+    });
+    adoptOrgPermissions(file, p);
+    const written = JSON.parse(readFileSync(file, 'utf8'));
+    expect(written.permissions).toEqual({
+      edit: 'allow',
+      allow: ['bash(git log:*)', 'bash(make:*)'],
+      deny: ['read(.env)'],
+    });
+    expect(written.telemetry).toEqual({ enabled: false });
+    expect(adoptOrgPermissions(file, policy({}))).toBeUndefined();
+  });
+
+  test('allowUserPermissions: false ignores members levels and rules, not their denies', () => {
+    writeFileSync(
+      join(home, 'config.json'),
+      JSON.stringify({
+        permissions: { bash: 'allow', allow: ['bash(curl:*)'], deny: ['read(.env)'] },
+      }),
+    );
+    const loaded = loadConfig(
+      home,
+      env,
+      [],
+      policy({
+        defaults: { permissions: { edit: 'allow' } },
+        restrictions: { allowUserPermissions: false },
+      }),
+    );
+    expect(loaded.config.permissions.bash).toBe('ask');
+    expect(loaded.config.permissions.edit).toBe('allow');
+    expect(loaded.config.permissions.allow).toEqual([]);
+    expect(loaded.config.permissions.deny).toEqual(['read(.env)']);
+    expect(loaded.org?.userPermissionsDisabled).toBe(true);
+    expect(loaded.org?.notes.join('\n')).toContain('permissions.bash from');
   });
 });

@@ -93,7 +93,7 @@ A call an ask rule caught offers no "always": the rule says to ask every time. C
 
 New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
 
-An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and keep only its own allow and ask rules (`restrictions.allowUserPermissionRules: false`); see [organizations.md](organizations.md).
+An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
 
 ## Sandbox
 

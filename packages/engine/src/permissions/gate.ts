@@ -207,13 +207,15 @@ export class PermissionGate {
         input: call.input,
         ...(preview ? { preview: preview.diff } : {}),
         ...(preview?.proposed ? { proposed: preview.proposed } : {}),
-        // An ask rule asks every time; offering "always" would contradict it.
-        ...(rules.length && !askRule ? { rules } : {}),
+        // An ask rule asks every time; offering "always" would contradict it,
+        // as would a grant when the organization sets everyone's permissions.
+        ...(rules.length && !askRule && !this.host.org()?.userPermissionsDisabled ? { rules } : {}),
         ...(askRule ? { askRule } : {}),
       },
       signal,
     );
-    if (answer.decision === 'allow_always' && !askRule) this.remember(rules, answer.save);
+    if (answer.decision === 'allow_always' && !askRule && !this.host.org()?.userPermissionsDisabled)
+      this.remember(rules, answer.save);
     return { allowed: answer.decision !== 'deny' };
   }
 

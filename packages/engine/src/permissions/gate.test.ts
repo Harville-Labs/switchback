@@ -128,6 +128,7 @@ describe('permission modes', () => {
       enforcedKeys: [],
       remoteDisabled: false,
       bypassDisabled: true,
+      userPermissionsDisabled: false,
     };
     const { engine } = setup([], {}, { org });
     const id = session(engine);
@@ -163,6 +164,35 @@ describe('rules at the prompt', () => {
       behavior: 'allow',
       source: 'this session',
     });
+  });
+
+  test('no always when the organization sets everyone permissions', async () => {
+    const org = {
+      id: 'o',
+      name: 'Acme',
+      version: '1',
+      notes: [],
+      enforcedKeys: [],
+      remoteDisabled: false,
+      bypassDisabled: false,
+      userPermissionsDisabled: true,
+    };
+    const { engine, events } = setup(
+      [
+        { toolCalls: [{ name: 'bash', input: { command: 'make' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'make' } }] },
+        { text: 'done' },
+      ],
+      { bash: 'ask' },
+      { org },
+    );
+    engine.subscribe((e) => {
+      if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'allow_always');
+    });
+    await engine.runTurn(session(engine), 'go');
+    const asked = events.filter((e) => e.type === 'permission.requested');
+    expect(asked).toHaveLength(2);
+    expect(asked[0]).not.toHaveProperty('rules');
   });
 
   test('always in this project saves the rule in a personal, git-ignored file', async () => {
@@ -216,7 +246,7 @@ describe('config layers', () => {
           allowRemote: true,
           allowUserProviders: true,
           allowUserMcpServers: true,
-          allowUserPermissionRules: false,
+          allowUserPermissions: false,
           allowUserHooks: true,
           allowBypassPermissions: true,
         },
