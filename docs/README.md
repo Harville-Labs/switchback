@@ -2,6 +2,9 @@
 
 ## Using Switchback
 
+These pages are published for each release at [harville.ai/switchback/docs](https://harville.ai/switchback/docs) (the list below decides which; `scripts/docs-bundle.ts` builds them, and a test checks every link between them).
+
+
 - [Configuration](configuration.md): every config key, file locations, environment variables
 - [Providers](providers.md): local servers (Ollama, llama.cpp, vLLM, LM Studio, SGLang, KoboldCpp, Jan, TGI), OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, any OpenAI-compatible API, and TypeSafe Jev for the routing classifier
 - [Routing and escalation](routing.md): how local vs. remote is decided, budgets, tuning

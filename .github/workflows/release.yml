@@ -137,6 +137,9 @@ jobs:
         run: |
           bun scripts/third-party-notices.ts --out dist/THIRD-PARTY-NOTICES.txt
           cp LICENSE NOTICE dist/
+      # The user docs for harville.ai/switchback/docs, which renders each release's.
+      - name: Docs bundle
+        run: bun scripts/docs-bundle.ts "${{ needs.verify.outputs.version }}" "dist/switchback-docs-${{ needs.verify.outputs.version }}.json"
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS
@@ -161,6 +164,19 @@ jobs:
           prerelease=""
           case "$version" in 0.*|*-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --title "Switchback $version" --notes-file notes.md $prerelease
+      # The website adds this version to its docs and redeploys. Needs WEBSITE_DISPATCH_TOKEN:
+      # a fine-grained token with Contents read and write on Harville-Labs/website.
+      - name: Publish the docs
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::Docs not published to harville.ai: the WEBSITE_DISPATCH_TOKEN secret is not set."
+            exit 0
+          fi
+          gh api repos/Harville-Labs/website/dispatches \
+            -f event_type=switchback-release \
+            -f "client_payload[version]=${{ needs.verify.outputs.version }}"
 
   extension:
     needs: publish
