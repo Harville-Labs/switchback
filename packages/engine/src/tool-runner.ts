@@ -152,6 +152,7 @@ export class ToolRunner {
     let isError = false;
     let ran = false;
     let images: ImagePart[] = [];
+    let diff: string | undefined;
     const pre = await this.hook(s, 'PreToolUse', call.name, { tool_input: parsed.data });
     const hookDenied =
       pre.block ??
@@ -172,7 +173,7 @@ export class ToolRunner {
       try {
         const result = await tool.run(parsed.data, callCtx);
         if (typeof result === 'string') output = result;
-        else ({ text: output, images } = result);
+        else ({ text: output, images, diff } = result);
       } catch (err) {
         output = (err as Error).message;
         isError = true;
@@ -203,6 +204,7 @@ export class ToolRunner {
       isError,
       ...(denied ? { denied } : {}),
       ...(priv ? { private: priv } : {}),
+      ...(diff && !isError ? { diff } : {}),
     });
     return {
       type: 'tool_result',

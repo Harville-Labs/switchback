@@ -44,7 +44,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.escalate` | `sessionId` | `{ when }`: the next model call climbs one step up the ladder (`next-step` during a turn, `next-prompt` otherwise); rule `user-escalation` |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
-| `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`) | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config |
+| `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`), `feedback?` | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config. With `deny`, `feedback` is what the user wants instead, and the model gets it with the refusal |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
 | `shells.list` | `{ sessionId? }` | `ShellInfo[]`: background shells, all or one session's |
 | `shells.kill` | `{ shellId }` | `ShellInfo` |
@@ -66,14 +66,14 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `type` | Meaning |
 |---|---|
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
-| `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step; `step`/`steps` (where the model is on the escalation ladder) and `stickyTurns` |
+| `route.decided` | Tier, model, `rule`, and a human-readable `reason` for this step; `step`/`steps` (where the model is on the escalation ladder) and `stickyTurns`; `inputTokens` and the model's `contextWindow`, for showing how full the context is |
 | `roles.updated` | A session's roles changed (`session.setRoles`), so every attached client can show them |
 | `queue.updated` | The session's queued prompts changed (`queued`: id and text of each) |
 | `queue.delivered` | A queued prompt reached the model at a step boundary; clients show it as the user's message then |
 | `shell.updated` | A background shell started, exited, or was stopped (`shell`: id, command, status, exit code) |
 | `mode.changed` | A session's permission mode changed (`session.setMode`, or a plan was approved) |
 | `text.delta` / `reasoning.delta` | Streaming output |
-| `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local |
+| `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local; `denied` that the call never ran; `diff`, on an edit or write, what it changed (for display; the model never sees it) |
 | `review.completed` | A review of the turn's local edits: `verdict` (`approve`, `revise`, or `skipped` with the reason in `summary`), `issues` (`file`, `line`, `severity`, `comment`), the reviewer `model`, and `round` |
 | `secrets.redacted` | Secrets were replaced with placeholders in a request to a remote model; `kinds` names each one (repeats included) and `model` the recipient. Sent only when a request contains more than the previous one |
 | `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file. `rules` is what `allow_always` would grant (absent when `askRule` names an ask rule, which asks every time); `plan` is set when the model asks to leave plan mode |

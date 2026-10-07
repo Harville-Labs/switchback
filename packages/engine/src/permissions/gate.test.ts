@@ -166,6 +166,21 @@ describe('rules at the prompt', () => {
     });
   });
 
+  test('a denial can tell the model what to do instead', async () => {
+    const { engine, lp } = setup(
+      [{ toolCalls: [{ name: 'bash', input: { command: 'make deploy' } }] }, { text: 'ok' }],
+      { bash: 'ask' },
+    );
+    engine.subscribe((e) => {
+      if (e.type === 'permission.requested')
+        engine.respondPermission(e.requestId, 'deny', undefined, 'run make test first');
+    });
+    await engine.runTurn(session(engine), 'go');
+    const [result] = results(lp);
+    expect(result?.isError).toBe(true);
+    expect(result?.content).toContain('run make test first');
+  });
+
   test('no always when the organization sets everyone permissions', async () => {
     const org = {
       id: 'o',

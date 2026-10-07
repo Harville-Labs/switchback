@@ -211,8 +211,13 @@ export class Engine {
     requestId: string,
     decision: PermissionDecision,
     save?: 'project' | 'user',
+    feedback?: string,
   ): void {
-    this.p.gate.prompts.answer(requestId, { decision, ...(save ? { save } : {}) });
+    this.p.gate.prompts.answer(requestId, {
+      decision,
+      ...(save ? { save } : {}),
+      ...(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+    });
   }
 
   /**

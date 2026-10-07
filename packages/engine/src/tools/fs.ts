@@ -79,9 +79,14 @@ export const writeTool = defineTool({
   },
   async run(input, ctx) {
     const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
+    const before = await readFile(file, 'utf8').catch(() => '');
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, input.content);
-    return `wrote ${input.path}`;
+    return {
+      text: `wrote ${input.path}`,
+      images: [],
+      diff: diffPreview(input.path, before, input.content),
+    };
   },
 });
 
@@ -129,9 +134,13 @@ export const editTool = defineTool({
     };
   },
   async run(input, ctx) {
-    const { file, after, replacements } = await applyEdit(input, ctx.workspaceRoot);
+    const { file, before, after, replacements } = await applyEdit(input, ctx.workspaceRoot);
     await writeFile(file, after);
-    return `edited ${input.path} (${replacements} replacement${replacements > 1 ? 's' : ''})`;
+    return {
+      text: `edited ${input.path} (${replacements} replacement${replacements > 1 ? 's' : ''})`,
+      images: [],
+      diff: diffPreview(input.path, before, after),
+    };
   },
 });
 

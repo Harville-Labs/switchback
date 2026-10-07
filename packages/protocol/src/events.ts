@@ -30,6 +30,8 @@ export type EngineEvent =
       reason: string;
       /** Prompt size the decision was based on (exact when the local server counted it). */
       inputTokens?: number;
+      /** The chosen model's context window, so clients can show how full it is. */
+      contextWindow?: number;
       /** Where the model is on the escalation ladder: 0 is `start`, `steps` the top. */
       step?: number;
       steps?: number;
@@ -64,6 +66,8 @@ export type EngineEvent =
       denied?: boolean;
       /** Set when the result carries private content, so the session now stays local. */
       private?: string;
+      /** A unified diff of what an edit or write changed, for display only (the model never sees it). */
+      diff?: string;
     } & SessionScoped)
   | ({
       type: 'permission.requested';
