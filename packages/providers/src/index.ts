@@ -1,3 +1,4 @@
+export * from './agent-cli.ts';
 export * from './anthropic.ts';
 export * from './catalog.ts';
 export * from './gemini.ts';

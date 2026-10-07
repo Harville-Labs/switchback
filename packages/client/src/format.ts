@@ -130,7 +130,8 @@ export function toolLabel(name: string, input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>;
   const first = (...keys: string[]) =>
     keys.map((k) => i[k]).find((v) => typeof v === 'string') as string | undefined;
-  switch (name) {
+  // Coding agent CLIs (Claude Code) name tools `Bash`, `Edit`, … with `file_path`.
+  switch (name === 'Bash' ? 'bash' : name) {
     case 'bash':
       return `$ ${first('command') ?? ''}`;
     case 'task':
@@ -140,8 +141,8 @@ export function toolLabel(name: string, input: unknown): string {
       return `skill ${first('name') ?? ''}${file ? ` · ${file}` : ''}`;
     }
     default: {
-      const arg = first('path', 'pattern', 'file', 'url', 'query');
-      return arg ? `${name} ${arg}` : name;
+      const arg = first('path', 'file_path', 'pattern', 'file', 'url', 'query');
+      return arg ? `${name.toLowerCase()} ${arg}` : name.toLowerCase();
     }
   }
 }

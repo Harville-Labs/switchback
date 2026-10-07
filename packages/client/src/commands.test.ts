@@ -78,3 +78,8 @@ test('escalating says when it takes effect', () => {
   expect(escalateNotice('next-prompt')).toContain('next prompt');
   expect(matchCommands('up', 'tui')[0]?.name).toBe('up');
 });
+
+test("a coding agent CLI's tool calls read like Switchback's own", () => {
+  expect(toolLabel('Bash', { command: 'bun test' })).toBe('$ bun test');
+  expect(toolLabel('Edit', { file_path: 'src/a.ts' })).toBe('edit src/a.ts');
+});

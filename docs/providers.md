@@ -177,6 +177,31 @@ OpenRouter (a base URL on `openrouter.ai`) gets two things other compatible APIs
 
 Gateways report upstream failures inside an already-successful stream. Server-side failures, like a provider disconnecting or a rate limit, count as retryable, so the router falls back to the next model in the chain; client errors don't.
 
+### Claude Code and Codex, with your own sign-in
+
+If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a subscription or a key, Switchback can use them as models. They're coding agents rather than chat APIs, so a turn routed to one is handed to it whole: it works in the workspace with its own tools, and its answer joins the conversation like any model's. Everything else is the same as any model: put it in `routing.start` to start every turn there, in `routing.escalate` to take the turns that need it, or in `review.models`.
+
+```jsonc
+"providers": {
+  "claude": { "type": "claude-code" },
+  "codex": { "type": "codex", "sandbox": "workspace-write", "network": false }
+},
+"models": {
+  "sonnet": { "provider": "claude", "model": "claude-sonnet-5", "price": { "input": 0, "output": 0 } },
+  "codex": { "provider": "codex", "model": "gpt-6-sol", "price": { "input": 0, "output": 0 } }
+},
+"routing": { "start": ["fast"], "escalate": [["sonnet"]] }
+```
+
+`switchback init` offers both (`--remote claude-code`, `--remote codex` unattended) and writes this for you.
+
+- **Sign-in.** They use whatever the CLI is signed in with: your Claude or ChatGPT plan, or a key. Switchback runs `claude` or `codex` from `PATH` (or `executable`), else the copy its SDK ships with, which uses the same sign-in. A turn that can't run (not signed in, say) fails with the CLI's explanation.
+- **Cost.** `billing: "subscription"` (the default) records their turns as free, so they don't count toward budgets; `"api"` records the cost the CLI reports. Setup gives their models a zero `price`, so escalation prompts don't show an estimate.
+- **Context.** Each keeps its own session, resumed on its next turn in the same Switchback session, so it remembers its earlier work. When it takes over from another model, it's told what it missed: a digest of the conversation since its last turn, then the request.
+- **Permissions.** Claude Code asks about each tool call, and Switchback's [permission policy](permissions.md) answers (rules, modes, organization denials, and private paths). Codex can't ask per call, so each turn is approved once as a command, `codex exec --sandbox <mode>` (choose **Always** to stop being asked; headless runs need `--allow 'bash(codex:*)'`), and runs in the sandbox you chose. Because Codex reads files without asking, it won't run while `privacy.localOnlyPaths` is set.
+- **Remote.** Both are remote models: routing, `allowRemote: false`, organization policy, and private sessions treat them like any hosted model. An organization can rule them out with its provider-type restrictions.
+- Using a subscription through another program is between you and its provider; check their terms.
+
 ### Behavior common to every remote
 
 - Streaming output and tool calls, normalized into one transcript format, so a session can move between providers mid-turn.

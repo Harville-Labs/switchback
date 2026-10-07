@@ -2,13 +2,16 @@
  * The agent loop: route each step, call the model, run its tools, and repeat
  * until the model answers without tools or a limit stops the turn.
  */
+
 import type { Message, ModelRef, RoutePreference, StopReason } from '@switchback/protocol';
 import { type ChatEvent, type Provider, ProviderError, type ToolSpec } from '@switchback/providers';
 import { ladderSteps, type ModelInfo, type Router, stepOf } from '@switchback/router';
+import { isAgentCli, runAgentCliTurn } from './agent-cli-turn.ts';
 import type { AgentDefinition } from './agents.ts';
 import { contextOf } from './compaction.ts';
 import type { Compactor } from './compactor.ts';
 import { estimateEscalationCost } from './estimate.ts';
+import type { ExternalRuntimes } from './external-runtime.ts';
 import { hasImages, withoutImages } from './images.ts';
 import type { UsageLedger } from './ledger.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
@@ -21,6 +24,8 @@ import type { Interaction, ToolRunner } from './tool-runner.ts';
 import { toolSpec, toolsFor } from './tools/index.ts';
 
 export interface AgentLoopDeps {
+  /** Runs turns on coding agent CLI models (Claude Code, Codex). */
+  external: ExternalRuntimes;
   models: ModelDirectory;
   tools: ToolRunner;
   compactor: Compactor;
@@ -147,6 +152,11 @@ export class AgentLoop {
 
       const provider = models.provider(model.ref.provider);
       if (!provider) throw new Error(`provider "${model.ref.provider}" is not configured`);
+      // A coding agent CLI works the whole turn itself.
+      if (isAgentCli(provider)) {
+        s.signals.recordTurn(decision.step, escalated);
+        return runAgentCliTurn(this.host, this.deps.external, s, model, turnId, signal);
+      }
       let done: Done;
       let decodeMs: number | undefined;
       try {

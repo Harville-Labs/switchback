@@ -4,12 +4,14 @@
  * permission policy; its progress is emitted on the child session; its cost is
  * ledgered.
  */
+import type { ModelRef } from '@switchback/protocol';
+import type { ModelInfo } from '@switchback/router';
 import { z } from 'zod';
 import type { AgentDefinition } from './agents.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { privateToolUse } from './privacy.ts';
-import { createRuntime, readsWorkspaceUnasked } from './runtimes/index.ts';
-import type { AgentRuntime } from './runtimes/runtime.ts';
+import { type AgentCliConfig, createRuntime, runtimeForModel } from './runtimes/index.ts';
+import type { AgentRuntime, RuntimeResult } from './runtimes/runtime.ts';
 import type { InvocationBudget } from './subagents.ts';
 import type { Tool, ToolContext } from './tools/index.ts';
 
@@ -77,8 +79,7 @@ export class ExternalRuntimes {
         `agent "${agent.name}" names runtime "${name}", which isn't configured under runtimes`,
       );
     if (blocked) return fail(`${blocked}; external runtimes are remote`);
-    const cfg = this.host.config().runtimes[name];
-    if (cfg && readsWorkspaceUnasked(cfg) && this.host.config().privacy.localOnlyPaths.length)
+    if (runtime.unaskedReads && this.host.config().privacy.localOnlyPaths.length)
       return fail(
         `${runtime.label} reads the workspace without asking about each file, so it can't run while privacy.localOnlyPaths is set`,
       );
@@ -95,6 +96,71 @@ export class ExternalRuntimes {
       rule: 'runtime',
       reason: `agent "${agent.name}" runs on ${runtime.label}`,
     });
+    const r = await this.drive(s, runtime, turnId, signal, {
+      prompt,
+      ...(budget ? { budgetUsd: Math.max(0, budget.limitUsd - budget.spentUsd) } : {}),
+      record: { rule: 'runtime', agent: agent.name },
+    });
+    this.host.append(s, {
+      role: 'assistant',
+      parts: [{ type: 'text', text: r.text }],
+      meta: { model, tier: 'remote', routeReason: `runs on ${runtime.label}` },
+    });
+    if (r.ok) return { stopReason: 'end_turn', text: r.text };
+    return signal.aborted ? { stopReason: 'cancelled', text: r.text } : fail(r.text);
+  }
+
+  /**
+   * A turn routed to a coding agent CLI the user is signed in to (a
+   * `claude-code` or `codex` model): the CLI works it with its own tools,
+   * resuming its session from the session's last turn there. The result is
+   * the session's answer; the agent loop records it.
+   */
+  async runAsModel(
+    s: LiveSession,
+    model: ModelInfo,
+    cfg: AgentCliConfig,
+    prompt: string,
+    turnId: string,
+    signal: AbortSignal,
+  ): Promise<{ ok: boolean; text: string }> {
+    const runtime =
+      this.deps.injected?.get(model.alias) ??
+      runtimeForModel(model.ref.provider, cfg, model.ref.model);
+    if (runtime.unaskedReads && this.host.config().privacy.localOnlyPaths.length)
+      return {
+        ok: false,
+        text: `${runtime.label} reads the workspace without asking about each file, so it can't run while privacy.localOnlyPaths is set`,
+      };
+    const resume = s.agentSessions?.[model.alias];
+    const r = await this.drive(s, runtime, turnId, signal, {
+      prompt,
+      ...(resume ? { resume } : {}),
+      record: {
+        rule: 'agent-cli',
+        agent: s.header.agent,
+        model: model.ref,
+        free: cfg.billing === 'subscription',
+      },
+    });
+    if (r.sessionId) s.agentSessions = { ...s.agentSessions, [model.alias]: r.sessionId };
+    return { ok: r.ok, text: r.text };
+  }
+
+  /** Run a task on a runtime: its progress as the session's events, its tools through the policy, its usage ledgered. */
+  private async drive(
+    s: LiveSession,
+    runtime: AgentRuntime,
+    turnId: string,
+    signal: AbortSignal,
+    task: {
+      prompt: string;
+      resume?: string;
+      budgetUsd?: number;
+      /** How its usage is recorded; `free` for calls a subscription covers. */
+      record: { rule: string; agent: string; model?: ModelRef; free?: boolean };
+    },
+  ): Promise<RuntimeResult> {
     const ctx: ToolContext = {
       workspaceRoot: this.host.rootOf(s),
       sessionId: s.header.id,
@@ -102,10 +168,11 @@ export class ExternalRuntimes {
       agentCatalog: [],
     };
     const r = await runtime.run({
-      prompt,
+      prompt: task.prompt,
       cwd: ctx.workspaceRoot,
       signal,
-      ...(budget ? { budgetUsd: Math.max(0, budget.limitUsd - budget.spentUsd) } : {}),
+      ...(task.resume ? { resume: task.resume } : {}),
+      ...(task.budgetUsd !== undefined ? { budgetUsd: task.budgetUsd } : {}),
       canUseTool: (tool, input) => this.canUseTool(s, ctx, tool, input, signal),
       onEvent: (ev) => {
         if (ev.type === 'text')
@@ -131,19 +198,14 @@ export class ExternalRuntimes {
           });
       },
     });
+    const { rule, agent, model, free } = task.record;
     for (const call of r.calls)
-      this.host.recordUsage(s, 'remote', call.model, call.usage, {
-        rule: 'runtime',
-        agent: agent.name,
-        costUsd: call.costUsd,
+      this.host.recordUsage(s, 'remote', model ?? call.model, call.usage, {
+        rule,
+        agent,
+        costUsd: free ? 0 : call.costUsd,
       });
-    this.host.append(s, {
-      role: 'assistant',
-      parts: [{ type: 'text', text: r.text }],
-      meta: { model, tier: 'remote', routeReason: `runs on ${runtime.label}` },
-    });
-    if (r.ok) return { stopReason: 'end_turn', text: r.text };
-    return signal.aborted ? { stopReason: 'cancelled', text: r.text } : fail(r.text);
+    return r;
   }
 
   private async canUseTool(

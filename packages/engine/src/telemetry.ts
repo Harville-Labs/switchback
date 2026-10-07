@@ -42,6 +42,7 @@ const KNOWN_RULES = new Set([
   'privacy',
   'compaction',
   'runtime',
+  'agent-cli',
   'authoring',
   'review',
 ]);
