@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "harville-labs": {
+      "source": { "source": "github", "repo": "Harville-Labs/agents" }
+    }
+  },
+  "enabledPlugins": {
+    "hl@harville-labs": true
+  }
+}
