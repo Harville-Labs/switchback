@@ -52,13 +52,40 @@ Escalate less often and more precisely.
 - More providers: Google Gemini, the OpenAI Responses API, Claude Platform on AWS, Microsoft Foundry
 - `switchback agents new` for guided agent authoring
 
-## v1.0 Product readiness
+## v0.6 Distribution and sites (released)
+
+- One-line installers for macOS, Linux, and Windows; the VS Code Marketplace listing
+- The TUI and VS Code share one engine, newest version wins
+- Switchback sites: the hosted control plane for companies, with seats, policy, usage, and SSO
+- Private paths and secret redaction for remote requests
+- Draft locally, review remotely; savings receipts; opt-in telemetry
+
+## v0.7 Roles (released)
+
+- Role-based routing: any model can start, escalate, review, or run subagents (ADR 0015)
+- Escalation ladder and review ladder, changeable during a session
+- `switchback init` asks for models first, then which model does what
+- `switchback self-update`; Azure OpenAI, OpenRouter, and more self-hosted servers in `init`
+- Slash command menu and a cleaner chat in both clients
+
+## v1.0 Product readiness (released)
 
 - Open-core licensing: Apache-2.0 for Switchback, paid company sites (ADR 0014)
-- Opt-in telemetry and crash reporting
-- Signed and notarized binaries, auto-update, Homebrew (the install script shipped)
-- OS sandboxing for `bash` (macOS Seatbelt, Linux bubblewrap)
-- Managed policies for teams (locked budgets, allowed providers, required `ask`)
-- Team usage dashboard
-- Documentation site on harville.ai
-- External security review
+- Permission rules and modes (default, accept edits, plan, bypass), hooks, and an OS sandbox for `bash` (macOS Seatbelt, Linux bubblewrap)
+- Organization policy that members can't override, including deny rules
+- Checkpoints and rewind, queued and interrupting messages, resumable sessions, background shells, a checklist
+- Web fetch and search, custom commands and skills, MCP resources and prompts, image input
+- Claude Code and Codex as models on your own sign-in; Managed Agents, Codex, and Bedrock AgentCore as subagent runtimes
+- Escalate on demand (`/up`); tokens per second; notifications; scripts and CI with `switchback run`
+- Documentation at harville.ai/switchback/docs, published for each release
+
+## Next
+
+Tracked as issues labeled `future`:
+
+- Signed and notarized binaries, auto-update, Homebrew (#33)
+- An external security review (#37)
+- Server-side enforcement of provider access and spend for organizations (#40)
+- System-managed (MDM) organization policy and sign-in (#41)
+- Paid company sites: plans, self-serve billing, and seats (#31)
+- Checking escalation against each user's own outcomes, in place of a fixed classifier (#42)

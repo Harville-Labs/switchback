@@ -11,7 +11,7 @@ A local-first coding agent from Harville Labs. (Formerly Harness.) Most of the w
 - **Managed by your organization.** Sign in with `switchback login` and your org's server pushes approved models (including company GPU servers), spend caps, provider restrictions, or an outright remote-off switch, live. See [docs/organizations.md](docs/organizations.md).
 - **Terminal and VS Code, same engine.** The TUI and the VS Code extension are thin clients of one engine and one protocol, and they render from the same view model, so they can't drift apart.
 
-> Status: pre-release (v0.1). Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/switchback/issues) and the [roadmap](docs/roadmap.md).
+> Status: 1.0. Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/switchback/issues) and the [roadmap](docs/roadmap.md).
 
 ## Install
 
@@ -31,7 +31,7 @@ The scripts ([install.sh](scripts/install.sh), [install.ps1](scripts/install.ps1
 
 Update the CLI in place with `switchback self-update` (or `switchback self-update --check` to see whether there's a newer release). It verifies the download the same way the installers do.
 
-For VS Code alone, install **Switchback** from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=isaiah-harville.switchback) or [Open VSX](https://open-vsx.org/extension/isaiah-harville/switchback) (`code --install-extension isaiah-harville.switchback --pre-release` while Switchback is 0.x). It includes the engine. Use the terminal UI, the extension, or both: with both installed, they run the newer of the two engines and share live sessions.
+For VS Code alone, install **Switchback** from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=isaiah-harville.switchback) or [Open VSX](https://open-vsx.org/extension/isaiah-harville/switchback) (`code --install-extension isaiah-harville.switchback`). It includes the engine. Use the terminal UI, the extension, or both: with both installed, they run the newer of the two engines and share live sessions.
 
 ## Quick start
 

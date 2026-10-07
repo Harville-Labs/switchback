@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-07
+
 ### Removed
 - The pre-routing classifier (`routing.classifier`) and the TypeSafe Jev provider, which existed only to serve as it. Whether a prompt is "hard" depends on which model starts it, so a fixed rating couldn't be trusted. Escalation stays automatic when a model struggles or a prompt outgrows it; a config that still sets `routing.classifier` is told what replaced it
 
