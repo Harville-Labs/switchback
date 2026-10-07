@@ -7,6 +7,8 @@ import type { Part, StopReason, Tier, Usage } from '@switchback/protocol';
 import type { ChatEvent, ChatRequest, HealthStatus, Provider } from './types.ts';
 
 export interface ScriptedTurn {
+  /** Thinking, streamed before the text and kept as a reasoning part from this model. */
+  reasoning?: string;
   text?: string;
   toolCalls?: { name: string; input: unknown }[];
   stopReason?: StopReason;
@@ -42,6 +44,15 @@ export class ScriptedProvider implements Provider {
     if (step.error) throw step.error;
 
     const parts: Part[] = [];
+    if (step.reasoning) {
+      for (const word of step.reasoning.split(/(?<=\s)/))
+        yield { type: 'reasoning.delta', text: word };
+      parts.push({
+        type: 'reasoning',
+        text: step.reasoning,
+        origin: { provider: this.id, model: request.model },
+      });
+    }
     if (step.text) {
       for (const word of step.text.split(/(?<=\s)/)) yield { type: 'text.delta', text: word };
       parts.push({ type: 'text', text: step.text });

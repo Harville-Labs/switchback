@@ -58,6 +58,20 @@ Switchback ships with no default local model. Which server and model your machin
 
 In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/usage` shows spend and savings, and `esc` cancels.
 
+The TUI shows a proposed edit before asking for permission:
+
+![Switchback edit permission prompt with a diff](docs/assets/screenshots/permission-diff.svg)
+
+The completed turn keeps the edit and test results in the transcript:
+
+![Switchback turn with an edit and test results](docs/assets/screenshots/turn.svg)
+
+Press `ctrl+o` to expand the thinking and test output:
+
+![Switchback turn with expanded thinking and test output](docs/assets/screenshots/turn-expanded.svg)
+
+Regenerate these screenshots with `bun run screenshots`. The script uses a temporary demo project and scripted models.
+
 ## How routing works
 
 Every model call goes through the router, which picks the first matching rule:
