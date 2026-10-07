@@ -86,6 +86,17 @@ export class TurnRunner {
   }
 
   /** Drop every queued prompt (cancel). */
+  /** Cancel the running turn and every background subagent the session started. */
+  cancel(s: LiveSession): boolean {
+    const hadWork = !!s.controller || s.background.size > 0;
+    s.controller?.abort();
+    s.bgController?.abort();
+    s.bgController = undefined;
+    s.inbox.length = 0;
+    this.clearQueue(s);
+    return hadWork;
+  }
+
   clearQueue(s: LiveSession): void {
     if (!s.queue?.length) return;
     s.queue = [];

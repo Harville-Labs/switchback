@@ -21,3 +21,4 @@ export * from './telemetry.ts';
 export * from './tokens.ts';
 export * from './tools/index.ts';
 export * from './trust.ts';
+export * from './workspace.ts';
