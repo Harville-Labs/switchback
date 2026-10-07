@@ -53,7 +53,7 @@ import type { TurnOptions } from './turn-runner.ts';
 
 export type { EngineOptions } from './engine-options.ts';
 
-export const ENGINE_VERSION = '1.0.0';
+export const ENGINE_VERSION = '1.1.0';
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();

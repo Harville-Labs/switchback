@@ -4,6 +4,10 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-07
+
+Upgrading: three changes need action. Move `~/.config/switchback` and `~/.local/share/switchback` into `~/.switchback` (or re-run `switchback init`); expect `bypassPermissions` to stop asking where ask rules used to; and rename `restrictions.allowUserPermissionRules` to `allowUserPermissions` in organization policies.
+
 ### Added
 - **Full-screen terminal UI**: the TUI takes over the terminal like an editor, with the transcript above and the input fixed at the bottom; Page Up/Down and the mouse wheel scroll it, and quitting restores the shell and prints how to resume. Hold Shift (Option in macOS Terminal and iTerm2) to select text
 - **Tool calls say what they did**, in both clients: lines read, files listed, matches found, the first lines a command printed (with its exit code when it failed), and an edit's size and diff, with line numbers and tinted bands in the TUI. Runs of reading and searching fold into one **Explored** block. `ctrl+o` expands thinking, output, diffs, and explored calls in full
@@ -20,8 +24,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ### Changed
 - **Breaking:** everything of Switchback's now lives in `~/.switchback` on every platform (config, agents, commands, skills, and `data/` for sessions and the ledger), instead of `~/.config/switchback` and `~/.local/share/switchback`. `XDG_CONFIG_HOME` and `XDG_DATA_HOME` no longer apply; move your files, or re-run `switchback init`
-- `bypassPermissions` never asks: ask rules, running outside the sandbox, and edits to `.switchback/` all go ahead. Deny rules still stop a call
-- `restrictions.allowUserPermissionRules` is now `allowUserPermissions`, and with `false` it also ignores members' permission levels and turns off **Always** at prompts
+- **Breaking:** `bypassPermissions` never asks: ask rules, running outside the sandbox, and edits to `.switchback/` all go ahead. Deny rules still stop a call
+- **Breaking:** `restrictions.allowUserPermissionRules` is now `allowUserPermissions`, and with `false` it also ignores members' permission levels and turns off **Always** at prompts
 - `/permissions` and `switchback doctor` group rules by where they came from
 
 ## [1.0.0] - 2026-10-07

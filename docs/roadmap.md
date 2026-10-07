@@ -79,6 +79,13 @@ Escalate less often and more precisely.
 - Escalate on demand (`/up`); tokens per second; notifications; scripts and CI with `switchback run`
 - Documentation at harville.ai/switchback/docs, published for each release
 
+## v1.1 Terminal UI and permissions (released)
+
+- A full-screen terminal UI: scrolling, tool calls that say what they did, diffs after edits, prompts as lists, themes
+- Default permission rules from `switchback init`; organizations set members' permissions at sign-in
+- `bypassPermissions` that never asks, and a note to the model when you decline
+- A command sandbox on Windows (alpha); everything in `~/.switchback`
+
 ## Next
 
 Tracked as issues labeled `future`:
