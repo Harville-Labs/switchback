@@ -1,14 +1,26 @@
 /**
  * OS sandboxing for the bash tool, through Anthropic's sandbox runtime
- * (Seatbelt on macOS, bubblewrap and seccomp on Linux): writes only where
- * work happens, no reads of credentials, and network as configured.
- * Windows isn't sandboxed (the runtime's Windows support is alpha and needs
- * an elevated install); `mode: "on"` refuses to run commands there.
+ * (Seatbelt on macOS, bubblewrap and seccomp on Linux, a separate sandbox
+ * account with ACLs and a network filter on Windows): writes only where work
+ * happens, no reads of credentials, and network as configured.
+ *
+ * Windows needs a one-time elevated install (`switchback sandbox install`),
+ * and grants writes once, when the sandbox starts: a command can only add
+ * denies. So its write grants cover the workspace and every subagent
+ * worktree from the start, and take config changes at the next restart.
  */
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SandboxManager, type SandboxRuntimeConfig } from '@anthropic-ai/sandbox-runtime';
+import {
+  checkWindowsDependenciesAsync,
+  installWindowsSandboxAsync,
+  resolveSrtWin,
+  SandboxManager,
+  type SandboxRuntimeConfig,
+  uninstallWindowsSandbox,
+  VENDORED_SRT_WIN_EXE,
+} from '@anthropic-ai/sandbox-runtime';
 import type { SourcedRule } from '../permissions/policy.ts';
 import { parseRule } from '../permissions/rules.ts';
 
@@ -113,6 +125,12 @@ function rulePath(spec: string, root: string, home: string): string {
   return anchored ? join(root, rel) : join(root, '**', rel);
 }
 
+/** No writes, no network: the base each command's own policy widens. */
+const STRICT: SandboxRuntimeConfig = {
+  filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
+  network: { allowedDomains: [], deniedDomains: [] },
+};
+
 export type SandboxState = { active: true } | { active: false; reason: string };
 
 /**
@@ -122,7 +140,11 @@ export type SandboxState = { active: true } | { active: false; reason: string };
 export class BashSandbox {
   private ready: Promise<SandboxState> | undefined;
 
-  constructor(private readonly dataDir: string) {}
+  constructor(
+    private readonly dataDir: string,
+    /** The policy for every command, which Windows needs up front. */
+    private readonly session?: () => SandboxRuntimeConfig,
+  ) {}
 
   /** Whether commands will run sandboxed, and if not, why. */
   state(mode: SandboxSettings['mode']): Promise<SandboxState> {
@@ -140,7 +162,9 @@ export class BashSandbox {
     policy: SandboxRuntimeConfig,
     commandId: string,
   ): Promise<{ argv: string[]; env: NodeJS.ProcessEnv }> {
-    return SandboxManager.wrapWithSandboxArgv(command, shell, policy, undefined, cwd, {
+    // Windows granted the writes when it started; a command may only add denies.
+    const own = process.platform === 'win32' ? withoutGrants(policy) : policy;
+    return SandboxManager.wrapWithSandboxArgv(command, shell, own, undefined, cwd, {
       commandId,
       commandText: command,
     });
@@ -156,9 +180,25 @@ export class BashSandbox {
     this.ready = undefined;
   }
 
+  private async startWindows(): Promise<SandboxState> {
+    const path = await srtWinPath(this.dataDir);
+    if (!path) return { active: false, reason: "this build doesn't include the Windows sandbox" };
+    const srtWin = resolveSrtWin({ path });
+    const deps = await checkWindowsDependenciesAsync({ srtWin });
+    if (deps.errors.length) return { active: false, reason: INSTALL_HINT };
+    try {
+      await SandboxManager.initialize({
+        ...(this.session?.() ?? STRICT),
+        windows: { srtWin: { path } },
+      });
+      return { active: true };
+    } catch (err) {
+      return { active: false, reason: (err as Error).message };
+    }
+  }
+
   private async start(): Promise<SandboxState> {
-    if (process.platform === 'win32')
-      return { active: false, reason: 'the bash sandbox is not available on Windows' };
+    if (process.platform === 'win32') return this.startWindows();
     if (!SandboxManager.isSupportedPlatform())
       return { active: false, reason: `the bash sandbox is not supported on ${process.platform}` };
     const deps = SandboxManager.checkDependencies();
@@ -167,8 +207,7 @@ export class BashSandbox {
     try {
       // The base policy is the strictest; each command passes its own.
       await SandboxManager.initialize({
-        filesystem: { denyRead: [], allowWrite: [], denyWrite: [] },
-        network: { allowedDomains: [], deniedDomains: [] },
+        ...STRICT,
         ...(applyPath ? { seccomp: { applyPath } } : {}),
       });
       return { active: true };
@@ -176,6 +215,74 @@ export class BashSandbox {
       return { active: false, reason: (err as Error).message };
     }
   }
+}
+
+/** The same policy without its grants, which Windows applies only at startup. */
+function withoutGrants(policy: SandboxRuntimeConfig): SandboxRuntimeConfig {
+  return { ...policy, filesystem: { ...policy.filesystem, allowWrite: [] } };
+}
+
+const INSTALL_HINT =
+  'the Windows sandbox is not set up; run `switchback sandbox install` (one administrator prompt)';
+
+/**
+ * Where the Windows helper runs from: copied into the data directory, which
+ * no sandboxed command can write, rather than spawned from the package (in a
+ * development checkout that sits inside the workspace's write grant).
+ */
+async function srtWinPath(dataDir: string): Promise<string | undefined> {
+  const path = join(dataDir, 'sandbox', 'srt-win.exe');
+  if (existsSync(path)) return path;
+  const embedded = Bun.embeddedFiles.find((f) => (f as File).name?.startsWith('srt-win-'));
+  const source = embedded ? undefined : VENDORED_SRT_WIN_EXE;
+  if (!embedded && !(source && existsSync(source))) return undefined;
+  mkdirSync(join(dataDir, 'sandbox'), { recursive: true });
+  if (embedded) writeFileSync(path, new Uint8Array(await embedded.arrayBuffer()));
+  else copyFileSync(source as string, path);
+  return path;
+}
+
+export interface WindowsSandboxResult {
+  ok: boolean;
+  message: string;
+}
+
+/** `switchback sandbox install`: the sandbox account and network filter (one UAC prompt). */
+export async function installSandbox(dataDir: string): Promise<WindowsSandboxResult> {
+  if (process.platform !== 'win32') return platformNote();
+  const path = await srtWinPath(dataDir);
+  if (!path) return { ok: false, message: "this build doesn't include the Windows sandbox helper" };
+  const result = await installWindowsSandboxAsync({ srtWin: resolveSrtWin({ path }) });
+  if (result.cancelled)
+    return { ok: false, message: 'the administrator prompt was dismissed; nothing changed' };
+  return { ok: true, message: 'the command sandbox is set up for every user on this machine' };
+}
+
+/** Whether commands can be sandboxed without an install step first. */
+export async function sandboxInstalled(dataDir: string): Promise<boolean> {
+  if (process.platform !== 'win32') return true;
+  const path = await srtWinPath(dataDir);
+  if (!path) return false;
+  const deps = await checkWindowsDependenciesAsync({ srtWin: resolveSrtWin({ path }) });
+  return deps.errors.length === 0;
+}
+
+/** `switchback sandbox uninstall`. */
+export async function uninstallSandbox(dataDir: string): Promise<WindowsSandboxResult> {
+  if (process.platform !== 'win32') return platformNote();
+  const path = await srtWinPath(dataDir);
+  if (!path) return { ok: false, message: "this build doesn't include the Windows sandbox helper" };
+  const result = uninstallWindowsSandbox({ srtWin: resolveSrtWin({ path }) });
+  if (result.cancelled)
+    return { ok: false, message: 'the administrator prompt was dismissed; nothing changed' };
+  return { ok: true, message: 'the command sandbox is removed' };
+}
+
+function platformNote(): WindowsSandboxResult {
+  return {
+    ok: true,
+    message: `${process.platform === 'darwin' ? 'macOS' : 'Linux'} needs no install step; \`switchback doctor\` says whether the sandbox is on`,
+  };
 }
 
 /**

@@ -9,6 +9,7 @@ import { webFetchTool, webSearchTool } from './web.ts';
 
 export { EXIT_PLAN_MODE } from './plan.ts';
 export { type BackgroundShell, CommandRunner, type CommandSettings } from './process.ts';
+export { installSandbox, sandboxInstalled, uninstallSandbox } from './sandbox.ts';
 export * from './tool.ts';
 export type { WebSettings } from './web.ts';
 

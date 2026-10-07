@@ -106,7 +106,7 @@ An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermi
 
 ## Sandbox
 
-Bash commands, foreground and background, run in an OS sandbox through Anthropic's [sandbox runtime](https://github.com/anthropics/sandbox-runtime): Seatbelt (`sandbox-exec`) on macOS, bubblewrap and seccomp on Linux. Inside it:
+Bash commands, foreground and background, run in an OS sandbox through Anthropic's [sandbox runtime](https://github.com/anthropics/sandbox-runtime): Seatbelt (`sandbox-exec`) on macOS, bubblewrap and seccomp on Linux, and on Windows a separate `srt-sandbox` account fenced by file ACLs and a Windows Filtering Platform network filter. Inside it:
 
 - **Writes** go only to the workspace (and a subagent's worktree), temp directories, package caches (`~/.npm`, `~/.bun/install/cache`, `~/.cache`, `~/.cargo/registry`, `~/go/pkg/mod`, `~/.gradle/caches`, `~/.m2/repository`, `~/Library/Caches`, ...), and `bash.sandbox.allowWrite`. Never to Switchback's own configuration (`.switchback/`) or to `.git/hooks` and `.git/config`, which would let a command run code outside the sandbox the next time you use git.
 - **Reads** are open except credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.azure`, `~/.kube`, `~/.config/gcloud`, `~/.docker/config.json`, `~/.netrc`; set `bash.sandbox.denyRead` to change the list), Switchback's config and data directories, and files your `read(...)` deny rules name. `edit(...)` deny rules become write denies. So `read(.env)` holds for `cat .env` too.
@@ -120,13 +120,15 @@ When the sandbox blocks something, the command's error says what was blocked, so
 |---|---|
 | macOS | `ripgrep` (`brew install ripgrep`) |
 | Linux | `bubblewrap`, `socat`, and `ripgrep` (`apt-get install bubblewrap socat ripgrep`). On Ubuntu 24.04 and later, unprivileged user namespaces must be allowed (`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, or an AppArmor profile) |
-| Windows | Not sandboxed. The runtime's Windows support is in alpha and needs an elevated install, so `auto` runs commands unsandboxed and `on` refuses to run them |
+| Windows (alpha) | A one-time setup with one administrator prompt: `switchback init` offers it, or run `switchback sandbox install` (`uninstall` removes it). Until then, `auto` runs commands unsandboxed and `on` refuses to run them |
 
 Known limits:
 
 - Commands that push over SSH can't read `~/.ssh` in the default policy; use an HTTPS remote, take `~/.ssh` out of `denyRead`, or approve the one command unsandboxed.
 - `git config` and anything else that writes `.git/config` fails inside the sandbox.
 - On Linux, write paths are literal (no globs) and read-deny globs cover only the files that exist when the command starts.
+- On Windows, write grants are set when the sandbox starts: the workspace and every subagent worktree. Changes to `bash.sandbox` or deny rules apply after a restart.
+- On Windows, commands run as the sandbox account: tools installed only in your own profile (nvm, per-user Scoop or winget, `pip install --user`) can't run unless their paths are readable; prefer machine-wide installs. Commands get a fresh environment, so `bash.env` doesn't reach them. Tools that check certificate revocation through schannel fail behind the network filter (`git -c http.schannelCheckRevoke=false`, `curl --ssl-no-revoke`).
 
 An organization can enforce `bash.sandbox.mode: "on"` and `bash.sandbox.allowUnsandboxed: false` in its policy ([organizations.md](organizations.md)).
 

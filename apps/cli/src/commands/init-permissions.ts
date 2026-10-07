@@ -7,9 +7,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import {
   detectPresets,
+  installSandbox,
   PERMISSION_PRESETS,
   parseJsonc,
   readCachedPolicy,
+  sandboxInstalled,
   setupPermissions,
   switchbackPaths,
   writeConfigLayer,
@@ -47,6 +49,23 @@ export async function setupUserPermissions(flags: InitFlags, p: Prompter | undef
     `${green('✓')} Permissions in ${file}: ${added} command rules run without asking${asks ? `, ${asks} ask first (commits, pushes, publishes)` : ''}. Edit them there; /permissions lists them.`,
   );
   console.log();
+}
+
+/** Windows sandboxes commands only after a one-time elevated install. */
+export async function offerWindowsSandbox(p: Prompter | undefined) {
+  if (process.platform !== 'win32' || !p) return;
+  if (await sandboxInstalled(switchbackPaths().dataDir)) return;
+  const install = await p.confirm(
+    `Set up the command sandbox? ${dim('Commands then run as a separate account that can only write the workspace. Windows asks for administrator approval once.')}`,
+  );
+  if (!install) {
+    console.log(
+      dim('  Commands run unsandboxed. `switchback sandbox install` sets it up later.\n'),
+    );
+    return;
+  }
+  const result = await installSandbox(switchbackPaths().dataDir);
+  console.log(result.ok ? `${green('✓')} ${result.message}\n` : `  ${result.message}\n`);
 }
 
 function existingRules(file: string): Rules {

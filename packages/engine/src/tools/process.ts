@@ -3,7 +3,7 @@
  * OS sandbox wraps it), and the background shells a session keeps running
  * across turns (dev servers, watchers).
  */
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import type { ShellInfo } from '@switchback/protocol';
 import type { Subprocess } from 'bun';
 import {
@@ -126,7 +126,17 @@ export function createCommandRunner(o: {
     o.sandbox === false
       ? undefined
       : {
-          runtime: o.sandbox ?? new BashSandbox(o.dataDir),
+          runtime:
+            o.sandbox ??
+            new BashSandbox(o.dataDir, () =>
+              // Every subagent worktree, since Windows grants writes only at startup.
+              sandboxPolicy(o.settings().sandbox, {
+                workspaceRoot: o.workspaceRoot,
+                sessionRoot: join(o.dataDir, 'worktrees'),
+                switchbackDirs: o.switchbackDirs,
+                rules: o.rules(),
+              }),
+            ),
           context: (cwd) => ({
             workspaceRoot: o.workspaceRoot,
             sessionRoot: cwd,
