@@ -13,6 +13,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - `privacy.localOnlyPaths` takes folders anywhere on the machine (`~/customers/`)
 - Protocol (additive): `permission.requested` carries `reason`
 - **Agent Client Protocol**: `switchback acp` runs Switchback as an agent for Zed, JetBrains IDEs, and other editors that speak ACP. Sessions are shared live with the TUI and VS Code through the workspace's engine, and routing decisions, permission prompts, escalations, modes, and the checklist all come through. See docs/clients/acp.md
+- **OpenCode Go and Zen**: a provider for OpenCode's subscription (Go) and pay-as-you-go (Zen) gateways, with one `OPENCODE_API_KEY`. Each model goes to the API OpenCode serves it on (Chat Completions, Anthropic Messages, or Responses). `switchback init` offers it, with models from OpenCode's live list. See docs/providers.md#opencode-go-and-zen
 
 ### Changed
 - Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule

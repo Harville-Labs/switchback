@@ -42,6 +42,7 @@ export const REMOTE_KINDS = [
   'foundry',
   'azure-openai',
   'openrouter',
+  'opencode',
   'openai-compatible',
 ] as const;
 export type RemoteKind = (typeof REMOTE_KINDS)[number];
@@ -49,6 +50,9 @@ export type RemoteKind = (typeof REMOTE_KINDS)[number];
 /** Kinds that run a coding agent CLI the user is signed in to; a subscription covers them. */
 export const AGENT_CLI_KINDS = ['claude-code', 'codex'] as const;
 const isAgentCliKind = (kind: RemoteKind) => (AGENT_CLI_KINDS as readonly string[]).includes(kind);
+/** Models a flat subscription covers: no per-token price. */
+const isSubscription = (r: RemoteAnswer) =>
+  isAgentCliKind(r.kind) || (r.kind === 'opencode' && r.plan === 'go');
 
 /** Which catalog a remote kind draws its models from. */
 export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
@@ -57,7 +61,8 @@ export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
   if (kind === 'bedrock' || kind === 'vertex' || kind === 'anthropic-aws' || kind === 'foundry')
     return 'anthropic';
   if (kind === 'azure-openai') return 'openai';
-  if (kind === 'openai-compatible' || kind === 'openrouter') return undefined;
+  if (kind === 'openai-compatible' || kind === 'openrouter' || kind === 'opencode')
+    return undefined;
   return kind;
 }
 
@@ -99,7 +104,9 @@ export type RemoteAnswer =
       contextWindow?: number;
       maxOutputTokens?: number;
       price?: Price;
-    };
+    }
+  /** OpenCode Go (subscription) or Zen (pay as you go); models come from its live list. */
+  | { kind: 'opencode'; plan: 'go' | 'zen'; model: string; contextWindow?: number };
 
 /**
  * Which models do what (ADR 0015), by alias. `review`: `off`, `ladder` (the
@@ -170,6 +177,7 @@ export const REMOTE_PROVIDERS: Record<RemoteKind, { name: string; detail?: strin
   foundry: { name: 'Microsoft Foundry', detail: 'Claude' },
   'azure-openai': { name: 'Azure OpenAI', detail: 'GPT' },
   openrouter: { name: 'OpenRouter', detail: 'hundreds of models, one key' },
+  opencode: { name: 'OpenCode', detail: 'Go subscription or Zen' },
   'openai-compatible': {
     name: 'OpenAI-compatible API',
     detail: 'Together, Groq, Fireworks, a gateway, ...',
@@ -197,9 +205,9 @@ export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): Planned
     const catalog = catalogFor(r.kind);
     const entry = catalog ? CATALOG[catalog].models.find((m) => m.id === r.model) : undefined;
     const compat = r.kind === 'openai-compatible' || r.kind === 'openrouter';
-    const contextWindow = compat ? r.contextWindow : entry?.contextWindow;
-    // A subscription covers CLI models, so they cost nothing per token here.
-    const inputPrice = isAgentCliKind(r.kind) ? 0 : compat ? r.price?.input : entry?.price.input;
+    const contextWindow = compat || r.kind === 'opencode' ? r.contextWindow : entry?.contextWindow;
+    // A subscription covers these models, so they cost nothing per token here.
+    const inputPrice = isSubscription(r) ? 0 : compat ? r.price?.input : entry?.price.input;
     plan.push({
       alias,
       tier: 'remote',
@@ -275,6 +283,23 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   let sizeAliasesFrom: HostedProviderKind | undefined;
   for (const [i, r] of a.remotes.entries()) {
     const alias = plan[a.locals.length + i]?.alias ?? aliasFor(r.model);
+    if (r.kind === 'opencode') {
+      const key = `opencode:${r.plan}`;
+      let id = hostedIds.get(key);
+      if (!id) {
+        id = unique(r.plan === 'go' ? 'opencode-go' : 'opencode-zen', providers);
+        hostedIds.set(key, id);
+        providers[id] = { type: 'opencode', plan: r.plan };
+      }
+      models[alias] = {
+        provider: id,
+        model: r.model,
+        ...(r.contextWindow ? { contextWindow: r.contextWindow } : {}),
+        // A Go subscription has no per-token price; Zen's prices aren't in its model list.
+        ...(isSubscription(r) ? { price: { input: 0, output: 0 } } : {}),
+      };
+      continue;
+    }
     if (r.kind === 'openai-compatible' || r.kind === 'openrouter') {
       let id = hostedIds.get(`compat:${r.baseUrl}`);
       if (!id) {
