@@ -125,7 +125,9 @@ describe('an AGENTS.md change reaches running sessions', () => {
     const a = one.e.createSession({}).id;
     const b = two.e.createSession({}).id;
     writeFileSync(join(root, 'AGENTS.md'), 'Use spaces.\n');
-    for (let i = 0; i < 50 && !notes.length; i++) await Bun.sleep(20);
+    // macOS delivers file events with up to a second or two of latency; Linux and Windows are faster.
+    for (const deadline = Date.now() + 5_000; !notes.length && Date.now() < deadline; )
+      await Bun.sleep(20);
     expect(notes).toEqual([
       "The project's AGENTS.md changed; sessions get it with their next message",
     ]);
@@ -135,7 +137,7 @@ describe('an AGENTS.md change reaches running sessions', () => {
     expect(reminders(two.lp.requests[0]?.messages.at(-1))).toHaveLength(1);
     await one.e.shutdown();
     await two.e.shutdown();
-  });
+  }, 10_000);
 });
 
 test('compaction carries the latest instructions past its summary', () => {
