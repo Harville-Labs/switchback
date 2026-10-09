@@ -1,6 +1,7 @@
 import { bashOutputTool, bashTool, killShellTool } from './bash.ts';
 import { docsTool } from './docs.ts';
 import { editTool, globTool, grepTool, readTool, writeTool } from './fs.ts';
+import { mergeWorktreeTool } from './merge.ts';
 import { exitPlanModeTool } from './plan.ts';
 import { skillTool } from './skill.ts';
 import { taskTool } from './task.ts';
@@ -31,12 +32,15 @@ export const ALL_TOOLS: Tool[] = [
   todoTool,
   skillTool,
   docsTool,
+  mergeWorktreeTool,
 ];
 
 /** Tools that come with another: an agent that may run bash may also read and stop what it started. */
 const COMPANIONS: Record<string, string> = {
   [bashOutputTool.name]: bashTool.name,
   [killShellTool.name]: bashTool.name,
+  // Only an agent that can start isolated subagents has their branches to merge.
+  [mergeWorktreeTool.name]: taskTool.name,
 };
 
 /**

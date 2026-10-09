@@ -10,6 +10,7 @@ import type {
   SessionRoles,
   ShellInfo,
   Tier,
+  WorktreeOutcome,
 } from '@switchback/protocol';
 
 export type ViewItem =
@@ -52,6 +53,8 @@ export type ViewItem =
       toolCalls: number;
       /** The parent didn't wait; the report arrives later as a message. */
       background?: boolean;
+      /** Its git worktree: the branch while it runs, and what it left once it's done. */
+      worktree?: { branch: string } & Partial<WorktreeOutcome>;
     }
   | {
       kind: 'review';

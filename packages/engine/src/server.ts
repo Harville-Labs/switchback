@@ -35,6 +35,7 @@ import {
   ShellsListParams,
   type Transport,
   UsageGetParams,
+  WorktreesDiffParams,
 } from '@switchback/protocol';
 import type { z } from 'zod';
 import type { Engine } from './engine.ts';
@@ -141,6 +142,10 @@ export function serve(
         return engine.shells(parse(ShellsListParams, req.params).sessionId);
       case 'shells.kill':
         return engine.killShell(parse(ShellsKillParams, req.params).shellId);
+      case 'worktrees.list':
+        return engine.listWorktrees();
+      case 'worktrees.diff':
+        return engine.worktreeDiff(parse(WorktreesDiffParams, req.params).branch);
       case 'permissions.list':
         return engine.permissions(parse(PermissionsListParams, req.params).sessionId);
       case 'escalation.respond': {
