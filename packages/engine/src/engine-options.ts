@@ -3,6 +3,7 @@ import type { Price, Provider } from '@switchback/providers';
 import type { AgentDefinition } from './agents.ts';
 import type { CheckpointStore } from './checkpoints.ts';
 import type { SwitchbackConfig } from './config.ts';
+import type { InstructionsSource } from './instructions-live.ts';
 import type { LibraryDirs } from './library.ts';
 import type { OrgStatus } from './org/policy.ts';
 import type { SourcedRule } from './permissions/policy.ts';
@@ -32,6 +33,13 @@ export interface EngineOptions {
   library?: LibraryDirs;
   /** Project instructions (the workspace's AGENTS.md). */
   instructions?: string;
+  /** The user's instructions for every project (`~/.switchback/AGENTS.md`). */
+  userInstructions?: string;
+  /**
+   * Both AGENTS.md files, watched for changes (ADR 0017); replaces
+   * `instructions` and `userInstructions`, which never change.
+   */
+  instructionsSource?: InstructionsSource;
   /**
    * How to resolve `ask` permissions and escalations when no client answers.
    * `prompt` emits events and waits (interactive clients); `approve` / `deny`

@@ -42,6 +42,7 @@ import { type AgentSpec, draftWithSummarizer } from './authoring.ts';
 import { referenceModel, type SwitchbackConfig } from './config.ts';
 import type { EngineOptions } from './engine-options.ts';
 import { assembleEngine, type EngineParts } from './engine-parts.ts';
+import { changeNote } from './instructions-live.ts';
 import type { LedgerEntry } from './ledger.ts';
 import { type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { McpHub, mcpList, promptCommands } from './mcp/hub.ts';
@@ -68,6 +69,9 @@ export class Engine {
       notify: (level, message) => this.notify(level, message),
       mcp: () => this.mcp,
     });
+    this.p.instructions.watch?.((scopes) =>
+      this.emit({ type: 'config.updated', notes: scopes.map(changeNote) }),
+    );
   }
 
   private startMcp(config: SwitchbackConfig): McpHub | undefined {
@@ -323,6 +327,7 @@ export class Engine {
   }
 
   async shutdown(): Promise<void> {
+    this.p.instructions.close();
     await this.p.commands.close();
     for (const s of this.p.sessions.inMemory()) {
       s.controller?.abort();

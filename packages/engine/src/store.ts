@@ -28,6 +28,8 @@ export interface SessionHeader {
   createdAt: string;
   /** Frozen at creation so the cached prompt prefix never changes mid-session. */
   system: string;
+  /** Hashes of the AGENTS.md files in `system`, to tell when they change (ADR 0017). */
+  instructions?: { user?: string; project?: string };
 }
 
 export interface StoredSession {

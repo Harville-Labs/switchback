@@ -1,11 +1,11 @@
 /** An engine for a workspace on disk: its agents, commands, skills, instructions, and stores. */
-import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadAgents } from './agents.ts';
 import { FileCheckpointStore } from './checkpoints.ts';
 import type { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import type { EngineOptions } from './engine-options.ts';
+import { WatchedInstructions } from './instructions-live.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { FileSessionStore } from './store.ts';
 
@@ -31,16 +31,17 @@ export function engineFromWorkspace(
       { dir: pp.skillsDir, source: 'project' },
     ],
   };
-  const instructions = existsSync(pp.instructionsFile)
-    ? readFileSync(pp.instructionsFile, 'utf8')
-    : undefined;
+  const instructionsSource = new WatchedInstructions({
+    user: hp.instructionsFile,
+    project: pp.instructionsFile,
+  });
   const engine = new Engine({
     workspaceRoot,
     config,
     agents,
     agentDirs,
     library,
-    ...(instructions ? { instructions } : {}),
+    instructionsSource,
     ledgerFile: hp.usageFile,
     store: new FileSessionStore(hp.sessionsDir),
     checkpoints: new FileCheckpointStore(join(hp.dataDir, 'checkpoints')),

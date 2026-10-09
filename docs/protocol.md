@@ -84,7 +84,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
-| `config.updated` | Configuration changed while running (e.g. an organization policy update); carries `org` and human-readable `notes` |
+| `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit); carries `org` and human-readable `notes` |
 | `log` | Engine diagnostics |
 
 Clients should fold events with `reduce()` from `@switchback/client/view` rather than writing their own interpretation.

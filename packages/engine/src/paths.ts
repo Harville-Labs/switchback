@@ -19,6 +19,8 @@ export function switchbackPaths(env: Record<string, string | undefined> = proces
     agentsDir: join(config, 'agents'),
     commandsDir: join(config, 'commands'),
     skillsDir: join(config, 'skills'),
+    /** Your instructions for every project, in the same AGENTS.md format as a project's. */
+    instructionsFile: join(config, 'AGENTS.md'),
     dataDir: data,
     sessionsDir: join(data, 'sessions'),
     usageFile: join(data, 'usage.jsonl'),

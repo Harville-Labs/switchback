@@ -27,6 +27,11 @@ export interface TextPart {
   review?: { round: number; model: ModelRef };
   /** Context the engine added for the model (e.g. that plan mode is on); clients don't show it. */
   reminder?: true;
+  /**
+   * Set on a reminder that delivers a changed AGENTS.md (ADR 0017): which
+   * file, and its content hash (absent when the file was removed).
+   */
+  instructions?: { scope: 'user' | 'project'; hash?: string };
 }
 
 /** Image formats every vision-capable provider accepts. */

@@ -4,6 +4,7 @@ export * from './config.ts';
 export * from './engine.ts';
 export * from './estimate.ts';
 export { hookTrustKey, type SourcedHook } from './hooks/layers.ts';
+export * from './instructions.ts';
 export * from './ledger.ts';
 export * from './mcp/config.ts';
 export * from './mcp/hub.ts';

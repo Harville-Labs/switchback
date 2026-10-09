@@ -44,7 +44,7 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `isolation` | `worktree` | Always run this agent in its own git worktree (see below) |
 | `budgetUsd` | dollars | Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
 
-The body is the system prompt. Switchback appends an environment section and the project's `AGENTS.md` to it.
+The body is the system prompt. Switchback appends an environment section, your `~/.switchback/AGENTS.md`, and the project's `AGENTS.md` to it ([AGENTS.md](commands-and-skills.md#agentsmd)).
 
 ### Creating one
 

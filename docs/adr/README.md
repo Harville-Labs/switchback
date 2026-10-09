@@ -20,3 +20,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0014](0014-open-core-licensing.md) | Apache-2.0 for Switchback, proprietary hosted sites | Accepted |
 | [0015](0015-role-based-routing.md) | Roles (start, escalate, review, subagents) filled by any model; local/remote is a model property | Accepted |
 | [0016](0016-open-conventions.md) | Open conventions (AGENTS.md, `.switchback/`), never another agent's files | Accepted |
+| [0017](0017-live-instructions.md) | AGENTS.md changes reach running sessions as appended reminders | Accepted |
