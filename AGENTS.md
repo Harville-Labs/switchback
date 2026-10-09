@@ -34,7 +34,7 @@ Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so yo
 | `packages/router` | Pure routing decisions and escalation signals | Do I/O. It takes snapshots and returns decisions. |
 | `packages/engine` | Sessions, the agent loop, tools, permissions, subagents, config, ledger, organization policy (`src/org`), JSON-RPC server | Render anything |
 | `packages/client` | Typed protocol client, child-process transport, shared view-model reducer | Import engine code |
-| `apps/cli` | `switchback` binary: TUI (Ink), `run`, `serve --stdio`, `doctor`, `usage` | Contain agent behavior |
+| `apps/cli` | `switchback` binary: TUI (Ink), `run`, `serve --stdio`, `acp` (Agent Client Protocol), `doctor`, `usage` | Contain agent behavior |
 | `apps/vscode` | VS Code extension (host + webview) | Contain agent behavior |
 | `apps/site` | Hosted console for company sites (proprietary; see `apps/site/LICENSE`). Its own rules are in [apps/site/AGENTS.md](apps/site/AGENTS.md) | Be imported by any Apache-2.0 package |
 

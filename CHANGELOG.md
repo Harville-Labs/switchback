@@ -12,6 +12,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Config edits are checked**: an edit or write that would leave a Switchback config file unparseable or invalid fails with the reason before you're asked. Your user config can now be edited this way, always with a prompt and a diff
 - `privacy.localOnlyPaths` takes folders anywhere on the machine (`~/customers/`)
 - Protocol (additive): `permission.requested` carries `reason`
+- **Agent Client Protocol**: `switchback acp` runs Switchback as an agent for Zed, JetBrains IDEs, and other editors that speak ACP. Sessions are shared live with the TUI and VS Code through the workspace's engine, and routing decisions, permission prompts, escalations, modes, and the checklist all come through. See docs/clients/acp.md
 
 ### Changed
 - Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule

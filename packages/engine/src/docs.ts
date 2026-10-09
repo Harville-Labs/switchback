@@ -7,6 +7,7 @@
  * the compiled binary to embed them, so a test checks they match the index.
  */
 
+import acp from '../../../docs/clients/acp.md' with { type: 'text' };
 import headless from '../../../docs/clients/headless.md' with { type: 'text' };
 import tui from '../../../docs/clients/tui.md' with { type: 'text' };
 import vscode from '../../../docs/clients/vscode.md' with { type: 'text' };
@@ -43,6 +44,7 @@ export const EMBEDDED_DOCS: Record<string, string> = {
   'clients/tui': tui,
   'clients/vscode': vscode,
   'clients/headless': headless,
+  'clients/acp': acp,
 };
 
 export interface DocsTopic {

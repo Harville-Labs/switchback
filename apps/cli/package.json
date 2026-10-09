@@ -11,6 +11,7 @@
     "build": "bun scripts/build.ts --outfile dist/switchback"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.7.0",
     "@inquirer/prompts": "^8.7.3",
     "@switchback/client": "workspace:*",
     "@switchback/engine": "workspace:*",
