@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-09
+
 ### Added
 - **`docs` tool**: the model reads Switchback's own documentation, built into the binary, so you can ask it how Switchback works or to change a setting. Every session has it; it needs no permission. See docs/tools.md#asking-about-switchback
 - **Your own `AGENTS.md`**: `~/.switchback/AGENTS.md` holds instructions for every project. Sessions get it before the project's `AGENTS.md`. `switchback doctor` shows each file's size in tokens and warns when they crowd a small local model. See docs/commands-and-skills.md#agentsmd
