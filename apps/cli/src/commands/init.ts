@@ -1,8 +1,8 @@
 /**
- * `switchback init`: guided configuration. Detects local model servers, asks
- * which models to use (local, hosted, or both), then which model does what
- * (ADR 0015), and writes a config file. Every question has a flag so setup can
- * also run unattended (`--yes`).
+ * `switchback init`: guided configuration. Local endpoints first, each with
+ * the models to use from it, then hosted providers one at a time; then which
+ * model does what (ADR 0015), and a config file. Every question has a flag so
+ * setup can also run unattended (`--yes`).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import {
@@ -49,27 +49,15 @@ export async function init(flags: InitFlags): Promise<number> {
 async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   if (p) {
     console.log(
-      `${bold('Switchback setup')}\n${dim('Pick the models you want, local, hosted, or both; then choose which one starts, which ones it escalates to, and who reviews.')}\n`,
+      `${bold('Switchback setup')}\n${dim('Add your local endpoints and hosted providers, then choose which model starts, which ones it escalates to, and who reviews.')}\n`,
     );
   }
 
-  const scope =
-    flags.scope ??
-    (p
-      ? await p.select('Where should this configuration live?', [
-          {
-            label: 'User config',
-            value: 'user' as const,
-            hint: 'this machine, all projects (recommended for model servers)',
-          },
-          {
-            label: 'Project config',
-            value: 'project' as const,
-            hint: '.switchback/config.json in this workspace',
-          },
-        ])
-      : 'user');
-  const file = scope === 'user' ? switchbackPaths().configFile : projectPaths(flags.cwd).configFile;
+  // Model servers belong to this machine, so the user config by default; `--scope project` for a team's.
+  const file =
+    (flags.scope ?? 'user') === 'user'
+      ? switchbackPaths().configFile
+      : projectPaths(flags.cwd).configFile;
   if (
     existsSync(file) &&
     p &&
@@ -80,9 +68,14 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   }
 
   const locals = await chooseLocals(flags, p);
-  const remotes = await chooseRemotes(flags, p);
-  if (!locals.length && !remotes.length)
-    throw new SetupError('pick at least one model, local or hosted');
+  const remotes = await chooseRemotes(flags, p, locals.length === 0);
+  if (!locals.length && !remotes.length) {
+    if (!p) throw new SetupError('pick at least one model, local or hosted');
+    console.log(
+      `\nNo models chosen, so nothing was written. Run ${bold('switchback init')} any time to add them.\n`,
+    );
+    return 0;
+  }
 
   const plan = planModels({ locals, remotes });
   const roles = await chooseRoles(flags, p, plan);
@@ -182,19 +175,9 @@ function telemetryChosen(): boolean {
   }
 }
 
-/** First-run prompt before the TUI opens. */
+/** First run, before the TUI opens: straight into setup, which can be answered "no" throughout. */
 export async function offerSetup(cwd: string): Promise<number> {
-  const p = new Prompter();
-  const yes = await p.confirm(
-    `${bold('No Switchback configuration found.')} Set up your models now?`,
-  );
-  p.close();
-  if (!yes) {
-    console.log(
-      dim('Continuing without configured models. Run `switchback init` any time to choose them.\n'),
-    );
-    return 0;
-  }
+  console.log(`${bold('No Switchback configuration found.')} Let's add your models.\n`);
   return init({
     cwd,
     yes: false,

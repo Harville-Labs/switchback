@@ -3,21 +3,20 @@ import { type DetectedServer, detectLocalServers, type LocalAnswer } from '@swit
 import { bold, dim, type Prompter, yellow } from '../prompt.ts';
 import { type InitFlags, SetupError } from './init-flags.ts';
 
-type Pick = { server: DetectedServer; model: DetectedServer['models'][number] } | 'manual' | 'done';
+type Detect = typeof detectLocalServers;
 
-const ADD_LOCAL =
-  'Add another local model? (A bigger one to escalate to, a backup, or a reviewer: you choose roles next.)';
-
+/**
+ * Local models: endpoints one at a time, each with the models to use from it.
+ * Servers already running here are found first and offered as the answers.
+ */
 export async function chooseLocals(
   flags: InitFlags,
   p: Prompter | undefined,
+  detect: Detect = detectLocalServers,
 ): Promise<LocalAnswer[]> {
   if (flags.noLocal) return [];
-  if (p)
-    console.log(
-      `\n${bold('Local models')}\n${dim('Looking for model servers on this machine...')}`,
-    );
-  const servers = await detectLocalServers({ extra: flags.localUrls });
+  if (p) console.log(dim('Looking for model servers on this machine...'));
+  const servers = await detect({ extra: flags.localUrls });
 
   // Unattended: models must be named; each server is found or given.
   if (!p) {
@@ -49,87 +48,88 @@ export async function chooseLocals(
     });
   }
 
-  const options: { label: string; value: Pick; hint?: string }[] = [];
-  for (const server of servers) {
-    for (const model of server.models) {
-      const hints = [
-        model.contextWindow ? `ctx ${model.contextWindow.toLocaleString('en-US')}` : undefined,
-        model.tools === true ? 'tools ✓' : model.tools === false ? 'no tool calling' : undefined,
-      ].filter(Boolean);
-      options.push({
-        label: `${server.label} · ${model.id}`,
-        value: { server, model },
-        hint: hints.join(' · '),
-      });
-    }
-  }
-  if (servers.length === 0) {
-    console.log(
-      yellow('No local model server found.') +
-        dim(
-          ' Install one (Ollama: https://ollama.com, LM Studio, llama.cpp) and pull a model with tool-calling support, or enter a server URL.',
-        ),
-    );
-  } else if (options.length === 0) {
-    console.log(
-      yellow(
-        `Found ${servers.map((s) => s.label).join(', ')} but no models. Pull a model first (e.g. \`ollama pull <model>\`).`,
-      ),
-    );
-  }
+  const found = servers.filter((s) => s.models.length);
+  const hasAny = await p.confirm(
+    `\n${bold('Do you have any local model endpoints?')}${
+      found.length
+        ? dim(` Found ${found.map((s) => `${s.label} (${s.baseUrl})`).join(', ')}.`)
+        : dim(' Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible server.')
+    }`,
+    found.length > 0,
+  );
+  if (!hasAny) return [];
 
   const chosen: LocalAnswer[] = [];
+  const used = new Set<string>();
   for (;;) {
-    const remaining = options.filter(
-      (o) =>
-        typeof o.value !== 'object' ||
-        !chosen.some((c) => {
-          const v = o.value as Exclude<Pick, string>;
-          return c.baseUrl === v.server.baseUrl && c.model === v.model.id;
-        }),
+    const next = found.find((s) => !used.has(s.baseUrl));
+    const baseUrl = normalizeUrl(
+      await p.text(
+        'Endpoint URL',
+        next?.baseUrl ?? flags.localUrls[0] ?? 'http://localhost:11434/v1',
+      ),
     );
-    // Prefer a model that reports tool support.
-    const preferred = Math.max(
-      0,
-      remaining.findIndex((o) => typeof o.value === 'object' && o.value.model.tools === true),
-    );
-    const choices = [
-      ...remaining,
-      { label: 'Enter a server URL and model manually', value: 'manual' as const },
-      {
-        label: chosen.length ? 'Done' : 'Skip: no local models (hosted only)',
-        value: 'done' as const,
-      },
-    ];
-    const pick = await p.select(
-      chosen.length ? '\nWhich other local model?' : `\n${bold('Local models')}: which one first?`,
-      choices,
-      remaining.length ? preferred : choices.length - 2,
-    );
-    if (pick === 'done') break;
-    chosen.push(pick === 'manual' ? await manualLocal(flags, p) : await detectedLocal(pick, p));
-    if (!(await p.confirm(`\n${ADD_LOCAL}`, false))) break;
+    used.add(baseUrl);
+    const server =
+      servers.find((s) => s.baseUrl === baseUrl) ??
+      (await detect({ extra: [baseUrl] })).find((s) => s.baseUrl === baseUrl);
+    if (server?.models.length) chosen.push(...(await pickModels(server, p)));
+    else chosen.push(await manualLocal(baseUrl, p));
+    if (!(await p.confirm('Any more local endpoints?', false))) break;
   }
-
   return chosen;
 }
 
-async function manualLocal(flags: InitFlags, p: Prompter): Promise<LocalAnswer> {
-  const baseUrl = normalizeUrl(
-    await p.text('Server base URL', flags.localUrls[0] ?? 'http://localhost:11434/v1'),
+/** The models to use from a server that lists them: a checklist, tool-capable ones first. */
+async function pickModels(server: DetectedServer, p: Prompter): Promise<LocalAnswer[]> {
+  if (server.note) console.log(dim(`  ${server.note}`));
+  const models = [...server.models].sort(
+    (a, b) => Number(b.tools === true) - Number(a.tools === true),
   );
-  const [probe] = await detectLocalServers({ extra: [baseUrl] }).then((s) =>
-    s.filter((x) => x.baseUrl === baseUrl),
+  const picked = await p.multiSelect(
+    `Which models from ${server.label}? ${dim('space to select, enter when done')}`,
+    models.map((model) => ({
+      label: model.id,
+      value: model,
+      hint: [
+        model.contextWindow ? `ctx ${model.contextWindow.toLocaleString('en-US')}` : undefined,
+        model.tools === true ? 'tools ✓' : model.tools === false ? 'no tool calling' : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    })),
   );
-  if (!probe?.models.length)
-    console.log(yellow('  Could not list models at that URL; continuing anyway.'));
-  const model = probe?.models.length
-    ? await p.search(
-        'Model name',
-        probe.models.map((m) => ({ label: m.id, value: m.id })),
-        { freeText: true },
-      )
-    : await p.text('Model name');
+  if (!picked.length) console.log(yellow(`  No models picked from ${server.label}.`));
+  const out: LocalAnswer[] = [];
+  for (const model of picked) {
+    if (model.tools === false)
+      console.log(
+        yellow(
+          `  ${model.id} doesn't report tool-calling support. Switchback will escalate often with it.`,
+        ),
+      );
+    // Asked only when the server can't say; the engine asks it again at runtime otherwise.
+    const contextWindow =
+      model.contextWindow ??
+      (await p.number(
+        `Context window (tokens) for ${model.id} ${dim(model.maxContext ? `model max ${model.maxContext.toLocaleString('en-US')}` : 'the server loads')}`,
+        32_768,
+      )) ??
+      32_768;
+    out.push({
+      providerId: server.kind === 'openai-compatible' ? 'local-server' : server.kind,
+      baseUrl: server.baseUrl,
+      model: model.id,
+      contextWindow,
+    });
+  }
+  return out;
+}
+
+/** An endpoint that didn't list its models (down, or it needs a key): one model, by hand. */
+async function manualLocal(baseUrl: string, p: Prompter): Promise<LocalAnswer> {
+  console.log(yellow(`  Couldn't list models at ${baseUrl}; enter one by hand.`));
+  const model = await p.text('Model name');
   if (!model) throw new SetupError('a model name is required');
   const contextWindow =
     (await p.number('Context window (tokens) the server loads', 32_768)) ?? 32_768;
@@ -140,32 +140,6 @@ async function manualLocal(flags: InitFlags, p: Prompter): Promise<LocalAnswer> 
     model,
     contextWindow,
     ...(apiKeyEnv ? { apiKeyEnv } : {}),
-  };
-}
-
-async function detectedLocal(
-  { server, model }: Exclude<Pick, string>,
-  p: Prompter,
-): Promise<LocalAnswer> {
-  if (model.tools === false) {
-    console.log(
-      yellow(
-        `  ${model.id} doesn't report tool-calling support. Switchback will escalate often with it.`,
-      ),
-    );
-  }
-  if (server.note) console.log(dim(`  ${server.note}`));
-  const suggested = model.contextWindow ?? 32_768;
-  const contextWindow =
-    (await p.number(
-      `Context window (tokens) ${dim(model.maxContext ? `model max ${model.maxContext.toLocaleString('en-US')}` : 'the server loads')}`,
-      suggested,
-    )) ?? suggested;
-  return {
-    providerId: server.kind === 'openai-compatible' ? 'local-server' : server.kind,
-    baseUrl: server.baseUrl,
-    model: model.id,
-    contextWindow,
   };
 }
 

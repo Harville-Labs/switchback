@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import { Prompter } from './prompt.ts';
 
 const DOWN = '\x1b[B';
+const UP = '\x1b[A';
 const ENTER = '\r';
 const SPACE = ' ';
 
@@ -35,6 +36,17 @@ describe('prompts', () => {
     await t.type(DOWN, ENTER);
     expect(await answer).toBe('project');
     expect(t.screen()).toContain('.switchback/config.json');
+  });
+
+  test('select stops at the ends of the list instead of wrapping around', async () => {
+    const t = terminal();
+    const answer = t.p.select('Where?', options);
+    await t.type(UP, ENTER);
+    expect(await answer).toBe('user');
+    const u = terminal();
+    const last = u.p.select('Where?', options);
+    await u.type(DOWN, DOWN, DOWN, ENTER);
+    expect(await last).toBe('project');
   });
 
   test('select starts on the default', async () => {

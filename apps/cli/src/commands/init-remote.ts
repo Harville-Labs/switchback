@@ -64,9 +64,15 @@ export function credentialHint(kind: RemoteKind): string {
   }
 }
 
+/**
+ * Hosted models: a provider at a time, each with its own setup. `suggest`
+ * is the default answer to whether to set any up (yes when there are no
+ * local models).
+ */
 export async function chooseRemotes(
   flags: InitFlags,
   p: Prompter | undefined,
+  suggest = true,
 ): Promise<RemoteAnswer[]> {
   if (!p) {
     if (!flags.remotes.length)
@@ -77,24 +83,15 @@ export async function chooseRemotes(
       out.push(await chooseRemote(kind, flags.remoteModels[i], flags, undefined));
     return out;
   }
+  if (!(await p.confirm(`\n${bold('Set up any remote providers?')}`, suggest))) return [];
   const chosen: RemoteAnswer[] = [];
   for (;;) {
-    const kind: RemoteKind | 'none' = await p.select(
-      chosen.length
-        ? '\nWhich provider for the next hosted model?'
-        : `\n${bold('Hosted models')}\nWhich provider?`,
-      [
-        ...REMOTE_KINDS.map((k) => ({
-          label: remoteLabel(k),
-          value: k,
-          hint: credentialHint(k),
-        })),
-        { label: chosen.length ? 'Done' : 'None: local models only', value: 'none' as const },
-      ],
+    const kind: RemoteKind = await p.select(
+      'Which provider?',
+      REMOTE_KINDS.map((k) => ({ label: remoteLabel(k), value: k, hint: credentialHint(k) })),
     );
-    if (kind === 'none') break;
     chosen.push(await chooseRemote(kind, undefined, flags, p));
-    if (!(await p.confirm('\nAdd another hosted model? (Same provider or another.)', false))) break;
+    if (!(await p.confirm('\nAny additional remote providers?', false))) break;
   }
   return chosen;
 }

@@ -31,7 +31,12 @@ switchback config edit       # open the user config in $EDITOR (--scope project 
 switchback config schema     # JSON Schema for editor validation
 ```
 
-`switchback init` probes Ollama (11434), LM Studio (1234), llama.cpp (8080), and vLLM (8000), lists their models with tool-calling support and the context size each server actually loads, and writes a config layer. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `switchback --help`.
+`switchback init` asks for your models in two parts:
+
+1. **Local endpoints.** "Do you have any local model endpoints?" Enter each server's URL; servers already running here (Ollama on 11434, LM Studio on 1234, llama.cpp on 8080, vLLM on 8000, and others) are found first and offered as the answer. Each endpoint's models come up as a checklist (arrow keys, space to pick, Enter when done), with tool-calling support and the context size the server loads; the context size is asked only when the server can't say. Then "Any more local endpoints?"
+2. **Remote providers.** "Set up any remote providers?" Pick a provider, answer its setup (model, region, resource, ...), then "Any additional remote providers?" Pick the same provider again for a second model from it.
+
+Then it asks which model does what, and writes a config layer, to the user config unless you pass `--scope project`. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `switchback --help`.
 
 Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config, and your own settings for one project in `.switchback/config.local.json`.
 

@@ -4,7 +4,7 @@
 
 ## First run
 
-With no config file anywhere, `switchback` offers to run `switchback init` before opening the UI. Declining opens the UI anyway; turns run remotely until a local model is configured.
+With no config file anywhere, `switchback` starts setup (`switchback init`) before opening the UI, beginning with "Do you have any local model endpoints?" Answering no to that and to remote providers writes nothing and opens the UI anyway; run `switchback init` later to add models.
 
 ## Resuming
 
