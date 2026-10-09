@@ -433,19 +433,22 @@ describe('Engine', () => {
     expect(result).toMatchObject({ type: 'tool_result', isError: true });
   });
 
-  test('refuses paths outside the workspace', async () => {
-    const { engine, lp } = setup(
-      [{ toolCalls: [{ name: 'read', input: { path: '../../etc/passwd' } }] }, { text: 'ok' }],
+  test('asks before editing outside the workspace, though edits are allowed', async () => {
+    const { engine, lp, events } = setup(
+      [
+        { toolCalls: [{ name: 'write', input: { path: '../outside.txt', content: 'x' } }] },
+        { text: 'ok' },
+      ],
       [],
     );
-    const s = engine.createSession({});
-    await engine.runTurn(s.id, 'read it');
-    const result = lp.requests[1]?.messages.at(-1)?.parts[0] as {
-      content: string;
-      isError: boolean;
-    };
-    expect(result.isError).toBe(true);
-    expect(result.content).toContain('outside the workspace');
+    engine.subscribe((e) => {
+      if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'deny');
+    });
+    await engine.runTurn(engine.createSession({}).id, 'write it');
+    expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
+      reason: 'outside the workspace',
+    });
+    expect(lp.requests[1]?.messages.at(-1)?.parts[0]).toMatchObject({ isError: true });
   });
 
   test('ask escalation policy waits for the user', async () => {

@@ -13,15 +13,7 @@ import {
   type Price,
 } from '@switchback/providers';
 import { applyEdits, type JSONPath, modify } from 'jsonc-parser';
-import {
-  deepMerge,
-  defaultConfig,
-  parseJsonc,
-  referenceProblem,
-  removedKeyProblem,
-  removedKeysIn,
-  SwitchbackConfig,
-} from './config.ts';
+import { deepMerge, layerProblem, parseJsonc, removedKeysIn } from './config.ts';
 
 export {
   type DetectedModel,
@@ -460,11 +452,7 @@ export function writeConfigLayer(
     text = applyEdits(text, modify(text, [key], undefined, {}));
   const existing = parseJsonc(text) as Record<string, unknown>;
   const merged = deepMerge(existing, layer);
-  const check = SwitchbackConfig.safeParse(deepMerge(defaultConfig(), merged));
-  const problem = check.success
-    ? (removedKeyProblem(merged) ??
-      (options.references === false ? undefined : referenceProblem(check.data)))
-    : check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+  const problem = layerProblem(merged, { references: options.references !== false });
   if (problem) throw new Error(`setup produced an invalid config: ${problem}`);
   for (const [path, value] of leaves(layer)) {
     text = applyEdits(

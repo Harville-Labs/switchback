@@ -6,9 +6,13 @@ Switchback runs tools on the user's machine, so every tool call passes three che
 
 Tool inputs come from a model and are untrusted. Each tool has a Zod schema. Invalid input is never executed; the model receives the validation error instead, and the failure counts as a malformed-call signal for routing. Responses that stopped on `max_tokens` or `refusal` never have their tool calls executed, because the input may be truncated.
 
-## 2. Workspace confinement
+## 2. Where a path goes
 
-File tools resolve paths against the workspace root and reject anything outside it, including `..`, absolute paths elsewhere, and symlinks that point out of the workspace. The deepest existing ancestor is canonicalized with `realpath` before the check.
+File tools resolve paths against the workspace root, expand `~/` to your home directory, and canonicalize the deepest existing ancestor with `realpath`, so a symlink can't hide where a path really goes. Then:
+
+- **Inside the workspace**, the policy below decides as usual.
+- **Outside it** (`../other-repo`, `~/notes`, `/srv/data`), reads follow `permissions.read` as usual, and edits ask. See [Outside the workspace](#outside-the-workspace).
+- **Off limits, always:** Switchback's session data and usage ledger (`~/.switchback/data`), its sign-in credentials (`~/.switchback/auth.json`), and the credentials in `bash.sandbox.denyRead` (`~/.ssh`, `~/.aws`, ...). No rule, mode, or answer opens them, `bypassPermissions` included, even when the workspace contains them.
 
 The `bash` tool runs with the workspace as its working directory, inside the OS sandbox where the platform has one (see [Sandbox](#sandbox)). It still defaults to `ask`: the sandbox limits what a command can reach, not what it does with what it can.
 
@@ -17,13 +21,35 @@ The `bash` tool runs with the workspace as its working directory, inside the OS 
 Every call that passes validation and confinement is decided in this order:
 
 1. **A category set to `deny`** (`permissions.bash: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off.
-2. **Deny rules.** The call is refused, and the model is told which rule refused it and where the rule came from.
+2. **Deny rules,** and `permissions.outsideWorkspace: "deny"` for paths outside the workspace. The call is refused, and the model is told why.
 3. **Plan mode.** Edits are refused until the user approves a plan.
 4. **Bypass.** In `bypassPermissions`, everything else runs without a prompt.
-5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/`): the user is asked, including in `acceptEdits`.
+5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`): the user is asked, including in `acceptEdits`. A path **outside the workspace** asks too, unless an allow rule names it; `read: allow`, a bare `read` rule, a hook, and `acceptEdits` don't count.
 6. **Allow rules,** including what the user allowed earlier in the session.
 7. **The mode.** `acceptEdits` allows edits.
 8. **The category's level:** `allow`, or ask.
+
+### Outside the workspace
+
+The model can read and search files anywhere on your machine the way it reads the workspace: with `permissions.read` at its default `allow`, without asking. Editing outside the workspace always asks, even with `edit: "allow"` or in `acceptEdits`. The prompt says the path is outside the workspace, and **Always** grants that folder (`edit(~/Projects/shared-lib/)`), not every edit.
+
+Open folders for editing ahead of time with allow rules that name them, and keep places out with deny rules:
+
+```jsonc
+"permissions": {
+  "allow": ["edit(~/Projects/shared-lib/)"],
+  "deny":  ["read(~/Documents/taxes/)"],
+  "outsideWorkspace": "ask"   // or "deny": file tools stay in the workspace, reads included
+}
+```
+
+On Windows, write a folder from the root with its drive: `edit(//D:/shared/)`.
+
+To keep what's in a folder off remote models entirely, list it in [`privacy.localOnlyPaths`](privacy.md#private-paths): `"localOnlyPaths": ["~/customers/"]`. A session that reads from it stays local from then on.
+
+Your user config (`~/.switchback/config.json`) and `~/.switchback/AGENTS.md` can be edited this way too. As with the project's `.switchback/`, an edit always asks, shows the diff, and is checked first: an edit that would leave any Switchback config file unparseable or invalid fails with the reason, before you're asked.
+
+These rules govern the file tools. `bash` stays in its [sandbox](#sandbox), whose write access an allow rule doesn't widen; use `bash.sandbox.allowWrite` for that. `@file` mentions still take workspace paths only.
 
 ### Levels
 
@@ -98,7 +124,7 @@ A call an ask rule caught offers no "always": the rule says to ask every time. C
 | `default` | Nothing: the levels and rules decide |
 | `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
 | `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
-| `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, and edits to `.switchback/` included. Only a category `deny`, a deny rule, and `bash.sandbox.allowUnsandboxed: false` stop a call |
+| `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration included. Only a category `deny`, a deny rule, `permissions.outsideWorkspace: "deny"`, the off-limits places, and `bash.sandbox.allowUnsandboxed: false` stop a call |
 
 New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
 

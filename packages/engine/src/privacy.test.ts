@@ -20,6 +20,8 @@ import { MemorySessionStore } from './store.ts';
 const TOKEN = 'ghp_1234567890abcdefghijABCDEFGHIJ123456';
 
 describe('privatePathMatcher', () => {
+  const R = join('/', 'work', 'app');
+  const at = (p: string) => join(R, p);
   const m = privatePathMatcher([
     'secrets/',
     '*.pem',
@@ -27,15 +29,27 @@ describe('privatePathMatcher', () => {
     'config/prod/**',
   ]) as PrivatePathMatcher;
   test('directories, file names anywhere, and nested globs', () => {
-    expect(m('secrets/db.yml')).toBe(true);
-    expect(m('secrets/deep/x.json')).toBe(true);
-    expect(m('certs/server.pem')).toBe(true);
-    expect(m('server.pem')).toBe(true);
-    expect(m('.env')).toBe(true);
-    expect(m('app/.env.local')).toBe(true);
-    expect(m('config/prod/a.yml')).toBe(true);
-    expect(m('config/dev/a.yml')).toBe(false);
-    expect(m('src/secrets.ts')).toBe(false);
+    expect(m(at('secrets/db.yml'), R)).toBe(true);
+    expect(m(at('secrets/deep/x.json'), R)).toBe(true);
+    expect(m(at('certs/server.pem'), R)).toBe(true);
+    expect(m(at('server.pem'), R)).toBe(true);
+    expect(m(at('.env'), R)).toBe(true);
+    expect(m(at('app/.env.local'), R)).toBe(true);
+    expect(m(at('config/prod/a.yml'), R)).toBe(true);
+    expect(m(at('config/dev/a.yml'), R)).toBe(false);
+    expect(m(at('src/secrets.ts'), R)).toBe(false);
+  });
+  test('places outside the workspace, from the home directory or the root', () => {
+    const home = join('/', 'home', 'me');
+    const outside = privatePathMatcher(
+      ['~/customers/', '//data/medical/**'],
+      home,
+    ) as PrivatePathMatcher;
+    expect(outside(join(home, 'customers', 'acme', 'q3.csv'), R)).toBe(true);
+    expect(outside(join('/', 'data', 'medical', 'x.json'), R)).toBe(true);
+    expect(outside(join(home, 'notes.md'), R)).toBe(false);
+    // Relative patterns stay relative to the session's root.
+    expect(m(join('/', 'elsewhere', 'secrets', 'x'), R)).toBe(false);
   });
   test('no patterns, no matcher', () => {
     expect(privatePathMatcher([])).toBeUndefined();

@@ -125,6 +125,13 @@ export function imageLabel(name: string): string {
   return `🖼 ${name}`;
 }
 
+/** Why a permission prompt asks, when it's more than the usual level: one line, or undefined. */
+export function permissionWhy(p: { askRule?: string; reason?: string }): string | undefined {
+  if (p.askRule) return `The rule ${p.askRule} asks every time.`;
+  if (p.reason) return `Asking because: ${p.reason}.`;
+  return undefined;
+}
+
 /** Short human label for a tool call, e.g. `read src/app.ts` or `$ bun test`. */
 export function toolLabel(name: string, input: unknown): string {
   const i = (input ?? {}) as Record<string, unknown>;

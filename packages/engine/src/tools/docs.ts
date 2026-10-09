@@ -65,7 +65,7 @@ function whereConfigLives(ctx: ToolContext): string {
     'On this machine:',
     `- Project config (shared with the team): ${files.project}`,
     `- Your settings for this project only, never committed: ${files.projectLocal}`,
-    `- User config (every project): ${files.user}. It's outside the workspace, so the edit and write tools can't change it; tell the user what to change, or that \`switchback config edit\` opens it.`,
-    "Edit the project files with the edit tool so comments and formatting survive. Settings an organization enforces can't be overridden. The running engine read its config when it started, so changes take effect after it restarts: tell the user so.",
+    `- User config (every project): ${files.user}. Editing it asks the user every time, with the diff.`,
+    "Edit these files with the edit tool so comments and formatting survive; an edit that would make a config invalid fails with the reason, so fix it and try again. Settings an organization enforces can't be overridden. The running engine read its config when it started, so changes take effect after it restarts: tell the user so.",
   ].join('\n');
 }

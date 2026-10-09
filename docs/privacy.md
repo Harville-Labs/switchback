@@ -13,7 +13,13 @@ Both are ordinary config keys, so an organization can enforce them (see [organiz
 
 ## Private paths
 
-`privacy.localOnlyPaths` lists globs relative to the workspace. A pattern without a slash matches by file name anywhere, as in `.gitignore` (`*.pem`, `.env*`); a trailing slash means everything under a directory.
+`privacy.localOnlyPaths` lists globs in the same syntax as [permission rules](permissions.md#rules): relative to the workspace, or anywhere on the machine from `~/` (your home directory) or `//` (the root). A pattern without a slash matches by file name anywhere, as in `.gitignore` (`*.pem`, `.env*`); a trailing slash means everything under a directory.
+
+```jsonc
+"localOnlyPaths": ["secrets/", "*.pem", "~/customers/", "//srv/medical-records/"]
+```
+
+Folders outside the workspace matter because the model can read them like the workspace ([permissions.md](permissions.md#outside-the-workspace)).
 
 When content from a matching file enters a session, the session is **pinned local for the rest of its life**:
 

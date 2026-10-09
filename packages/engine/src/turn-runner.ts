@@ -3,6 +3,7 @@
  * reminder), run the agent loop, wait for background work when asked, and
  * review the edits.
  */
+import { resolve } from 'node:path';
 import {
   type Attachment,
   ErrorCode,
@@ -282,7 +283,10 @@ export class TurnRunner {
     ].map((p) => {
       // A file attachment's path may carry a line range (`src/a.ts:3-9`).
       const path = p.attachment?.path.replace(/:\d+-\d+$/, '');
-      return path && matches?.(path) ? { ...p, private: `attached ${path}` } : p;
+      const root = this.host.rootOf(s);
+      return path && matches?.(resolve(root, path), root)
+        ? { ...p, private: `attached ${path}` }
+        : p;
     });
     const mode = this.deps.mode(s);
     const reminder = s.depth === 0 ? modeReminder(s.toldMode, mode) : undefined;

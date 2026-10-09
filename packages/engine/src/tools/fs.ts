@@ -1,17 +1,21 @@
 import { realpathSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
 import { looksLikeImage, readImage } from '../images.ts';
 import {
   defineTool,
   diffPreview,
-  resolveInWorkspace,
+  resolveFile,
+  type ToolContext,
   ToolError,
   toWorkspacePath,
   truncate,
 } from './tool.ts';
+
+const PATH_HELP =
+  'File path, relative to the workspace root; absolute or starting with ~/ for files elsewhere. Editing outside the workspace asks the user first.';
 
 const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)([\\/]|$)/;
 
@@ -23,7 +27,7 @@ export const readTool = defineTool({
   description:
     'Read a file from the workspace. Text comes back as lines prefixed with 1-based line numbers (use offset/limit for large files); a PNG, JPEG, GIF, or WebP image comes back as the image.',
   schema: z.object({
-    path: z.string().describe('File path, relative to the workspace root'),
+    path: z.string().describe(PATH_HELP),
     offset: z.number().int().min(1).optional().describe('First line to return (1-based)'),
     limit: z
       .number()
@@ -36,7 +40,7 @@ export const readTool = defineTool({
   mutating: false,
   summarize: (i) => `read ${i.path}`,
   async run(input, ctx) {
-    const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
+    const file = resolveFile(ctx.workspaceRoot, input.path);
     const info = await stat(file).catch(() => undefined);
     if (!info) throw new ToolError(`${input.path} does not exist`);
     if (info.isDirectory()) throw new ToolError(`${input.path} is a directory; use glob`);
@@ -61,16 +65,17 @@ export const readTool = defineTool({
 
 export const writeTool = defineTool({
   name: 'write',
-  description: 'Create or overwrite a file in the workspace with the given content.',
+  description: 'Create or overwrite a file with the given content.',
   schema: z.object({
-    path: z.string().describe('File path, relative to the workspace root'),
+    path: z.string().describe(PATH_HELP),
     content: z.string().describe('Full file content'),
   }),
   permission: 'edit',
   mutating: true,
   summarize: (i) => `write ${i.path} (${i.content.length} chars)`,
   async preview(input, ctx) {
-    const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
+    const file = resolveFile(ctx.workspaceRoot, input.path);
+    validated(ctx, file, input.content);
     const before = await readFile(file, 'utf8').catch(() => '');
     return {
       diff: diffPreview(input.path, before, input.content),
@@ -78,7 +83,8 @@ export const writeTool = defineTool({
     };
   },
   async run(input, ctx) {
-    const file = resolveInWorkspace(ctx.workspaceRoot, input.path);
+    const file = resolveFile(ctx.workspaceRoot, input.path);
+    validated(ctx, file, input.content);
     const before = await readFile(file, 'utf8').catch(() => '');
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, input.content);
@@ -97,9 +103,15 @@ interface EditInput {
   replaceAll?: boolean | undefined;
 }
 
+/** A config edit that would break the config fails before anyone is asked. */
+function validated(ctx: ToolContext, file: string, content: string): void {
+  const problem = ctx.validate?.(file, content);
+  if (problem) throw new ToolError(problem);
+}
+
 /** Read the file and compute the edited text, or throw the error the model should see. */
-async function applyEdit(input: EditInput, root: string) {
-  const file = resolveInWorkspace(root, input.path);
+async function applyEdit(input: EditInput, ctx: ToolContext) {
+  const file = resolveFile(ctx.workspaceRoot, input.path);
   const before = await readFile(file, 'utf8').catch(() => {
     throw new ToolError(`${input.path} does not exist`);
   });
@@ -110,6 +122,7 @@ async function applyEdit(input: EditInput, root: string) {
   const after = input.replaceAll
     ? before.split(input.oldString).join(input.newString)
     : before.replace(input.oldString, () => input.newString);
+  validated(ctx, file, after);
   return { file, before, after, replacements: input.replaceAll ? count : 1 };
 }
 
@@ -118,7 +131,7 @@ export const editTool = defineTool({
   description:
     'Replace an exact string in a file. oldString must match exactly once unless replaceAll is true. Read the file first.',
   schema: z.object({
-    path: z.string(),
+    path: z.string().describe(PATH_HELP),
     oldString: z.string().min(1),
     newString: z.string(),
     replaceAll: z.boolean().optional(),
@@ -127,14 +140,14 @@ export const editTool = defineTool({
   mutating: true,
   summarize: (i) => `edit ${i.path}`,
   async preview(input, ctx) {
-    const { before, after } = await applyEdit(input, ctx.workspaceRoot);
+    const { before, after } = await applyEdit(input, ctx);
     return {
       diff: diffPreview(input.path, before, after),
       proposed: { path: input.path, content: after },
     };
   },
   async run(input, ctx) {
-    const { file, before, after, replacements } = await applyEdit(input, ctx.workspaceRoot);
+    const { file, before, after, replacements } = await applyEdit(input, ctx);
     await writeFile(file, after);
     return {
       text: `edited ${input.path} (${replacements} replacement${replacements > 1 ? 's' : ''})`,
@@ -150,13 +163,16 @@ export const globTool = defineTool({
     'Find files by glob pattern (e.g. "src/**/*.ts"). Ignores node_modules, .git, and build output.',
   schema: z.object({
     pattern: z.string(),
-    path: z.string().optional().describe('Directory to search in, relative to the workspace root'),
+    path: z
+      .string()
+      .optional()
+      .describe('Directory to search in, relative to the workspace root, or absolute'),
   }),
   permission: 'read',
   mutating: false,
   summarize: (i) => `glob ${i.pattern}`,
   async run(input, ctx) {
-    const cwd = resolveInWorkspace(ctx.workspaceRoot, input.path ?? '.');
+    const cwd = resolveFile(ctx.workspaceRoot, input.path ?? '.');
     const matches: string[] = [];
     for await (const f of new Glob(input.pattern).scan({ cwd, onlyFiles: true, dot: false })) {
       if (IGNORED.test(f) || ctx.hidden?.(join(cwd, f))) continue;
@@ -271,7 +287,7 @@ export const grepTool = defineTool({
   mutating: false,
   summarize: (i) => `grep ${i.pattern}`,
   async run(input, ctx) {
-    const cwd = resolveInWorkspace(ctx.workspaceRoot, input.path ?? '.');
+    const cwd = resolveFile(ctx.workspaceRoot, input.path ?? '.');
     if (ripgrep === undefined) ripgrep = process.env.SWITCHBACK_NO_RIPGREP ? null : Bun.which('rg');
     const found =
       (ripgrep ? await grepRipgrep(ripgrep, input, cwd, ctx.workspaceRoot) : undefined) ??
@@ -281,7 +297,7 @@ export const grepTool = defineTool({
     const out = hidden
       ? found.filter((line) => {
           const path = /^(.+?):\d+: /.exec(line)?.[1];
-          return !path || !hidden(join(ctx.workspaceRoot, path));
+          return !path || !hidden(resolve(ctx.workspaceRoot, path));
         })
       : found;
     if (!out.length) return 'no matches';

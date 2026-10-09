@@ -52,7 +52,7 @@ describe('docs tool', () => {
     const out = String(await docsTool.run({ topic: 'configuration' }, ctx));
     expect(out).toContain('/work/.switchback/config.json');
     expect(out).toContain('/work/.switchback/config.local.json');
-    expect(out).toMatch(/\/home\/me\/\.switchback\/config\.json\. It's outside the workspace/);
+    expect(out).toContain('/home/me/.switchback/config.json. Editing it asks the user every time');
     expect(out).toContain('# Configuration reference');
   });
 

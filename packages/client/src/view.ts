@@ -193,6 +193,7 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
           ...(event.preview ? { preview: event.preview } : {}),
           ...(event.rules ? { rules: event.rules } : {}),
           ...(event.askRule ? { askRule: event.askRule } : {}),
+          ...(event.reason ? { reason: event.reason } : {}),
           ...(event.plan ? { plan: event.plan } : {}),
         },
       ],

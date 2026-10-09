@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ShellInfo } from '@switchback/protocol';
 import { SwitchbackConfig } from '../config.ts';
-import { privatePathMatcher, privateToolUse } from '../privacy.ts';
+import { type PrivatePathMatcher, privatePathMatcher, privateToolUse } from '../privacy.ts';
 import { bashOutputTool, bashTool, killShellTool } from './bash.ts';
 import { toolsFor } from './index.ts';
 import { CommandRunner } from './process.ts';
@@ -87,7 +87,7 @@ describe('bash', () => {
   });
 
   test("a background shell's output is private when its command names a private file", () => {
-    const matches = privatePathMatcher(['secrets/**']) as (p: string) => boolean;
+    const matches = privatePathMatcher(['secrets/**']) as PrivatePathMatcher;
     const output = '$ tail -f secrets/app.log\n[sh_1: still running]\nline';
     expect(privateToolUse(matches, root, 'bash_output', { id: 'sh_1' }, output)).toContain(
       'secrets/app.log',

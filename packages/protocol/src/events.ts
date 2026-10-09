@@ -85,6 +85,11 @@ export type EngineEvent =
       plan?: string;
       /** Why the user is asked even though a mode or level would allow it: an ask rule. */
       askRule?: string;
+      /**
+       * Another reason the user is asked: `outside the workspace`, `Switchback's
+       * own configuration`, `running outside the OS sandbox`, or a hook's.
+       */
+      reason?: string;
     } & SessionScoped)
   | ({
       type: 'permission.resolved';

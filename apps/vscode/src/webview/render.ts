@@ -9,6 +9,7 @@ import {
   formatTodos,
   imageLabel,
   isQuietTool,
+  permissionWhy,
   speedLabel,
   tailLines,
 } from '@switchback/client/format';
@@ -208,9 +209,8 @@ export function renderPrompt(view: ViewState): string {
     const always = perm.rules
       ? `<button class="btn secondary" data-perm="always" title="${esc(perm.rules.join(', '))}">Always this session</button><button class="btn secondary" data-perm="project" title="Saved to .switchback/config.local.json">Always in this project</button>`
       : '';
-    const why = perm.askRule
-      ? `<div class="hint">The rule ${esc(perm.askRule)} asks every time.</div>`
-      : '';
+    const reason = permissionWhy(perm);
+    const why = reason ? `<div class="hint">${esc(reason)}</div>` : '';
     return `<div class="prompt">Allow <b>${esc(perm.summary)}</b>?${why}${perm.preview ? renderDiff(perm.preview) : ''}<div class="actions"><button class="btn" data-perm="once">Allow once</button>${always}<button class="btn secondary" data-perm="deny">Deny</button><button class="btn secondary" data-perm="tell" title="Decline, and tell the model what to do instead">Deny with a note…</button></div><form class="feedback" hidden><input name="feedback" placeholder="What should it do instead?" autocomplete="off"><button class="btn" type="submit">Send</button></form></div>`;
   }
   const escl = view.escalations[0];

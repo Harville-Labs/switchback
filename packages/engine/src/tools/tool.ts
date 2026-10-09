@@ -1,5 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ImagePart } from '@switchback/protocol';
 import type { ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
@@ -49,6 +50,12 @@ export interface ToolContext {
   skills?: () => Map<string, Skill>;
   /** Where this engine's config files are, absolute (the docs tool). */
   configFiles?: { user: string; project: string; projectLocal: string };
+  /**
+   * What's wrong with writing `content` to `file` (absolute), or undefined
+   * when nothing is: Switchback's config files must still parse and match
+   * the schema. Edit and write check it before asking and before writing.
+   */
+  validate?: (file: string, content: string) => string | undefined;
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';
@@ -128,21 +135,41 @@ export function toWorkspacePath(root: string, path: string): string | undefined 
 }
 
 /**
+ * A model-supplied path as the absolute, canonical file it names: `~/` is the
+ * home directory, relative paths start at `root`, and the deepest existing
+ * ancestor is resolved through symlinks, so a symlinked directory can't
+ * disguise where a path really goes. Nothing is refused here; whether a path
+ * outside the workspace may be used is the permission gate's decision.
+ */
+export function resolveFile(root: string, path: string, home: string = homedir()): string {
+  const expanded = path === '~' ? home : path.startsWith('~/') ? join(home, path.slice(2)) : path;
+  return canonical(resolve(root, expanded));
+}
+
+/** An absolute path with its deepest existing ancestor resolved through symlinks. */
+function canonical(path: string): string {
+  let existing = path;
+  while (!existsSync(existing) && dirname(existing) !== existing) existing = dirname(existing);
+  return resolve(realpathSync(existing), relative(existing, path));
+}
+
+/** Whether an absolute, canonical path is the workspace root or inside it. */
+export function insideWorkspace(root: string, file: string): boolean {
+  const rel = relative(canonical(resolve(root)), file);
+  // `relative` uses the platform separator (`..\\` on Windows).
+  return !(rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel));
+}
+
+/**
  * Resolve a model-supplied path and reject anything outside the workspace,
- * including escapes through symlinks.
+ * including escapes through symlinks. For places that must stay inside it
+ * (mentions, checkpoints, a skill's files); file tools use `resolveFile` and
+ * leave paths outside to the permission gate.
  */
 export function resolveInWorkspace(root: string, path: string): string {
-  const realRoot = realpathSync(root);
-  const target = resolve(realRoot, path);
-  // Canonicalize the deepest existing ancestor so symlinked dirs cannot escape.
-  let existing = target;
-  while (!existsSync(existing) && dirname(existing) !== existing) existing = dirname(existing);
-  const canonical = resolve(realpathSync(existing), relative(existing, target));
-  const rel = relative(realRoot, canonical);
-  // `relative` uses the platform separator (`..\` on Windows).
-  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+  const canonical = resolveFile(root, path);
+  if (!insideWorkspace(root, canonical))
     throw new ToolError(`path "${path}" is outside the workspace`);
-  }
   return canonical;
 }
 

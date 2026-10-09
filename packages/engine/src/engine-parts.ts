@@ -8,7 +8,7 @@ import { AgentCatalog } from './agent-catalog.ts';
 import { AgentLoop } from './agent-loop.ts';
 import { Checkpoints, MemoryCheckpointStore } from './checkpoints.ts';
 import { Compactor } from './compactor.ts';
-import { referenceModel } from './config.ts';
+import { configTextProblem, referenceModel } from './config.ts';
 import type { EngineOptions } from './engine-options.ts';
 import { ExternalRuntimes } from './external-runtime.ts';
 import { HookRunner } from './hooks/runner.ts';
@@ -31,6 +31,7 @@ import { MemorySessionStore } from './store.ts';
 import { Subagents } from './subagents.ts';
 import { ToolRunner } from './tool-runner.ts';
 import { type CommandRunner, createCommandRunner, shellOf } from './tools/process.ts';
+import { resolveFile } from './tools/tool.ts';
 import { TurnRunner } from './turn-runner.ts';
 import { UsageRecorder } from './usage-recorder.ts';
 
@@ -130,6 +131,8 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     project: project.configFile,
     projectLocal: project.localConfigFile,
   };
+  // Canonical, as file tools resolve paths, so `/var` and `/private/var` compare equal.
+  const canonicalConfigFiles = new Set(Object.values(configFiles).map((f) => resolveFile('/', f)));
   const hooks: HookRunner = new HookRunner({
     hooks: () => options.config.hooks,
     workspaceRoot: options.workspaceRoot,
@@ -153,6 +156,11 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     mode: (s) => controls.modeOf(s),
     // exit_plan_mode's result tells the model about the change itself.
     setMode: (s, mode) => controls.changeMode(sessions.top(s), mode, true),
+    places: () => ({
+      configDir: paths.configDir,
+      dataDir,
+      denyRead: options.config.bash.sandbox.denyRead,
+    }),
     saveTo: { project: configFiles.projectLocal, user: configFiles.user },
   });
   const tools: ToolRunner = new ToolRunner(host, gate, {
@@ -167,6 +175,8 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     },
     skills: () => library.skills(),
     configFiles,
+    validate: (file, content) =>
+      canonicalConfigFiles.has(file) ? configTextProblem(content) : undefined,
   });
   const external: ExternalRuntimes = new ExternalRuntimes(host, {
     injected: options.runtimes,

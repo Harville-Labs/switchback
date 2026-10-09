@@ -12,28 +12,37 @@
  * 4), and is deterministic, so consecutive remote calls keep the same prefix
  * and still hit the prompt cache.
  */
-import { sep } from 'node:path';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 import { lintSource } from '@secretlint/core';
 import { creator as recommended } from '@secretlint/secretlint-rule-preset-recommend';
 import type { Message, Part } from '@switchback/protocol';
-import { Glob } from 'bun';
+import { type PathMatcher, pathMatcher, toolPaths } from './permissions/path-match.ts';
 import { toWorkspacePath } from './tools/tool.ts';
 
-export type PrivatePathMatcher = (workspacePath: string) => boolean;
+/** Whether a file (absolute) in a session working in `root` is private. */
+export type PrivatePathMatcher = (absolutePath: string, root: string) => boolean;
 
 /**
- * Globs relative to the workspace root. A pattern without a slash also
- * matches by file name anywhere, as in `.gitignore` (`*.pem`, `.env*`).
+ * `privacy.localOnlyPaths`, in the same syntax as permission rules' paths
+ * (permissions/path-match.ts): relative to the workspace root, a name with no
+ * slash anywhere (`*.pem`), a trailing slash for a whole folder, and `~/` or
+ * `//` for places outside the workspace (`~/customers/`).
  */
-export function privatePathMatcher(patterns: string[]): PrivatePathMatcher | undefined {
+export function privatePathMatcher(
+  patterns: string[],
+  home: string = homedir(),
+): PrivatePathMatcher | undefined {
   if (!patterns.length) return undefined;
-  const globs = patterns.map((p) => {
-    const pattern = p.replace(/^\.\//, '').replace(/\/$/, '/**');
-    return new Glob(pattern.includes('/') ? pattern : `{${pattern},**/${pattern}}`);
-  });
-  return (path) => {
-    const p = path.split(sep).join('/').replace(/^\.\//, '');
-    return globs.some((g) => g.match(p) || g.match(`${p}/`));
+  // Subagents in worktrees have their own roots; relative patterns follow them.
+  const byRoot = new Map<string, PathMatcher[]>();
+  return (path, root) => {
+    let matchers = byRoot.get(root);
+    if (!matchers) {
+      matchers = patterns.map((p) => pathMatcher(p, root, home));
+      byRoot.set(root, matchers);
+    }
+    return matchers.some((m) => m(path));
   };
 }
 
@@ -60,10 +69,11 @@ export function privateToolUse(
 ): string | undefined {
   const i = (input ?? {}) as Record<string, unknown>;
   const check = (path: unknown) => {
-    if (typeof path !== 'string') return undefined;
-    // The workspace root itself ("") isn't a file a pattern can match.
-    const p = toWorkspacePath(root, path) || undefined;
-    return p && matches(p) ? p : undefined;
+    const [written, ...others] = toolPaths(root, path);
+    // The workspace root itself isn't a file a pattern can match.
+    if (!written || written === resolve(root)) return undefined;
+    if (![written, ...others].some((p) => matches(p, root))) return undefined;
+    return toWorkspacePath(root, written) ?? written;
   };
   if (tool === 'read' || tool === 'edit' || tool === 'write') {
     const p = check(i.path);
