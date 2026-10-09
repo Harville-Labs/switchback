@@ -8,8 +8,9 @@
  * - a trailing `/` means everything under that directory
  */
 import { homedir } from 'node:os';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Glob } from 'bun';
+import { resolveFile } from '../tools/tool.ts';
 
 export type PathMatcher = (absolutePath: string) => boolean;
 
@@ -42,7 +43,16 @@ function toSlash(p: string): string {
   return p.split(sep).join('/');
 }
 
-/** A tool's path input, resolved against the session's root. */
-export function resolveToolPath(root: string, path: unknown): string | undefined {
-  return typeof path === 'string' ? resolve(root, path) : undefined;
+/**
+ * A tool's path input as the paths rules are matched against: as written
+ * (`~/` expanded, relative to the session's root) and canonical (symlinks
+ * resolved, so `/tmp` is also `/private/tmp` on macOS). A rule matches if
+ * either does.
+ */
+export function toolPaths(root: string, path: unknown, home: string = homedir()): string[] {
+  if (typeof path !== 'string') return [];
+  const expanded = path === '~' ? home : path.startsWith('~/') ? join(home, path.slice(2)) : path;
+  const written = resolve(root, expanded);
+  const canonical = resolveFile(root, path, home);
+  return written === canonical ? [written] : [written, canonical];
 }

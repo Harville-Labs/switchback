@@ -21,3 +21,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0015](0015-role-based-routing.md) | Roles (start, escalate, review, subagents) filled by any model; local/remote is a model property | Accepted |
 | [0016](0016-open-conventions.md) | Open conventions (AGENTS.md, `.switchback/`), never another agent's files | Accepted |
 | [0017](0017-live-instructions.md) | AGENTS.md changes reach running sessions as appended reminders | Accepted |
+| [0018](0018-outside-the-workspace.md) | Files outside the workspace ask instead of failing; some places are always off limits | Accepted |

@@ -6,7 +6,7 @@
 import type { SwitchbackConfig } from '../config.ts';
 import type { PermissionCategory } from '../tools/tool.ts';
 import { commandMatches, parseCommand, suggestBashRules } from './bash-match.ts';
-import { pathMatcher, resolveToolPath } from './path-match.ts';
+import { pathMatcher, toolPaths } from './path-match.ts';
 import { type PermissionRule, parseRule, type RuleBehavior } from './rules.ts';
 
 export interface SourcedRule {
@@ -102,8 +102,8 @@ export class PermissionPolicy {
     if (!rule.specifier) return true;
     if (rule.target.kind === 'webfetch') return domainMatches(rule.specifier, call.input);
     if (rule.target.kind !== 'read' && rule.target.kind !== 'edit') return false;
-    const path = resolveToolPath(root, pathInput(call));
-    return !!path && pathMatcher(rule.specifier, root, this.home)(path);
+    const matches = pathMatcher(rule.specifier, root, this.home);
+    return toolPaths(root, pathInput(call), this.home).some(matches);
   }
 }
 

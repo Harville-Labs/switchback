@@ -503,6 +503,11 @@
           "type": "string",
           "enum": ["default", "acceptEdits", "plan", "bypassPermissions"]
         },
+        "outsideWorkspace": {
+          "default": "ask",
+          "type": "string",
+          "enum": ["ask", "deny"]
+        },
         "allow": {
           "default": [],
           "type": "array",

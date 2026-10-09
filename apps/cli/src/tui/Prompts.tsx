@@ -8,6 +8,7 @@ import {
   estimateLabel,
   type PendingEscalation,
   type PendingPermission,
+  permissionWhy,
   toolTitle,
 } from '@switchback/client';
 import type { PermissionDecision } from '@switchback/protocol';
@@ -198,6 +199,7 @@ function ToolPermission({
 
   const title = toolTitle(p.tool, undefined);
   const isEdit = p.tool === 'edit' || p.tool === 'write';
+  const why = permissionWhy(p);
   const heading = isEdit
     ? p.preview && /^@@ -0,0 /m.test(p.preview)
       ? 'Create file'
@@ -215,7 +217,7 @@ function ToolPermission({
             ? p.summary.replace(/^(edit|write) /, '').replace(/ \(\d+ chars\)$/, '')
             : p.summary}
         </Text>
-        {p.askRule ? <Text dimColor>The rule {p.askRule} asks every time.</Text> : null}
+        {why ? <Text dimColor>{why}</Text> : null}
       </Box>
       {p.preview ? (
         <Box marginBottom={1}>

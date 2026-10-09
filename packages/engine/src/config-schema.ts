@@ -66,6 +66,11 @@ export const SwitchbackConfig = z.object({
       mcp: PermissionLevel.default('ask'),
       /** The mode new sessions start in (docs/permissions.md). */
       defaultMode: PermissionMode.default('default'),
+      /**
+       * Files outside the workspace: `ask` (allow rules that name a place
+       * open it ahead of time) or `deny` (file tools stay in the workspace).
+       */
+      outsideWorkspace: z.enum(['ask', 'deny']).default('ask'),
       /** Rules like `bash(git status:*)`. Lists from every layer add up; deny beats ask beats allow. */
       allow: PermissionRules,
       ask: PermissionRules,

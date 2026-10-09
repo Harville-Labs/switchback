@@ -29,6 +29,7 @@ export interface ToolRunnerDeps {
   noteEdit(s: LiveSession, path: string, writer: string): void;
   skills(): Map<string, Skill>;
   configFiles: NonNullable<ToolContext['configFiles']>;
+  validate: NonNullable<ToolContext['validate']>;
 }
 
 export interface ToolCall {
@@ -69,6 +70,7 @@ export class ToolRunner {
       commands: this.deps.commands,
       skills: () => this.deps.skills(),
       configFiles: this.deps.configFiles,
+      validate: this.deps.validate,
       ...(s.depth === 0
         ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
         : {}),

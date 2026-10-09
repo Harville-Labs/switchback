@@ -8,6 +8,13 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **`docs` tool**: the model reads Switchback's own documentation, built into the binary, so you can ask it how Switchback works or to change a setting. Every session has it; it needs no permission. See docs/tools.md#asking-about-switchback
 - **Your own `AGENTS.md`**: `~/.switchback/AGENTS.md` holds instructions for every project. Sessions get it before the project's `AGENTS.md`. `switchback doctor` shows each file's size in tokens and warns when they crowd a small local model. See docs/commands-and-skills.md#agentsmd
 - **AGENTS.md edits apply without a restart**: every engine watches both files. New sessions start with the new text, and running sessions get it with their next message, without rewriting the system prompt, so prompt caches keep working (ADR 0017)
+- **Files outside the workspace**: the model can read, search, and edit them after asking, instead of being refused. **Always** opens the folder; allow rules such as `read(~/notes/)` open folders ahead of time, and `permissions.outsideWorkspace: "deny"` turns it off. Switchback's data, its sign-in, and credentials (`bash.sandbox.denyRead`) stay off limits in every mode. See docs/permissions.md#outside-the-workspace
+- **Config edits are checked**: an edit or write that would leave a Switchback config file unparseable or invalid fails with the reason before you're asked. Your user config can now be edited this way, always with a prompt and a diff
+- `privacy.localOnlyPaths` takes folders anywhere on the machine (`~/customers/`)
+- Protocol (additive): `permission.requested` carries `reason`
+
+### Changed
+- Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule
 
 ## [1.1.0] - 2026-10-07
 

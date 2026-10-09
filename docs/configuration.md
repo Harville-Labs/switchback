@@ -118,6 +118,7 @@ See [routing.md](routing.md#configuration-reference).
 | `web` | `ask` | `webfetch`, `websearch` |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
 | `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `plan`, or `bypassPermissions` |
+| `outsideWorkspace` | `ask` | Files outside the workspace: `ask` before each use (allow rules that name a folder open it ahead of time), or `deny` to keep file tools in the workspace. See [permissions.md](permissions.md#outside-the-workspace) |
 | `allow`, `ask`, `deny` | `[]` | Rules such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
 
 The levels are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md) for the order rules and modes are applied in and the full rule syntax.
@@ -194,7 +195,7 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 
 | Key | Default | |
 |---|---|---|
-| `localOnlyPaths` | `[]` | Globs, relative to the workspace. Once content from a matching file enters a session, the session stays on local models for good. A pattern without a slash matches by file name anywhere (`*.pem`, `.env*`) |
+| `localOnlyPaths` | `[]` | Globs, relative to the workspace, or anywhere with `~/` and `//` (`~/customers/`). Once content from a matching file enters a session, the session stays on local models for good. A pattern without a slash matches by file name anywhere (`*.pem`, `.env*`) |
 | `secrets` | `redact` | Credentials in what's about to be sent to a remote model: `redact` replaces them with placeholders in the outbound copy, `block` keeps the turn local, `off` sends them unchanged |
 
 See [privacy.md](privacy.md) for what's detected and the limits.

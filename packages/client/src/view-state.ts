@@ -95,6 +95,8 @@ export interface PendingPermission {
   rules?: string[];
   /** The ask rule behind this prompt, when there is one. */
   askRule?: string;
+  /** Another reason it asks (outside the workspace, Switchback's own configuration). */
+  reason?: string;
   /** A plan to approve (plan mode). */
   plan?: string;
 }

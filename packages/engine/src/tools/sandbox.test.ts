@@ -183,7 +183,7 @@ describe('asking to leave the sandbox', () => {
     });
     await e.runTurn(e.createSession({}).id, 'go');
     expect(events.find((ev) => ev.type === 'permission.requested')).toMatchObject({
-      askRule: 'running outside the OS sandbox',
+      reason: 'running outside the OS sandbox',
     });
   });
 
@@ -214,7 +214,7 @@ describe('asking to leave the sandbox', () => {
     });
     await e.runTurn(e.createSession({ permissionMode: 'acceptEdits' }).id, 'go');
     expect(events.find((ev) => ev.type === 'permission.requested')).toMatchObject({
-      askRule: "Switchback's own configuration",
+      reason: "Switchback's own configuration",
     });
   });
 });

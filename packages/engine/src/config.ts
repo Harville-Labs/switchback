@@ -378,6 +378,37 @@ export function parseJsonc(text: string): unknown {
   return value;
 }
 
+/**
+ * What's wrong with one config file's contents, or undefined: it must parse
+ * as JSONC and, over the defaults, match the schema with no removed keys.
+ * Model references aren't checked here (models may be defined in another
+ * layer) unless `references` is set.
+ */
+export function layerProblem(
+  layer: unknown,
+  { references = false }: { references?: boolean } = {},
+): string | undefined {
+  if (typeof layer !== 'object' || layer === null || Array.isArray(layer))
+    return 'a config file must hold one JSON object';
+  const check = SwitchbackConfig.safeParse(
+    deepMerge(defaultConfig(), layer as Record<string, unknown>),
+  );
+  if (!check.success)
+    return check.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+  return removedKeyProblem(layer) ?? (references ? referenceProblem(check.data) : undefined);
+}
+
+/** {@link layerProblem} for a config file's text, parse errors included. */
+export function configTextProblem(text: string): string | undefined {
+  let layer: unknown;
+  try {
+    layer = parseJsonc(text);
+  } catch (err) {
+    return (err as Error).message;
+  }
+  return layerProblem(layer);
+}
+
 /** JSON Schema for config files (input shape: everything with a default is optional). */
 export function configJsonSchema(): Record<string, unknown> {
   const schema = z.toJSONSchema(SwitchbackConfig, {
