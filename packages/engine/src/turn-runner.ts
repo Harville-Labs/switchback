@@ -12,10 +12,17 @@ import {
   type SessionPromptParams,
   type SessionPromptResult,
   type StopReason,
+  type TextPart,
   textOf,
 } from '@switchback/protocol';
 import type { AgentLoop } from './agent-loop.ts';
 import type { TurnHooks } from './hooks/turn-hooks.ts';
+import {
+  hashesOf,
+  type InstructionsSource,
+  instructionReminders,
+  toldOf,
+} from './instructions-live.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import type { McpHub } from './mcp/hub.ts';
 import { expandMcp } from './mcp/mentions.ts';
@@ -43,6 +50,8 @@ export interface TurnRunnerDeps {
   checkpoint(s: LiveSession, turnId: string, prompt: string): void;
   /** Connected MCP servers, for `/server:prompt` and `@server:uri`. */
   mcp(): McpHub | undefined;
+  /** Both AGENTS.md files; changes reach the session with its next prompt (ADR 0017). */
+  instructions: InstructionsSource;
 }
 
 export class TurnRunner {
@@ -285,8 +294,18 @@ export class TurnRunner {
         { type: 'text', text, ...(priv ? { private: priv } : {}) },
         ...attachments,
         ...notes.map((note) => ({ type: 'text' as const, text: note, reminder: true as const })),
+        ...this.instructionChanges(s),
       ],
     });
     return undefined;
+  }
+
+  /** Reminders of AGENTS.md changes the session's model hasn't been told about. */
+  private instructionChanges(s: LiveSession): TextPart[] {
+    this.deps.instructions.refresh();
+    const now = this.deps.instructions.current();
+    const told = s.toldInstructions ?? toldOf(s.header.instructions, s.messages) ?? hashesOf(now);
+    s.toldInstructions = hashesOf(now);
+    return instructionReminders(told, now);
   }
 }

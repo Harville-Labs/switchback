@@ -1,6 +1,13 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
 import { formatMcpServers, formatPermissions, formatRoles, modeLabel } from '@switchback/client';
-import { configRoles, modelSummaries, roleAliases, tierOfModel } from '@switchback/engine';
+import {
+  configRoles,
+  instructionFiles,
+  instructionsUsage,
+  modelSummaries,
+  roleAliases,
+  tierOfModel,
+} from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 
@@ -56,8 +63,11 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     const pc = m && config.providers[m.provider];
     return m && pc && tierOfModel(config, alias) === 'local' ? [{ alias, m, pc }] : [];
   });
+  // Local windows are the tight ones; instructions are measured against them below.
+  const windows: number[] = [];
   for (const { alias, m, pc } of locals) {
     if (m.contextWindow) {
+      windows.push(m.contextWindow);
       out(`  ${alias} context window ${m.contextWindow.toLocaleString('en-US')} (configured)`);
       continue;
     }
@@ -65,6 +75,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
       .contextWindow?.(m.model)
       .catch(() => undefined);
     if (found) {
+      windows.push(found.contextWindow);
       out(
         `  ${alias} context window ${found.contextWindow.toLocaleString('en-US')} (detected from ${found.source})`,
       );
@@ -81,6 +92,17 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   } else if (!r.start.some((a) => config.models[a])) {
     out('  no start model: turns begin on step 1');
   }
+
+  out('\nInstructions (in every session and subagent)');
+  const usage = instructionsUsage(instructionFiles(flags.cwd), windows);
+  if (!usage.files.length) out("  no AGENTS.md (yours or the project's)");
+  for (const f of usage.files) out(`  ${f.path}: ${f.tokens.toLocaleString('en-US')} tokens`);
+  if (usage.files.length > 1) out(`  total: ${usage.total.toLocaleString('en-US')} tokens`);
+  if (usage.window && usage.total)
+    out(
+      `  ${((usage.total / usage.window) * 100).toFixed(1)}% of the smallest local window (${usage.window.toLocaleString('en-US')})`,
+    );
+  if (usage.warning) out(`  ! ${usage.warning}`);
 
   const { servers } = await engine.mcpStatus();
   if (servers.length) {

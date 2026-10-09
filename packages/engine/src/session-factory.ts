@@ -11,6 +11,7 @@ import {
 } from '@switchback/protocol';
 import type { AgentCatalog } from './agent-catalog.ts';
 import type { SwitchbackConfig } from './config.ts';
+import { hashesOf, type Instructions } from './instructions-live.ts';
 import type { UsageLedger } from './ledger.ts';
 import type { Library } from './library.ts';
 import type { LiveSession } from './live-session.ts';
@@ -36,8 +37,8 @@ export interface SessionFactoryDeps {
   workspaceRoot: string;
   config(): SwitchbackConfig;
   org(): OrgStatus | undefined;
-  /** The workspace's AGENTS.md. */
-  instructions: string | undefined;
+  /** Both AGENTS.md files as they are now. */
+  instructions(): Instructions;
   agents: AgentCatalog;
   library: Library;
   sessions: SessionRegistry;
@@ -62,6 +63,7 @@ export class SessionFactory {
     if (!agent) throw new RpcError(ErrorCode.InvalidParams, `unknown agent "${agentName}"`);
     if (params.permissionMode) assertModeAllowed(params.permissionMode, this.deps.org());
     const wt = params.worktree;
+    const instructions = this.deps.instructions();
     const header: SessionHeader = {
       id: newSessionId(),
       title: params.title ?? '',
@@ -70,12 +72,14 @@ export class SessionFactory {
       workspaceRoot,
       ...(wt ? { worktree: { path: wt.path, root: wt.root, branch: wt.branch } } : {}),
       createdAt: this.deps.now().toISOString(),
+      instructions: hashesOf(instructions),
       system: systemPrompt({
         agent,
         workspaceRoot,
         root: wt?.root ?? workspaceRoot,
         shell: shellOf(config.bash).name,
-        ...(this.deps.instructions ? { project: this.deps.instructions } : {}),
+        ...(instructions.user ? { user: instructions.user } : {}),
+        ...(instructions.project ? { project: instructions.project } : {}),
         ...(params.instructions ? { session: params.instructions } : {}),
         skills: skillsSection(this.deps.library.skills().values()),
       }),

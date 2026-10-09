@@ -13,6 +13,7 @@ import type { EngineOptions } from './engine-options.ts';
 import { ExternalRuntimes } from './external-runtime.ts';
 import { HookRunner } from './hooks/runner.ts';
 import { TurnHooks } from './hooks/turn-hooks.ts';
+import { fixedInstructions } from './instructions-live.ts';
 import { UsageLedger } from './ledger.ts';
 import { Library } from './library.ts';
 import type { EngineHost, LiveSession } from './live-session.ts';
@@ -76,10 +77,20 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     ledger: ledger,
     sessions: sessions,
   });
+  const instructions =
+    options.instructionsSource ??
+    fixedInstructions({
+      ...(options.userInstructions ? { user: options.userInstructions } : {}),
+      ...(options.instructions ? { project: options.instructions } : {}),
+    });
   const factory: SessionFactory = new SessionFactory({
     ...settings,
     workspaceRoot: options.workspaceRoot,
-    instructions: options.instructions,
+    // Re-read first: a file saved a moment ago may not have reached the watcher yet.
+    instructions: () => {
+      instructions.refresh();
+      return instructions.current();
+    },
     agents: agents,
     library: library,
     sessions: sessions,
@@ -199,6 +210,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     reviews: reviews,
     mode: (s) => controls.modeOf(s),
     checkpoint: (s, turnId, prompt) => controls.beginCheckpoint(s, turnId, prompt),
+    instructions,
     mcp: () => io.mcp(),
   });
 
@@ -213,6 +225,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
 
   return {
     now,
+    instructions,
     models,
     ledger,
     sessions,

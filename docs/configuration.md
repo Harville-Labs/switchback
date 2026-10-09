@@ -13,9 +13,9 @@ Layers deep-merge in this order, with later layers winning:
 
 Files are JSONC: `//` and `/* */` comments and trailing commas are allowed. Any string of the form `{env:NAME}` is replaced with that environment variable, so secrets stay out of files. `switchback doctor` shows which files were loaded.
 
-Next to each config file, `agents/`, `commands/`, and `skills/` folders hold [agents](subagents.md), [custom commands, and skills](commands-and-skills.md).
+Next to each config file, `agents/`, `commands/`, and `skills/` folders hold [agents](subagents.md), [custom commands, and skills](commands-and-skills.md). Standing instructions go in `AGENTS.md`: the workspace's, and `~/.switchback/AGENTS.md` for every project ([AGENTS.md](commands-and-skills.md#agentsmd)).
 
-`SWITCHBACK_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/agents/`, `<dir>/commands/`, `<dir>/skills/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
+`SWITCHBACK_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/AGENTS.md`, `<dir>/agents/`, `<dir>/commands/`, `<dir>/skills/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
 ## Setting up
 

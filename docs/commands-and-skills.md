@@ -1,11 +1,23 @@
 # Custom commands and skills
 
-Two ways to give Switchback your own instructions in files:
+Three ways to give Switchback your own instructions in files:
 
+- **`AGENTS.md`** holds standing instructions that go into every session: how to build and test, conventions, things not to do.
 - A **custom command** is a prompt you run by name: `/fix-issue 12`.
 - A **skill** is know-how the model loads when a task calls for it: how your team writes release notes, how to fill in a PDF form, how to cut a release.
 
-Both live in Switchback's own folders, in the project (shared with your team through git) or in your user config (yours, in every project). When a project and you both define the same name, the project's wins. Switchback rescans these folders as it uses them, so new files work without a restart.
+Commands and skills live in Switchback's own folders, in the project (shared with your team through git) or in your user config (yours, in every project). When a project and you both define the same name, the project's wins. Switchback rescans these folders as it uses them, so new files work without a restart.
+
+## AGENTS.md
+
+| Where | Scope |
+|---|---|
+| `AGENTS.md` at the workspace root | This project, shared with your team through git |
+| `~/.switchback/AGENTS.md` | You, in every project |
+
+Both go into every session's system prompt, subagents included: yours under **User instructions**, then the project's under **Project instructions**, so the project's more specific instructions come last. Switchback reads only these two files ([open conventions](adr/0016-open-conventions.md)), never another tool's. Edits take effect without a restart, in every session on the machine. New sessions start with the current text. A running session gets the change with your next message, as a note to the model that replaces that section of its instructions. Its system prompt isn't rewritten, so the provider's prompt cache keeps working. A turn already in progress finishes under the instructions it started with.
+
+Every session pays for them in context, subagents included. `switchback doctor` shows each file's size in tokens and warns when together they take more than 10% of your smallest local model's context window. Keep them to rules that apply to every task, and move how-to detail into [skills](#skills), which load only when needed.
 
 ## Custom commands
 

@@ -4,6 +4,7 @@
  * every request is built from the latest marker with `contextOf`.
  */
 import type { CompactionPart, Message } from '@switchback/protocol';
+import { latestInstructionReminders } from './instructions-live.ts';
 import { messageTokens } from './tokens.ts';
 
 export function markerOf(m: Message): CompactionPart | undefined {
@@ -24,7 +25,13 @@ export function latestMarker(
 /** One stable object per marker, so per-message token counts stay cached. */
 const summaryMessages = new WeakMap<CompactionPart, Message>();
 
-function summaryMessage(part: CompactionPart): Message {
+/**
+ * The summary as a user message, followed by the latest AGENTS.md reminders
+ * from the compacted part (ADR 0017): the model must keep following
+ * instructions that changed after its system prompt was written. History
+ * before a marker never changes, so this is the same for every request.
+ */
+function summaryMessage(part: CompactionPart, messages: Message[]): Message {
   let m = summaryMessages.get(part);
   if (!m) {
     m = {
@@ -34,6 +41,7 @@ function summaryMessage(part: CompactionPart): Message {
           type: 'text',
           text: `<conversation_summary>\nEarlier parts of this conversation were compacted. Summary:\n\n${part.summary}\n</conversation_summary>`,
         },
+        ...latestInstructionReminders(messages.slice(0, part.keepFrom)),
       ],
     };
     summaryMessages.set(part, m);
@@ -46,7 +54,7 @@ export function contextOf(messages: Message[]): Message[] {
   const latest = latestMarker(messages);
   if (!latest) return messages.filter((m) => !markerOf(m));
   return [
-    summaryMessage(latest.part),
+    summaryMessage(latest.part, messages),
     ...messages.slice(latest.part.keepFrom).filter((m) => !markerOf(m)),
   ];
 }

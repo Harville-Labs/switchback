@@ -18,6 +18,7 @@ import type {
 } from '@switchback/protocol';
 import type { SignalTracker } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
+import type { InstructionHashes } from './instructions-live.ts';
 import type { OrgStatus } from './org/policy.ts';
 import type { PrivatePathMatcher } from './privacy.ts';
 import type { SessionHeader } from './store.ts';
@@ -69,6 +70,8 @@ export interface LiveSession {
   mode?: PermissionMode;
   /** The mode the model was last told about (plan mode reminders). */
   toldMode?: PermissionMode;
+  /** The AGENTS.md hashes the model was last told about; worked out from the transcript when unset. */
+  toldInstructions?: InstructionHashes;
   /** The running turn, so prompts sent meanwhile can join it or interrupt it. */
   turn?: { id: string; done: Promise<unknown> };
   /** Prompts sent during the running turn, delivered at its next step. */
