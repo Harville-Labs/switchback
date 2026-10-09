@@ -101,15 +101,15 @@ test('an edit asks the editor about the tool call it already showed, and runs wh
 
 test('the editor hears why a prompt asks, such as a file outside the workspace', async () => {
   const { agent, asked } = await editor([
-    { toolCalls: [{ name: 'read', input: { path: '../elsewhere.txt' } }] },
+    { toolCalls: [{ name: 'write', input: { path: '../elsewhere.txt', content: 'x' } }] },
     { text: 'ok' },
   ]);
   const { sessionId } = await agent.request('session/new', { cwd: root, mcpServers: [] });
-  await agent.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'read' }] });
+  await agent.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'write' }] });
   const content = asked[0]?.toolCall.content?.[0];
-  expect(
-    content?.type === 'content' && content.content.type === 'text' && content.content.text,
-  ).toBe('Asking because: outside the workspace.');
+  const text =
+    content?.type === 'content' && content.content.type === 'text' ? content.content.text : '';
+  expect(text.startsWith('Asking because: outside the workspace.\n\n```diff')).toBe(true);
 });
 
 test('a denied edit fails its tool call and changes nothing', async () => {
