@@ -47,6 +47,8 @@ export interface ToolContext {
   approvePlan?: (plan: string) => Promise<PlanAnswer>;
   /** The skills there are now, by name (the skill tool). */
   skills?: () => Map<string, Skill>;
+  /** Where this engine's config files are, absolute (the docs tool). */
+  configFiles?: { user: string; project: string; projectLocal: string };
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';

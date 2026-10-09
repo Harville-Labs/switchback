@@ -18,8 +18,13 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `websearch` | web | Search the web through the configured backend ([configuration.md](configuration.md#web)) |
 | `todo` | none | Keep a checklist for multi-step work; each call replaces the list |
 | `skill` | none | Load a [skill](commands-and-skills.md#skills): its instructions, or one of its files |
+| `docs` | none | Read Switchback's own documentation, as built into this version: the topics below "Using Switchback" in the docs index, a whole page or one section. The configuration page starts with where this machine's config files are |
 
-An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `exit_plan_mode` comes with every top-level session, and `todo` and `skill` with every session.
+An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `exit_plan_mode` comes with every top-level session, and `todo`, `skill`, and `docs` with every session.
+
+## Asking about Switchback
+
+Because every session has `docs`, you can ask the model how Switchback works or to change its settings ("route turns over 50k tokens to the remote model", "allow `bun test` without asking") and it reads the documentation for the version you're running first, offline. It edits the project's `.switchback/config.json` or `.switchback/config.local.json` itself, with the usual permission prompt. Your user config (`~/.switchback/config.json`) is outside the workspace, so for that it tells you what to change. The running engine reads its config when it starts, so a change takes effect after it restarts.
 
 ## The checklist
 

@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **`docs` tool**: the model reads Switchback's own documentation, built into the binary, so you can ask it how Switchback works or to change a setting. Every session has it; it needs no permission. See docs/tools.md#asking-about-switchback
+
 ## [1.1.0] - 2026-10-07
 
 Upgrading: three changes need action. Move `~/.config/switchback` and `~/.local/share/switchback` into `~/.switchback` (or re-run `switchback init`); expect `bypassPermissions` to stop asking where ask rules used to; and rename `restrictions.allowUserPermissionRules` to `allowUserPermissions` in organization policies.

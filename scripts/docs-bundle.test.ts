@@ -44,9 +44,9 @@ test('links resolve relative to the page they are on', () => {
   expect(
     userPages('## Using Switchback\n- [A](a.md): first\n- [B](b.md) · [C](c/d.md)\n## Building\n'),
   ).toEqual([
-    { slug: 'a', summary: 'first' },
-    { slug: 'b', summary: '' },
-    { slug: 'c/d', summary: '' },
+    { slug: 'a', title: 'A', summary: 'first' },
+    { slug: 'b', title: 'B', summary: '' },
+    { slug: 'c/d', title: 'C', summary: '' },
   ]);
 });
 
