@@ -123,7 +123,8 @@ describe('Engine', () => {
     // The detected 6,000-token window, not the 16,000 default (which vLLM would reject).
     const detected = await maxTokensFor({});
     expect(detected).toBeLessThan(6_000);
-    expect(detected).toBeGreaterThan(4_000);
+    // Less what the prompt and tool list take.
+    expect(detected).toBeGreaterThan(3_000);
     // A configured cap under the window stands.
     expect(await maxTokensFor({ contextWindow: 32_000, maxOutputTokens: 2_000 })).toBe(2_000);
   });
@@ -296,8 +297,9 @@ describe('Engine', () => {
     expect(lp.requests.filter((q) => q.system.includes('read-only search agent'))).toHaveLength(2);
     // Explore is read-only: its tool list must not include write or task.
     const exploreReq = lp.requests.find((q) => q.system.includes('read-only search agent'));
-    // The checklist and skills come with every agent; they aren't capabilities.
+    // The checklist, skills, and docs come with every agent; they aren't capabilities.
     expect(exploreReq?.tools.map((t) => t.name).sort()).toEqual([
+      'docs',
       'glob',
       'grep',
       'read',

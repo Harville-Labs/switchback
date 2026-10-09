@@ -113,6 +113,12 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
   });
   const paths = switchbackPaths();
   const dataDir = options.dataDir ?? paths.dataDir;
+  const project = projectPaths(options.workspaceRoot);
+  const configFiles = {
+    user: options.userConfigFile ?? paths.configFile,
+    project: project.configFile,
+    projectLocal: project.localConfigFile,
+  };
   const hooks: HookRunner = new HookRunner({
     hooks: () => options.config.hooks,
     workspaceRoot: options.workspaceRoot,
@@ -136,10 +142,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     mode: (s) => controls.modeOf(s),
     // exit_plan_mode's result tells the model about the change itself.
     setMode: (s, mode) => controls.changeMode(sessions.top(s), mode, true),
-    saveTo: {
-      project: projectPaths(options.workspaceRoot).localConfigFile,
-      user: options.userConfigFile ?? switchbackPaths().configFile,
-    },
+    saveTo: { project: configFiles.projectLocal, user: configFiles.user },
   });
   const tools: ToolRunner = new ToolRunner(host, gate, {
     commands: commands,
@@ -152,6 +155,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
       controls.noteCheckpoint(s, path);
     },
     skills: () => library.skills(),
+    configFiles,
   });
   const external: ExternalRuntimes = new ExternalRuntimes(host, {
     injected: options.runtimes,

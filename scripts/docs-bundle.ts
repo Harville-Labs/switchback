@@ -16,6 +16,7 @@ import { dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked, type Token } from 'marked';
 import { gfmHeadingId } from 'marked-gfm-heading-id';
+import { userPages } from '../packages/engine/src/docs.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DOCS = join(ROOT, 'docs');
@@ -33,21 +34,11 @@ export interface DocsPage {
   headings: { id: string; text: string; depth: number }[];
 }
 
+export { userPages };
+
 export interface DocsBundle {
   version: string;
   pages: DocsPage[];
-}
-
-/** The pages the index lists for users, in its order, with their one-line summaries. */
-export function userPages(index: string): { slug: string; summary: string }[] {
-  const section = /## Using Switchback\n([\s\S]*?)\n## /.exec(index)?.[1] ?? '';
-  const pages: { slug: string; summary: string }[] = [];
-  for (const line of section.split('\n')) {
-    // A line can list several pages (`[TUI](clients/tui.md) · [VS Code](clients/vscode.md)`).
-    const summary = /\]\([^)]+\.md\):\s*(.*)$/.exec(line)?.[1] ?? '';
-    for (const m of line.matchAll(/\]\(([^)#]+)\.md\)/g)) pages.push({ slug: m[1] ?? '', summary });
-  }
-  return pages;
 }
 
 /** Where a link in `from` (a slug) points: another included page, GitHub, or as written. */
