@@ -11,11 +11,14 @@ import {
   formatReceipt,
   formatShells,
   formatUsage,
+  formatWorktreeDiff,
+  formatWorktrees,
   parseMode,
 } from '@switchback/client';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
 import { chooseAgent, chooseMode, chooseModels, chooseRewind, chooseRole } from './pickers.ts';
+import { worktreeDiffs } from './worktree-diff.ts';
 
 export async function runChatCommand(
   engine: EngineConnection,
@@ -102,6 +105,15 @@ export async function runChatCommand(
     case 'mcp': {
       const { servers } = await c.request('mcp.list', {});
       return info(`MCP servers\n${formatMcpServers(servers)}`);
+    }
+    case 'worktrees': {
+      if (!args[0]) return info(formatWorktrees(await c.request('worktrees.list', {})));
+      const diff = await c.request('worktrees.diff', { branch: args[0] });
+      if (!diff.files.length) return info(formatWorktreeDiff(diff));
+      await worktreeDiffs.open(diff);
+      return info(
+        `${diff.branch}: ${diff.stat.split('\n').at(-1)?.trim() ?? ''} (opened in the diff editor)`,
+      );
     }
     case 'setup':
       await vscode.commands.executeCommand('switchback.runSetup');

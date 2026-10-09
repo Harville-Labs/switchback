@@ -12,6 +12,7 @@ import {
   toolTitle,
   type ViewItem,
   type ViewState,
+  worktreeLabel,
 } from '@switchback/client';
 import { Box, Text } from 'ink';
 import { DiffView } from './Diff.tsx';
@@ -307,7 +308,7 @@ export function Item({
     case 'subagent': {
       const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
       return (
-        <Box marginTop={compact ? 0 : 1}>
+        <Box marginTop={compact ? 0 : 1} flexDirection="column">
           <Text>
             <Text color={t.thinking}>
               {icon} {item.agent}
@@ -319,6 +320,7 @@ export function Item({
               {item.status === 'running' && item.activity ? ` · ${item.activity}` : ''}
             </Text>
           </Text>
+          {item.worktree ? <Text dimColor>{`  ${worktreeLabel(item.worktree)}`}</Text> : null}
         </Box>
       );
     }

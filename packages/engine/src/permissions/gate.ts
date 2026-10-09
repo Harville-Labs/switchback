@@ -216,6 +216,7 @@ export class PermissionGate {
         };
       return { ask: 'running outside the OS sandbox' };
     }
+    if (tool.name === 'merge_worktree') return { ask: 'merging a branch into your working tree' };
     if (tool.permission === 'edit' && reach?.kind === 'switchback')
       return { ask: "Switchback's own configuration" };
     if (tool.permission === 'edit' && typeof i.path === 'string') {

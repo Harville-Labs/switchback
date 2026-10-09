@@ -21,7 +21,7 @@ export interface Worktree {
   base: string;
 }
 
-async function git(cwd: string, args: string[]): Promise<string> {
+export async function git(cwd: string, args: string[]): Promise<string> {
   // An argument array, never a shell string: branch names and paths are not interpreted.
   const proc = Bun.spawn(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' });
   const [out, err, code] = await Promise.all([
@@ -39,7 +39,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
  * Windows), so they run one at a time per repository.
  */
 const queues = new Map<string, Promise<unknown>>();
-function serialized<T>(repo: string, work: () => Promise<T>): Promise<T> {
+export function serialized<T>(repo: string, work: () => Promise<T>): Promise<T> {
   const run = (queues.get(repo) ?? Promise.resolve()).then(work, work);
   queues.set(
     repo,

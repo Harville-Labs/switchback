@@ -5,13 +5,14 @@
  */
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import type { RoutePreference } from '@switchback/protocol';
+import type { RoutePreference, WorktreeOutcome } from '@switchback/protocol';
 import type { AgentDefinition } from './agents.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { switchbackPaths } from './paths.ts';
 import { Semaphore } from './semaphore.ts';
 import { type SubagentResult, ToolError, truncate } from './tools/index.ts';
 import { createWorktree, finishWorktree, type Worktree } from './worktree.ts';
+import { parseShortstat, writeBranchMeta } from './worktree-info.ts';
 
 export interface SubagentDeps {
   agent(name: string): AgentDefinition | undefined;
@@ -73,6 +74,15 @@ export class Subagents {
       parentId: parent.header.id,
       ...(worktree ? { worktree } : {}),
     });
+    if (worktree)
+      writeBranchMeta(worktreeDir(this.deps.workspaceRoot, this.deps.dataDir), {
+        branch: worktree.branch,
+        agent,
+        task: description,
+        sessionId: child.header.id,
+        parentSessionId: parent.header.id,
+        createdAt: child.header.createdAt,
+      });
     const limitUsd = def?.budgetUsd ?? config.subagents.budgetUsd;
     if (limitUsd !== undefined) child.budget = { agent, limitUsd };
     const background = options.background === true;
@@ -90,6 +100,7 @@ export class Subagents {
           agent,
           task: description,
           ...(background ? { background } : {}),
+          ...(worktree ? { worktree: { branch: worktree.branch, path: worktree.path } } : {}),
         });
         // The brief was written with the parent's context, so it's private if that is.
         const inherited = parent.private ? `from its parent: ${parent.private}` : undefined;
@@ -100,6 +111,11 @@ export class Subagents {
               ...(inherited ? { private: inherited } : {}),
             });
         const ok = result.stopReason === 'end_turn';
+        const said = ok ? result.text : `${result.stopReason}: ${child.lastError ?? result.text}`;
+        // Committed and measured first, so the completion event can say what it left.
+        const isolated = worktree
+          ? await finishIsolated(worktree, ok, description, said)
+          : undefined;
         this.host.emit({
           type: 'subagent.completed',
           ...scope(parent),
@@ -107,11 +123,11 @@ export class Subagents {
           agent,
           ok,
           ...(background ? { background } : {}),
+          ...(isolated ? { worktree: isolated.outcome } : {}),
         });
-        const text = ok ? result.text : `${result.stopReason}: ${child.lastError ?? result.text}`;
         return {
           ok,
-          text: worktree ? await finishIsolated(worktree, ok, description, text) : text,
+          text: isolated?.text ?? said,
           sessionId: child.header.id,
           ...(child.private && !parent.private
             ? { private: `subagent ${agent}: ${child.private}` }
@@ -171,15 +187,13 @@ export class Subagents {
 
   private createWorktree(parent: LiveSession): Promise<Worktree> {
     const id = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
-    return createWorktree(this.host.rootOf(parent), this.worktreeDir(), id).catch((err: Error) => {
+    return createWorktree(
+      this.host.rootOf(parent),
+      worktreeDir(this.deps.workspaceRoot, this.deps.dataDir),
+      id,
+    ).catch((err: Error) => {
       throw new ToolError(err.message);
     });
-  }
-
-  /** Worktrees live in the data directory, one folder per repository. */
-  private worktreeDir(): string {
-    const id = createHash('sha256').update(this.deps.workspaceRoot).digest('hex').slice(0, 12);
-    return join(this.deps.dataDir ?? switchbackPaths().dataDir, 'worktrees', id);
   }
 
   /** Remote spend of a session and all its descendant sessions. */
@@ -215,24 +229,41 @@ export class Subagents {
   }
 }
 
+/** Worktrees (and what's known about their branches) live in the data directory, one folder per workspace. */
+export function worktreeDir(workspaceRoot: string, dataDir: string | undefined): string {
+  const id = createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 12);
+  return join(dataDir ?? switchbackPaths().dataDir, 'worktrees', id);
+}
+
 /**
  * Turn an isolated subagent's outcome into its report: on success, commit to
  * its branch, remove the worktree, and include the diff; on failure, keep
- * the worktree for inspection.
+ * the worktree for inspection. `outcome` is what clients are told.
  */
 async function finishIsolated(
   wt: Worktree,
   ok: boolean,
   description: string,
   text: string,
-): Promise<string> {
-  if (!ok)
-    return `${text}\n\nThe worktree is kept for inspection at ${wt.path} (branch ${wt.branch}).`;
+): Promise<{ text: string; outcome: WorktreeOutcome }> {
+  const none = { branch: wt.branch, changed: false, files: 0, insertions: 0, deletions: 0 };
+  const kept = (why: string) => ({
+    text: `${text}\n\n${why} at ${wt.path} (branch ${wt.branch}).`,
+    outcome: { ...none, kept: wt.path },
+  });
+  if (!ok) return kept('The worktree is kept for inspection');
   try {
     const r = await finishWorktree(wt, `switchback: ${description}`);
-    if (!r.changed) return `${text}\n\n(Isolated in a worktree; it made no file changes.)`;
-    return `${text}\n\nChanges are committed on branch \`${wt.branch}\` (from ${wt.base.slice(0, 8)}); your working tree is unchanged. Review and merge them if you want them, e.g. \`git merge ${wt.branch}\`.\n\n${r.stat}\n\n${truncate(r.diff, 20_000)}`;
+    if (!r.changed)
+      return {
+        text: `${text}\n\n(Isolated in a worktree; it made no file changes.)`,
+        outcome: none,
+      };
+    return {
+      text: `${text}\n\nChanges are committed on branch \`${wt.branch}\` (from ${wt.base.slice(0, 8)}); your working tree is unchanged. Review them, and merge them with the merge_worktree tool if they should land.\n\n${r.stat}\n\n${truncate(r.diff, 20_000)}`,
+      outcome: { ...none, changed: true, ...parseShortstat(r.stat.split('\n').at(-1) ?? '') },
+    };
   } catch (err) {
-    return `${text}\n\nCould not finish the worktree (${(err as Error).message}); it is kept at ${wt.path} (branch ${wt.branch}).`;
+    return kept(`Could not finish the worktree (${(err as Error).message}); it is kept`);
   }
 }

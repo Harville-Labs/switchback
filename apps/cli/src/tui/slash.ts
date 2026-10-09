@@ -16,6 +16,8 @@ import {
   formatShells,
   formatSubagents,
   formatUsage,
+  formatWorktreeDiff,
+  formatWorktrees,
   fromTranscript,
   initialView,
   MODE_DESCRIPTIONS,
@@ -296,6 +298,10 @@ const HANDLERS: Record<string, Handler> = {
   mcp: async (ctx) => {
     const { servers } = await ctx.client.request('mcp.list', {});
     say(ctx, `MCP servers\n${formatMcpServers(servers)}`);
+  },
+  worktrees: async (ctx, args) => {
+    if (!args[0]) return say(ctx, formatWorktrees(await ctx.client.request('worktrees.list', {})));
+    say(ctx, formatWorktreeDiff(await ctx.client.request('worktrees.diff', { branch: args[0] })));
   },
   copy,
   rewind: (ctx) => ctx.openRewind(),

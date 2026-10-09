@@ -14,6 +14,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - Protocol (additive): `permission.requested` carries `reason`
 - **Agent Client Protocol**: `switchback acp` runs Switchback as an agent for Zed, JetBrains IDEs, and other editors that speak ACP. Sessions are shared live with the TUI and VS Code through the workspace's engine, and routing decisions, permission prompts, escalations, modes, and the checklist all come through. See docs/clients/acp.md
 - **OpenCode Go and Zen**: a provider for OpenCode's subscription (Go) and pay-as-you-go (Zen) gateways, with one `OPENCODE_API_KEY`. Each model goes to the API OpenCode serves it on (Chat Completions, Anthropic Messages, or Responses). `switchback init` offers it, with models from OpenCode's live list. See docs/providers.md#opencode-go-and-zen
+- **See what isolated subagents did**: their rows show the branch while they run and what they changed when they're done; `/worktrees` (both clients) and `switchback worktrees` list every branch they made, with state, size, and why; `/worktrees <branch>` shows the diff, side by side in VS Code. See docs/subagents.md#seeing-what-they-did
+- **`merge_worktree` tool**: the parent agent can merge an isolated subagent's branch into your checked-out branch, always after asking you with the diff. Refused while you have uncommitted changes; a conflict aborts and names the files
+- Protocol (additive): `worktrees.list`, `worktrees.diff`, and `worktree` on `subagent.started` and `subagent.completed`
 
 ### Changed
 - **`switchback doctor` is easier to read**: section headings stand out, ✓ is green, ✗ red, warnings yellow, and details are dimmed, in a terminal only (piped output stays plain). Paths under your home directory show as `~/...`

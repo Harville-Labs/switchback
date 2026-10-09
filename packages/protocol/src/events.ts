@@ -12,6 +12,7 @@ import type {
   ShellInfo,
 } from './methods.ts';
 import type { ModelRef, StopReason, Tier, Usage } from './transcript.ts';
+import type { WorktreeOutcome, WorktreeStart } from './worktrees.ts';
 
 interface SessionScoped {
   sessionId: string;
@@ -123,6 +124,8 @@ export type EngineEvent =
       task: string;
       /** Started with `background: true`: the parent didn't wait for it. */
       background?: boolean;
+      /** Set when it works in its own git worktree. */
+      worktree?: WorktreeStart;
     } & SessionScoped)
   | ({
       type: 'subagent.completed';
@@ -130,6 +133,8 @@ export type EngineEvent =
       agent: string;
       ok: boolean;
       background?: boolean;
+      /** What it left on its branch, when it worked in a worktree. */
+      worktree?: WorktreeOutcome;
     } & SessionScoped)
   | ({
       type: 'review.completed';

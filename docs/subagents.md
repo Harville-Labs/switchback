@@ -129,10 +129,17 @@ Credentials: Managed Agents uses `ANTHROPIC_API_KEY` (or `apiKey`); Codex uses i
 
 With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the agent file), the subagent works in its own git worktree on a new branch, `switchback/<id>`, created from `HEAD`. Its file tools, shell, and `@` mentions operate there, so parallel editing subagents never touch each other or your working tree.
 
-- **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. The parent (or you) decides whether to merge, e.g. `git merge switchback/<id>`. A subagent that changed nothing leaves no branch behind.
+- **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. A subagent that changed nothing leaves no branch behind.
+- **Merging** is up to the parent and you. The parent can call `merge_worktree`, which always asks you first and shows the diff (in every mode but `bypassPermissions`; plan mode refuses it like any edit). It merges as its own merge commit into your checked-out branch, refuses while your working tree has uncommitted changes, and on a conflict aborts and names the files, leaving everything as it was. You can always merge by hand: `git merge switchback/<id>`. Rewind (`/rewind`) doesn't undo a merge; `git revert -m 1 <merge commit>` does.
 - **On failure**, the worktree is kept for inspection and its path is in the report.
 - It needs a git repository with at least one commit. Uncommitted changes in your working tree aren't in the worktree, since it starts from `HEAD`.
-- Worktrees live in the Switchback data directory (`~/.switchback/data/worktrees/`), outside your repository. Commits use your git identity, or `Switchback <switchback@localhost>` when none is set.
+- Worktrees live in the Switchback data directory (`~/.switchback/data/worktrees/`), outside your repository, with a note of who made each branch and why. Commits use your git identity, or `Switchback <switchback@localhost>` when none is set.
+
+#### Seeing what they did
+
+- **While it runs**, the subagent's row shows its branch (`⎇ switchback/1a2b3c4d5e6f`); **when it's done**, how many files it changed and lines it added and removed, or where its worktree was kept.
+- **`/worktrees`** (both clients) and **`switchback worktrees`** list every `switchback/*` branch in the repository, newest first: running, ready to merge (with how many commits your branch doesn't have), merged, or kept after a failure, with the task and agent that made it.
+- **`/worktrees <branch>`** shows a branch's diff since it left your branch: in the TUI as text, and in VS Code in the multi-file diff editor, each file side by side. `switchback worktrees <branch>` prints it, and `--json` gives either listing as data.
 
 ### Background tasks
 

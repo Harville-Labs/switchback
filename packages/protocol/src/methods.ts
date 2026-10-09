@@ -11,6 +11,7 @@ import {
   type Tier,
   type Usage,
 } from './transcript.ts';
+import type { WorktreeDiff, WorktreeInfo, WorktreesDiffParams } from './worktrees.ts';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -442,6 +443,10 @@ export interface Methods {
   /** Background shells, all or one session's. */
   'shells.list': { params: ShellsListParams; result: ShellInfo[] };
   'shells.kill': { params: ShellsKillParams; result: ShellInfo };
+  /** Every branch isolated subagents made in this repository, newest first. */
+  'worktrees.list': { params: Record<string, never>; result: WorktreeInfo[] };
+  /** One branch's changes since it left the checked-out branch. */
+  'worktrees.diff': { params: WorktreesDiffParams; result: WorktreeDiff };
 }
 
 export type MethodName = keyof Methods;

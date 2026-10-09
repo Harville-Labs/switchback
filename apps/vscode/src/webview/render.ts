@@ -21,6 +21,7 @@ import {
   toolTitle,
 } from '@switchback/client/tool-display';
 import type { TodoItem, ViewItem, ViewState } from '@switchback/client/view';
+import { worktreeLabel } from '@switchback/client/worktrees';
 import type { PermissionDecision } from '@switchback/protocol';
 import { esc, renderMarkdown } from './markdown.ts';
 
@@ -117,7 +118,10 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
       ]
         .filter(Boolean)
         .join(' · ');
-      const summary = `<span class="${item.status}">↳ ${icon} ${esc(item.agent)}</span> ${esc(item.task)} <span class="detail">${esc(meta)}</span>`;
+      const branch = item.worktree
+        ? ` <span class="detail worktree">${esc(worktreeLabel(item.worktree))}</span>`
+        : '';
+      const summary = `<span class="${item.status}">↳ ${icon} ${esc(item.agent)}</span> ${esc(item.task)} <span class="detail">${esc(meta)}</span>${branch}`;
       const child = ctx.children[item.id];
       if (!child) return `<div class="subagent">${summary}</div>`;
       // Expanded state lives in \`expanded\` so re-rendering doesn't collapse it.
