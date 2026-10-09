@@ -4,7 +4,8 @@
  * - `src/**`, `./docs/*.md`: relative to the workspace root
  * - `.env`, `*.pem` (no slash): that name at any depth
  * - `/build/**`: anchored at the workspace root
- * - `~/.ssh/**`, `//etc/hosts`: absolute paths (home directory, filesystem root)
+ * - `~/.ssh/**`, `//etc/hosts`: absolute paths (home directory, filesystem root;
+ *   `//C:/data` on Windows)
  * - a trailing `/` means everything under that directory
  */
 import { homedir } from 'node:os';
@@ -21,7 +22,9 @@ export function pathMatcher(
 ): PathMatcher {
   const dirOnly = specifier.endsWith('/');
   const spec = dirOnly ? `${specifier}**` : specifier;
-  if (spec.startsWith('//')) return absolute(new Glob(spec.slice(1)));
+  // `//C:/data` is a drive path on Windows; `//srv/data` is `/srv/data` elsewhere.
+  if (spec.startsWith('//'))
+    return absolute(new Glob(/^\/\/[A-Za-z]:\//.test(spec) ? spec.slice(2) : spec.slice(1)));
   if (spec.startsWith('~/')) return absolute(new Glob(`${toSlash(home)}/${spec.slice(2)}`));
   const rel = spec.replace(/^\.?\//, '');
   const anchored = spec.startsWith('/') || spec.startsWith('./') || rel.includes('/');

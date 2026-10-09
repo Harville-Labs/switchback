@@ -9,8 +9,8 @@
  * 3. Plan mode: no edits.
  * 4. `bypassPermissions`: everything else runs, without a prompt.
  * 5. Ask rules, a command that wants to leave the sandbox, and edits to the
- *    agent's own configuration: always ask in the other modes. A path
- *    outside the workspace asks unless an allow rule names it.
+ *    agent's own configuration: always ask in the other modes. An edit
+ *    outside the workspace asks unless an allow rule names the place.
  * 6. A PreToolUse hook's decision (its deny is applied before the gate, its
  *    ask asks, its allow skips a level's prompt), then allow rules, including
  *    what the user allowed this session.
@@ -169,16 +169,15 @@ export class PermissionGate {
       return this.ask(s, tool, call, ctx, signal, {
         reason: `a hook${hook.reason ? `: ${hook.reason}` : ''}`,
       });
-    if (away) {
-      // Leaving the workspace takes a rule that names the place; `read: allow`,
-      // a bare `read` rule, a hook, or acceptEdits isn't enough.
+    // Reads outside the workspace follow `permissions.read` like any other.
+    // Editing there takes a rule that names the place; `edit: allow`, a bare
+    // `edit` rule, a hook, or acceptEdits isn't enough.
+    if (away && tool.permission === 'edit') {
       if (verdict?.behavior === 'allow' && verdict.rule.rule.includes('('))
         return { allowed: true };
-      const folder = tool.name === 'glob' || tool.name === 'grep';
-      const category = tool.permission === 'edit' ? 'edit' : 'read';
       return this.ask(s, tool, call, ctx, signal, {
         reason: 'outside the workspace',
-        rules: [folderRule(category, away.path, folder)],
+        rules: [folderRule(away.path)],
       });
     }
     // A hook's allow skips the prompt a level would show (ask rules asked above).

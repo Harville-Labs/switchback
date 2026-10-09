@@ -19,7 +19,7 @@ Both are ordinary config keys, so an organization can enforce them (see [organiz
 "localOnlyPaths": ["secrets/", "*.pem", "~/customers/", "//srv/medical-records/"]
 ```
 
-Folders outside the workspace matter because the model can read them once you allow it ([permissions.md](permissions.md#outside-the-workspace)).
+Folders outside the workspace matter because the model can read them like the workspace ([permissions.md](permissions.md#outside-the-workspace)).
 
 When content from a matching file enters a session, the session is **pinned local for the rest of its life**:
 

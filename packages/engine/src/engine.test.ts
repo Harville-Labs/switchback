@@ -433,15 +433,18 @@ describe('Engine', () => {
     expect(result).toMatchObject({ type: 'tool_result', isError: true });
   });
 
-  test('asks before reading outside the workspace, though reads are allowed', async () => {
+  test('asks before editing outside the workspace, though edits are allowed', async () => {
     const { engine, lp, events } = setup(
-      [{ toolCalls: [{ name: 'read', input: { path: '../outside.txt' } }] }, { text: 'ok' }],
+      [
+        { toolCalls: [{ name: 'write', input: { path: '../outside.txt', content: 'x' } }] },
+        { text: 'ok' },
+      ],
       [],
     );
     engine.subscribe((e) => {
       if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'deny');
     });
-    await engine.runTurn(engine.createSession({}).id, 'read it');
+    await engine.runTurn(engine.createSession({}).id, 'write it');
     expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
       reason: 'outside the workspace',
     });

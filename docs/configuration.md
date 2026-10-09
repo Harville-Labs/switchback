@@ -118,7 +118,7 @@ See [routing.md](routing.md#configuration-reference).
 | `web` | `ask` | `webfetch`, `websearch` |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
 | `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `plan`, or `bypassPermissions` |
-| `outsideWorkspace` | `ask` | Files outside the workspace: `ask` before each use (allow rules that name a folder open it ahead of time), or `deny` to keep file tools in the workspace. See [permissions.md](permissions.md#outside-the-workspace) |
+| `outsideWorkspace` | `ask` | Files outside the workspace: with `ask`, reads follow `read` and edits ask (allow rules that name a folder open it ahead of time); `deny` keeps file tools in the workspace, reads included. See [permissions.md](permissions.md#outside-the-workspace) |
 | `allow`, `ask`, `deny` | `[]` | Rules such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
 
 The levels are `allow`, `ask`, and `deny`. See [permissions.md](permissions.md) for the order rules and modes are applied in and the full rule syntax.
