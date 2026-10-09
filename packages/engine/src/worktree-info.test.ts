@@ -153,7 +153,7 @@ test('merging always asks with the diff, then lands as one merge commit', async 
   expect(prompt?.preview).toContain('+from the agent');
   expect(prompt).not.toHaveProperty('rules');
   expect(lastResult()?.content).toContain(`Merged ${wt?.branch}`);
-  expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toBe('from the agent\n');
+  expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toMatch(/^from the agent\r?\n$/);
   expect(git('log', '-1', '--format=%P').split(' ')).toHaveLength(2);
   expect((await engine.listWorktrees())[0]).toMatchObject({ state: 'merged', ahead: 0 });
 });
@@ -188,7 +188,7 @@ test('a conflict aborts the merge, names the files, and leaves the tree as it wa
   await say(`merge ${wt?.branch}`);
   expect(lastResult()?.content).toContain('conflicts in shared.txt; the merge was aborted');
   expect(git('status', '--porcelain')).toBe('');
-  expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toBe('mine\n');
+  expect(readFileSync(join(repo, 'shared.txt'), 'utf8')).toMatch(/^mine\r?\n$/);
 });
 
 test('a failed subagent’s worktree is listed as kept, and can’t be merged until it’s removed', async () => {
