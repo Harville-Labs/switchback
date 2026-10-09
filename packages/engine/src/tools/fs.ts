@@ -15,7 +15,7 @@ import {
 } from './tool.ts';
 
 const PATH_HELP =
-  'File path, relative to the workspace root. Paths outside it (absolute, or starting with ~/) ask the user first.';
+  'File path, relative to the workspace root; absolute or starting with ~/ for files elsewhere. Editing outside the workspace asks the user first.';
 
 const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)([\\/]|$)/;
 
@@ -166,9 +166,7 @@ export const globTool = defineTool({
     path: z
       .string()
       .optional()
-      .describe(
-        'Directory to search in, relative to the workspace root (outside it asks the user first)',
-      ),
+      .describe('Directory to search in, relative to the workspace root, or absolute'),
   }),
   permission: 'read',
   mutating: false,

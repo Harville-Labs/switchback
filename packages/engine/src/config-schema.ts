@@ -67,8 +67,9 @@ export const SwitchbackConfig = z.object({
       /** The mode new sessions start in (docs/permissions.md). */
       defaultMode: PermissionMode.default('default'),
       /**
-       * Files outside the workspace: `ask` (allow rules that name a place
-       * open it ahead of time) or `deny` (file tools stay in the workspace).
+       * Files outside the workspace: `ask` (reads follow `read`; edits ask
+       * unless an allow rule names the place) or `deny` (file tools stay in
+       * the workspace).
        */
       outsideWorkspace: z.enum(['ask', 'deny']).default('ask'),
       /** Rules like `bash(git status:*)`. Lists from every layer add up; deny beats ask beats allow. */

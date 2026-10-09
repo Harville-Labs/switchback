@@ -9,12 +9,17 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type { EngineEvent, PermissionDecision, ToolResultPart } from '@switchback/protocol';
 import { type Provider, type Script, ScriptedProvider } from '@switchback/providers';
 import { SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
 import { folderRule, reachOf } from './outside.ts';
+import { pathMatcher } from './path-match.ts';
+
+/** A path as a rule writes it from the root: `//srv/data`, or `//C:/data` on Windows. */
+const absolute = (p: string) => `//${p.split(sep).join('/').replace(/^\/+/, '')}`;
+const rule = (kind: string, dir: string) => `${kind}(${absolute(dir)}/)`;
 
 let base: string;
 let root: string;
@@ -64,37 +69,49 @@ function run(
 }
 
 describe('outside the workspace', () => {
-  test('a read asks, and "always" opens that folder for the rest of the session', async () => {
-    const { asked, results, go } = run(
-      [
-        { name: 'read', input: { path: join(away, 'a.md') } },
-        { name: 'read', input: { path: '../notes/b.md' } },
-      ],
-      {},
-      () => 'allow_always',
-    );
+  test('reads and searches run without asking, as reads in the workspace do', async () => {
+    const { asked, results, go } = run([
+      { name: 'read', input: { path: join(away, 'a.md') } },
+      { name: 'grep', input: { pattern: 'beta', path: '../notes' } },
+    ]);
     await go();
-    expect(asked).toHaveLength(1);
-    expect(asked[0]).toMatchObject({ reason: 'outside the workspace', rules: [`read(/${away}/)`] });
+    expect(asked).toHaveLength(0);
     expect(results().map((r) => r.content)).toEqual([
       expect.stringContaining('alpha'),
       expect.stringContaining('beta'),
     ]);
   });
 
-  test('an allow rule naming the folder opens it; a bare read rule and read: allow do not', async () => {
-    const named = run([{ name: 'read', input: { path: join(away, 'a.md') } }], {
-      permissions: { allow: [`read(/${away}/)`] },
+  test('an edit asks, and "always" opens that folder for edits', async () => {
+    const { asked, go } = run(
+      [
+        { name: 'write', input: { path: join(away, 'c.md'), content: 'gamma\n' } },
+        { name: 'write', input: { path: '../notes/d.md', content: 'delta\n' } },
+      ],
+      {},
+      () => 'allow_always',
+    );
+    await go();
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({
+      reason: 'outside the workspace',
+      rules: [rule('edit', away)],
+    });
+    expect(readFileSync(join(away, 'd.md'), 'utf8')).toBe('delta\n');
+  });
+
+  test('an allow rule naming the folder opens it for edits; edit: allow and a bare rule do not', async () => {
+    const named = run([{ name: 'write', input: { path: join(away, 'c.md'), content: 'x' } }], {
+      permissions: { allow: [rule('edit', away)] },
     });
     await named.go();
     expect(named.asked).toHaveLength(0);
 
-    const bare = run([{ name: 'grep', input: { pattern: 'alpha', path: away } }], {
-      permissions: { read: 'allow', allow: ['read'] },
+    const bare = run([{ name: 'write', input: { path: join(away, 'c.md'), content: 'x' } }], {
+      permissions: { edit: 'allow', allow: ['edit'] },
     });
     await bare.go();
     expect(bare.asked).toHaveLength(1);
-    expect(bare.asked[0]?.rules).toEqual([`read(/${away}/)`]);
   });
 
   test('edits ask even in acceptEdits, and a denied write changes nothing', async () => {
@@ -110,7 +127,7 @@ describe('outside the workspace', () => {
     expect(existsSync(join(away, 'c.md'))).toBe(false);
   });
 
-  test('permissions.outsideWorkspace: deny refuses without asking', async () => {
+  test('permissions.outsideWorkspace: deny refuses reads too, without asking', async () => {
     const { asked, results, go } = run([{ name: 'read', input: { path: join(away, 'a.md') } }], {
       permissions: { outsideWorkspace: 'deny' },
     });
@@ -131,7 +148,7 @@ describe('outside the workspace', () => {
 
   test('a private folder outside the workspace keeps the session local', async () => {
     const { engine, go } = run([{ name: 'read', input: { path: join(away, 'a.md') } }], {
-      privacy: { localOnlyPaths: [`/${away}/`] },
+      privacy: { localOnlyPaths: [`${absolute(away)}/`] },
     });
     const events: EngineEvent[] = [];
     engine.subscribe((e) => events.push(e));
@@ -184,31 +201,44 @@ describe('config edits', () => {
 });
 
 describe('reachOf', () => {
+  const H = resolve('/h');
   const places = {
-    configDir: '/h/.switchback',
-    dataDir: '/h/.switchback/data',
+    configDir: join(H, '.switchback'),
+    dataDir: join(H, '.switchback', 'data'),
     denyRead: ['~/.ssh'],
-    home: '/h',
+    home: H,
   };
+  const at = (...p: string[]) => join(H, ...p);
   test("Switchback's data and sign-in are off limits; its config asks; elsewhere is outside", () => {
-    expect(reachOf('/h/.switchback/data/usage.jsonl', false, places)).toMatchObject({
+    expect(reachOf(at('.switchback', 'data', 'usage.jsonl'), false, places)).toMatchObject({
       kind: 'off-limits',
     });
-    expect(reachOf('/h/.switchback/auth.json', false, places)).toMatchObject({
+    expect(reachOf(at('.switchback', 'auth.json'), false, places)).toMatchObject({
       kind: 'off-limits',
     });
-    expect(reachOf('/h/.ssh/id_ed25519', false, places)).toMatchObject({ kind: 'off-limits' });
-    expect(reachOf('/h/.switchback/config.json', false, places)).toMatchObject({
+    expect(reachOf(at('.ssh', 'id_ed25519'), false, places)).toMatchObject({ kind: 'off-limits' });
+    expect(reachOf(at('.switchback', 'config.json'), false, places)).toMatchObject({
       kind: 'switchback',
     });
-    expect(reachOf('/h/notes/a.md', false, places)).toMatchObject({ kind: 'outside' });
-    expect(reachOf('/h/repo/a.ts', true, places)).toEqual({ kind: 'inside' });
+    expect(reachOf(at('notes', 'a.md'), false, places)).toMatchObject({ kind: 'outside' });
+    expect(reachOf(at('repo', 'a.ts'), true, places)).toEqual({ kind: 'inside' });
     // A credential is off limits even when the workspace holds it.
-    expect(reachOf('/h/.ssh/config', true, places)).toMatchObject({ kind: 'off-limits' });
+    expect(reachOf(at('.ssh', 'config'), true, places)).toMatchObject({ kind: 'off-limits' });
+    // A subagent's worktree lives in the data directory; it's that session's own root.
+    expect(reachOf(at('.switchback', 'data', 'worktrees', 'w1', 'a.ts'), true, places)).toEqual({
+      kind: 'inside',
+    });
   });
 
-  test('"always" names the folder from home or from the root', () => {
-    expect(folderRule('read', '/h/notes/a.md', false, '/h')).toBe('read(~/notes/)');
-    expect(folderRule('edit', '/srv/data', true, '/h')).toBe('edit(//srv/data/)');
+  test('"always" names the folder from home, or from the root', () => {
+    expect(folderRule(at('notes', 'a.md'), H)).toBe('edit(~/notes/)');
+    const srv = join(resolve('/srv'), 'data');
+    expect(folderRule(join(srv, 'x.csv'), H)).toBe(`edit(${absolute(srv)}/)`);
+    if (sep === '/') expect(folderRule('/srv/data/x.csv', H)).toBe('edit(//srv/data/)');
+  });
+
+  test('// rules match drive paths on Windows', () => {
+    expect(pathMatcher('//C:/data/', '/repo')('C:/data/x.csv')).toBe(true);
+    expect(pathMatcher('//C:/data/', '/repo')('D:/data/x.csv')).toBe(false);
   });
 });
