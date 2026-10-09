@@ -97,6 +97,8 @@ export class Prompter {
           message: message(question) || 'Choose one',
           choices: options.map(choice),
           pageSize: 12,
+          // Stop at the ends: a long list that wraps around reads as endless (#121).
+          loop: false,
           ...(fallback !== undefined ? { default: fallback } : {}),
         },
         this.context,
@@ -115,6 +117,7 @@ export class Prompter {
           message: message(question),
           choices: options.map((o) => ({ ...choice(o), checked: o.checked ?? false })),
           pageSize: 12,
+          loop: false,
         },
         this.context,
       ),
