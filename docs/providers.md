@@ -177,6 +177,24 @@ OpenRouter (a base URL on `openrouter.ai`) gets two things other compatible APIs
 
 Gateways report upstream failures inside an already-successful stream. Server-side failures, like a provider disconnecting or a rate limit, count as retryable, so the router falls back to the next model in the chain; client errors don't.
 
+### OpenCode Go and Zen
+
+[OpenCode](https://opencode.ai) runs two model gateways with one API key: **Go**, a monthly subscription to open coding models (Kimi, GLM, DeepSeek, MiniMax, Qwen, ...), and **Zen**, pay as you go, with models from many providers. Get a key from the OpenCode console and put it in `OPENCODE_API_KEY`.
+
+```jsonc
+"providers": {
+  "opencode-go": { "type": "opencode", "plan": "go" }   // or "zen"; apiKey defaults to {env:OPENCODE_API_KEY}
+},
+"models": {
+  "kimi": { "provider": "opencode-go", "model": "kimi-k3", "contextWindow": 256000,
+            "price": { "input": 0, "output": 0 } }
+}
+```
+
+OpenCode serves each model on one of three APIs, and Switchback picks the matching adapter from the model's family, as OpenCode documents it (checked 2026-10-09): Claude and Qwen models on Anthropic Messages, GPT and Grok models on the Responses API, everything else on Chat Completions. A model it adds later that doesn't follow that pattern can be pinned with `"api": { "<model>": "chat" | "messages" | "responses" }` on the provider. Gemini models are served on Google's API there, which Switchback doesn't use through OpenCode; use the `gemini` provider for those.
+
+`switchback init` offers OpenCode: pick Go or Zen (`--opencode-plan`), then a model from OpenCode's live list. The list doesn't give context windows, so setup asks (default 128,000). Go models are written with a zero per-token price, since the subscription covers them, the way Claude Code and Codex are. Zen's prices aren't in its list; set `models.<alias>.price` for accurate cost and savings figures.
+
 ### Claude Code and Codex, with your own sign-in
 
 If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a subscription or a key, Switchback can use them as models. They're coding agents rather than chat APIs, so a turn routed to one is handed to it whole: it works in the workspace with its own tools, and its answer joins the conversation like any model's. Everything else is the same as any model: put it in `routing.start` to start every turn there, in `routing.escalate` to take the turns that need it, or in `review.models`.

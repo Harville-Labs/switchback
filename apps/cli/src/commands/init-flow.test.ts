@@ -15,20 +15,24 @@ type Step = [question: string, answer: unknown];
 function scripted(steps: Step[]) {
   const queue = [...steps];
   const defaults: Record<string, unknown> = {};
-  const next = (question: string, fallback?: unknown) => {
+  /** The values each list offered, by expected question. */
+  const offered: Record<string, unknown[]> = {};
+  const next = (question: string, fallback?: unknown, options?: Option<unknown>[]) => {
     const step = queue.shift();
     if (!step) throw new Error(`unexpected question: ${question}`);
     const [expected, answer] = step;
     if (!question.includes(expected)) throw new Error(`expected "${expected}", got "${question}"`);
     defaults[expected] = fallback;
+    if (options) offered[expected] = options.map((o) => o.value);
     return answer === 'default' ? fallback : answer;
   };
   const p = {
     text: async (q: string, fallback?: string) => next(q, fallback),
     number: async (q: string, fallback?: number) => next(q, fallback),
     confirm: async (q: string, fallback = true) => next(q, fallback),
-    select: async <T>(q: string, options: Option<T>[], i = 0) => next(q, options[i]?.value),
-    search: async (q: string) => next(q),
+    select: async <T>(q: string, options: Option<T>[], i = 0) =>
+      next(q, options[i]?.value, options),
+    search: async (q: string, options: Option<string>[]) => next(q, undefined, options),
     // Answers name the labels to tick.
     multiSelect: async <T>(q: string, options: Option<T>[]) => {
       const labels = next(q) as string[];
@@ -36,7 +40,7 @@ function scripted(steps: Step[]) {
     },
     close() {},
   } as unknown as Prompter;
-  return { p, defaults, left: () => queue.map(([q]) => q) };
+  return { p, defaults, offered, left: () => queue.map(([q]) => q) };
 }
 
 const flags: InitFlags = {
@@ -157,5 +161,26 @@ describe('remote providers', () => {
     const none = scripted([['Set up any remote providers?', false]]);
     expect(await chooseRemotes(flags, none.p, true)).toEqual([]);
     expect(none.defaults['Set up any remote providers?']).toBe(true);
+  });
+
+  test('OpenCode: the plan, then a model from its live list, without Gemini', async () => {
+    const asked: string[] = [];
+    const list = async (url: string) => {
+      asked.push(url);
+      return [{ id: 'kimi-k3' }, { id: 'gemini-3-pro' }, { id: 'glm-5.3' }];
+    };
+    const s = scripted([
+      ['Set up any remote providers?', true],
+      ['Which provider?', 'opencode'],
+      ['Which OpenCode plan?', 'go'],
+      ['Which model?', 'glm-5.3'],
+      ['Context window', 'default'],
+      ['Any additional remote providers?', false],
+    ]);
+    expect(await chooseRemotes(flags, s.p, true, list as never)).toEqual([
+      { kind: 'opencode', plan: 'go', model: 'glm-5.3', contextWindow: 128_000 },
+    ]);
+    expect(asked).toEqual(['https://opencode.ai/zen/go/v1']);
+    expect(s.offered['Which model?']).toEqual(['kimi-k3', 'glm-5.3']);
   });
 });

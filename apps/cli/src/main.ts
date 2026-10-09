@@ -85,6 +85,7 @@ init options (all optional; prompts cover anything not given)
   --resource <name>        Resource name (Microsoft Foundry, Azure OpenAI)
   --deployment <name>      Azure OpenAI deployment, per --remote-model (default: the model ID)
   --azure-auth <key|entra> Azure OpenAI: API key (default) or Microsoft Entra ID
+  --opencode-plan <go|zen> OpenCode: Go subscription (default) or Zen pay as you go
   --policy <p>             Escalation: auto | ask | off
   --telemetry <on|off>     Anonymous usage statistics (default: off; always your user config)
   --daily-budget <usd>     --monthly-budget <usd>
@@ -178,6 +179,7 @@ async function main(argv: string[]): Promise<number> {
       resource: { type: 'string' },
       deployment: { type: 'string' },
       'azure-auth': { type: 'string' },
+      'opencode-plan': { type: 'string' },
       policy: { type: 'string' },
       'daily-budget': { type: 'string' },
       'monthly-budget': { type: 'string' },
@@ -284,6 +286,11 @@ async function main(argv: string[]): Promise<number> {
         ...(values.deployment ? { deployment: values.deployment } : {}),
         ...(values['azure-auth']
           ? { azureAuth: oneOf('azure-auth', values['azure-auth'], ['key', 'entra'] as const) }
+          : {}),
+        ...(values['opencode-plan']
+          ? {
+              opencodePlan: oneOf('opencode-plan', values['opencode-plan'], ['go', 'zen'] as const),
+            }
           : {}),
         ...(policy ? { policy } : {}),
         ...(dailyBudget ? { dailyBudget } : {}),
