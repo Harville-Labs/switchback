@@ -20,6 +20,7 @@ These pages are published for each release at [harville.ai/switchback/docs](http
 - [Sites](sites.md): your company's site on switchback.harville.ai: seats, members, roles, policy, devices
 - [Terminal UI](clients/tui.md) · [VS Code extension](clients/vscode.md)
 - [Scripts and CI](clients/headless.md): `switchback run`, its output formats, and exit codes
+- [Editors on ACP](clients/acp.md): Zed, JetBrains, and other editors that speak the Agent Client Protocol
 
 ## Building Switchback
 

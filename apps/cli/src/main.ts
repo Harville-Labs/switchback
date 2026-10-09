@@ -28,6 +28,7 @@ Usage
   switchback logout | whoami         Sign out / show organization and policy
   switchback serve --stdio           Serve the engine protocol to one client over stdin/stdout
   switchback serve --socket          Run this workspace's shared engine (TUI and VS Code attach to it)
+  switchback acp                     Run as an Agent Client Protocol agent over stdin/stdout (Zed, JetBrains, ...)
 
 Options
   --cwd <dir>        Workspace root (default: current directory)
@@ -335,6 +336,13 @@ async function main(argv: string[]): Promise<number> {
         throw new UsageError('a shared daemon never runs mock providers; use --stdio with --mock');
       const { serve } = await import('./commands/serve.ts');
       return serve({ ...common, socket: values.socket });
+    }
+    case 'acp': {
+      const { acpServer } = await import('./commands/acp.ts');
+      return acpServer({
+        ...common,
+        daemon: !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON,
+      });
     }
     case 'agents': {
       const { agents } = await import('./commands/agents.ts');
