@@ -25,6 +25,7 @@ Usage
   switchback telemetry [action]      status | on | off | preview (anonymous, off by default)
   switchback sandbox [action]        install | uninstall: the command sandbox's one-time setup (Windows)
   switchback self-update [version]   Update to the newest release (or the given one); --check only reports
+                                    Aliases: selfupdate, upgrade, update
   switchback login --site <id>       Sign in to your company's Switchback site (applies its policy)
   switchback logout | whoami         Sign out / show organization and policy
   switchback serve --stdio           Serve the engine protocol to one client over stdin/stdout
@@ -395,7 +396,9 @@ async function main(argv: string[]): Promise<number> {
       return whoami(common.cwd);
     }
     case 'self-update':
-    case 'selfupdate': {
+    case 'selfupdate':
+    case 'upgrade':
+    case 'update': {
       if (rest.length > 1) throw new UsageError('self-update takes at most one version');
       const { selfUpdate } = await import('./commands/self-update.ts');
       return selfUpdate({ ...(rest[0] ? { version: rest[0] } : {}), check: values.check });
