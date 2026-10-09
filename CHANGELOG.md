@@ -18,6 +18,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Agent Client Protocol**: `switchback acp` runs Switchback as an agent for Zed, JetBrains IDEs, and other editors that speak ACP. Sessions are shared live with the TUI and VS Code through the workspace's engine, and routing decisions, permission prompts, escalations, modes, and the checklist all come through. See docs/clients/acp.md
 
 ### Changed
+- **`switchback doctor` is easier to read**: section headings stand out, ✓ is green, ✗ red, warnings yellow, and details are dimmed, in a terminal only (piped output stays plain). Paths under your home directory show as `~/...`
 - Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule
 
 ## [1.1.0] - 2026-10-07
