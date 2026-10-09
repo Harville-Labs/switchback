@@ -16,6 +16,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **OpenCode Go and Zen**: a provider for OpenCode's subscription (Go) and pay-as-you-go (Zen) gateways, with one `OPENCODE_API_KEY`. Each model goes to the API OpenCode serves it on (Chat Completions, Anthropic Messages, or Responses). `switchback init` offers it, with models from OpenCode's live list. See docs/providers.md#opencode-go-and-zen
 
 ### Changed
+- **`switchback doctor` is easier to read**: section headings stand out, ✓ is green, ✗ red, warnings yellow, and details are dimmed, in a terminal only (piped output stays plain). Paths under your home directory show as `~/...`
 - Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule
 - **Simpler setup** (#121): `switchback init` asks "Do you have any local model endpoints?", takes each endpoint's URL (servers running here are offered), and lists its models as a checklist; then "Set up any remote providers?", one provider at a time. The first run goes straight into it, and it writes to the user config unless you pass `--scope project`. Lists in setup stop at the ends instead of wrapping around
 

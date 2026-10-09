@@ -1,4 +1,5 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
+import { homedir } from 'node:os';
 import { formatMcpServers, formatPermissions, formatRoles, modeLabel } from '@switchback/client';
 import {
   configRoles,
@@ -10,25 +11,37 @@ import {
 } from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
+import { bold, cyan, dim, green, red, yellow } from '../prompt.ts';
+import { heading, marked, summary, tildify } from './doctor-style.ts';
+
+const style = { bold, dim, green, red, yellow, cyan };
 
 export async function doctor(flags: CommonFlags): Promise<number> {
   const { engine, loaded, agentErrors } = createEngine(flags, 'deny');
   const { config } = loaded;
-  const out = (s = '') => process.stdout.write(`${s}\n`);
+  const out = (s = '') =>
+    process.stdout.write(
+      `${s
+        .split('\n')
+        .map((l) => marked(style, l))
+        .join('\n')}\n`,
+    );
+  const section = (title: string, note?: string) => out(`\n${heading(style, title, note)}`);
   let problems = 0;
 
-  out('Config files');
-  if (loaded.sources.length === 0) out('  (none; using built-in defaults)');
-  for (const s of loaded.sources) out(`  ${s}`);
+  out(heading(style, 'Config files'));
+  if (loaded.sources.length === 0) out(dim('  (none; using built-in defaults)'));
+  for (const s of loaded.sources) out(`  ${tildify(s, homedir())}`);
 
   if (loaded.org) {
     const o = loaded.org;
-    out(`\nOrganization\n  ${o.name} (${o.id}), policy revision ${o.version}`);
+    section('Organization');
+    out(`  ${o.name} ${dim(`(${o.id}), policy revision ${o.version}`)}`);
     for (const n of o.notes) out(`  ${n}`);
     if (o.enforcedKeys.length) out(`  enforced: ${o.enforcedKeys.join(', ')}`);
   }
 
-  out('\nProviders');
+  section('Providers');
   const used = new Set(Object.values(config.models).map((m) => m.provider));
   for (const [id, pc] of Object.entries(config.providers)) {
     if (!used.has(id)) {
@@ -37,12 +50,13 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     }
     const status = await createProvider(id, pc).health();
     if (!status.ok) problems++;
+    const latency = status.latencyMs !== undefined ? dim(` [${status.latencyMs}ms]`) : '';
     out(
-      `  ${status.ok ? '✓' : '✗'} ${id} (${pc.type}, ${tierOf(pc)}): ${status.detail}${status.latencyMs !== undefined ? ` [${status.latencyMs}ms]` : ''}`,
+      `  ${status.ok ? '✓' : '✗'} ${bold(id)} ${dim(`(${pc.type}, ${tierOf(pc)})`)}: ${status.detail}${latency}`,
     );
     // Local servers list exactly what they serve; hosted catalogs use other names and aliases.
     if (!status.models || tierOf(pc) !== 'local') continue;
-    out(`    serves ${status.models.join(', ') || 'no models'}`);
+    out(dim(`    serves ${status.models.join(', ') || 'no models'}`));
     for (const [alias, m] of Object.entries(config.models)) {
       if (m.provider !== id || status.models.includes(m.model)) continue;
       problems++;
@@ -50,7 +64,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     }
   }
 
-  out('\nRouting');
+  section('Routing');
   const r = config.routing;
   for (const line of formatRoles(configRoles(config), modelSummaries(config)).split('\n'))
     out(`  ${line}`);
@@ -68,7 +82,9 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   for (const { alias, m, pc } of locals) {
     if (m.contextWindow) {
       windows.push(m.contextWindow);
-      out(`  ${alias} context window ${m.contextWindow.toLocaleString('en-US')} (configured)`);
+      out(
+        `  ${alias} context window ${m.contextWindow.toLocaleString('en-US')} ${dim('(configured)')}`,
+      );
       continue;
     }
     const found = await createProvider(m.provider, pc)
@@ -77,7 +93,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     if (found) {
       windows.push(found.contextWindow);
       out(
-        `  ${alias} context window ${found.contextWindow.toLocaleString('en-US')} (detected from ${found.source})`,
+        `  ${alias} context window ${found.contextWindow.toLocaleString('en-US')} ${dim(`(detected from ${found.source})`)}`,
       );
     } else {
       problems++;
@@ -93,10 +109,11 @@ export async function doctor(flags: CommonFlags): Promise<number> {
     out('  no start model: turns begin on step 1');
   }
 
-  out('\nInstructions (in every session and subagent)');
+  section('Instructions', 'in every session and subagent');
   const usage = instructionsUsage(instructionFiles(flags.cwd), windows);
   if (!usage.files.length) out("  no AGENTS.md (yours or the project's)");
-  for (const f of usage.files) out(`  ${f.path}: ${f.tokens.toLocaleString('en-US')} tokens`);
+  for (const f of usage.files)
+    out(`  ${tildify(f.path, homedir())}: ${bold(f.tokens.toLocaleString('en-US'))} tokens`);
   if (usage.files.length > 1) out(`  total: ${usage.total.toLocaleString('en-US')} tokens`);
   if (usage.window && usage.total)
     out(
@@ -106,11 +123,11 @@ export async function doctor(flags: CommonFlags): Promise<number> {
 
   const { servers } = await engine.mcpStatus();
   if (servers.length) {
-    out('\nMCP servers');
+    section('MCP servers');
     out(formatMcpServers(servers));
     problems += servers.filter((s) => s.state === 'failed' || s.state === 'untrusted').length;
   }
-  out('\nPermissions');
+  section('Permissions');
   out(
     formatPermissions(await engine.permissions())
       .split('\n')
@@ -119,7 +136,8 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   );
   out(`  new sessions start in ${modeLabel(config.permissions.defaultMode)} mode`);
   const hookCount = Object.values(config.hooks).reduce((n, m) => n + (m?.length ?? 0), 0);
-  out(`\nHooks\n  ${hookCount} configured`);
+  section('Hooks');
+  out(`  ${hookCount} configured`);
   if (loaded.untrustedHooks.length) {
     problems++;
     out(
@@ -128,16 +146,16 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   }
   await engine.shutdown();
 
-  out('\nAgents');
+  section('Agents');
   for (const a of engine.listAgents())
     out(
-      `  ${a.name} [${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}${a.model ? `, ${a.model}` : ''}]: ${a.description}`,
+      `  ${bold(a.name)} ${dim(`[${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}${a.model ? `, ${a.model}` : ''}]`)} ${dim(a.description)}`,
     );
   for (const e of agentErrors) {
     problems++;
     out(`  ✗ ${e}`);
   }
 
-  out(problems ? `\n${problems} problem(s) found.` : '\nAll good.');
+  out(`\n${summary(style, problems)}`);
   return problems ? 1 : 0;
 }
