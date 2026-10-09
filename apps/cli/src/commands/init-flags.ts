@@ -37,6 +37,8 @@ export interface InitFlags {
   deployment?: string;
   /** Azure OpenAI sign-in. */
   azureAuth?: 'key' | 'entra';
+  /** OpenCode: the Go subscription or Zen, pay as you go. */
+  opencodePlan?: 'go' | 'zen';
   policy?: 'auto' | 'ask' | 'off';
   dailyBudget?: number;
   monthlyBudget?: number;

@@ -4,9 +4,6 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-### Changed
-- **Simpler setup** (#121): `switchback init` asks "Do you have any local model endpoints?", takes each endpoint's URL (servers running here are offered), and lists its models as a checklist; then "Set up any remote providers?", one provider at a time. The first run goes straight into it, and it writes to the user config unless you pass `--scope project`. Lists in setup stop at the ends instead of wrapping around
-
 ### Added
 - **`docs` tool**: the model reads Switchback's own documentation, built into the binary, so you can ask it how Switchback works or to change a setting. Every session has it; it needs no permission. See docs/tools.md#asking-about-switchback
 - **Your own `AGENTS.md`**: `~/.switchback/AGENTS.md` holds instructions for every project. Sessions get it before the project's `AGENTS.md`. `switchback doctor` shows each file's size in tokens and warns when they crowd a small local model. See docs/commands-and-skills.md#agentsmd
@@ -16,9 +13,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - `privacy.localOnlyPaths` takes folders anywhere on the machine (`~/customers/`)
 - Protocol (additive): `permission.requested` carries `reason`
 - **Agent Client Protocol**: `switchback acp` runs Switchback as an agent for Zed, JetBrains IDEs, and other editors that speak ACP. Sessions are shared live with the TUI and VS Code through the workspace's engine, and routing decisions, permission prompts, escalations, modes, and the checklist all come through. See docs/clients/acp.md
+- **OpenCode Go and Zen**: a provider for OpenCode's subscription (Go) and pay-as-you-go (Zen) gateways, with one `OPENCODE_API_KEY`. Each model goes to the API OpenCode serves it on (Chat Completions, Anthropic Messages, or Responses). `switchback init` offers it, with models from OpenCode's live list. See docs/providers.md#opencode-go-and-zen
 
 ### Changed
 - Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule
+- **Simpler setup** (#121): `switchback init` asks "Do you have any local model endpoints?", takes each endpoint's URL (servers running here are offered), and lists its models as a checklist; then "Set up any remote providers?", one provider at a time. The first run goes straight into it, and it writes to the user config unless you pass `--scope project`. Lists in setup stop at the ends instead of wrapping around
 
 ## [1.1.0] - 2026-10-07
 

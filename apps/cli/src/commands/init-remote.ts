@@ -14,9 +14,14 @@ import {
   hasAnthropicCredentials,
   type ListedModel,
   listModels,
+  OPENCODE_BASE_URL,
+  OPENCODE_KEY_ENV,
+  openCodeApi,
 } from '@switchback/providers';
 import { bold, dim, type Prompter, yellow } from '../prompt.ts';
 import { type InitFlags, SetupError } from './init-flags.ts';
+
+type List = typeof listModels;
 
 export const remoteLabel = (kind: RemoteKind) => {
   const { name, detail } = REMOTE_PROVIDERS[kind];
@@ -59,6 +64,8 @@ export function credentialHint(kind: RemoteKind): string {
         : 'AZURE_OPENAI_API_KEY or Entra ID, and a deployment';
     case 'openrouter':
       return process.env.OPENROUTER_API_KEY ? 'credentials found' : 'needs OPENROUTER_API_KEY';
+    case 'opencode':
+      return process.env[OPENCODE_KEY_ENV] ? 'credentials found' : `needs ${OPENCODE_KEY_ENV}`;
     case 'openai-compatible':
       return 'base URL and API key';
   }
@@ -73,6 +80,8 @@ export async function chooseRemotes(
   flags: InitFlags,
   p: Prompter | undefined,
   suggest = true,
+  /** Model listing; tests pass their own. */
+  list: List = listModels,
 ): Promise<RemoteAnswer[]> {
   if (!p) {
     if (!flags.remotes.length)
@@ -80,7 +89,7 @@ export async function chooseRemotes(
     const kinds = flags.remotes.filter((k): k is RemoteKind => k !== 'none');
     const out: RemoteAnswer[] = [];
     for (const [i, kind] of kinds.entries())
-      out.push(await chooseRemote(kind, flags.remoteModels[i], flags, undefined));
+      out.push(await chooseRemote(kind, flags.remoteModels[i], flags, undefined, list));
     return out;
   }
   if (!(await p.confirm(`\n${bold('Set up any remote providers?')}`, suggest))) return [];
@@ -90,7 +99,7 @@ export async function chooseRemotes(
       'Which provider?',
       REMOTE_KINDS.map((k) => ({ label: remoteLabel(k), value: k, hint: credentialHint(k) })),
     );
-    chosen.push(await chooseRemote(kind, undefined, flags, p));
+    chosen.push(await chooseRemote(kind, undefined, flags, p, list));
     if (!(await p.confirm('\nAny additional remote providers?', false))) break;
   }
   return chosen;
@@ -101,6 +110,7 @@ async function chooseRemote(
   modelFlag: string | undefined,
   flags: InitFlags,
   p: Prompter | undefined,
+  list: List,
 ): Promise<RemoteAnswer> {
   const env = process.env;
 
@@ -119,7 +129,7 @@ async function chooseRemote(
           ? await p.text('Environment variable holding the API key')
           : undefined);
     // Most endpoints list their models; some also give context lengths and prices.
-    const listed = await listModels(baseUrl, {
+    const listed = await list(baseUrl, {
       ...(apiKeyEnv && env[apiKeyEnv] ? { apiKey: env[apiKeyEnv] } : {}),
     }).catch((err: Error) => {
       if (p) console.log(dim(`  Couldn't list models (${err.message}); enter one by hand.`));
@@ -163,6 +173,8 @@ async function chooseRemote(
       ...(apiKeyEnv ? { apiKeyEnv } : {}),
     };
   }
+
+  if (kind === 'opencode') return chooseOpenCode(modelFlag, flags, p, list);
 
   const catalog = CATALOG[catalogFor(kind) as HostedProviderKind];
   const model =
@@ -285,6 +297,60 @@ async function chooseRemote(
       return { kind, model, resource };
     }
   }
+}
+
+/** OpenCode: the plan, then a model from its live list (the list needs no key). */
+async function chooseOpenCode(
+  modelFlag: string | undefined,
+  flags: InitFlags,
+  p: Prompter | undefined,
+  list: List,
+): Promise<RemoteAnswer> {
+  const plan =
+    flags.opencodePlan ??
+    (p
+      ? await p.select('Which OpenCode plan?', [
+          {
+            label: 'OpenCode Go',
+            value: 'go' as const,
+            hint: 'monthly subscription to open coding models',
+          },
+          { label: 'OpenCode Zen', value: 'zen' as const, hint: 'pay as you go, many providers' },
+        ])
+      : 'go');
+  const listed = await list(`${OPENCODE_BASE_URL[plan]}/v1`).catch((err: Error) => {
+    if (p)
+      console.log(dim(`  Couldn't list OpenCode's models (${err.message}); enter one by hand.`));
+    return [];
+  });
+  // Gemini is served on Google's API there, which Switchback doesn't use through OpenCode.
+  const usable = listed.filter((m) => openCodeApi(m.id) !== undefined);
+  const model =
+    modelFlag ??
+    (p && usable.length
+      ? await p.search(
+          `Which model? ${dim(`${usable.length} available; type to filter`)}`,
+          usable.map((m) => ({ label: m.id, value: m.id })),
+          { freeText: true },
+        )
+      : p
+        ? await p.text('Model ID')
+        : undefined);
+  if (!model) throw new SetupError('--remote-model is required for opencode');
+  if (!openCodeApi(model))
+    throw new SetupError(
+      `OpenCode serves ${model} on Google's API, which Switchback doesn't use through OpenCode; pick another model`,
+    );
+  const contextWindow =
+    flags.remoteContextWindow ??
+    (p ? await p.number('Context window (tokens)', 128_000) : undefined) ??
+    128_000;
+  const hint = credentialHint('opencode');
+  if (hint.startsWith('needs'))
+    console.log(
+      yellow(`  OpenCode ${hint} (from the OpenCode console) before Switchback can use it.`),
+    );
+  return { kind: 'opencode', plan, model, contextWindow };
 }
 
 /** What the endpoint said about a model, for the picker. */

@@ -5,6 +5,7 @@ import { AnthropicProvider } from './anthropic.ts';
 import { GeminiProvider } from './gemini.ts';
 import { flavorForUrl, OpenAICompatibleProvider } from './openai-compatible.ts';
 import { OpenAIResponsesProvider } from './openai-responses.ts';
+import { OPENCODE_KEY_ENV, OpenCodeProvider } from './opencode.ts';
 import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
 import type { ApiKeySource, ChatRequest, Provider } from './types.ts';
 
@@ -128,6 +129,18 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     network: z.boolean().default(false),
   }),
   z.object({
+    /**
+     * OpenCode Go (a monthly subscription) or Zen (pay as you go): one key for
+     * many models, each on the API OpenCode serves it on (opencode.ts).
+     */
+    type: z.literal('opencode'),
+    plan: z.enum(['go', 'zen']).default('go'),
+    /** Defaults to $OPENCODE_API_KEY. */
+    apiKey: Secret.optional(),
+    /** Which API a model is served on, for models OpenCode added after this release. */
+    api: z.record(z.string(), z.enum(['chat', 'messages', 'responses'])).optional(),
+  }),
+  z.object({
     type: z.literal('mock'),
     tier: z.enum(['local', 'remote']).default('local'),
   }),
@@ -145,6 +158,7 @@ export const CREDENTIAL_ENV: Partial<Record<ProviderConfig['type'], string>> = {
   deepseek: 'DEEPSEEK_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
+  opencode: OPENCODE_KEY_ENV,
 };
 
 const NO_THINKING = ['claude-haiku-4-5', 'anthropic.claude-haiku-4-5'];
@@ -300,6 +314,15 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         },
         noThinkingModels: NO_THINKING,
       });
+    case 'opencode': {
+      const apiKey = config.apiKey || process.env[OPENCODE_KEY_ENV];
+      return new OpenCodeProvider({
+        id,
+        plan: config.plan,
+        ...(apiKey ? { apiKey } : {}),
+        ...(config.api ? { api: config.api } : {}),
+      });
+    }
     case 'gemini': {
       const apiKey = config.apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
       return new GeminiProvider({

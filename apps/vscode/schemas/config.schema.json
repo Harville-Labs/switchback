@@ -291,6 +291,34 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "opencode"
+              },
+              "plan": {
+                "default": "go",
+                "type": "string",
+                "enum": ["go", "zen"]
+              },
+              "apiKey": {
+                "type": "string"
+              },
+              "api": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": ["chat", "messages", "responses"]
+                }
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "mock"
               },
               "tier": {

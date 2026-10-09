@@ -19,6 +19,7 @@ const PROVIDER_TYPES = [
   'gemini',
   'claude-code',
   'codex',
+  'opencode',
   'mock',
 ] as const satisfies readonly ProviderConfig['type'][];
 
