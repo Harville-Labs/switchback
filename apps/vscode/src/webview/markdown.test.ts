@@ -1,13 +1,13 @@
 import { beforeAll, expect, test } from 'bun:test';
-import { Window } from 'happy-dom';
+import type { Window } from 'happy-dom';
+import { installDom } from './test-dom.ts';
 
 let renderMarkdown: (text: string) => string;
 let window: Window;
 let document: Window['document'];
 beforeAll(async () => {
   // DOMPurify binds to the global window when first imported.
-  window = new Window();
-  Object.assign(globalThis, { window, document: window.document });
+  window = installDom();
   document = window.document;
   ({ renderMarkdown } = await import('./markdown.ts'));
 });

@@ -18,8 +18,20 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'switchback-hooks-'));
 });
 // Windows can't remove a directory a hook process (Notification runs in the
-// background) still has open; give it a moment.
-afterEach(() => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+// background) still has open; give it a moment. Bun's rmSync doesn't honor
+// `maxRetries`, so retry here.
+afterEach(async () => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      rmSync(root, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= 50 || (code !== 'EBUSY' && code !== 'EPERM')) throw err;
+      await Bun.sleep(100);
+    }
+  }
+});
 
 const cmd = (command: string, timeout?: number) => ({
   type: 'command' as const,
