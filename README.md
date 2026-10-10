@@ -135,4 +135,4 @@ To work on the VS Code extension, open this folder in VS Code and run the **Run 
 
 ## License
 
-Switchback is licensed under the [Apache License 2.0](LICENSE). The exception is `apps/site`, the hosted console for company sites, which is proprietary ([apps/site/LICENSE](apps/site/LICENSE)). Using Switchback on your own is free; companies pay for a site to manage it for their team ([ADR 0014](docs/adr/0014-open-core-licensing.md)).
+Switchback is licensed under the [Apache License 2.0](LICENSE). Using Switchback on your own is free; companies pay for a site on the hosted console at app.switchback.sh to manage it for their team ([ADR 0020](docs/adr/0020-private-console.md)).

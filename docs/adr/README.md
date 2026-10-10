@@ -17,9 +17,10 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0011](0011-site-data-in-postgres-only.md) | Site data lives only in external Postgres | Accepted |
 | [0012](0012-switchback-managers-and-site-operators.md) | Switchback managers and site operators | Accepted (auth amended by 0013) |
 | [0013](0013-site-auth-with-better-auth.md) | Site authentication with Better Auth, and single sign-on per site | Accepted |
-| [0014](0014-open-core-licensing.md) | Apache-2.0 for Switchback, proprietary hosted sites | Accepted |
+| [0014](0014-open-core-licensing.md) | Apache-2.0 for Switchback, proprietary hosted sites | Superseded by 0020 |
 | [0015](0015-role-based-routing.md) | Roles (start, escalate, review, subagents) filled by any model; local/remote is a model property | Accepted |
 | [0016](0016-open-conventions.md) | Open conventions (AGENTS.md, `.switchback/`), never another agent's files | Accepted |
 | [0017](0017-live-instructions.md) | AGENTS.md changes reach running sessions as appended reminders | Accepted |
 | [0018](0018-outside-the-workspace.md) | Files outside the workspace: reads as usual, edits ask; some places are always off limits | Accepted |
 | [0019](0019-switchback-domains.md) | Switchback's own domains: switchback.sh for the site and docs, app.switchback.sh for the console | Accepted |
+| [0020](0020-private-console.md) | The hosted console is private; Switchback is Apache-2.0 throughout | Accepted |
