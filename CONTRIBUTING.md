@@ -4,7 +4,7 @@ Switchback is developed by Harville Labs. This guide covers the workflow for any
 
 ## Licensing of contributions
 
-Switchback is licensed under Apache-2.0, and contributions are accepted under the same license (section 5 of the [LICENSE](LICENSE)); there's no separate agreement to sign. `apps/site` is proprietary and developed by Harville Labs only, so pull requests that change it can't be accepted from outside contributors.
+Switchback is licensed under Apache-2.0, and contributions are accepted under the same license (section 5 of the [LICENSE](LICENSE)); there's no separate agreement to sign.
 
 ## Setup
 

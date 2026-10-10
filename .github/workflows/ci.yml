@@ -12,19 +12,6 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # The site's tests run against real Postgres, like production.
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: switchback
-          POSTGRES_PASSWORD: switchback
-          POSTGRES_DB: switchback_site_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U switchback" --health-interval 2s --health-retries 30
-    env:
-      TEST_DATABASE_URL: postgres://switchback:switchback@localhost:5432/switchback_site_test
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -39,8 +26,6 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - run: bun run lint
       - run: bun run typecheck
-      - name: Site (svelte-check and build)
-        run: bun run --cwd apps/site check && bun run --cwd apps/site build
       - run: bun test
 
   test:

@@ -1,9 +1,7 @@
 Switchback
 Copyright 2026 Harville Labs, LLC
 
-This product is licensed under the Apache License, Version 2.0 (see LICENSE),
-except for apps/site, the hosted site console, which is proprietary (see
-apps/site/LICENSE).
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
 Release binaries and VS Code extensions include third-party software; its
 licenses are listed in THIRD-PARTY-NOTICES.txt alongside each release.

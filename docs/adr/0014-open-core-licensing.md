@@ -1,6 +1,6 @@
 # 0014: Open-core licensing
 
-**Status:** Accepted · 2026-10-01
+**Status:** Superseded by [0020](0020-private-console.md) · 2026-10-01
 
 ## Context
 
