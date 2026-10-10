@@ -4,7 +4,14 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-10
+
+### Fixed
+- **VS Code: permission, plan, and escalation prompts can be answered again.** Since 1.1.0 none of their buttons did anything, so a turn waiting on a prompt waited forever
+
 ### Changed
+- **Setup in VS Code without the CLI**: with nothing configured, setup starts by itself when the extension loads (and **Set Up Models** runs it again), asking the same questions as `switchback init` in VS Code's own quick picks, using the engine bundled with the extension, and the new config applies at once. The questions now live in the engine and reach clients over the protocol (`setup.start`, `setup.answer`, `setup.cancel`; `setup.ask`, `setup.note`, `setup.finished`), so the terminal and VS Code set up the same way
+- `switchback upgrade` and `switchback update` run `switchback self-update`
 - **Switchback has its own domains** (ADR 0019): the site and docs are at switchback.sh, and the console is at app.switchback.sh. Install with `curl -fsSL https://switchback.sh/install.sh | sh` or `irm https://switchback.sh/install.ps1 | iex`. `switchback login --site` and the default `telemetry.endpoint` use app.switchback.sh. The old addresses redirect. Sites with single sign-on need their identity provider's redirect URI changed to app.switchback.sh
 
 ## [1.2.0] - 2026-10-09
@@ -24,7 +31,6 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - Protocol (additive): `worktrees.list`, `worktrees.diff`, and `worktree` on `subagent.started` and `subagent.completed`
 
 ### Changed
-- **Setup in VS Code without the CLI**: with nothing configured, setup starts by itself when the extension loads (and **Set Up Models** runs it again), asking the same questions as `switchback init` in VS Code's own quick picks, using the engine bundled with the extension, and the new config applies at once. The questions now live in the engine and reach clients over the protocol (`setup.start`, `setup.answer`, `setup.cancel`; `setup.ask`, `setup.note`, `setup.finished`), so the terminal and VS Code set up the same way
 - **`switchback doctor` is easier to read**: section headings stand out, ✓ is green, ✗ red, warnings yellow, and details are dimmed, in a terminal only (piped output stays plain). Paths under your home directory show as `~/...`
 - Permission prompts say why they ask ("Asking because: outside the workspace.") instead of calling every reason a rule
 - **Simpler setup** (#121): `switchback init` asks "Do you have any local model endpoints?", takes each endpoint's URL (servers running here are offered), and lists its models as a checklist; then "Set up any remote providers?", one provider at a time. The first run goes straight into it, and it writes to the user config unless you pass `--scope project`. Lists in setup stop at the ends instead of wrapping around
