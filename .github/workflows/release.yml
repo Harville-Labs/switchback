@@ -140,6 +140,9 @@ jobs:
       # The user docs for switchback.sh/docs, which renders each release's.
       - name: Docs bundle
         run: bun scripts/docs-bundle.ts "${{ needs.verify.outputs.version }}" "dist/switchback-docs-${{ needs.verify.outputs.version }}.json"
+      # The console (app.switchback.sh, in Harville-Labs/sites) serves the latest release's installers.
+      - name: Installers
+        run: cp scripts/install.sh scripts/install.ps1 dist/
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS
@@ -177,6 +180,41 @@ jobs:
           gh api repos/Harville-Labs/sites/dispatches \
             -f event_type=switchback-release \
             -f "client_payload[version]=${{ needs.verify.outputs.version }}"
+
+  # The organization protocol package the hosted console (Harville-Labs/sites) builds against.
+  # GitHub Packages keeps it private; grant the sites repository read access in its settings.
+  org-package:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@harville-labs'
+      - run: bun install --frozen-lockfile
+      - name: Publish @harville-labs/switchback-org
+        working-directory: packages/org
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          npm version "$VERSION" --no-git-tag-version
+          bun run build
+          # The workspace imports src/ directly; consumers outside it get the built files.
+          jq '.exports |= map_values(sub("^\\./src/"; "./dist/") | sub("\\.ts$"; "")
+            | { types: "\(.).d.ts", default: "\(.).js" })' package.json > package.tmp
+          mv package.tmp package.json
+          tag=latest
+          [ "$(bun ../../scripts/release.ts channel "$VERSION")" = pre-release ] && tag=next
+          npm publish --tag "$tag"
 
   extension:
     needs: publish

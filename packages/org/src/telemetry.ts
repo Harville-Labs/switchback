@@ -1,6 +1,6 @@
 /**
  * The telemetry report format (docs/telemetry.md), on its own so receivers
- * (the hosted site) can validate reports without importing the engine.
+ * (the hosted console) can validate reports without importing the engine.
  */
 import { z } from 'zod';
 

@@ -6,14 +6,15 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { OrgAuthError, OrgClient, type UsageAggregate } from '@harville-labs/switchback-org/client';
 import type { LedgerEntry } from '../ledger.ts';
 import { switchbackPaths } from '../paths.ts';
-import { OrgAuthError, OrgClient, toAuth, type UsageAggregate } from './client.ts';
 import {
   type CachedPolicy,
   type OrgAuth,
   readAuth,
   readCachedPolicy,
+  toAuth,
   writeAuth,
   writeCachedPolicy,
 } from './store.ts';

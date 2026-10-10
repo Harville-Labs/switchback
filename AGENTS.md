@@ -33,6 +33,7 @@ Set `SWITCHBACK_HOME=$(mktemp -d)` when running the CLI during development so yo
 | `packages/providers` | Provider interface and adapters (OpenAI-compatible, Anthropic/Bedrock/Vertex, mock), pricing | Know about routing, tools, or sessions |
 | `packages/router` | Pure routing decisions and escalation signals | Do I/O. It takes snapshots and returns decisions. |
 | `packages/engine` | Sessions, the agent loop, tools, permissions, subagents, config, ledger, organization policy (`src/org`), JSON-RPC server | Render anything |
+| `packages/org` | The organization protocol shared with servers: the policy and telemetry formats, `OrgClient`, and the install command. Published privately to GitHub Packages as `@harville-labs/switchback-org` for the hosted console | Import any other workspace package |
 | `packages/client` | Typed protocol client, child-process transport, shared view-model reducer | Import engine code |
 | `apps/cli` | `switchback` binary: TUI (Ink), `run`, `serve --stdio`, `acp` (Agent Client Protocol), `doctor`, `usage` | Contain agent behavior |
 | `apps/vscode` | VS Code extension (host + webview) | Contain agent behavior |
@@ -67,7 +68,7 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 
 **Add a config key.** Add it to the Zod schema in `packages/engine/src/config.ts` with a default, run `bun run schema` (a test fails if the shipped schema is stale), document it in [docs/configuration.md](docs/configuration.md), and, if users choose it during setup, add a prompt and flag to `switchback init`. Never add a default local provider or model: local setup is the user's choice.
 
-**Change what an organization can control.** Extend `OrgPolicy` in `packages/engine/src/org/policy.ts`, apply it in `applyRestrictions` (restrictions remove things; they never add), test it in `org.test.ts` against the dev server, and document it in [docs/organizations.md](docs/organizations.md). Org-enforced settings must win over every user and project setting, including in-session grants.
+**Change what an organization can control.** Extend `OrgPolicy` in `packages/org/src/policy.ts`, apply it in `applyRestrictions` (restrictions remove things; they never add), test it in `org.test.ts` against the dev server, and document it in [docs/organizations.md](docs/organizations.md). Org-enforced settings must win over every user and project setting, including in-session grants.
 
 ## Conventions
 

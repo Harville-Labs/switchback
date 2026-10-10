@@ -5,8 +5,7 @@ on:
     branches: [main]
     paths:
       - apps/site/**
-      - packages/engine/src/org/schema.ts
-      - packages/engine/src/telemetry-schema.ts
+      - packages/org/src/**
       - scripts/install.sh
       - scripts/install.ps1
       - bun.lock

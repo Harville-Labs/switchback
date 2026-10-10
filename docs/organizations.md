@@ -99,7 +99,7 @@ Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "
 
 ## Server API
 
-Any server implementing these endpoints works. `packages/engine/src/org/dev-server.ts` is a runnable reference implementation (`bun packages/engine/src/org/dev-server.ts policy.json`). Sign-in is standard OAuth: the device authorization grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)) with client ID `switchback`, which Switchback runs with [openid-client](https://github.com/panva/openid-client). Its two endpoints take form posts, as the RFCs require; the others take JSON. Authenticated calls send `Authorization: Bearer <access_token>`.
+Any server implementing these endpoints works. `packages/engine/src/org/dev-server.ts` is a runnable reference implementation (`bun packages/engine/src/org/dev-server.ts policy.json`), and `packages/org` holds the policy format and the client Switchback signs in with. Sign-in is standard OAuth: the device authorization grant ([RFC 8628](https://www.rfc-editor.org/rfc/rfc8628)) with client ID `switchback`, which Switchback runs with [openid-client](https://github.com/panva/openid-client). Its two endpoints take form posts, as the RFCs require; the others take JSON. Authenticated calls send `Authorization: Bearer <access_token>`.
 
 | Endpoint | Purpose |
 |---|---|

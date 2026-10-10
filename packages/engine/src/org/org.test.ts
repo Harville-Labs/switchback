@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { OrgClient } from '@harville-labs/switchback-org/client';
 import type { EngineEvent } from '@switchback/protocol';
 import { ScriptedProvider } from '@switchback/providers';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
 import { adoptOrgPermissions } from './adopt.ts';
-import { OrgClient, toAuth } from './client.ts';
 import { startDevOrgServer } from './dev-server.ts';
 import { applyRestrictions, OrgPolicy } from './policy.ts';
-import { clearAuth, readAuth, readCachedPolicy, writeAuth } from './store.ts';
+import { clearAuth, readAuth, readCachedPolicy, toAuth, writeAuth } from './store.ts';
 import { OrgSync, refreshPolicy } from './sync.ts';
 
 let home: string;

@@ -5,6 +5,7 @@
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { TokenResponse } from '@harville-labs/switchback-org/client';
 import { z } from 'zod';
 import { switchbackPaths } from '../paths.ts';
 import { OrgPolicy } from './policy.ts';
@@ -21,6 +22,23 @@ export const OrgAuth = z.object({
   user: z.object({ email: z.string().optional(), name: z.string().optional() }).prefault({}),
 });
 export type OrgAuth = z.infer<typeof OrgAuth>;
+
+/** Stored credentials. `org` comes from the token response, or the policy when it's absent. */
+export function toAuth(
+  server: string,
+  t: TokenResponse,
+  org: { id: string; name: string },
+  now = Date.now(),
+): OrgAuth {
+  return {
+    server,
+    accessToken: t.access_token,
+    ...(t.refresh_token ? { refreshToken: t.refresh_token } : {}),
+    ...(t.expires_in ? { expiresAt: now + t.expires_in * 1000 } : {}),
+    org: t.org ?? org,
+    user: t.user,
+  };
+}
 
 export const CachedPolicy = z.object({
   server: z.string(),

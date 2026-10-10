@@ -1,5 +1,5 @@
 /** Policy: versioned, validated organization policy and what clients receive. */
-import { OrgPolicy } from '@switchback/engine/org/schema';
+import { OrgPolicy } from '@harville-labs/switchback-org/policy';
 import { and, desc, eq } from 'drizzle-orm';
 import * as t from '../schema.ts';
 import { audit } from './audit.ts';
