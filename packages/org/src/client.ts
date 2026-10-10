@@ -12,7 +12,6 @@
 import * as oidc from 'openid-client';
 import { z } from 'zod';
 import { OrgPolicy } from './policy.ts';
-import type { OrgAuth } from './store.ts';
 
 type Fetch = typeof fetch;
 
@@ -62,23 +61,6 @@ export interface UsageAggregate {
   outputTokens: number;
   cacheReadTokens: number;
   costUsd: number;
-}
-
-/** Stored credentials. `org` comes from the token response, or the policy when it's absent. */
-export function toAuth(
-  server: string,
-  t: TokenResponse,
-  org: { id: string; name: string },
-  now = Date.now(),
-): OrgAuth {
-  return {
-    server,
-    accessToken: t.access_token,
-    ...(t.refresh_token ? { refreshToken: t.refresh_token } : {}),
-    ...(t.expires_in ? { expiresAt: now + t.expires_in * 1000 } : {}),
-    org: t.org ?? org,
-    user: t.user,
-  };
 }
 
 /** openid-client's errors, as the two kinds callers act on. */

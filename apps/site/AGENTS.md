@@ -40,7 +40,7 @@ The root `bun run check` runs this app's `check`. CI also runs `bun test` with a
 1. **Postgres only** ([ADR 0011](../../docs/adr/0011-site-data-in-postgres-only.md)). Every piece of data lives in the external Postgres. No embedded database, on-disk state, or in-memory store that must survive a restart.
 2. **Better Auth handles every credential** ([ADR 0013](../../docs/adr/0013-site-auth-with-better-auth.md)). Browsers reach only its sign-in link and SSO callback endpoints; console server actions make every other call through `ctx.auth.api` as the signed-in person, so the plugins check permissions as well as our rules.
 3. **Sessions stay on their site.** A session from a customer's SSO provider works only on that site, never on another site or `/admin`. A device token works only on its site's API, never in the console.
-4. **Restrictions only remove.** Site policy is validated with the engine's own schema (`@switchback/engine/org/schema`) and can only take capabilities away from clients. The site and the engine must agree on the schema, so change it in the engine.
+4. **Restrictions only remove.** Site policy is validated with the same schema the engine uses (`@harville-labs/switchback-org/policy`) and can only take capabilities away from clients. The site and the engine must agree on the schema, so change it in `packages/org`.
 5. **Every change to members, roles, policy, devices, or settings writes an audit entry** with who made it.
 6. **A site always has at least one operator**, and members plus pending invitations never exceed seats.
 7. **No prompts, code, or file names.** Switchback never sends them, and the site has no field for them. Usage is daily token counts and costs per member and model; telemetry is anonymous.
@@ -54,7 +54,7 @@ The root `bun run check` runs this app's `check`. CI also runs `bun test` with a
 
 **Change Better Auth plugins or upgrade it.** Better Auth is pinned exactly so the schema generator matches. Bump `better-auth` and `@better-auth/sso` together, run `bun run auth:schema`, then `bun run db:generate`, then the full test suite (SSO tests run against `oauth2-mock-server`).
 
-**Change the client protocol.** The protocol is shared with the engine's `OrgClient` (`packages/engine/src/org`). Change both in the same PR, document it in [docs/organizations.md](../../docs/organizations.md), and add a test in `site.test.ts` that drives the endpoint with the real `OrgClient`.
+**Change the client protocol.** The protocol is shared with the engine's `OrgClient` (`packages/org/src/client.ts`). Change both in the same PR, document it in [docs/organizations.md](../../docs/organizations.md), and add a test in `site.test.ts` that drives the endpoint with the real `OrgClient`.
 
 **Add an environment variable.** Read it in `context.ts`, validate it, fail at startup in production if it's required, and add it to the table in [docs/sites.md](../../docs/sites.md). Production values are set in the homelab repository; secrets there are SOPS-encrypted.
 

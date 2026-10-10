@@ -4,6 +4,6 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
-  // The engine's schemas are TypeScript source in the workspace; bundle them.
-  ssr: { noExternal: ['@switchback/engine'] },
+  // The org package is TypeScript source in the workspace; bundle it.
+  ssr: { noExternal: ['@harville-labs/switchback-org'] },
 });

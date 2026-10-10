@@ -1,5 +1,5 @@
 /** Usage and telemetry: daily reports from clients, and the console's views of them. */
-import { DailyReport } from '@switchback/engine/telemetry/schema';
+import { DailyReport } from '@harville-labs/switchback-org/telemetry';
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import * as t from '../schema.ts';

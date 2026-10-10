@@ -21,7 +21,7 @@
     },
     "apps/cli": {
       "name": "@switchback/cli",
-      "version": "1.1.0",
+      "version": "1.2.1",
       "bin": {
         "switchback": "./src/main.ts",
       },
@@ -52,11 +52,10 @@
         "@better-auth/sso": "1.7.6",
         "@fontsource-variable/archivo": "5.3.0",
         "@fontsource/b612-mono": "5.3.0",
+        "@harville-labs/switchback-org": "workspace:*",
         "@sveltejs/adapter-node": "^5.5.7",
         "@sveltejs/kit": "^2.70.3",
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
-        "@switchback/client": "workspace:*",
-        "@switchback/engine": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@types/nodemailer": "^8.0.2",
         "better-auth": "1.7.6",
@@ -75,7 +74,7 @@
     },
     "apps/vscode": {
       "name": "switchback",
-      "version": "1.1.0",
+      "version": "1.2.1",
       "dependencies": {
         "@switchback/client": "workspace:*",
         "@switchback/protocol": "workspace:*",
@@ -96,6 +95,7 @@
       "name": "@switchback/client",
       "version": "0.0.0",
       "dependencies": {
+        "@harville-labs/switchback-org": "workspace:*",
         "@switchback/protocol": "workspace:*",
         "marked": "15",
         "semver": "^7.8.5",
@@ -112,6 +112,7 @@
         "@anthropic-ai/sandbox-runtime": "0.0.78",
         "@anthropic-ai/sdk": "^0.128.0",
         "@aws-sdk/client-bedrock-agentcore": "^3.1146.0",
+        "@harville-labs/switchback-org": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.30.1",
         "@openai/codex-sdk": "0.160.1",
         "@secretlint/core": "^13.0.6",
@@ -123,7 +124,6 @@
         "diff": "^9.0.0",
         "gpt-tokenizer": "^4.0.0",
         "jsonc-parser": "^3.3.1",
-        "openid-client": "6.8.8",
         "shell-quote": "^1.8.3",
         "turndown": "^7.2.4",
         "yaml": "^2.9.1",
@@ -133,6 +133,14 @@
         "@switchback/client": "workspace:*",
         "@types/shell-quote": "^1.7.5",
         "@types/turndown": "^5.0.6",
+      },
+    },
+    "packages/org": {
+      "name": "@harville-labs/switchback-org",
+      "version": "0.0.0",
+      "dependencies": {
+        "openid-client": "6.8.8",
+        "zod": "^4.6.5",
       },
     },
     "packages/protocol": {
@@ -396,6 +404,8 @@
     "@fontsource/b612-mono": ["@fontsource/b612-mono@5.3.0", "", {}, "sha512-G0Ihm+ekqqP5PZJ1zrx6GbeS2q4GDmYnM01zrNrPARRg64GoG0D2pTf+FsbDWvbg/9tVWFRmFIz8xYLjgFrUpg=="],
 
     "@google/genai": ["@google/genai@2.24.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-bIu5eoxF1AaPWs9ivmUJGp1RpDHyapoODvWvnkzRDx2CTIW6UJXFhDdjj0BlRve3ZHMMuEkQBVrA/ALqpW4apA=="],
+
+    "@harville-labs/switchback-org": ["@harville-labs/switchback-org@workspace:packages/org"],
 
     "@hono/node-server": ["@hono/node-server@2.1.1", "", { "peerDependencies": { "hono": "^4" } }, "sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg=="],
 

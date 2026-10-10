@@ -14,7 +14,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { UsageAggregate } from './client.ts';
+import type { UsageAggregate } from '@harville-labs/switchback-org/client';
 
 export interface DevOrgServerOptions {
   /** Policy JSON (without needing org/version, which are filled in) or a file path. */

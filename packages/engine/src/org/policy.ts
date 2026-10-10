@@ -9,12 +9,17 @@
  *
  * See docs/organizations.md for the server contract.
  */
-import { tierOf } from '@switchback/providers';
+import type { OrgPolicy, PROVIDER_TYPES } from '@harville-labs/switchback-org/policy';
+import { type ProviderConfig, tierOf } from '@switchback/providers';
 import type { SwitchbackConfig } from '../config.ts';
 
-export { OrgPolicy } from './schema.ts';
+export { OrgPolicy } from '@harville-labs/switchback-org/policy';
 
-import type { OrgPolicy } from './schema.ts';
+// The policy format lives outside the engine so servers can use it, so it can't
+// import ProviderConfig. These fail to compile when the two lists drift apart.
+type PolicyProviderType = (typeof PROVIDER_TYPES)[number];
+true satisfies ProviderConfig['type'] extends PolicyProviderType ? true : false;
+true satisfies PolicyProviderType extends ProviderConfig['type'] ? true : false;
 
 export interface OrgStatus {
   id: string;

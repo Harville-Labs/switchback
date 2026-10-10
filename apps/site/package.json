@@ -17,14 +17,13 @@
     "auth:schema": "bunx auth@1.7.6 generate --config scripts/auth-schema.config.ts --output src/lib/server/auth-schema.ts --yes && biome format --write src/lib/server/auth-schema.ts"
   },
   "devDependencies": {
+    "@harville-labs/switchback-org": "workspace:*",
     "@better-auth/sso": "1.7.6",
     "@fontsource-variable/archivo": "5.3.0",
     "@fontsource/b612-mono": "5.3.0",
     "@sveltejs/adapter-node": "^5.5.7",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
-    "@switchback/client": "workspace:*",
-    "@switchback/engine": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@types/nodemailer": "^8.0.2",
     "better-auth": "1.7.6",

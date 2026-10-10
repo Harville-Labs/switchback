@@ -13,14 +13,14 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
+import { type DailyReport, TELEMETRY_SCHEMA } from '@harville-labs/switchback-org/telemetry';
 import { type EngineEvent, isSessionEvent, type StopReason } from '@switchback/protocol';
 import { CATALOG, tierOf } from '@switchback/providers';
 import { roleAliases } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import type { LedgerEntry } from './ledger.ts';
-import { type DailyReport, TELEMETRY_SCHEMA } from './telemetry-schema.ts';
 
-export { TELEMETRY_SCHEMA } from './telemetry-schema.ts';
+export { TELEMETRY_SCHEMA } from '@harville-labs/switchback-org/telemetry';
 export const DEFAULT_TELEMETRY_ENDPOINT = 'https://app.switchback.sh/api/telemetry/v1';
 
 /** Routing rules Switchback defines; anything else is reported as `other`. */
@@ -56,7 +56,7 @@ function publicModel(model: string): string {
   return KNOWN_MODELS.has(bare) ? bare : 'custom';
 }
 
-export { DailyReport } from './telemetry-schema.ts';
+export { DailyReport } from '@harville-labs/switchback-org/telemetry';
 
 // ---------------------------------------------------------------------------
 // State and counters (data directory)

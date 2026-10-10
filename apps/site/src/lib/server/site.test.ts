@@ -7,7 +7,7 @@ import {
   expect,
   test,
 } from 'bun:test';
-import { OrgAuthError, OrgClient } from '@switchback/engine';
+import { OrgAuthError, OrgClient } from '@harville-labs/switchback-org/client';
 import { eq } from 'drizzle-orm';
 import { OAuth2Server } from 'oauth2-mock-server';
 import postgres from 'postgres';

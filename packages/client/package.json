@@ -14,6 +14,7 @@
     "./worktrees": "./src/worktrees.ts"
   },
   "dependencies": {
+    "@harville-labs/switchback-org": "workspace:*",
     "@switchback/protocol": "workspace:*",
     "marked": "15",
     "semver": "^7.8.5"

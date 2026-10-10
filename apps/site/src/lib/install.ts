@@ -1,4 +1,4 @@
-import { type InstallPlatform, installCommand } from '@switchback/client';
+import { type InstallPlatform, installCommand } from '@harville-labs/switchback-org/install';
 
 export type { InstallPlatform };
 

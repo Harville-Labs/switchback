@@ -1,0 +1,31 @@
+{
+  "name": "@harville-labs/switchback-org",
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "description": "Switchback's organization protocol: the policy and telemetry formats, the device sign-in client, and the install command",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Harville-Labs/switchback.git",
+    "directory": "packages/org"
+  },
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./client": "./src/client.ts",
+    "./install": "./src/install.ts",
+    "./policy": "./src/policy.ts",
+    "./telemetry": "./src/telemetry.ts"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "openid-client": "6.8.8",
+    "zod": "^4.6.5"
+  }
+}

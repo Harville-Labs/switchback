@@ -5,8 +5,9 @@
  * edit them afterwards; without it, only the policy's own permissions apply
  * whatever the file says (config.ts).
  */
+
+import type { OrgPolicy } from '@harville-labs/switchback-org/policy';
 import { writeConfigLayer } from '../setup.ts';
-import type { OrgPolicy } from './schema.ts';
 
 const RULE_LISTS = ['allow', 'ask', 'deny'] as const;
 

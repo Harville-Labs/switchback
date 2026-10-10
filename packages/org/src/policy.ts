@@ -1,12 +1,12 @@
 /**
  * The organization policy format (docs/organizations.md), on its own so
- * servers (the hosted site) can validate policies without importing the
+ * servers (the hosted console) can validate policies without importing the
  * engine.
  */
-import type { ProviderConfig } from '@switchback/providers';
 import { z } from 'zod';
 
-const PROVIDER_TYPES = [
+/** Every provider type; the engine checks this matches `ProviderConfig['type']`. */
+export const PROVIDER_TYPES = [
   'openai-compatible',
   'openai',
   'deepseek',
@@ -21,7 +21,7 @@ const PROVIDER_TYPES = [
   'codex',
   'opencode',
   'mock',
-] as const satisfies readonly ProviderConfig['type'][];
+] as const;
 
 export const OrgPolicy = z.object({
   /** Server-assigned revision, shown to users and admins. */
