@@ -4,6 +4,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-10
+
+### Fixed
+- Releases publish `@harville-labs/switchback-org`; 1.3.0's publish failed
+
 ## [1.3.0] - 2026-10-10
 
 ### Added

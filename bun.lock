@@ -21,7 +21,7 @@
     },
     "apps/cli": {
       "name": "@switchback/cli",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "bin": {
         "switchback": "./src/main.ts",
       },
@@ -74,7 +74,7 @@
     },
     "apps/vscode": {
       "name": "switchback",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "dependencies": {
         "@switchback/client": "workspace:*",
         "@switchback/protocol": "workspace:*",
