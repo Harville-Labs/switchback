@@ -17,6 +17,7 @@ import {
   type CheckpointInfo,
   type CustomCommandInfo,
   type EngineEvent,
+  ErrorCode,
   type InitializeResult,
   type McpListResult,
   type PermissionDecision,
@@ -24,6 +25,7 @@ import {
   type PermissionsListResult,
   PROTOCOL_VERSION,
   type RoutePreference,
+  RpcError,
   type SessionEscalateResult,
   type SessionGetResult,
   type SessionPromptParams,
@@ -38,6 +40,8 @@ import {
   type ShellInfo,
   type UsagePeriod,
   type UsageReport,
+  type WorktreeDiff,
+  type WorktreeInfo,
 } from '@switchback/protocol';
 import type { Price } from '@switchback/providers';
 import { type AgentSpec, draftWithSummarizer } from './authoring.ts';
@@ -53,11 +57,14 @@ import { switchbackPaths } from './paths.ts';
 import type { SourcedRule } from './permissions/policy.ts';
 import type { NewSession } from './session-factory.ts';
 import { SetupRuns } from './setup-flow/protocol-prompter.ts';
+import { worktreeDir } from './subagents.ts';
 import type { TurnOptions } from './turn-runner.ts';
+import { gitToplevel } from './worktree.ts';
+import { listWorktrees, worktreeDiff } from './worktree-info.ts';
 
 export type { EngineOptions } from './engine-options.ts';
 
-export const ENGINE_VERSION = '1.1.0';
+export const ENGINE_VERSION = '1.2.0';
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
@@ -355,6 +362,30 @@ export class Engine {
   /** `setup.cancel`. */
   cancelSetup(setupId: string): void {
     this.setupRuns.cancel(setupId);
+  }
+
+  /** `worktrees.list`: branches isolated subagents made in this repository. */
+  async listWorktrees(): Promise<WorktreeInfo[]> {
+    const repo = await gitToplevel(this.options.workspaceRoot);
+    if (!repo) return [];
+    const running = new Set<string>();
+    for (const s of this.p.sessions.inMemory())
+      if (s.controller && s.header.worktree) running.add(s.header.worktree.branch);
+    return listWorktrees(repo, this.worktreeMeta(), running);
+  }
+
+  /** `worktrees.diff`. */
+  async worktreeDiff(branch: string): Promise<WorktreeDiff> {
+    const repo = await gitToplevel(this.options.workspaceRoot);
+    if (!repo)
+      throw new RpcError(ErrorCode.InvalidParams, 'this workspace is not a git repository');
+    return worktreeDiff(repo, branch).catch((err: Error) => {
+      throw new RpcError(ErrorCode.InvalidParams, `no branch ${branch} here (${err.message})`);
+    });
+  }
+
+  private worktreeMeta(): string {
+    return worktreeDir(this.options.workspaceRoot, this.options.dataDir);
   }
 
   async shutdown(): Promise<void> {

@@ -54,6 +54,18 @@ test('run exits non-zero with a clear message on bad flags', async () => {
   expect(await new Response(proc.stderr).text()).toContain('--route must be');
 });
 
+test('upgrade and update dispatch to self-update', () => {
+  for (const alias of ['upgrade', 'update']) {
+    const proc = Bun.spawnSync([process.execPath, main, alias, '1.0.0', 'extra'], {
+      env: { ...process.env, SWITCHBACK_HOME: home },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    expect(proc.exitCode).toBe(2);
+    expect(proc.stderr.toString()).toContain('self-update takes at most one version');
+  }
+});
+
 test('agents new writes a valid file that a running engine picks up without a restart', async () => {
   const ws = mkdtempSync(join(tmpdir(), 'switchback-agents-'));
   const transport = spawnEngine({

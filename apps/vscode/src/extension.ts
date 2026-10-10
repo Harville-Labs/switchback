@@ -15,6 +15,7 @@ import { installerShell } from './engine-binary.ts';
 import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 import { runSetup } from './setup-wizard.ts';
+import { WORKTREE_SCHEME, worktreeDiffs } from './worktree-diff.ts';
 
 /** The getting-started walkthrough (`contributes.walkthroughs`), as `<publisher>.<name>#<id>`. */
 const WALKTHROUGH = 'isaiah-harville.switchback#gettingStarted';
@@ -60,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
   context.subscriptions.push(
     review,
     vscode.workspace.registerTextDocumentContentProvider(PROPOSED_SCHEME, review),
+    vscode.workspace.registerTextDocumentContentProvider(WORKTREE_SCHEME, worktreeDiffs),
   );
   const answerEdit = (decision: 'allow_once' | 'deny') => async (uri?: vscode.Uri) => {
     const requestId =

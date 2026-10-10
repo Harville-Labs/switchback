@@ -221,3 +221,75 @@ test('Escalate now asks the host to escalate', async () => {
   $('[data-escalate-now]').click();
   expect(posted.at(-1)).toEqual({ type: 'command', name: 'up', args: [] });
 });
+
+test('a permission prompt can be answered', async () => {
+  await send({ type: 'ready', init, session, route: 'auto' });
+  await send({
+    type: 'event',
+    event: {
+      type: 'permission.requested',
+      sessionId: 's1',
+      requestId: 'perm_1',
+      tool: 'bash',
+      summary: '$ ls',
+      input: { command: 'ls' },
+      rules: ['bash(ls:*)'],
+    },
+  });
+  const allow = $('#prompts [data-perm="once"]');
+  expect(allow).toBeTruthy();
+  allow.click();
+  expect(posted.at(-1)).toEqual({
+    type: 'permission',
+    requestId: 'perm_1',
+    decision: 'allow_once',
+  });
+  expect($('#prompts').textContent).toBe('');
+});
+
+test('every kind of prompt answers: deny with a note, plans, and escalations', async () => {
+  const ask = (requestId: string, extra: object = {}) =>
+    send({
+      type: 'event',
+      event: {
+        type: 'permission.requested',
+        sessionId: 's1',
+        requestId,
+        tool: 'bash',
+        summary: '$ rm x',
+        input: { command: 'rm x' },
+        ...extra,
+      },
+    });
+  await ask('perm_2');
+  $('#prompts [data-perm="tell"]').click();
+  const form = $('#prompts form.feedback') as HTMLFormElement;
+  expect(form.hidden).toBe(false);
+  (form.querySelector('input') as HTMLInputElement).value = 'use trash instead';
+  form.dispatchEvent(
+    new window.Event('submit', { cancelable: true, bubbles: true }) as unknown as Event,
+  );
+  expect(posted.at(-1)).toEqual({
+    type: 'permission',
+    requestId: 'perm_2',
+    decision: 'deny',
+    feedback: 'use trash instead',
+  });
+
+  await ask('perm_3', { tool: 'exit_plan_mode', plan: '1. do it' });
+  $('#prompts [data-perm="always"]').click();
+  expect(posted.at(-1)).toMatchObject({ requestId: 'perm_3', decision: 'allow_always' });
+
+  await send({
+    type: 'event',
+    event: {
+      type: 'escalation.requested',
+      sessionId: 's1',
+      requestId: 'esc_1',
+      reason: 'stuck',
+      target: { provider: 'p', model: 'big' },
+    },
+  });
+  $('#prompts [data-esc="1"]').click();
+  expect(posted.at(-1)).toEqual({ type: 'escalation', requestId: 'esc_1', approve: true });
+});

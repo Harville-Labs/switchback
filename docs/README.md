@@ -2,7 +2,7 @@
 
 ## Using Switchback
 
-These pages are published for each release at [harville.ai/switchback/docs](https://harville.ai/switchback/docs) (the list below decides which; `scripts/docs-bundle.ts` builds them, and a test checks every link between them).
+These pages are published for each release at [switchback.sh/docs](https://switchback.sh/docs) (the list below decides which; `scripts/docs-bundle.ts` builds them, and a test checks every link between them).
 
 
 - [Configuration](configuration.md): every config key, file locations, environment variables
@@ -17,7 +17,7 @@ These pages are published for each release at [harville.ai/switchback/docs](http
 - [Custom commands and skills](commands-and-skills.md): your own `/commands`, and skills the model loads when it needs them
 - [Hooks](hooks.md): your own commands on session events (Claude Code's format)
 - [Organizations](organizations.md): sign-in, centrally managed models, limits, and restrictions
-- [Sites](sites.md): your company's site on switchback.harville.ai: seats, members, roles, policy, devices
+- [Sites](sites.md): your company's site on app.switchback.sh: seats, members, roles, policy, devices
 - [Terminal UI](clients/tui.md) · [VS Code extension](clients/vscode.md)
 - [Scripts and CI](clients/headless.md): `switchback run`, its output formats, and exit codes
 - [Editors on ACP](clients/acp.md): Zed, JetBrains, and other editors that speak the Agent Client Protocol

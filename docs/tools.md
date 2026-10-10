@@ -18,9 +18,10 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `websearch` | web | Search the web through the configured backend ([configuration.md](configuration.md#web)) |
 | `todo` | none | Keep a checklist for multi-step work; each call replaces the list |
 | `skill` | none | Load a [skill](commands-and-skills.md#skills): its instructions, or one of its files |
+| `merge_worktree` | edit (always asks) | Merge a branch an [isolated subagent](subagents.md#worktree-isolation) left into your checked-out branch, after you see the diff |
 | `docs` | none | Read Switchback's own documentation, as built into this version: the topics below "Using Switchback" in the docs index, a whole page or one section. The configuration page starts with where this machine's config files are |
 
-An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `exit_plan_mode` comes with every top-level session, and `todo`, `skill`, and `docs` with every session.
+An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `merge_worktree` with `task`, `exit_plan_mode` comes with every top-level session, and `todo`, `skill`, and `docs` with every session.
 
 ## Asking about Switchback
 

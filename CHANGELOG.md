@@ -4,6 +4,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- **Switchback has its own domains** (ADR 0019): the site and docs are at switchback.sh, and the console is at app.switchback.sh. Install with `curl -fsSL https://switchback.sh/install.sh | sh` or `irm https://switchback.sh/install.ps1 | iex`. `switchback login --site` and the default `telemetry.endpoint` use app.switchback.sh. The old addresses redirect. Sites with single sign-on need their identity provider's redirect URI changed to app.switchback.sh
+
+## [1.2.0] - 2026-10-09
+
 ### Added
 - **`docs` tool**: the model reads Switchback's own documentation, built into the binary, so you can ask it how Switchback works or to change a setting. Every session has it; it needs no permission. See docs/tools.md#asking-about-switchback
 - **Your own `AGENTS.md`**: `~/.switchback/AGENTS.md` holds instructions for every project. Sessions get it before the project's `AGENTS.md`. `switchback doctor` shows each file's size in tokens and warns when they crowd a small local model. See docs/commands-and-skills.md#agentsmd
@@ -14,6 +19,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - Protocol (additive): `permission.requested` carries `reason`
 - **Agent Client Protocol**: `switchback acp` runs Switchback as an agent for Zed, JetBrains IDEs, and other editors that speak ACP. Sessions are shared live with the TUI and VS Code through the workspace's engine, and routing decisions, permission prompts, escalations, modes, and the checklist all come through. See docs/clients/acp.md
 - **OpenCode Go and Zen**: a provider for OpenCode's subscription (Go) and pay-as-you-go (Zen) gateways, with one `OPENCODE_API_KEY`. Each model goes to the API OpenCode serves it on (Chat Completions, Anthropic Messages, or Responses). `switchback init` offers it, with models from OpenCode's live list. See docs/providers.md#opencode-go-and-zen
+- **See what isolated subagents did**: their rows show the branch while they run and what they changed when they're done; `/worktrees` (both clients) and `switchback worktrees` list every branch they made, with state, size, and why; `/worktrees <branch>` shows the diff, side by side in VS Code. See docs/subagents.md#seeing-what-they-did
+- **`merge_worktree` tool**: the parent agent can merge an isolated subagent's branch into your checked-out branch, always after asking you with the diff. Refused while you have uncommitted changes; a conflict aborts and names the files
+- Protocol (additive): `worktrees.list`, `worktrees.diff`, and `worktree` on `subagent.started` and `subagent.completed`
 
 ### Changed
 - **Setup in VS Code without the CLI**: **Set Up Models** asks the same questions as `switchback init` in VS Code's own quick picks, using the engine bundled with the extension, and the new config applies at once. The questions now live in the engine and reach clients over the protocol (`setup.start`, `setup.answer`, `setup.cancel`; `setup.ask`, `setup.note`, `setup.finished`), so the terminal and VS Code set up the same way

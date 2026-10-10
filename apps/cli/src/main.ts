@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { RemoteKind } from '@switchback/engine';
-import { PermissionMode, RoutePreference } from '@switchback/protocol';
+import { PermissionMode, RoutePreference, SWITCHBACK_BRANCH } from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
 const MIN_BUN = [1, 4, 0];
@@ -19,11 +19,13 @@ Usage
   switchback hooks [trust]           Show hooks; trust a project's hooks
   switchback agents [new]            List agents, or create one (interview, optional drafted prompt)
   switchback sessions                List this workspace's saved sessions [--json]
+  switchback worktrees [branch]      Branches isolated subagents made, or one branch's diff [--json]
   switchback usage                   Show spend, savings, cache hits, and budget
                                   [--period today|week|month] [--by rule|agent|model]
   switchback telemetry [action]      status | on | off | preview (anonymous, off by default)
   switchback sandbox [action]        install | uninstall: the command sandbox's one-time setup (Windows)
   switchback self-update [version]   Update to the newest release (or the given one); --check only reports
+                                    Aliases: selfupdate, upgrade, update
   switchback login --site <id>       Sign in to your company's Switchback site (applies its policy)
   switchback logout | whoami         Sign out / show organization and policy
   switchback serve --stdio           Serve the engine protocol to one client over stdin/stdout
@@ -95,7 +97,7 @@ agents new options (prompts cover anything not given; --yes for none)
   --model <local|remote|alias> --prompt <text> --budget <usd> --isolation worktree
 
 login options
-  --site <id>              Your company's site on switchback.harville.ai
+  --site <id>              Your company's site on app.switchback.sh
   --server <url>           Any organization server (default: previous or $SWITCHBACK_ORG_SERVER)
   --token <token>          Sign in with an access token instead of the browser (CI)
 `;
@@ -394,7 +396,9 @@ async function main(argv: string[]): Promise<number> {
       return whoami(common.cwd);
     }
     case 'self-update':
-    case 'selfupdate': {
+    case 'selfupdate':
+    case 'upgrade':
+    case 'update': {
       if (rest.length > 1) throw new UsageError('self-update takes at most one version');
       const { selfUpdate } = await import('./commands/self-update.ts');
       return selfUpdate({ ...(rest[0] ? { version: rest[0] } : {}), check: values.check });
@@ -410,6 +414,15 @@ async function main(argv: string[]): Promise<number> {
     case 'hooks': {
       const { hooks } = await import('./commands/hooks.ts');
       return hooks(rest[0], common);
+    }
+    case 'worktrees': {
+      const branch = rest[0];
+      if (branch && !SWITCHBACK_BRANCH.test(branch))
+        throw new UsageError(
+          `"${branch}" isn't a branch Switchback made for a subagent; \`switchback worktrees\` lists them`,
+        );
+      const { worktrees } = await import('./commands/worktrees.ts');
+      return worktrees({ ...common, json: values.json, ...(branch ? { branch } : {}) });
     }
     case 'sessions': {
       const { sessions } = await import('./commands/sessions.ts');

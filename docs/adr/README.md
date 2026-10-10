@@ -22,3 +22,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0016](0016-open-conventions.md) | Open conventions (AGENTS.md, `.switchback/`), never another agent's files | Accepted |
 | [0017](0017-live-instructions.md) | AGENTS.md changes reach running sessions as appended reminders | Accepted |
 | [0018](0018-outside-the-workspace.md) | Files outside the workspace: reads as usual, edits ask; some places are always off limits | Accepted |
+| [0019](0019-switchback-domains.md) | Switchback's own domains: switchback.sh for the site and docs, app.switchback.sh for the console | Accepted |

@@ -1,6 +1,6 @@
 # Organizations: centrally managed configuration
 
-An organization's policy is pushed to everyone who signs in to Switchback. Companies get this from their site on switchback.harville.ai, hosted by Harville Labs ([sites.md](sites.md)); any server implementing the [API below](#server-api) works too. With it, admins can:
+An organization's policy is pushed to everyone who signs in to Switchback. Companies get this from their site on app.switchback.sh, hosted by Harville Labs ([sites.md](sites.md)); any server implementing the [API below](#server-api) works too. With it, admins can:
 
 - **Provide models:** the company's local model servers (a GPU box, a vLLM cluster) and approved hosted providers, configured for users automatically.
 - **Set limits:** per-user daily and monthly caps on remote spend.
@@ -12,7 +12,7 @@ An organization's policy is pushed to everyone who signs in to Switchback. Compa
 ## For users
 
 ```sh
-switchback login --site acme                             # your company's site on switchback.harville.ai
+switchback login --site acme                             # your company's site on app.switchback.sh
 switchback login --server https://switchback.acme.example   # or any compatible server
 switchback whoami                                        # organization, policy revision, restrictions
 switchback logout

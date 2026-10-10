@@ -207,7 +207,10 @@ prompts.addEventListener('click', (e) => {
     }
     return;
   }
-  if (btn.type === 'submit') return;
+  // The note's Send button submits its form (handled above). Checking the
+  // form, not `btn.type`: a <button> with no type attribute is a submit button
+  // even outside a form, which made every prompt button do nothing.
+  if (btn.closest('form.feedback')) return;
   const answer = btn.dataset.perm ? permissionAnswer(btn.dataset.perm) : undefined;
   if (answer && perm) {
     vscode.postMessage({ type: 'permission', requestId: perm.requestId, ...answer });

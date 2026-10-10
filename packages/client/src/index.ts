@@ -9,3 +9,4 @@ export * from './setup.ts';
 export * from './spawn.ts';
 export * from './tool-display.ts';
 export * from './view.ts';
+export * from './worktrees.ts';

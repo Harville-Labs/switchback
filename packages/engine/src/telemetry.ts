@@ -21,7 +21,7 @@ import type { LedgerEntry } from './ledger.ts';
 import { type DailyReport, TELEMETRY_SCHEMA } from './telemetry-schema.ts';
 
 export { TELEMETRY_SCHEMA } from './telemetry-schema.ts';
-export const DEFAULT_TELEMETRY_ENDPOINT = 'https://switchback.harville.ai/api/telemetry/v1';
+export const DEFAULT_TELEMETRY_ENDPOINT = 'https://app.switchback.sh/api/telemetry/v1';
 
 /** Routing rules Switchback defines; anything else is reported as `other`. */
 const KNOWN_RULES = new Set([

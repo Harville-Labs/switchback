@@ -77,7 +77,7 @@ Escalate less often and more precisely.
 - Web fetch and search, custom commands and skills, MCP resources and prompts, image input
 - Claude Code and Codex as models on your own sign-in; Managed Agents, Codex, and Bedrock AgentCore as subagent runtimes
 - Escalate on demand (`/up`); tokens per second; notifications; scripts and CI with `switchback run`
-- Documentation at harville.ai/switchback/docs, published for each release
+- Documentation at switchback.sh/docs, published for each release
 
 ## v1.1 Terminal UI and permissions (released)
 

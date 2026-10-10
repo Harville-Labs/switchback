@@ -50,4 +50,4 @@ Any of these keeps it off regardless of config files:
 
 ## How it's sent
 
-When an engine starts (the TUI, `switchback run`, `switchback serve`), it uploads any complete days that are due in one HTTPS `POST` of `{ "reports": [...] }` to `telemetry.endpoint` (default `https://switchback.harville.ai/api/telemetry/v1`), in the background with a 5-second timeout. A failure is silent and retried next time; at most 30 days are kept pending. Counters live in `telemetry-counters.jsonl` in the data directory, readable only by you.
+When an engine starts (the TUI, `switchback run`, `switchback serve`), it uploads any complete days that are due in one HTTPS `POST` of `{ "reports": [...] }` to `telemetry.endpoint` (default `https://app.switchback.sh/api/telemetry/v1`), in the background with a 5-second timeout. A failure is silent and retried next time; at most 30 days are kept pending. Counters live in `telemetry-counters.jsonl` in the data directory, readable only by you.

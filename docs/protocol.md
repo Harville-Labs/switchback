@@ -47,6 +47,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`), `feedback?` | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config. With `deny`, `feedback` is what the user wants instead, and the model gets it with the refusal |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
 | `shells.list` | `{ sessionId? }` | `ShellInfo[]`: background shells, all or one session's |
+| `worktrees.list` | `{}` | `WorktreeInfo[]`: branches isolated subagents made in this repository, newest first, with state (`running`, `ready`, `merged`, `kept`), size, commits ahead, and who made each and why |
+| `worktrees.diff` | `{ branch }` | `WorktreeDiff`: a `switchback/*` branch's stat, unified diff, and each changed file before and after |
 | `shells.kill` | `{ shellId }` | `ShellInfo` |
 | `setup.start` | `{ scope? }` | `{ setupId }`: start setup; its questions arrive as `setup.ask` events |
 | `setup.answer` | `{ requestId, value }` | Answer a `setup.ask`: text a string; number a number or `''` for the default; confirm a boolean; select an index; multiSelect indexes; search an index or typed text. `null` cancels |
@@ -82,7 +84,7 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file. `rules` is what `allow_always` would grant (absent when `askRule` names an ask rule, which asks every time); `reason` says why else it asks (`outside the workspace`, `Switchback's own configuration`, `running outside the OS sandbox`, a hook); `plan` is set when the model asks to leave plan mode |
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
-| `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait |
+| `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait. For an isolated subagent, `worktree` carries its branch and path at the start, and at the end whether it changed anything, files, insertions, deletions, and `kept` (the path) if its worktree was kept |
 | `usage.updated` | Cumulative session usage, cost, and `savingsUsd` |
 | `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |

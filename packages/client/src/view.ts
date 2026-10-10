@@ -339,6 +339,7 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         status: 'running',
         toolCalls: 0,
         ...(event.background ? { background: true } : {}),
+        ...(event.worktree ? { worktree: { branch: event.worktree.branch } } : {}),
       });
       return {
         ...state,
@@ -358,6 +359,7 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         items[i] = {
           ...(items[i] as Extract<ViewItem, { kind: 'subagent' }>),
           status: event.ok ? 'ok' : 'error',
+          ...(event.worktree ? { worktree: event.worktree } : {}),
         };
       if (event.background)
         items.push({

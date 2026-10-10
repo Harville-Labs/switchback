@@ -1,7 +1,7 @@
 Copyright (c) 2026 Harville Labs, LLC. All rights reserved.
 
 This license covers everything in the apps/site directory: the hosted
-console for Switchback sites that Harville Labs runs at switchback.harville.ai.
+console for Switchback sites that Harville Labs runs at app.switchback.sh.
 The rest of the Switchback repository is licensed under the Apache License,
 Version 2.0 (see ../../LICENSE).
 

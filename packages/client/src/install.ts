@@ -1,7 +1,7 @@
-/** The installers switchback.harville.ai serves: scripts/install.sh and scripts/install.ps1. */
+/** The installers (scripts/install.sh and scripts/install.ps1) at their short addresses on switchback.sh, which redirect to the console at app.switchback.sh that serves them. */
 export const INSTALLERS = {
-  unix: 'https://switchback.harville.ai/install.sh',
-  windows: 'https://switchback.harville.ai/install.ps1',
+  unix: 'https://switchback.sh/install.sh',
+  windows: 'https://switchback.sh/install.ps1',
 } as const;
 
 export type InstallPlatform = keyof typeof INSTALLERS;

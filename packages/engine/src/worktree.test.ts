@@ -84,9 +84,12 @@ function setup(childFails = false) {
   engine.subscribe((e) => events.push(e));
   return { engine, lp, events };
 }
+/** Worktree checkouts left on disk (`meta/` holds what's known about each branch). */
 const worktrees = () => {
   const base = join(data, 'worktrees');
-  return existsSync(base) ? readdirSync(base).flatMap((d) => readdirSync(join(base, d))) : [];
+  return existsSync(base)
+    ? readdirSync(base).flatMap((d) => readdirSync(join(base, d)).filter((f) => f !== 'meta'))
+    : [];
 };
 
 describe('worktree isolation', () => {
