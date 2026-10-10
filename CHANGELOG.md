@@ -4,6 +4,12 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-10
+
+### Added
+- Each release attaches `install.sh` and `install.ps1`
+- The organization protocol (the policy and telemetry formats, the sign-in client, and the install command) is its own package, `packages/org`, published privately to GitHub Packages as `@harville-labs/switchback-org` for the hosted console
+
 ## [1.2.1] - 2026-10-10
 
 ### Fixed
