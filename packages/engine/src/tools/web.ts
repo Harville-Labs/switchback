@@ -54,7 +54,7 @@ export const webFetchTool = defineTool({
         redirect: 'manual',
         signal,
         headers: {
-          'User-Agent': 'Switchback (+https://switchback.harville.ai)',
+          'User-Agent': 'Switchback (+https://switchback.sh)',
           Accept: 'text/html, text/markdown, text/plain, application/json;q=0.9, */*;q=0.5',
         },
       });

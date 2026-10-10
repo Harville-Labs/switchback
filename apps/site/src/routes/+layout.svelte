@@ -26,7 +26,7 @@ const close = () => (menuOpen = false);
         <span class="who">{data.user.email}</span>
         <form method="POST" action="/logout"><button class="nav-item pill">Sign out</button></form>
       {:else}
-        <a href="https://harville.ai/switchback" class="nav-item">About Switchback</a>
+        <a href="https://switchback.sh" class="nav-item">About Switchback</a>
         <a href="/login" class="nav-item pill" class:active={page.url.pathname === '/login'} onclick={close}>Sign in</a>
       {/if}
     </nav>
@@ -40,7 +40,7 @@ const close = () => (menuOpen = false);
   <div class="frame footer-row">
     <a class="brand" href="https://harville.ai" aria-label="Harville Labs"><Monogram /><span>Harville Labs</span></a>
     <nav class="footer-links" aria-label="Footer">
-      <a href="https://harville.ai/switchback">Switchback</a>
+      <a href="https://switchback.sh">Switchback</a>
       <a href="https://github.com/Harville-Labs/switchback">GitHub ↗</a>
       <a href="mailto:hello@harville.ai">hello@harville.ai</a>
     </nav>

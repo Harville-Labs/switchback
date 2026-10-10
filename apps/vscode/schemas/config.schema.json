@@ -1049,7 +1049,7 @@
           "type": "boolean"
         },
         "endpoint": {
-          "default": "https://switchback.harville.ai/api/telemetry/v1",
+          "default": "https://app.switchback.sh/api/telemetry/v1",
           "type": "string",
           "format": "uri"
         }

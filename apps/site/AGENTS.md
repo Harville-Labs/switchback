@@ -1,6 +1,6 @@
 # AGENTS.md: apps/site
 
-The hosted console at switchback.harville.ai, where companies manage Switchback for their team. The [root AGENTS.md](../../AGENTS.md) applies here too; this file adds what's specific to the site. User-facing behavior and environment variables are documented in [docs/sites.md](../../docs/sites.md); the design is in ADRs [0010](../../docs/adr/0010-hosted-sites.md) through [0013](../../docs/adr/0013-site-auth-with-better-auth.md).
+The hosted console at app.switchback.sh, where companies manage Switchback for their team. The [root AGENTS.md](../../AGENTS.md) applies here too; this file adds what's specific to the site. User-facing behavior and environment variables are documented in [docs/sites.md](../../docs/sites.md); the design is in ADRs [0010](../../docs/adr/0010-hosted-sites.md) through [0013](../../docs/adr/0013-site-auth-with-better-auth.md).
 
 **This app is proprietary** ([LICENSE](LICENSE), [ADR 0014](../../docs/adr/0014-open-core-licensing.md)). Nothing under `packages/` or the other apps may import from it, and outside contributions to it can't be accepted.
 

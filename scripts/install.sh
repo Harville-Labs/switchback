@@ -1,8 +1,8 @@
 #!/bin/sh
 # Install Switchback, the local-first coding agent from Harville Labs.
 #
-#   curl -fsSL https://switchback.harville.ai/install.sh | sh
-#   curl -fsSL https://switchback.harville.ai/install.sh | sh -s -- --vscode
+#   curl -fsSL https://switchback.sh/install.sh | sh
+#   curl -fsSL https://switchback.sh/install.sh | sh -s -- --vscode
 #
 # Options:
 #   --version <x.y.z>   or SWITCHBACK_VERSION       a specific release (default: the latest)
@@ -14,7 +14,7 @@
 # shell profile; if the directory isn't on your PATH, it says what to add.
 #
 # The source is scripts/install.sh in https://github.com/Harville-Labs/switchback;
-# switchback.harville.ai serves it, and scripts/install.ps1 is the Windows
+# app.switchback.sh serves it, and scripts/install.ps1 is the Windows
 # counterpart. SWITCHBACK_DOWNLOAD_URL and SWITCHBACK_RELEASES_API point it at a
 # mirror (or a test server) instead of GitHub.
 
@@ -32,7 +32,7 @@ has() { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
   cat <<'EOF'
-Install Switchback: curl -fsSL https://switchback.harville.ai/install.sh | sh -s -- [options]
+Install Switchback: curl -fsSL https://switchback.sh/install.sh | sh -s -- [options]
 
   --version <x.y.z>   a specific release (default: the latest)     SWITCHBACK_VERSION
   --dir <path>        where to put `switchback` (default: ~/.local/bin) SWITCHBACK_INSTALL_DIR
@@ -85,7 +85,7 @@ detect_platform() {
     Darwin) OS=darwin ;;
     Linux) OS=linux ;;
     MINGW* | MSYS* | CYGWIN*)
-      fail "this script is for macOS and Linux. On Windows, run this in PowerShell: irm https://switchback.harville.ai/install.ps1 | iex" ;;
+      fail "this script is for macOS and Linux. On Windows, run this in PowerShell: irm https://switchback.sh/install.ps1 | iex" ;;
     *) fail "Switchback has no build for $(uname -s). It runs on macOS, Linux, and Windows." ;;
   esac
   case $(uname -m) in

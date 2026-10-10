@@ -1,7 +1,7 @@
 # Install Switchback on Windows, the local-first coding agent from Harville Labs.
 #
-#   irm https://switchback.harville.ai/install.ps1 | iex
-#   & ([scriptblock]::Create((irm https://switchback.harville.ai/install.ps1))) -VSCode
+#   irm https://switchback.sh/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://switchback.sh/install.ps1))) -VSCode
 #
 # Options (or environment variables, which also work with `| iex`):
 #   -Version <x.y.z>   or SWITCHBACK_VERSION       a specific release (default: the latest)
@@ -15,7 +15,7 @@
 # profile line; remove it in Settings > System > About > Advanced system settings).
 #
 # This is the Windows counterpart of scripts/install.sh in
-# https://github.com/Harville-Labs/switchback; switchback.harville.ai serves both.
+# https://github.com/Harville-Labs/switchback; app.switchback.sh serves both.
 # It runs on Windows PowerShell 5.1 and PowerShell 7. SWITCHBACK_DOWNLOAD_URL and
 # SWITCHBACK_RELEASES_API point it at a mirror (or a test server) instead of GitHub.
 
@@ -44,14 +44,14 @@ function Install-Switchback {
 
   if ($Help) {
     Write-Output @'
-Install Switchback: irm https://switchback.harville.ai/install.ps1 | iex
+Install Switchback: irm https://switchback.sh/install.ps1 | iex
 
   -Version <x.y.z>   a specific release (default: the latest)          SWITCHBACK_VERSION
   -Dir <path>        where to put switchback.exe (default: ~\.local\bin) SWITCHBACK_INSTALL_DIR
   -VSCode            also install the VS Code extension
   -NoModifyPath      don't add the directory to your user PATH
 
-With options: & ([scriptblock]::Create((irm https://switchback.harville.ai/install.ps1))) -VSCode
+With options: & ([scriptblock]::Create((irm https://switchback.sh/install.ps1))) -VSCode
 '@
     return
   }
@@ -60,7 +60,7 @@ With options: & ([scriptblock]::Create((irm https://switchback.harville.ai/insta
   try {
     # $IsWindows doesn't exist in Windows PowerShell 5.1, which only runs on Windows.
     if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) {
-      Fail 'this script is for Windows. On macOS and Linux: curl -fsSL https://switchback.harville.ai/install.sh | sh'
+      Fail 'this script is for Windows. On macOS and Linux: curl -fsSL https://switchback.sh/install.sh | sh'
     }
     # Windows on Arm runs the x64 build under emulation.
     $arch = 'x64'

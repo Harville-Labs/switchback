@@ -1,6 +1,6 @@
 # Switchback sites
 
-Companies manage Switchback on **switchback.harville.ai**, which Harville Labs hosts. Each company has a **site**, with seats, members, and the policy every member's Switchback follows. The design is recorded in [ADR 0010](adr/0010-hosted-sites.md); sign-in and single sign-on in [ADR 0013](adr/0013-site-auth-with-better-auth.md).
+Companies manage Switchback on **app.switchback.sh**, which Harville Labs hosts. Each company has a **site**, with seats, members, and the policy every member's Switchback follows. The design is recorded in [ADR 0010](adr/0010-hosted-sites.md); sign-in and single sign-on in [ADR 0013](adr/0013-site-auth-with-better-auth.md).
 
 ## For members
 
@@ -33,7 +33,7 @@ On the site you can see your own usage and the devices you've signed in, and sig
 
 Operators and admins can connect the site to the company's OIDC identity provider (Okta, Microsoft Entra ID, Google Workspace, Auth0, Keycloak, and others) under **Settings**:
 
-1. In the identity provider, create an OIDC web application with the redirect URI the page shows (`https://switchback.harville.ai/api/auth/sso/callback/site-<id>`).
+1. In the identity provider, create an OIDC web application with the redirect URI the page shows (`https://app.switchback.sh/api/auth/sso/callback/site-<id>`).
 2. Enter its issuer URL, client ID and secret, and your email domain.
 3. Add the DNS TXT record the page shows (`_switchback-sso-site-<id>.<domain>`), then choose **Verify domain**. Until the domain is verified, nobody can sign in with the provider.
 
@@ -88,4 +88,4 @@ Point a Switchback at a local site with `SWITCHBACK_SITES_URL=http://localhost:8
 
 ### Deploying it
 
-CI builds `ghcr.io/harville-labs/switchback-site` on every change to `main` (`.github/workflows/site-image.yml`) and pins the new tag in `deploy/k8s/site/kustomization.yaml`. Flux applies that directory from the homelab repository (`apps/harville-labs/switchback-site`), which also holds the Ingress for `switchback.harville.ai`, the CloudNativePG cluster and its backups, rate limits, `BETTER_AUTH_SECRET` (SOPS-encrypted), and `MANAGER_EMAILS`.
+CI builds `ghcr.io/harville-labs/switchback-site` on every change to `main` (`.github/workflows/site-image.yml`) and pins the new tag in `deploy/k8s/site/kustomization.yaml`. Flux applies that directory from the homelab repository (`apps/harville-labs/switchback-site`), which also holds the Ingress for `app.switchback.sh`, the CloudNativePG cluster and its backups, rate limits, `BETTER_AUTH_SECRET` (SOPS-encrypted), and `MANAGER_EMAILS`.

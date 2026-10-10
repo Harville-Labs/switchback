@@ -1,6 +1,6 @@
 /**
  * The user-facing docs of one release, as a single JSON file the website
- * (harville.ai/switchback/docs) renders: the pages listed under "Using
+ * (switchback.sh/docs) renders: the pages listed under "Using
  * Switchback" in docs/README.md, in that order, rendered to HTML with
  * GitHub's heading anchors. Internal pages (architecture, ADRs, the
  * protocol, the roadmap) aren't included; links to them go to GitHub at the

@@ -42,7 +42,7 @@ spec:
               containerPort: 3000
           env:
             - name: ORIGIN
-              value: https://switchback.harville.ai
+              value: https://app.switchback.sh
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
