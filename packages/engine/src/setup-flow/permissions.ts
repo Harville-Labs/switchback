@@ -1,5 +1,5 @@
 /**
- * `switchback init`: the permission rules a new user config starts with
+ * Setup: the permission rules a new user config starts with
  * (read-only commands run, commits and publishes ask), and the test and build
  * presets the user picks. Always the user config: these are the person's
  * rules, not the project's.
@@ -7,44 +7,44 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import {
-  detectPresets,
-  installSandbox,
-  PERMISSION_PRESETS,
-  parseJsonc,
-  readCachedPolicy,
-  sandboxInstalled,
-  setupPermissions,
-  switchbackPaths,
-  writeConfigLayer,
-} from '@switchback/engine';
-import { bold, dim, green, type Prompter } from '../prompt.ts';
-import type { InitFlags } from './init-flags.ts';
+import { parseJsonc } from '../config.ts';
+import { readCachedPolicy } from '../org/store.ts';
+import { switchbackPaths } from '../paths.ts';
+import { detectPresets, PERMISSION_PRESETS, setupPermissions } from '../permissions/defaults.ts';
+import { writeConfigLayer } from '../setup.ts';
+import type { SetupFlags } from './flags.ts';
+import { asking, type SetupPrompter, say } from './prompter.ts';
 
 type Rules = Partial<Record<'allow' | 'ask' | 'deny', string[]>>;
 
-export async function setupUserPermissions(flags: InitFlags, p: Prompter | undefined) {
-  const policy = readCachedPolicy()?.policy;
+export async function setupUserPermissions(
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
+  env: Record<string, string | undefined> = process.env,
+) {
+  const p = asking(ui);
+  const policy = readCachedPolicy(env)?.policy;
   if (policy && !policy.restrictions.allowUserPermissions) {
-    if (p) console.log(dim(`Command permissions are set by ${policy.org.name}.\n`));
+    say(ui, `Command permissions are set by ${policy.org.name}.`, 'detail');
     return;
   }
-  const file = switchbackPaths().configFile;
+  const file = switchbackPaths(env).configFile;
   const existing = existingRules(file);
   const fresh = !existing.allow && !existing.ask && !existing.deny;
   const detected = detectPresets(flags.cwd);
   let presets: string[] = [];
   if (p) {
-    console.log(`\n${bold('Command permissions')}`);
-    console.log(
-      dim(
-        fresh
-          ? '  Read-only commands (ls, cat, find, grep, rg, git status, git log, git diff, ...) will run\n  without asking. Commits, pushes, and publishes will always ask first.'
-          : '  Your permission rules stay as they are; anything you pick here is added to them.',
-      ),
+    say(ui, 'Command permissions', 'heading');
+    say(
+      ui,
+      fresh
+        ? 'Read-only commands (ls, cat, find, grep, rg, git status, git log, git diff, ...) will run without asking. Commits, pushes, and publishes will always ask first.'
+        : 'Your permission rules stay as they are; anything you pick here is added to them.',
+      'detail',
     );
+    say(ui, "Test and build commands run your project's code, inside the sandbox.", 'detail');
     presets = await p.multiSelect(
-      `Should any test or build commands also run without asking? ${dim("They run your project's code, inside the sandbox.")}`,
+      'Should any test or build commands also run without asking?',
       PERMISSION_PRESETS.map((preset) => {
         const found = preset.markers.find((m) => existsSync(join(flags.cwd, m)));
         return {
@@ -58,7 +58,7 @@ export async function setupUserPermissions(flags: InitFlags, p: Prompter | undef
   }
   const next = setupPermissions(existing, presets);
   if (!next) {
-    if (p) console.log(dim('  Nothing to add.\n'));
+    say(ui, 'Nothing to add.', 'detail');
     return;
   }
   writeConfigLayer(file, { permissions: next }, { references: false });
@@ -71,10 +71,12 @@ export async function setupUserPermissions(flags: InitFlags, p: Prompter | undef
   ];
   const runs =
     parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : (parts[0] ?? '');
-  console.log(
-    `${green('✓')} Saved to ${tildify(file)}: ${runs} run without asking${fresh ? '; commits, pushes, and publishes ask first' : ''}.`,
+  say(
+    ui,
+    `Saved to ${tildify(file)}: ${runs} run without asking${fresh ? '; commits, pushes, and publishes ask first' : ''}.`,
+    'success',
   );
-  console.log(dim('  Change them in that file any time; /permissions shows what is in effect.\n'));
+  say(ui, 'Change them in that file any time; /permissions shows what is in effect.', 'detail');
 }
 
 /** A preset's rules as the commands they allow: `bun test, bun run test/lint/build`. */
@@ -96,23 +98,6 @@ export function presetCommands(allow: string[]): string {
 function tildify(path: string): string {
   const home = homedir();
   return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
-}
-
-/** Windows sandboxes commands only after a one-time elevated install. */
-export async function offerWindowsSandbox(p: Prompter | undefined) {
-  if (process.platform !== 'win32' || !p) return;
-  if (await sandboxInstalled(switchbackPaths().dataDir)) return;
-  const install = await p.confirm(
-    `Set up the command sandbox? ${dim('Commands then run as a separate account that can only write the workspace. Windows asks for administrator approval once.')}`,
-  );
-  if (!install) {
-    console.log(
-      dim('  Commands run unsandboxed. `switchback sandbox install` sets it up later.\n'),
-    );
-    return;
-  }
-  const result = await installSandbox(switchbackPaths().dataDir);
-  console.log(result.ok ? `${green('✓')} ${result.message}\n` : `  ${result.message}\n`);
 }
 
 function existingRules(file: string): Rules {

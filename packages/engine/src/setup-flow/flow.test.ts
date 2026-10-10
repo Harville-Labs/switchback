@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import type { DetectedServer } from '@switchback/engine';
-import type { Option, Prompter } from '../prompt.ts';
-import type { InitFlags } from './init-flags.ts';
-import { chooseLocals } from './init-local.ts';
-import { chooseRemotes } from './init-remote.ts';
+import type { DetectedServer } from '@switchback/providers';
+import type { SetupFlags } from './flags.ts';
+import { chooseLocals } from './local.ts';
+import type { SetupChoice as Option, SetupPrompter as Prompter } from './prompter.ts';
+import { chooseRemotes } from './remote.ts';
 
 /** One expected question and the answer to give: `default` takes the prompt's default. */
 type Step = [question: string, answer: unknown];
@@ -38,12 +38,12 @@ function scripted(steps: Step[]) {
       const labels = next(q) as string[];
       return options.filter((o) => labels.includes(o.label)).map((o) => o.value);
     },
-    close() {},
+    note: () => {},
   } as unknown as Prompter;
   return { p, defaults, offered, left: () => queue.map(([q]) => q) };
 }
 
-const flags: InitFlags = {
+const flags: SetupFlags = {
   cwd: '/tmp',
   yes: false,
   noLocal: false,

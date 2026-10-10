@@ -14,6 +14,7 @@ import { type AttachChoice, EditorContext } from './context.ts';
 import { installerShell } from './engine-binary.ts';
 import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
+import { runSetup } from './setup-wizard.ts';
 import { WORKTREE_SCHEME, worktreeDiffs } from './worktree-diff.ts';
 
 /** The getting-started walkthrough (`contributes.walkthroughs`), as `<publisher>.<name>#<id>`. */
@@ -77,6 +78,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
   );
   const attention = new AttentionNotifier(chat);
 
+  let setupOffered = false;
+
+  /** Setup in quick picks (setup-wizard.ts); a written config restarts the engine to use it. */
+  const setUp = async () => {
+    const client = engine?.client;
+    if (!client) {
+      void vscode.window.showErrorMessage(
+        "Switchback's engine isn't running, so setup can't start. Run \"Switchback: Show Engine Logs\" to see why.",
+      );
+      return;
+    }
+    await vscode.commands.executeCommand('switchback.chat.focus');
+    const say = (text: string) => engine?.post({ type: 'info', text });
+    try {
+      const result = await runSetup(client, say);
+      if (result.outcome === 'written') {
+        say('Restarting the engine to use the new configuration...');
+        await start();
+      } else if (result.outcome === 'failed')
+        void vscode.window.showErrorMessage(`Switchback setup failed: ${result.message ?? ''}`);
+      else
+        say(
+          `${result.outcome === 'cancelled' ? 'Setup cancelled; nothing was written.' : 'Nothing changed.'} Run "Switchback: Set Up Models" any time.`,
+        );
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Switchback setup failed: ${(err as Error).message}`);
+    }
+  };
+
   const start = async () => {
     engine?.dispose();
     if (!root) {
@@ -93,26 +123,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     });
     try {
       await engine.start();
-      // Local models are user-configured; nudge toward setup when there isn't one.
-      // Never await a notification here: it resolves only when the user
-      // clicks, and activation would hang until then.
-      if (!engine.init?.models.some((m) => m.tier === 'local')) {
-        void vscode.window
-          .showInformationMessage(
-            'Switchback has no local model configured, so every turn runs remotely.',
-            'Get Started',
-            'Set Up Models',
-          )
-          .then((pick) => {
-            if (pick === 'Set Up Models')
-              void vscode.commands.executeCommand('switchback.runSetup');
-            else if (pick)
-              void vscode.commands.executeCommand(
-                'workbench.action.openWalkthrough',
-                WALKTHROUGH,
-                false,
-              );
-          });
+      // Nothing configured yet: start setup right away, once per window, so a
+      // cancelled setup doesn't come back on every engine restart. Not awaited:
+      // activation mustn't wait on someone answering questions.
+      if (!engine.init?.models.length && !setupOffered) {
+        setupOffered = true;
+        void setUp();
       }
     } catch (err) {
       const message = (err as Error).message;
@@ -197,32 +213,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
       terminal.show();
     }),
     vscode.commands.registerCommand('switchback.runSetup', async () => {
-      if (!root) return;
-      // Setup is interactive and shared with the CLI, so run `switchback init` in a terminal
-      // and restart the engine when it closes to pick up the new config.
-      let binary = engine?.binary;
-      if (!binary) {
-        try {
-          binary = await resolveEngine(root, bundled);
-        } catch (err) {
-          void vscode.window.showErrorMessage((err as Error).message);
-          return;
-        }
-      }
-      const { command, args } = binary;
-      const terminal = vscode.window.createTerminal({
-        name: 'Switchback Setup',
-        cwd: root,
-        shellPath: command,
-        shellArgs: [...args, 'init'],
-      });
-      const sub = vscode.window.onDidCloseTerminal((t) => {
-        if (t !== terminal) return;
-        sub.dispose();
-        void start();
-      });
-      context.subscriptions.push(sub);
-      terminal.show();
+      if (root) await setUp();
     }),
     vscode.commands.registerCommand('switchback.showLogs', () => log.show()),
     vscode.commands.registerCommand('switchback.setRoute', async () => {

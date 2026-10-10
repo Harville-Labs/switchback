@@ -13,7 +13,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { EngineEvent, StopReason } from '@switchback/protocol';
+import { type EngineEvent, isSessionEvent, type StopReason } from '@switchback/protocol';
 import { CATALOG, tierOf } from '@switchback/providers';
 import { roleAliases } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
@@ -138,7 +138,7 @@ function readCounters(dataDir: string): Counter[] {
 
 /** Count what telemetry reports about an engine's turns (top-level sessions only). */
 export function recordEngineEvent(dataDir: string, event: EngineEvent, now: Date): void {
-  if (event.type === 'log' || event.type === 'config.updated' || event.parentSessionId) return;
+  if (!isSessionEvent(event) || event.parentSessionId) return;
   if (event.type === 'turn.completed')
     appendCounter(dataDir, { ts: now.toISOString(), kind: 'turn', stopReason: event.stopReason });
   else if (event.type === 'error') appendCounter(dataDir, { ts: now.toISOString(), kind: 'error' });

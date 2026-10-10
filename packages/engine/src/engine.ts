@@ -35,6 +35,8 @@ import {
   type SessionRoles,
   type SessionSetRolesParams,
   type SessionSummary,
+  type SetupAnswerParams,
+  type SetupStartParams,
   type ShellInfo,
   type UsagePeriod,
   type UsageReport,
@@ -54,6 +56,7 @@ import type { OrgStatus } from './org/policy.ts';
 import { switchbackPaths } from './paths.ts';
 import type { SourcedRule } from './permissions/policy.ts';
 import type { NewSession } from './session-factory.ts';
+import { SetupRuns } from './setup-flow/protocol-prompter.ts';
 import { worktreeDir } from './subagents.ts';
 import type { TurnOptions } from './turn-runner.ts';
 import { gitToplevel } from './worktree.ts';
@@ -66,11 +69,24 @@ export const ENGINE_VERSION = '1.2.0';
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
   private mcp: McpHub | undefined;
+  private readonly setupRuns: SetupRuns;
   /** The collaborators (engine-parts.ts). */
   private readonly p: EngineParts;
 
   constructor(private readonly options: EngineOptions) {
     this.mcp = this.startMcp(options.config);
+    this.setupRuns = new SetupRuns(
+      options.workspaceRoot,
+      (e) => this.emit(e),
+      options.setup,
+      () => {
+        try {
+          if (options.reloadConfig) this.applyConfig(options.reloadConfig());
+        } catch (err) {
+          this.notify('error', `the new configuration wasn't applied: ${(err as Error).message}`);
+        }
+      },
+    );
     this.p = assembleEngine(options, {
       emit: (e) => this.emit(e),
       notify: (level, message) => this.notify(level, message),
@@ -331,6 +347,21 @@ export class Engine {
   /** `shells.kill`. */
   killShell(shellId: string): ShellInfo {
     return this.p.commands.kill(shellId);
+  }
+
+  /** `setup.start`: setup's questions arrive as `setup.ask` events (setup-flow/). */
+  startSetup(params: SetupStartParams): { setupId: string } {
+    return this.setupRuns.start(params);
+  }
+
+  /** `setup.answer`. */
+  answerSetup(params: SetupAnswerParams): void {
+    this.setupRuns.answer(params);
+  }
+
+  /** `setup.cancel`. */
+  cancelSetup(setupId: string): void {
+    this.setupRuns.cancel(setupId);
   }
 
   /** `worktrees.list`: branches isolated subagents made in this repository. */

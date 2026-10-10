@@ -1,9 +1,8 @@
-/** `switchback init`: which model does what (ADR 0015). */
-import { formatRoles, formatSteps } from '@switchback/client';
-import { defaultRoles, type PlannedModel, type Roles } from '@switchback/engine';
+/** Setup: which model does what (ADR 0015). */
 import type { SessionRoles } from '@switchback/protocol';
-import { bold, type Prompter } from '../prompt.ts';
-import { type InitFlags, SetupError } from './init-flags.ts';
+import { defaultRoles, type PlannedModel, type Roles } from '../setup.ts';
+import { SetupError, type SetupFlags } from './flags.ts';
+import { asking, type SetupPrompter } from './prompter.ts';
 
 /** A role reference (`alias` or model ID) to the alias setup gives that model. */
 export function resolveAlias(plan: PlannedModel[], ref: string, flag: string): string {
@@ -17,10 +16,11 @@ export function resolveAlias(plan: PlannedModel[], ref: string, flag: string): s
 
 /** Which model does what: flags unattended, else defaults the user can change. */
 export async function chooseRoles(
-  flags: InitFlags,
-  p: Prompter | undefined,
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
   plan: PlannedModel[],
 ): Promise<Roles> {
+  const p = asking(ui);
   const roles = defaultRoles(plan);
   const chain = (v: string, flag: string) =>
     v.split(',').map((ref) => resolveAlias(plan, ref.trim(), flag));
@@ -35,7 +35,7 @@ export async function chooseRoles(
     roles.subagents = resolveAlias(plan, flags.subagentModel, '--subagent-model');
   if (!p) return roles;
 
-  // Shown exactly as `/roles` and `switchback doctor` show them.
+  // Clients show them exactly as `/roles` and `switchback doctor` do.
   const models = plan.map((m) => ({
     alias: m.alias,
     ref: { provider: m.where, model: m.model },
@@ -52,9 +52,9 @@ export async function chooseRoles(
     overridden: [],
   });
   for (;;) {
-    console.log(`\n${bold('Which model does what')}`);
-    for (const line of formatRoles(asSession(), models).split('\n')) console.log(`  ${line}`);
-    const action = await p.select('', [
+    p.note({ kind: 'text', text: 'Which model does what', tone: 'heading' });
+    p.note({ kind: 'roles', roles: asSession(), models });
+    const action = await p.select('Which model does what', [
       { label: 'Looks good', value: 'done' as const },
       { label: 'Change where turns start', value: 'start' as const },
       { label: 'Change the escalation ladder', value: 'escalate' as const },
@@ -101,7 +101,7 @@ export async function chooseRoles(
         ...(roles.escalate.length
           ? [
               {
-                label: `Yes, with the escalation ladder (${formatSteps(roles.escalate)})`,
+                label: 'Yes, with the escalation ladder',
                 value: 'ladder' as const,
                 hint: 'the first reviews; the next steps in when its findings stand',
               },
@@ -140,7 +140,7 @@ export async function chooseRoles(
 
 /** One model from the plan, leaving out `taken`; undefined for the "none" choice. */
 export async function pickModel(
-  p: Prompter,
+  p: SetupPrompter,
   plan: PlannedModel[],
   question: string,
   taken: string[],
@@ -164,6 +164,6 @@ export async function pickModel(
         .filter(Boolean)
         .join(' · '),
     }));
-  const pick = await p.select(`\n${question}`, [...options, { label: none, value: '' }]);
+  const pick = await p.select(question, [...options, { label: none, value: '' }]);
   return pick || undefined;
 }

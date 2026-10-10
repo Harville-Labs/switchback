@@ -211,7 +211,7 @@ test('init gives a new user config the default permissions, once', () => {
 }, 30_000);
 
 test('setup names the commands a preset allows', async () => {
-  const { presetCommands } = await import('./commands/init-permissions.ts');
+  const { presetCommands } = await import('@switchback/engine');
   expect(presetCommands(['bash(bun test:*)', 'bash(bun run test:*)', 'bash(bun run lint:*)'])).toBe(
     'bun test, bun run test/lint',
   );

@@ -6,4 +6,4 @@ Switchback starts each turn on the model you pick and escalates to a stronger on
 - **All local**: nothing leaves your machine.
 - **All hosted**: OpenAI, Anthropic, Gemini, DeepSeek, Bedrock, Vertex, Azure, OpenRouter, or any OpenAI-compatible API, with a cheaper model starting and a stronger one escalating.
 
-**Set Up Models** runs `switchback init` in a terminal: it finds local servers, asks for keys (or reads them from your environment), and writes `~/.switchback/config.json`. Run it again any time to change your mind.
+When nothing is configured yet, setup starts on its own as the extension loads; **Set Up Models** runs it again. It asks a few questions right here: your local model endpoints and which of their models to use, any remote providers, and which model does what. It finds servers running on this machine, reads keys from your environment, and writes `~/.switchback/config.json`, the same file `switchback init` writes. No terminal or CLI needed. Run it again any time to change your mind.

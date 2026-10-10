@@ -31,6 +31,9 @@ import {
   SessionRolesParams,
   SessionSetModeParams,
   SessionSetRolesParams,
+  SetupAnswerParams,
+  SetupCancelParams,
+  SetupStartParams,
   ShellsKillParams,
   ShellsListParams,
   type Transport,
@@ -142,6 +145,14 @@ export function serve(
         return engine.shells(parse(ShellsListParams, req.params).sessionId);
       case 'shells.kill':
         return engine.killShell(parse(ShellsKillParams, req.params).shellId);
+      case 'setup.start':
+        return engine.startSetup(parse(SetupStartParams, req.params));
+      case 'setup.answer':
+        engine.answerSetup(parse(SetupAnswerParams, req.params));
+        return { ok: true };
+      case 'setup.cancel':
+        engine.cancelSetup(parse(SetupCancelParams, req.params).setupId);
+        return { ok: true };
       case 'worktrees.list':
         return engine.listWorktrees();
       case 'worktrees.diff':
