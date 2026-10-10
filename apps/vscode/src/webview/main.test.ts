@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { beforeAll, expect, test } from 'bun:test';
 import type { InitializeResult, SessionRoles, SessionSummary } from '@switchback/protocol';
-import { Window } from 'happy-dom';
+import type { Window } from 'happy-dom';
 import type { HostToWebview, WebviewToHost } from '../messages.ts';
+import { installDom } from './test-dom.ts';
 
 /** The chat webview, loaded into a DOM with a stand-in for VS Code's webview API. */
 const posted: WebviewToHost[] = [];
@@ -13,20 +14,11 @@ const send = async (m: HostToWebview) => {
 const $ = (selector: string) => window.document.querySelector(selector) as unknown as HTMLElement;
 
 beforeAll(async () => {
-  window = new Window();
-  window.document.body.innerHTML = '<div id="app"></div>';
-  Object.assign(globalThis, {
-    window,
-    document: window.document,
+  window = installDom({
     acquireVsCodeApi: () => ({ postMessage: (m: WebviewToHost) => posted.push(m) }),
   });
+  window.document.body.innerHTML = '<div id="app"></div>';
   await import('./main.ts');
-});
-
-// Tests share one process: a leftover `window` makes later code (the OpenAI SDK) think it's in a browser.
-afterAll(() => {
-  for (const name of ['window', 'document', 'acquireVsCodeApi'])
-    delete (globalThis as Record<string, unknown>)[name];
 });
 
 const session: SessionSummary = {
