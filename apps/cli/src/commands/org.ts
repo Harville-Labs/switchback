@@ -28,7 +28,7 @@ export interface LoginFlags {
 
 /** Where Harville Labs hosts sites; `SWITCHBACK_SITES_URL` points elsewhere (staging, tests). */
 export function siteServer(site: string, env = process.env): string {
-  const base = (env.SWITCHBACK_SITES_URL ?? 'https://switchback.harville.ai').replace(/\/+$/, '');
+  const base = (env.SWITCHBACK_SITES_URL ?? 'https://app.switchback.sh').replace(/\/+$/, '');
   return `${base}/sites/${encodeURIComponent(site)}`;
 }
 

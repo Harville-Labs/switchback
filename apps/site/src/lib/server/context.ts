@@ -24,7 +24,7 @@ import { type Ctx, ensureUser } from './model.ts';
 export interface SiteApp {
   ctx: Ctx;
   mailer: Mailer;
-  /** e.g. https://switchback.harville.ai, without a trailing slash. */
+  /** e.g. https://app.switchback.sh, without a trailing slash. */
   publicUrl: string;
   /** Harville Labs' identity provider is configured. */
   staffSso: boolean;

@@ -10,7 +10,7 @@ let { data, form } = $props();
   <h1 class="mb-1 page-title">Sign in</h1>
   <p class="muted mb-4">
     Your company's Switchback site: members, policy, and usage. Using Switchback on your own? You don't
-    need a site; <a href="https://harville.ai/switchback">install Switchback</a> and go.
+    need a site; <a href="https://switchback.sh">install Switchback</a> and go.
   </p>
   <Flash error={form?.error ?? data.error} />
   {#if form?.sent}

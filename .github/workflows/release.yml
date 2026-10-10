@@ -137,7 +137,7 @@ jobs:
         run: |
           bun scripts/third-party-notices.ts --out dist/THIRD-PARTY-NOTICES.txt
           cp LICENSE NOTICE dist/
-      # The user docs for harville.ai/switchback/docs, which renders each release's.
+      # The user docs for switchback.sh/docs, which renders each release's.
       - name: Docs bundle
         run: bun scripts/docs-bundle.ts "${{ needs.verify.outputs.version }}" "dist/switchback-docs-${{ needs.verify.outputs.version }}.json"
       - name: Checksums
@@ -151,7 +151,7 @@ jobs:
             bun scripts/release.ts notes "${{ needs.verify.outputs.version }}"
             echo
             echo "### Install"
-            echo "On macOS and Linux: \`curl -fsSL https://switchback.harville.ai/install.sh | sh\` (add \`-s -- --vscode\` after \`sh\` for the VS Code extension too). On Windows, in PowerShell: \`irm https://switchback.harville.ai/install.ps1 | iex\`. Or download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`switchback\`. Then run \`switchback init\`."
+            echo "On macOS and Linux: \`curl -fsSL https://switchback.sh/install.sh | sh\` (add \`-s -- --vscode\` after \`sh\` for the VS Code extension too). On Windows, in PowerShell: \`irm https://switchback.sh/install.ps1 | iex\`. Or download the binary for your platform, verify it against \`SHA256SUMS\`, make it executable, and put it on your PATH as \`switchback\`. Then run \`switchback init\`."
             echo "Install the VS Code extension from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=isaiah-harville.switchback) or [Open VSX](https://open-vsx.org/extension/isaiah-harville/switchback) (\`$install\`), or from the \`switchback-vscode-${{ needs.verify.outputs.version }}-<platform>.vsix\` here. Each platform's extension includes the engine, so no separate install is needed; the universal .vsix uses \`switchback\` from your PATH."
             echo
             echo "Binaries are not yet signed or notarized (#33). On macOS, clear the quarantine flag with \`xattr -d com.apple.quarantine switchback\`."

@@ -18,16 +18,16 @@ A local-first coding agent from Harville Labs. (Formerly Harness.) Most of the w
 On macOS or Linux:
 
 ```sh
-curl -fsSL https://switchback.harville.ai/install.sh | sh
+curl -fsSL https://switchback.sh/install.sh | sh
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://switchback.harville.ai/install.ps1 | iex
+irm https://switchback.sh/install.ps1 | iex
 ```
 
-The scripts ([install.sh](scripts/install.sh), [install.ps1](scripts/install.ps1)) download the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/switchback/releases), check it against the release's `SHA256SUMS`, and put it in `~/.local/bin`, without sudo or administrator rights. `install.sh` never edits your shell profile; `install.ps1` adds the directory to your user PATH unless you pass `-NoModifyPath`. Options for `install.sh` go after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. `install.ps1` takes `-VSCode`, `-Version`, and `-Dir` (run it as `& ([scriptblock]::Create((irm https://switchback.harville.ai/install.ps1))) -VSCode`) or the `SWITCHBACK_VERSION` and `SWITCHBACK_INSTALL_DIR` environment variables.
+The scripts ([install.sh](scripts/install.sh), [install.ps1](scripts/install.ps1)) download the binary for your machine from the latest [GitHub release](https://github.com/Harville-Labs/switchback/releases), check it against the release's `SHA256SUMS`, and put it in `~/.local/bin`, without sudo or administrator rights. `install.sh` never edits your shell profile; `install.ps1` adds the directory to your user PATH unless you pass `-NoModifyPath`. Options for `install.sh` go after `sh -s --`: `--vscode` also installs the VS Code extension, `--version 0.5.0` picks a release, and `--dir <path>` installs elsewhere. `install.ps1` takes `-VSCode`, `-Version`, and `-Dir` (run it as `& ([scriptblock]::Create((irm https://switchback.sh/install.ps1))) -VSCode`) or the `SWITCHBACK_VERSION` and `SWITCHBACK_INSTALL_DIR` environment variables.
 
 Update the CLI in place with `switchback self-update` (or `switchback self-update --check` to see whether there's a newer release). It verifies the download the same way the installers do.
 

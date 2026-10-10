@@ -97,7 +97,7 @@ agents new options (prompts cover anything not given; --yes for none)
   --model <local|remote|alias> --prompt <text> --budget <usd> --isolation worktree
 
 login options
-  --site <id>              Your company's site on switchback.harville.ai
+  --site <id>              Your company's site on app.switchback.sh
   --server <url>           Any organization server (default: previous or $SWITCHBACK_ORG_SERVER)
   --token <token>          Sign in with an access token instead of the browser (CI)
 `;

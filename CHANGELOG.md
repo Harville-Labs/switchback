@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- **Switchback has its own domains** (ADR 0019): the site and docs are at switchback.sh, and the console is at app.switchback.sh. Install with `curl -fsSL https://switchback.sh/install.sh | sh` or `irm https://switchback.sh/install.ps1 | iex`. `switchback login --site` and the default `telemetry.endpoint` use app.switchback.sh. The old addresses redirect. Sites with single sign-on need their identity provider's redirect URI changed to app.switchback.sh
+
 ## [1.2.0] - 2026-10-09
 
 ### Added

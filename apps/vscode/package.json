@@ -11,7 +11,7 @@
     "theme": "dark"
   },
   "license": "Apache-2.0",
-  "homepage": "https://harville.ai/switchback",
+  "homepage": "https://switchback.sh",
   "repository": {
     "type": "git",
     "url": "https://github.com/Harville-Labs/switchback.git",

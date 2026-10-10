@@ -231,7 +231,7 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | Key | Default | |
 |---|---|---|
 | `enabled` | `false` | Anonymous daily usage statistics. Set with `switchback telemetry on\|off`; a project config can turn it off but not on. See [telemetry.md](telemetry.md) |
-| `endpoint` | `https://switchback.harville.ai/api/telemetry/v1` | Where reports are sent |
+| `endpoint` | `https://app.switchback.sh/api/telemetry/v1` | Where reports are sent |
 
 ### Other keys
 
