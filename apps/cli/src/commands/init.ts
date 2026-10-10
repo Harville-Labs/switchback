@@ -1,31 +1,31 @@
 /**
- * `switchback init`: guided configuration. Local endpoints first, each with
- * the models to use from it, then hosted providers one at a time; then which
- * model does what (ADR 0015), and a config file. Every question has a flag so
- * setup can also run unattended (`--yes`).
+ * `switchback init`: guided configuration in the terminal. The questions are
+ * the engine's (setup-flow), the same ones VS Code asks; this draws them, then
+ * offers what only a terminal on this machine can: the Windows command
+ * sandbox, the telemetry choice, and a `doctor` check. Every question has a
+ * flag so setup can also run unattended (`--yes`).
  */
 import { existsSync, readFileSync } from 'node:fs';
+import { formatSetupNote } from '@switchback/client';
 import {
-  buildSetupConfig,
+  installSandbox,
   parseJsonc,
-  planModels,
-  projectPaths,
-  type SetupAnswers,
+  runSetup,
+  SetupError,
+  type SetupFlags,
+  type SetupPrompter,
+  sandboxInstalled,
   switchbackPaths,
-  writeConfigLayer,
+  unattended,
 } from '@switchback/engine';
-import { bold, dim, green, Prompter } from '../prompt.ts';
+import type { SetupNote } from '@switchback/protocol';
+import { bold, dim, green, Prompter, yellow } from '../prompt.ts';
 import { doctor } from './doctor.ts';
-import { type InitFlags, SetupError } from './init-flags.ts';
-import { chooseLocals } from './init-local.ts';
-import { offerWindowsSandbox, setupUserPermissions } from './init-permissions.ts';
-import { chooseRemotes } from './init-remote.ts';
-import { chooseRoles } from './init-roles.ts';
 import { setTelemetry, TELEMETRY_PROMPT } from './telemetry.ts';
 
-export type { InitFlags } from './init-flags.ts';
+export type { SetupFlags as InitFlags } from '@switchback/engine';
 
-export async function init(flags: InitFlags): Promise<number> {
+export async function init(flags: SetupFlags): Promise<number> {
   if (!flags.yes && !process.stdin.isTTY) {
     process.stderr.write(
       'switchback init: not a terminal; pass --yes with flags (see `switchback --help`)\n',
@@ -46,112 +46,63 @@ export async function init(flags: InitFlags): Promise<number> {
   }
 }
 
-async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
-  if (p) {
-    console.log(
-      `${bold('Switchback setup')}\n${dim('Add your local endpoints and hosted providers, then choose which model starts, which ones it escalates to, and who reviews.')}\n`,
-    );
+/** Setup's notes, drawn for a terminal: the shared text, with color. */
+export function drawNote(note: SetupNote): string {
+  if (note.kind === 'roles')
+    return formatSetupNote(note)
+      .split('\n')
+      .map((l) => `  ${l}`)
+      .join('\n');
+  if (note.kind === 'config') {
+    const [head, ...json] = formatSetupNote(note).split('\n');
+    return `\n${bold(head ?? '')}\n${json.join('\n')}\n`;
   }
-
-  // Model servers belong to this machine, so the user config by default; `--scope project` for a team's.
-  const file =
-    (flags.scope ?? 'user') === 'user'
-      ? switchbackPaths().configFile
-      : projectPaths(flags.cwd).configFile;
-  if (
-    existsSync(file) &&
-    p &&
-    !(await p.confirm(`\n${file} exists. Update it? A backup is kept at .bak.`))
-  ) {
-    console.log('Nothing changed.');
-    return 0;
+  switch (note.tone) {
+    case 'heading':
+      return `\n${bold(note.text)}`;
+    case 'detail':
+      return dim(`  ${note.text}`);
+    case 'warning':
+      return yellow(`  ${note.text}`);
+    case 'success':
+      return `${green('✓')} ${note.text}`;
+    default:
+      return note.text;
   }
+}
 
-  const locals = await chooseLocals(flags, p);
-  const remotes = await chooseRemotes(flags, p, locals.length === 0);
-  if (!locals.length && !remotes.length) {
-    if (!p) throw new SetupError('pick at least one model, local or hosted');
-    console.log(
-      `\nNo models chosen, so nothing was written. Run ${bold('switchback init')} any time to add them.\n`,
-    );
-    return 0;
-  }
-
-  const plan = planModels({ locals, remotes });
-  const roles = await chooseRoles(flags, p, plan);
-  const tierOf = (alias: string) => plan.find((m) => m.alias === alias)?.tier;
-  const escalatesRemote = roles.escalate.flat().some((a) => tierOf(a) === 'remote');
-  const usesRemote =
-    escalatesRemote ||
-    [
-      ...roles.start,
-      roles.subagents ?? '',
-      ...(Array.isArray(roles.review) ? roles.review.flat() : []),
-    ].some((a) => tierOf(a) === 'remote');
-
-  const escalationPolicy =
-    flags.policy ??
-    (p && escalatesRemote
-      ? await p.select('\nWhen a model struggles and the next step is a hosted model:', [
-          {
-            label: 'Escalate automatically',
-            value: 'auto' as const,
-            hint: 'shows the reason each time',
-          },
-          { label: 'Ask me first', value: 'ask' as const, hint: 'local steps never ask' },
-          {
-            label: 'Never escalate',
-            value: 'off' as const,
-            hint: 'only context overflow and outages move up',
-          },
-        ])
-      : 'auto');
-
-  let budget: SetupAnswers['budget'];
-  if (flags.dailyBudget || flags.monthlyBudget) {
-    budget = {
-      ...(flags.dailyBudget ? { dailyUsd: flags.dailyBudget } : {}),
-      ...(flags.monthlyBudget ? { monthlyUsd: flags.monthlyBudget } : {}),
-    };
-  } else if (p && usesRemote) {
-    console.log(
-      dim('\nBudgets keep calls on local models once reached. Leave empty for no limit.'),
-    );
-    const dailyUsd = await p.number('Daily remote budget in USD');
-    const monthlyUsd = await p.number('Monthly remote budget in USD');
-    if (dailyUsd || monthlyUsd)
-      budget = { ...(dailyUsd ? { dailyUsd } : {}), ...(monthlyUsd ? { monthlyUsd } : {}) };
-  }
-
-  const answers: SetupAnswers = {
-    locals,
-    remotes,
-    roles,
-    escalationPolicy,
-    ...(budget ? { budget } : {}),
+/** The terminal prompts, as setup asks for them; a blank line before each question keeps steps apart. */
+function terminal(p: Prompter): SetupPrompter {
+  return {
+    text: (q, fallback) => p.text(q, fallback),
+    number: (q, fallback) => p.number(q, fallback),
+    confirm: (q, fallback) => p.confirm(`\n${q}`, fallback),
+    select: (q, options, i) => p.select(`\n${q}`, options, i),
+    multiSelect: (q, options) => p.multiSelect(`\n${q}`, options),
+    search: (q, options, opts) => p.search(q, options, opts),
+    note: (note) => console.log(drawNote(note)),
   };
-  const layer = buildSetupConfig(answers);
+}
 
-  if (p) {
+async function run(flags: SetupFlags, p: Prompter | undefined): Promise<number> {
+  if (p)
     console.log(
-      `\n${bold('Configuration to write')} ${dim(file)}\n${JSON.stringify(layer, null, 2)}\n`,
+      `${bold('Switchback setup')}\n${dim('Add your local endpoints and hosted providers, then choose which model starts, which ones it escalates to, and who reviews.')}`,
     );
-    if (!(await p.confirm('Write it?'))) {
-      console.log('Nothing changed.');
-      return 0;
-    }
-  }
-  const result = writeConfigLayer(file, layer);
-  console.log(
-    `${green('✓')} Wrote ${result.file}${result.backup ? dim(` (previous version: ${result.backup})`) : ''}\n`,
+  const result = await runSetup(
+    flags,
+    p ? terminal(p) : unattended((note) => console.log(drawNote(note))),
   );
-  await setupUserPermissions(flags, p);
+  if (result.outcome === 'nothing') {
+    if (p) console.log(`\nNothing changed. Run ${bold('switchback init')} any time.\n`);
+    return 0;
+  }
   await offerWindowsSandbox(p);
   const share =
     flags.telemetry ??
     (p && !telemetryChosen()
       ? await p.confirm(
-          `${TELEMETRY_PROMPT}\n${dim('  Details: docs/telemetry.md. Change it any time with `switchback telemetry on|off`.')}\n `,
+          `\n${TELEMETRY_PROMPT}\n${dim('  Details: docs/telemetry.md. Change it any time with `switchback telemetry on|off`.')}\n `,
           false,
         )
       : undefined);
@@ -161,6 +112,23 @@ async function run(flags: InitFlags, p: Prompter | undefined): Promise<number> {
   }
   await doctor({ cwd: flags.cwd, mock: false });
   return 0;
+}
+
+/** Windows sandboxes commands only after a one-time elevated install, which only a terminal here can do. */
+async function offerWindowsSandbox(p: Prompter | undefined) {
+  if (process.platform !== 'win32' || !p) return;
+  if (await sandboxInstalled(switchbackPaths().dataDir)) return;
+  const install = await p.confirm(
+    `\nSet up the command sandbox? ${dim('Commands then run as a separate account that can only write the workspace. Windows asks for administrator approval once.')}`,
+  );
+  if (!install) {
+    console.log(
+      dim('  Commands run unsandboxed. `switchback sandbox install` sets it up later.\n'),
+    );
+    return;
+  }
+  const result = await installSandbox(switchbackPaths().dataDir);
+  console.log(result.ok ? `${green('✓')} ${result.message}\n` : `  ${result.message}\n`);
 }
 
 /** Whether the user has answered before (either way): their config says. */

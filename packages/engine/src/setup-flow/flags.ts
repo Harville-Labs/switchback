@@ -1,7 +1,7 @@
-/** Flags for `switchback init`; every question has one, so setup can run unattended. */
-import type { RemoteKind } from '@switchback/engine';
+/** Setup's answers given up front (`switchback init` flags); every question has one, so setup can run unattended. */
+import type { RemoteKind } from '../setup.ts';
 
-export interface InitFlags {
+export interface SetupFlags {
   cwd: string;
   yes: boolean;
   scope?: 'user' | 'project';

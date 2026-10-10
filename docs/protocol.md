@@ -48,6 +48,9 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
 | `shells.list` | `{ sessionId? }` | `ShellInfo[]`: background shells, all or one session's |
 | `shells.kill` | `{ shellId }` | `ShellInfo` |
+| `setup.start` | `{ scope? }` | `{ setupId }`: start setup; its questions arrive as `setup.ask` events |
+| `setup.answer` | `{ requestId, value }` | Answer a `setup.ask`: text a string; number a number or `''` for the default; confirm a boolean; select an index; multiSelect indexes; search an index or typed text. `null` cancels |
+| `setup.cancel` | `{ setupId }` | Stop a setup; nothing is written |
 | `permissions.list` | `{ sessionId? }` | `{ mode?, modes, levels, rules }`: the session's mode, the modes it may switch to, the category levels, and every rule with its `source` |
 | `escalation.respond` | `requestId`, `approve` | `{ ok }` |
 | `agents.list` | none | `AgentSummary[]` |
@@ -84,7 +87,10 @@ Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Ever
 | `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
-| `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit); carries `org` and human-readable `notes` |
+| `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config); carries `org` and human-readable `notes` |
+| `setup.ask` | A setup question for the client that started it (`setupId`, `requestId`, `question`: text, number, confirm, select, multiSelect, or search, with options and a default) |
+| `setup.note` | Something setup tells the person between questions: text with a tone, the roles (`/roles`), or the config about to be written |
+| `setup.finished` | How setup ended: `written` (with `file`), `nothing`, `cancelled`, or `failed` (with `message`) |
 | `log` | Engine diagnostics |
 
 Clients should fold events with `reduce()` from `@switchback/client/view` rather than writing their own interpretation.

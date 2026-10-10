@@ -4,7 +4,7 @@
  * event as a line of JSON, as it happens).
  */
 import { privateLabel, redactedLabel, reviewLines } from '@switchback/client';
-import type { EngineEvent } from '@switchback/protocol';
+import { type EngineEvent, isSessionEvent } from '@switchback/protocol';
 
 export type RunOutput = 'text' | 'json' | 'events';
 
@@ -21,7 +21,7 @@ export function eventPrinter(output: RunOutput, sessionId: string): (e: EngineEv
       err(`[${e.org ? `${e.org.name} policy updated` : 'config updated'}]`);
       return;
     }
-    if (e.type === 'log' || e.sessionId !== sessionId) return;
+    if (!isSessionEvent(e) || e.sessionId !== sessionId) return;
     switch (e.type) {
       case 'text.delta':
         process.stdout.write(e.text);

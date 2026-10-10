@@ -3,11 +3,13 @@
  * TUI and the VS Code webview both render from this reducer, so they cannot
  * disagree about what happened in a session.
  */
-import type {
-  EngineEvent,
-  Message,
-  PermissionDecision,
-  SessionSummary,
+import {
+  type EngineEvent,
+  isSessionEvent,
+  type Message,
+  type PermissionDecision,
+  type SessionEvent,
+  type SessionSummary,
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
 import {
@@ -169,6 +171,8 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
     return addInfo(state, [head, ...event.notes.map((n) => `  ${n}`)].join('\n'));
   }
 
+  // Setup's questions go to the client that started it, not into a transcript.
+  if (!isSessionEvent(event)) return state;
   // Shells from any session in the tree; the status line counts the running ones.
   if (event.type === 'shell.updated') {
     if (!owns(state, event.sessionId)) return state;
@@ -425,8 +429,6 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
   }
   return state;
 }
-
-type SessionEvent = Exclude<EngineEvent, { type: 'log' } | { type: 'config.updated' }>;
 
 function updateSubagentRow(state: ViewState, event: SessionEvent): ViewState {
   const i = state.items.findIndex((it) => it.kind === 'subagent' && it.id === event.sessionId);

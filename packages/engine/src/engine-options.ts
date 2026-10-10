@@ -3,11 +3,13 @@ import type { Price, Provider } from '@switchback/providers';
 import type { AgentDefinition } from './agents.ts';
 import type { CheckpointStore } from './checkpoints.ts';
 import type { SwitchbackConfig } from './config.ts';
+import type { Engine } from './engine.ts';
 import type { InstructionsSource } from './instructions-live.ts';
 import type { LibraryDirs } from './library.ts';
 import type { OrgStatus } from './org/policy.ts';
 import type { SourcedRule } from './permissions/policy.ts';
 import type { AgentRuntime } from './runtimes/runtime.ts';
+import type { SetupDeps } from './setup-flow/flow.ts';
 import type { SessionStore } from './store.ts';
 import type { Interaction } from './tool-runner.ts';
 import type { BashSandbox } from './tools/sandbox.ts';
@@ -49,6 +51,14 @@ export interface EngineOptions {
   /** Organization policy in effect, reported to clients. */
   org?: OrgStatus;
   /** Where engine-owned files live (worktrees). Defaults to the switchback data directory. */
+  /**
+   * Load the config again from disk, as the host loaded it at start (layers,
+   * organization policy). After setup writes a config, the engine applies it
+   * live, so every client of a shared engine sees the new models.
+   */
+  reloadConfig?: () => Parameters<Engine['applyConfig']>[0];
+  /** Network lookups and Switchback's home for setup over the protocol; tests set them. */
+  setup?: SetupDeps;
   dataDir?: string;
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];

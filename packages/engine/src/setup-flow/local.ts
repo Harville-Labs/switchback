@@ -1,7 +1,8 @@
-/** `switchback init`: local model servers, detected or entered by hand. */
-import { type DetectedServer, detectLocalServers, type LocalAnswer } from '@switchback/engine';
-import { bold, dim, type Prompter, yellow } from '../prompt.ts';
-import { type InitFlags, SetupError } from './init-flags.ts';
+/** Setup: local model servers, detected or entered by hand. */
+import { type DetectedServer, detectLocalServers } from '@switchback/providers';
+import type { LocalAnswer } from '../setup.ts';
+import { SetupError, type SetupFlags } from './flags.ts';
+import { asking, type SetupPrompter, say } from './prompter.ts';
 
 type Detect = typeof detectLocalServers;
 
@@ -10,12 +11,13 @@ type Detect = typeof detectLocalServers;
  * Servers already running here are found first and offered as the answers.
  */
 export async function chooseLocals(
-  flags: InitFlags,
-  p: Prompter | undefined,
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
   detect: Detect = detectLocalServers,
 ): Promise<LocalAnswer[]> {
+  const p = asking(ui);
   if (flags.noLocal) return [];
-  if (p) console.log(dim('Looking for model servers on this machine...'));
+  say(ui, 'Looking for model servers on this machine...', 'detail');
   const servers = await detect({ extra: flags.localUrls });
 
   // Unattended: models must be named; each server is found or given.
@@ -49,14 +51,14 @@ export async function chooseLocals(
   }
 
   const found = servers.filter((s) => s.models.length);
-  const hasAny = await p.confirm(
-    `\n${bold('Do you have any local model endpoints?')}${
-      found.length
-        ? dim(` Found ${found.map((s) => `${s.label} (${s.baseUrl})`).join(', ')}.`)
-        : dim(' Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible server.')
-    }`,
-    found.length > 0,
+  say(
+    ui,
+    found.length
+      ? `Found ${found.map((s) => `${s.label} (${s.baseUrl})`).join(', ')}.`
+      : 'Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible server.',
+    'detail',
   );
+  const hasAny = await p.confirm('Do you have any local model endpoints?', found.length > 0);
   if (!hasAny) return [];
 
   const chosen: LocalAnswer[] = [];
@@ -81,13 +83,13 @@ export async function chooseLocals(
 }
 
 /** The models to use from a server that lists them: a checklist, tool-capable ones first. */
-async function pickModels(server: DetectedServer, p: Prompter): Promise<LocalAnswer[]> {
-  if (server.note) console.log(dim(`  ${server.note}`));
+async function pickModels(server: DetectedServer, p: SetupPrompter): Promise<LocalAnswer[]> {
+  if (server.note) say(p, server.note, 'detail');
   const models = [...server.models].sort(
     (a, b) => Number(b.tools === true) - Number(a.tools === true),
   );
   const picked = await p.multiSelect(
-    `Which models from ${server.label}? ${dim('space to select, enter when done')}`,
+    `Which models from ${server.label}?`,
     models.map((model) => ({
       label: model.id,
       value: model,
@@ -99,20 +101,20 @@ async function pickModels(server: DetectedServer, p: Prompter): Promise<LocalAns
         .join(' · '),
     })),
   );
-  if (!picked.length) console.log(yellow(`  No models picked from ${server.label}.`));
+  if (!picked.length) say(p, `No models picked from ${server.label}.`, 'warning');
   const out: LocalAnswer[] = [];
   for (const model of picked) {
     if (model.tools === false)
-      console.log(
-        yellow(
-          `  ${model.id} doesn't report tool-calling support. Switchback will escalate often with it.`,
-        ),
+      say(
+        p,
+        `${model.id} doesn't report tool-calling support. Switchback will escalate often with it.`,
+        'warning',
       );
     // Asked only when the server can't say; the engine asks it again at runtime otherwise.
     const contextWindow =
       model.contextWindow ??
       (await p.number(
-        `Context window (tokens) for ${model.id} ${dim(model.maxContext ? `model max ${model.maxContext.toLocaleString('en-US')}` : 'the server loads')}`,
+        `Context window (tokens) for ${model.id}${model.maxContext ? `; the model's maximum is ${model.maxContext.toLocaleString('en-US')}` : ', as the server loads it'}`,
         32_768,
       )) ??
       32_768;
@@ -127,8 +129,8 @@ async function pickModels(server: DetectedServer, p: Prompter): Promise<LocalAns
 }
 
 /** An endpoint that didn't list its models (down, or it needs a key): one model, by hand. */
-async function manualLocal(baseUrl: string, p: Prompter): Promise<LocalAnswer> {
-  console.log(yellow(`  Couldn't list models at ${baseUrl}; enter one by hand.`));
+async function manualLocal(baseUrl: string, p: SetupPrompter): Promise<LocalAnswer> {
+  say(p, `Couldn't list models at ${baseUrl}; enter one by hand.`, 'warning');
   const model = await p.text('Model name');
   if (!model) throw new SetupError('a model name is required');
   const contextWindow =

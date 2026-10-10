@@ -4,6 +4,7 @@
  * this surface. Adding a capability means adding it here first.
  */
 import { z } from 'zod';
+import type { SetupAnswerParams, SetupCancelParams, SetupStartParams } from './setup.ts';
 import {
   MAX_IMAGE_BYTES,
   type Message,
@@ -442,6 +443,10 @@ export interface Methods {
   /** Background shells, all or one session's. */
   'shells.list': { params: ShellsListParams; result: ShellInfo[] };
   'shells.kill': { params: ShellsKillParams; result: ShellInfo };
+  /** Start setup: the engine asks its questions as `setup.ask` events (setup.ts). */
+  'setup.start': { params: SetupStartParams; result: { setupId: string } };
+  'setup.answer': { params: SetupAnswerParams; result: { ok: true } };
+  'setup.cancel': { params: SetupCancelParams; result: { ok: true } };
 }
 
 export type MethodName = keyof Methods;

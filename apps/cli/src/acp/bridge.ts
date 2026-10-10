@@ -8,7 +8,7 @@
  */
 import * as acp from '@agentclientprotocol/sdk';
 import { estimateLabel, permissionWhy, type SwitchbackClient } from '@switchback/client';
-import type { EngineEvent, PermissionDecision } from '@switchback/protocol';
+import { type EngineEvent, isSessionEvent, type PermissionDecision } from '@switchback/protocol';
 import {
   isMode,
   modeState,
@@ -207,7 +207,7 @@ export class AcpBridge {
   }
 
   private async onEvent(e: EngineEvent): Promise<void> {
-    if (e.type === 'log' || e.type === 'config.updated') return;
+    if (!isSessionEvent(e)) return;
     if (e.type === 'subagent.started') this.parents.set(e.childSessionId, e.sessionId);
     const sessionId = this.top(e.sessionId);
     if (!sessionId) return;

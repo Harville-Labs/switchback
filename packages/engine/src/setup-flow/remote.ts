@@ -1,12 +1,4 @@
-/** `switchback init`: hosted providers, their models, and credentials. */
-import {
-  catalogFor,
-  OPENROUTER_BASE_URL,
-  REMOTE_KINDS,
-  REMOTE_PROVIDERS,
-  type RemoteAnswer,
-  type RemoteKind,
-} from '@switchback/engine';
+/** Setup: hosted providers, their models, and credentials. */
 import {
   CATALOG,
   CREDENTIAL_ENV,
@@ -18,8 +10,16 @@ import {
   OPENCODE_KEY_ENV,
   openCodeApi,
 } from '@switchback/providers';
-import { bold, dim, type Prompter, yellow } from '../prompt.ts';
-import { type InitFlags, SetupError } from './init-flags.ts';
+import {
+  catalogFor,
+  OPENROUTER_BASE_URL,
+  REMOTE_KINDS,
+  REMOTE_PROVIDERS,
+  type RemoteAnswer,
+  type RemoteKind,
+} from '../setup.ts';
+import { SetupError, type SetupFlags } from './flags.ts';
+import { asking, type SetupPrompter, say } from './prompter.ts';
 
 type List = typeof listModels;
 
@@ -77,30 +77,31 @@ export function credentialHint(kind: RemoteKind): string {
  * local models).
  */
 export async function chooseRemotes(
-  flags: InitFlags,
-  p: Prompter | undefined,
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
   suggest = true,
   /** Model listing; tests pass their own. */
   list: List = listModels,
 ): Promise<RemoteAnswer[]> {
+  const p = asking(ui);
   if (!p) {
     if (!flags.remotes.length)
       throw new SetupError(`pass --remote (${[...REMOTE_KINDS, 'none'].join(', ')})`);
     const kinds = flags.remotes.filter((k): k is RemoteKind => k !== 'none');
     const out: RemoteAnswer[] = [];
     for (const [i, kind] of kinds.entries())
-      out.push(await chooseRemote(kind, flags.remoteModels[i], flags, undefined, list));
+      out.push(await chooseRemote(kind, flags.remoteModels[i], flags, ui, list));
     return out;
   }
-  if (!(await p.confirm(`\n${bold('Set up any remote providers?')}`, suggest))) return [];
+  if (!(await p.confirm('Set up any remote providers?', suggest))) return [];
   const chosen: RemoteAnswer[] = [];
   for (;;) {
     const kind: RemoteKind = await p.select(
       'Which provider?',
       REMOTE_KINDS.map((k) => ({ label: remoteLabel(k), value: k, hint: credentialHint(k) })),
     );
-    chosen.push(await chooseRemote(kind, undefined, flags, p, list));
-    if (!(await p.confirm('\nAny additional remote providers?', false))) break;
+    chosen.push(await chooseRemote(kind, undefined, flags, ui, list));
+    if (!(await p.confirm('Any additional remote providers?', false))) break;
   }
   return chosen;
 }
@@ -108,10 +109,11 @@ export async function chooseRemotes(
 async function chooseRemote(
   kind: RemoteKind,
   modelFlag: string | undefined,
-  flags: InitFlags,
-  p: Prompter | undefined,
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
   list: List,
 ): Promise<RemoteAnswer> {
+  const p = asking(ui);
   const env = process.env;
 
   if (kind === 'openai-compatible' || kind === 'openrouter') {
@@ -132,14 +134,14 @@ async function chooseRemote(
     const listed = await list(baseUrl, {
       ...(apiKeyEnv && env[apiKeyEnv] ? { apiKey: env[apiKeyEnv] } : {}),
     }).catch((err: Error) => {
-      if (p) console.log(dim(`  Couldn't list models (${err.message}); enter one by hand.`));
+      say(ui, `Couldn't list models (${err.message}); enter one by hand.`, 'detail');
       return [];
     });
     const model =
       modelFlag ??
       (p && listed.length
         ? await p.search(
-            `Which model? ${dim(`${listed.length} available; type to filter`)}`,
+            `Which model? (${listed.length} available; type to filter)`,
             listed.map((m) => ({ label: m.id, value: m.id, hint: listedHint(m) })),
             { freeText: true },
           )
@@ -149,19 +151,19 @@ async function chooseRemote(
     if (!model) throw new SetupError(`--remote-model is required for ${kind}`);
     const found = listed.find((m) => m.id === model);
     if (listed.length && !found)
-      console.log(
-        yellow(`  ${model} isn't in ${new URL(baseUrl).host}'s model list; check the ID.`),
-      );
+      say(ui, `${model} isn't in ${new URL(baseUrl).host}'s model list; check the ID.`, 'warning');
     if (found?.tools === false)
-      console.log(yellow(`  ${model} doesn't take tools there, so it can't edit or run anything.`));
+      say(ui, `${model} doesn't take tools there, so it can't edit or run anything.`, 'warning');
     const contextWindow =
       found?.contextWindow ??
       flags.remoteContextWindow ??
       (p ? await p.number('Context window (tokens)', 128_000) : undefined) ??
       128_000;
     if (found?.price && p)
-      console.log(
-        dim(`  $${found.price.input} / $${found.price.output} per M tokens, from the model list`),
+      say(
+        ui,
+        `$${found.price.input} / $${found.price.output} per M tokens, from the model list`,
+        'detail',
       );
     return {
       kind,
@@ -174,7 +176,7 @@ async function chooseRemote(
     };
   }
 
-  if (kind === 'opencode') return chooseOpenCode(modelFlag, flags, p, list);
+  if (kind === 'opencode') return chooseOpenCode(modelFlag, flags, ui, list);
 
   const catalog = CATALOG[catalogFor(kind) as HostedProviderKind];
   const model =
@@ -196,7 +198,7 @@ async function chooseRemote(
   }
   const hint = credentialHint(kind);
   if (hint.startsWith('needs') || hint.startsWith('install'))
-    console.log(yellow(`  ${remoteLabel(kind)} ${hint} before Switchback can use it.`));
+    say(ui, `${remoteLabel(kind)} ${hint} before Switchback can use it.`, 'warning');
 
   switch (kind) {
     case 'anthropic':
@@ -217,12 +219,11 @@ async function chooseRemote(
         (p
           ? await p.text('AWS profile (leave empty for the default chain)', env.AWS_PROFILE)
           : env.AWS_PROFILE);
-      if (p)
-        console.log(
-          dim(
-            '  Bedrock bills differently from the Anthropic API; set models.<alias>.price for accurate savings.',
-          ),
-        );
+      say(
+        ui,
+        'Bedrock bills differently from the Anthropic API; set models.<alias>.price for accurate savings.',
+        'detail',
+      );
       return { kind, model, region, ...(profile ? { profile } : {}) };
     }
     case 'vertex': {
@@ -273,12 +274,11 @@ async function chooseRemote(
               },
             ])
           : 'key');
-      if (p)
-        console.log(
-          dim(
-            '  Prices are OpenAI list prices; Azure billing can differ, so set models.<alias>.price if it does.',
-          ),
-        );
+      say(
+        ui,
+        'Prices are OpenAI list prices; Azure billing can differ, so set models.<alias>.price if it does.',
+        'detail',
+      );
       return {
         kind,
         model,
@@ -302,10 +302,11 @@ async function chooseRemote(
 /** OpenCode: the plan, then a model from its live list (the list needs no key). */
 async function chooseOpenCode(
   modelFlag: string | undefined,
-  flags: InitFlags,
-  p: Prompter | undefined,
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
   list: List,
 ): Promise<RemoteAnswer> {
+  const p = asking(ui);
   const plan =
     flags.opencodePlan ??
     (p
@@ -319,8 +320,7 @@ async function chooseOpenCode(
         ])
       : 'go');
   const listed = await list(`${OPENCODE_BASE_URL[plan]}/v1`).catch((err: Error) => {
-    if (p)
-      console.log(dim(`  Couldn't list OpenCode's models (${err.message}); enter one by hand.`));
+    say(ui, `Couldn't list OpenCode's models (${err.message}); enter one by hand.`, 'detail');
     return [];
   });
   // Gemini is served on Google's API there, which Switchback doesn't use through OpenCode.
@@ -329,7 +329,7 @@ async function chooseOpenCode(
     modelFlag ??
     (p && usable.length
       ? await p.search(
-          `Which model? ${dim(`${usable.length} available; type to filter`)}`,
+          `Which model? (${usable.length} available; type to filter)`,
           usable.map((m) => ({ label: m.id, value: m.id })),
           { freeText: true },
         )
@@ -347,8 +347,10 @@ async function chooseOpenCode(
     128_000;
   const hint = credentialHint('opencode');
   if (hint.startsWith('needs'))
-    console.log(
-      yellow(`  OpenCode ${hint} (from the OpenCode console) before Switchback can use it.`),
+    say(
+      ui,
+      `OpenCode ${hint} (from the OpenCode console) before Switchback can use it.`,
+      'warning',
     );
   return { kind: 'opencode', plan, model, contextWindow };
 }

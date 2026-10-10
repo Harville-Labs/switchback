@@ -14,6 +14,7 @@ import { type AttachChoice, EditorContext } from './context.ts';
 import { installerShell } from './engine-binary.ts';
 import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
+import { runSetup } from './setup-wizard.ts';
 
 /** The getting-started walkthrough (`contributes.walkthroughs`), as `<publisher>.<name>#<id>`. */
 const WALKTHROUGH = 'isaiah-harville.switchback#gettingStarted';
@@ -196,31 +197,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     }),
     vscode.commands.registerCommand('switchback.runSetup', async () => {
       if (!root) return;
-      // Setup is interactive and shared with the CLI, so run `switchback init` in a terminal
-      // and restart the engine when it closes to pick up the new config.
-      let binary = engine?.binary;
-      if (!binary) {
-        try {
-          binary = await resolveEngine(root, bundled);
-        } catch (err) {
-          void vscode.window.showErrorMessage((err as Error).message);
-          return;
-        }
+      // The engine asks setup's questions (the same as `switchback init`) and they show
+      // here as quick picks, so setup needs no terminal and no CLI: the bundled engine is enough.
+      const client = engine?.client;
+      if (!client) {
+        void vscode.window.showErrorMessage(
+          "Switchback's engine isn't running, so setup can't start. Run \"Switchback: Show Engine Logs\" to see why.",
+        );
+        return;
       }
-      const { command, args } = binary;
-      const terminal = vscode.window.createTerminal({
-        name: 'Switchback Setup',
-        cwd: root,
-        shellPath: command,
-        shellArgs: [...args, 'init'],
-      });
-      const sub = vscode.window.onDidCloseTerminal((t) => {
-        if (t !== terminal) return;
-        sub.dispose();
-        void start();
-      });
-      context.subscriptions.push(sub);
-      terminal.show();
+      await vscode.commands.executeCommand('switchback.chat.focus');
+      const say = (text: string) => engine?.post({ type: 'info', text });
+      try {
+        const result = await runSetup(client, say);
+        if (result.outcome === 'written') {
+          say('Restarting the engine to use the new configuration...');
+          await start();
+        } else if (result.outcome === 'failed')
+          void vscode.window.showErrorMessage(`Switchback setup failed: ${result.message ?? ''}`);
+        else
+          say(
+            result.outcome === 'cancelled'
+              ? 'Setup cancelled; nothing was written.'
+              : 'Nothing changed.',
+          );
+      } catch (err) {
+        void vscode.window.showErrorMessage(`Switchback setup failed: ${(err as Error).message}`);
+      }
     }),
     vscode.commands.registerCommand('switchback.showLogs', () => log.show()),
     vscode.commands.registerCommand('switchback.setRoute', async () => {

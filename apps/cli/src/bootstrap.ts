@@ -83,6 +83,8 @@ export function createEngine(
       prices: loaded.prices,
       untrustedMcp: loaded.untrustedMcp,
       rules: loaded.rules,
+      // Setup run by a client writes a config; the engine applies it without a restart.
+      reloadConfig: () => load(flags),
       ...(interaction ? { interaction } : {}),
       ...(loaded.org ? { org: loaded.org } : {}),
     });

@@ -6,7 +6,12 @@
  * policy, a hook, or no `--yes`). Usage errors exit 2 before anything runs.
  */
 import { receiptLine } from '@switchback/client';
-import type { PermissionMode, RoutePreference, StopReason } from '@switchback/protocol';
+import {
+  isSessionEvent,
+  type PermissionMode,
+  type RoutePreference,
+  type StopReason,
+} from '@switchback/protocol';
 import { type CommonFlags, connectInProcess } from '../bootstrap.ts';
 import { eventPrinter, type RunOutput } from './run-output.ts';
 
@@ -46,7 +51,7 @@ export async function run(flags: RunFlags): Promise<number> {
   const finished = new Promise<StopReason>((resolve) => {
     client.on((e) => {
       print(e);
-      if (e.type === 'log' || e.type === 'config.updated' || e.sessionId !== sessionId) return;
+      if (!isSessionEvent(e) || e.sessionId !== sessionId) return;
       if (e.type === 'text.delta') answer += e.text;
       if (e.type === 'turn.started') answer = '';
       if (e.type === 'tool.completed' && e.denied) denied = true;

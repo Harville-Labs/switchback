@@ -11,6 +11,7 @@ import type {
   SessionRoles,
   ShellInfo,
 } from './methods.ts';
+import type { SetupNote, SetupOutcome, SetupQuestion } from './setup.ts';
 import type { ModelRef, StopReason, Tier, Usage } from './transcript.ts';
 
 interface SessionScoped {
@@ -177,6 +178,17 @@ export type EngineEvent =
   | ({ type: 'error'; turnId?: string; message: string } & SessionScoped)
   | { type: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string }
   /** Configuration changed while running (e.g. an organization policy update). */
-  | { type: 'config.updated'; org?: OrgInfo; notes: string[] };
+  | { type: 'config.updated'; org?: OrgInfo; notes: string[] }
+  /** Setup (setup.start) asks a question; answer with `setup.answer`. */
+  | { type: 'setup.ask'; setupId: string; requestId: string; question: SetupQuestion }
+  | { type: 'setup.note'; setupId: string; note: SetupNote }
+  | ({ type: 'setup.finished'; setupId: string } & SetupOutcome);
 
 export type EngineEventType = EngineEvent['type'];
+
+/** Events about one session (and its subagents): everything but logs, config changes, and setup. */
+export type SessionEvent = Extract<EngineEvent, { sessionId: string }>;
+
+export function isSessionEvent(e: EngineEvent): e is SessionEvent {
+  return 'sessionId' in e;
+}
