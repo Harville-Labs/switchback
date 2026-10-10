@@ -164,17 +164,17 @@ jobs:
           prerelease=""
           case "$version" in 0.*|*-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* --title "Switchback $version" --notes-file notes.md $prerelease
-      # The website adds this version to its docs and redeploys. Needs DISPATCH_TOKEN:
-      # a fine-grained token with Contents read and write on Harville-Labs/website.
+      # switchback.sh (Harville-Labs/sites) adds this version to its docs and redeploys.
+      # Needs DISPATCH_TOKEN: a fine-grained token with Contents read and write on Harville-Labs/sites.
       - name: Publish the docs
         env:
           GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::Docs not published to harville.ai: the DISPATCH_TOKEN secret is not set."
+            echo "::warning::Docs not published to switchback.sh: the DISPATCH_TOKEN secret is not set."
             exit 0
           fi
-          gh api repos/Harville-Labs/website/dispatches \
+          gh api repos/Harville-Labs/sites/dispatches \
             -f event_type=switchback-release \
             -f "client_payload[version]=${{ needs.verify.outputs.version }}"
 

@@ -66,7 +66,7 @@ MANAGER_EMAILS=you@harville.ai bun run dev       # http://localhost:8788; sign-i
 bun run test                                     # tests, against a separate test database
 ```
 
-Each site's console is at `/sites/<id>`; `/` goes to your sites, or to sign-in. The site also serves the installer at `/install.sh` from `scripts/install.sh`, so a change to the script ships with the next site image. Switchback's public page is on harville.ai.
+Each site's console is at `/sites/<id>`; `/` goes to your sites, or to sign-in. The site also serves the installer at `/install.sh` from `scripts/install.sh`, so a change to the script ships with the next site image. Switchback's public page is switchback.sh, whose `/install.sh` and `/install.ps1` redirect here.
 
 The site keeps every piece of data in Postgres, never in local storage ([ADR 0011](adr/0011-site-data-in-postgres-only.md)). `bun run db:down` stops the container and keeps its data; `docker compose down -v` deletes it.
 
