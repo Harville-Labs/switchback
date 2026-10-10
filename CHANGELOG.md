@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-10
+
 ### Changed
 - **The hosted console's source is now private** (ADR 0020, supersedes ADR 0014). Everything in this repository is Apache-2.0 with no exceptions. The organization protocol is unchanged and still documented in docs/organizations.md
 
