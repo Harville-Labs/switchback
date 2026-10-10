@@ -260,7 +260,9 @@ test('every kind of prompt answers: deny with a note, plans, and escalations', a
   const form = $('#prompts form.feedback') as HTMLFormElement;
   expect(form.hidden).toBe(false);
   (form.querySelector('input') as HTMLInputElement).value = 'use trash instead';
-  form.dispatchEvent(new window.Event('submit', { cancelable: true, bubbles: true }) as unknown as Event);
+  form.dispatchEvent(
+    new window.Event('submit', { cancelable: true, bubbles: true }) as unknown as Event,
+  );
   expect(posted.at(-1)).toEqual({
     type: 'permission',
     requestId: 'perm_2',
