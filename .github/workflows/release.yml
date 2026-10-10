@@ -140,6 +140,9 @@ jobs:
       # The user docs for switchback.sh/docs, which renders each release's.
       - name: Docs bundle
         run: bun scripts/docs-bundle.ts "${{ needs.verify.outputs.version }}" "dist/switchback-docs-${{ needs.verify.outputs.version }}.json"
+      # The console (app.switchback.sh, in Harville-Labs/sites) serves the latest release's installers.
+      - name: Installers
+        run: cp scripts/install.sh scripts/install.ps1 dist/
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS
