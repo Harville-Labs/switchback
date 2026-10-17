@@ -32,7 +32,7 @@ function engine(store = new FileSessionStore(join(base, 'sessions'))) {
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { m: { provider: 'lp', model: 'small', contextWindow: 32_000 } },
-      routing: { start: ['m'] },
+      routing: { current: ['m'] },
     }),
     providers: new Map<string, Provider>([['lp', lp]]),
     instructionsSource: new WatchedInstructions(files(), 20),

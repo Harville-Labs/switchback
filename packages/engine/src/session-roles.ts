@@ -18,14 +18,14 @@ export function effectiveRoles(config: SwitchbackConfig, own: RoleOverrides = {}
   const base = configRoles(config);
   const sub = own.subagents === null ? undefined : (own.subagents ?? base.subagents);
   return {
-    start: own.start ?? base.start,
+    current: own.current ?? base.current,
     escalate: own.escalate ?? base.escalate,
     review: {
       mode: own.review?.mode ?? base.review.mode,
       models: own.review?.models ?? base.review.models,
     },
     ...(sub ? { subagents: sub } : {}),
-    overridden: (['start', 'escalate', 'review', 'subagents'] as const).filter(
+    overridden: (['current', 'escalate', 'review', 'subagents'] as const).filter(
       (k) => own[k] !== undefined,
     ),
   };
@@ -42,7 +42,7 @@ export function changeRoles(
   org: OrgStatus | undefined,
 ): RoleOverrides {
   const named = [
-    ...(params.start ?? []),
+    ...(params.current ?? []),
     ...(params.escalate?.flat() ?? []),
     ...(params.review?.models?.flat() ?? []),
     ...(params.subagents ? [params.subagents] : []),
@@ -54,7 +54,7 @@ export function changeRoles(
       `"${unknown}" is not a configured model (${Object.keys(config.models).join(', ')})`,
     );
   const locked = [
-    ['start', 'routing.start'],
+    ['current', 'routing.current'],
     ['escalate', 'routing.escalate'],
     ['review', 'review.'],
     ['subagents', 'subagents.model'],
@@ -69,7 +69,7 @@ export function changeRoles(
       `${org.name}'s policy sets ${locked[1]?.replace(/\.$/, '')}; it can't be changed here`,
     );
   const roles = params.reset ? {} : { ...current };
-  if (params.start) roles.start = params.start;
+  if (params.current) roles.current = params.current;
   if (params.escalate) roles.escalate = params.escalate;
   if (params.review) roles.review = { ...roles.review, ...params.review };
   if (params.subagents !== undefined) roles.subagents = params.subagents;
@@ -79,7 +79,7 @@ export function changeRoles(
 /** The config layer that makes these roles the default for new sessions. */
 export function rolesLayer(roles: SessionRoles): Record<string, unknown> {
   return {
-    routing: { start: roles.start, escalate: roles.escalate },
+    routing: { current: roles.current, escalate: roles.escalate },
     review: roles.review,
     ...(roles.subagents ? { subagents: { model: roles.subagents } } : {}),
   };

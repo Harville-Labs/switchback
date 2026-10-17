@@ -64,7 +64,8 @@ init options (all optional; prompts cover anything not given)
   --local-model <name>     Local model name as the server lists it. Repeat for
                            fallbacks and bigger-context models, in order
   --context-window <n>     Tokens the server loads, per --local-model in order
-  --start <m>              Where turns start (model ID or alias). Repeat for backups
+  --current <m>            The current model, where turns start (model ID or
+                           alias). Repeat for backups. --start still works
   --escalate <m[,m]>       An escalation step; repeat for the ladder, in order.
                            Commas make alternatives for one step. Default: the
                            other local models, then hosted ones, cheapest first
@@ -164,6 +165,8 @@ async function main(argv: string[]): Promise<number> {
       'local-url': { type: 'string', multiple: true },
       'local-model': { type: 'string', multiple: true },
       'context-window': { type: 'string', multiple: true },
+      current: { type: 'string', multiple: true },
+      // The flag's name before the role was called current; kept for scripts.
       start: { type: 'string', multiple: true },
       escalate: { type: 'string', multiple: true },
       reviewers: { type: 'string' },
@@ -271,7 +274,9 @@ async function main(argv: string[]): Promise<number> {
         localUrls: values['local-url'] ?? [],
         localModels: values['local-model'] ?? [],
         contextWindows,
-        ...(values.start ? { start: values.start } : {}),
+        ...(values.current || values.start
+          ? { current: [...(values.current ?? []), ...(values.start ?? [])] }
+          : {}),
         ...(values.escalate ? { escalate: values.escalate } : {}),
         ...(values.reviewers ? { reviewers: values.reviewers } : {}),
         ...(values['subagent-model'] ? { subagentModel: values['subagent-model'] } : {}),

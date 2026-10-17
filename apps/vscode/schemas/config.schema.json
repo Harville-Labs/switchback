@@ -391,7 +391,7 @@
       "default": {},
       "type": "object",
       "properties": {
-        "start": {
+        "current": {
           "anyOf": [
             {
               "type": "string",

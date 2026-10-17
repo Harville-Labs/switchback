@@ -16,7 +16,7 @@ export { roleAliases } from '@switchback/router';
 
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
-import { removedKeyProblem } from './config-removed.ts';
+import { removedKeyProblem, withRenamedKeys } from './config-removed.ts';
 import { SwitchbackConfig } from './config-schema.ts';
 import { HookLayers, type SourcedHook } from './hooks/layers.ts';
 import {
@@ -84,6 +84,13 @@ export function loadConfig(
   extra: Record<string, unknown>[] = [],
   org: OrgPolicy | null | undefined = readCachedPolicy(env)?.policy,
 ): LoadedConfig {
+  if (org)
+    org = {
+      ...org,
+      defaults: withRenamedKeys(org.defaults),
+      enforced: withRenamedKeys(org.enforced),
+    };
+  extra = extra.map(withRenamedKeys);
   const pp = projectPaths(workspaceRoot);
   const userFile = switchbackPaths(env).configFile;
   // In the home directory, the project's `.switchback/` is the user's own.
@@ -133,7 +140,7 @@ export function loadConfig(
     if (!existsSync(file)) continue;
     let parsed: Record<string, unknown>;
     try {
-      parsed = parseJsonc(readFileSync(file, 'utf8')) as Record<string, unknown>;
+      parsed = withRenamedKeys(parseJsonc(readFileSync(file, 'utf8')) as Record<string, unknown>);
     } catch (err) {
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
@@ -287,7 +294,7 @@ export function referenceProblem(config: SwitchbackConfig): string | undefined {
   // A misspelled alias would silently drop out of its role.
   const { routing } = config;
   const roles: [string, string | undefined][] = [
-    ...routing.start.map((a, i): [string, string] => [`routing.start[${i}]`, a]),
+    ...routing.current.map((a, i): [string, string] => [`routing.current[${i}]`, a]),
     ...routing.escalate.flatMap((step, i) =>
       step.map((a, j): [string, string] => [
         `routing.escalate[${i}]${step.length > 1 ? `[${j}]` : ''}`,
@@ -318,7 +325,7 @@ export function tierOfModel(config: SwitchbackConfig, alias: string): Tier | und
 export function configRoles(config: SwitchbackConfig): SessionRoles {
   const { routing, review, subagents } = config;
   return {
-    start: routing.start,
+    current: routing.current,
     escalate: routing.escalate,
     review: { mode: review.mode, models: review.models },
     ...(subagents.model ? { subagents: subagents.model } : {}),
@@ -390,6 +397,7 @@ export function layerProblem(
 ): string | undefined {
   if (typeof layer !== 'object' || layer === null || Array.isArray(layer))
     return 'a config file must hold one JSON object';
+  layer = withRenamedKeys(layer);
   const check = SwitchbackConfig.safeParse(
     deepMerge(defaultConfig(), layer as Record<string, unknown>),
   );

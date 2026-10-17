@@ -46,7 +46,7 @@ The VS Code extension validates both files against the schema and offers autocom
 
 There are **no default providers or models**, local or remote. Switchback doesn't choose a vendor for you; `switchback init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `switchback` offers setup.
 
-Models fill roles ([routing.md](routing.md)): `routing.start` is where turns begin and `routing.escalate` is the ladder above it. Any model can fill any role, so all-local, all-remote, and mixed setups are the same config with different models:
+Models fill roles ([routing.md](routing.md)): `routing.current` is the current model, where turns begin (with backups after it), and `routing.escalate` is the ladder above it. `routing.start`, its old name, still works and is moved to `routing.current` the next time Switchback writes the file. Any model can fill any role, so all-local, all-remote, and mixed setups are the same config with different models:
 
 - With no local model in a role, turns run remote and the route line says so. Agents pinned to `local` (such as `explore`) route normally instead of failing; `--route local` and `/local` are refused with a pointer to `switchback init`.
 - With no remote model in a role (or `routing.allowRemote: false`), nothing is ever billed; escalation still climbs through local steps.
@@ -69,7 +69,7 @@ Any number of providers can be configured together, including several local serv
     "sol":     { "provider": "openai", "model": "gpt-6-sol" },
     "ds":      { "provider": "deepseek", "model": "deepseek-v4-pro", "effort": "high" }
   },
-  "routing": { "start": ["laptop"], "escalate": ["big", ["sol", "ds"]] }
+  "routing": { "current": ["laptop"], "escalate": ["big", ["sol", "ds"]] }
 }
 ```
 

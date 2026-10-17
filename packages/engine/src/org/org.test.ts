@@ -32,7 +32,7 @@ const base = SwitchbackConfig.parse({
     remote: { provider: 'openai', model: 'gpt-6-sol' },
     haiku: { provider: 'deepseek', model: 'deepseek-flash' },
   },
-  routing: { start: ['local'], escalate: [['remote']], budget: { dailyUsd: 50 } },
+  routing: { current: ['local'], escalate: [['remote']], budget: { dailyUsd: 50 } },
 });
 const policy = (p: Record<string, unknown>) =>
   OrgPolicy.parse({ version: 1, org: { id: 'acme', name: 'Acme' }, ...p });
@@ -45,7 +45,7 @@ describe('restrictions', () => {
     );
     expect(Object.keys(config.providers)).toEqual(['gpu']);
     expect(Object.keys(config.models)).toEqual(['local']);
-    expect(config.routing).toMatchObject({ allowRemote: false, start: ['local'], escalate: [] });
+    expect(config.routing).toMatchObject({ allowRemote: false, current: ['local'], escalate: [] });
     expect(notes).toContain('provider "openai" removed: remote providers are disabled');
     expect(notes).toContain('routing.escalate: "remote" removed with its provider');
   });
@@ -128,15 +128,15 @@ describe('layering', () => {
     defaults: {
       providers: { gpu: { type: 'openai-compatible', baseUrl: 'http://gpu.acme.internal/v1' } },
       models: { 'acme-coder': { provider: 'gpu', model: 'acme-coder' } },
-      routing: { start: ['local', 'acme-coder'] },
+      routing: { current: ['local', 'acme-coder'] },
     },
   });
 
   test("a policy's role may name a model only some members have", () => {
     const without = loadConfig(home, env, [], gpuPolicy);
-    expect(without.config.routing.start).toEqual(['acme-coder']);
+    expect(without.config.routing.current).toEqual(['acme-coder']);
     expect(without.org?.notes).toContain(
-      'routing.start: "local" skipped; no model has that alias here',
+      'routing.current: "local" skipped; no model has that alias here',
     );
     writeFileSync(
       join(home, 'config.json'),
@@ -146,14 +146,17 @@ describe('layering', () => {
       }),
     );
     const withLocal = loadConfig(home, env, [], gpuPolicy);
-    expect(withLocal.config.routing.start).toEqual(['local', 'acme-coder']);
+    expect(withLocal.config.routing.current).toEqual(['local', 'acme-coder']);
     expect(withLocal.org?.notes).toEqual([]);
   });
 
   test("the member's own misspelled role alias is still an error", () => {
-    writeFileSync(join(home, 'config.json'), JSON.stringify({ routing: { start: ['acme-codr'] } }));
+    writeFileSync(
+      join(home, 'config.json'),
+      JSON.stringify({ routing: { current: ['acme-codr'] } }),
+    );
     expect(() => loadConfig(home, env, [], gpuPolicy)).toThrow(
-      'routing.start[0] references unknown model "acme-codr"',
+      'routing.current[0] references unknown model "acme-codr"',
     );
   });
 });
@@ -170,7 +173,7 @@ describe('with an organization server', () => {
           local: { provider: 'gpu', model: 'coder' },
           remote: { provider: 'cloud', model: 'big' },
         },
-        routing: { start: ['local'], escalate: [['remote']] },
+        routing: { current: ['local'], escalate: [['remote']] },
       },
     };
     const server = startDevOrgServer({ policy: () => current, autoApprove: true });

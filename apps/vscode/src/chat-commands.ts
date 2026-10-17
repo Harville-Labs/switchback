@@ -55,7 +55,7 @@ export async function runChatCommand(
       return info(formatModels(engine.init?.models ?? [], await engine.currentRoles()));
     case 'roles':
       return args[0] === 'reset' ? chooseRole(engine, 'reset') : chooseModels(engine);
-    case 'start':
+    case 'current':
     case 'escalate':
       return chooseRole(engine, name);
     case 'subagent-model':

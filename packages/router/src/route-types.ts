@@ -54,7 +54,7 @@ export type RouteDecision =
       /** True when this decision moves the turn up the escalation ladder. */
       escalated: boolean;
       /**
-       * The step the model is on: 0 for `routing.start`, k for the k-th
+       * The step the model is on: 0 for `routing.current`, k for the k-th
        * `routing.escalate` step. The engine reports it back through
        * `SignalTracker` so stickiness knows where the session is.
        */

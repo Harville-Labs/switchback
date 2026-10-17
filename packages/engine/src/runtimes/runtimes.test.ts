@@ -94,7 +94,7 @@ function engine(opts: Partial<Omit<EngineOptions, 'config'>> & { config?: object
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
-      routing: { start: ['local'], escalate: [] },
+      routing: { current: ['local'], escalate: [] },
       runtimes: { claude: { type: 'claude-agent-sdk', model: 'claude-sonnet-5' } },
       ...config,
     }),
@@ -170,7 +170,7 @@ describe('external runtime as a subagent', () => {
   test('local-only routing never starts an external runtime', async () => {
     const { e, calls } = engine({
       interaction: 'approve',
-      config: { routing: { start: ['local'], allowRemote: false } },
+      config: { routing: { current: ['local'], allowRemote: false } },
     });
     const s = e.createSession({});
     await e.runTurn(s.id, 'go');

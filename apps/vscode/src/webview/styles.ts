@@ -151,4 +151,41 @@ export const STYLES = `
   .pill:hover, .segmented button:hover { border-color: var(--vscode-focusBorder); color: var(--vscode-foreground); }
   .pill .k { color: var(--vscode-descriptionForeground); }
   .pill .here { font-weight: 600; color: var(--vscode-charts-yellow); }
+  .pill.model { display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 8px; }
+  .pill.model select { font: inherit; color: var(--vscode-foreground); background: transparent; border: none; padding: 2px 2px; max-width: 220px; text-overflow: ellipsis; cursor: pointer; }
+  .pill.model select:focus { outline: 1px solid var(--vscode-focusBorder); border-radius: 4px; }
+  .pill.model option { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); }
+
+  /* Tabs and the sessions dashboard */
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); font-size: .85em; }
+  .tabs:empty { display: none; }
+  .tablist { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .tab { display: inline-flex; align-items: center; gap: 5px; max-width: 180px; min-width: 0; padding: 3px 6px 3px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--vscode-descriptionForeground); }
+  .tab:hover { background: var(--vscode-toolbar-hoverBackground); color: var(--vscode-foreground); }
+  .tab.on { background: var(--vscode-tab-activeBackground, var(--vscode-input-background)); border-color: var(--vscode-panel-border); color: var(--vscode-foreground); }
+  .tab .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab .dot { width: 1em; text-align: center; flex: none; }
+  .tab .x { display: inline-flex; opacity: 0; border-radius: 4px; }
+  .tab:hover .x, .tab.on .x, .tab:focus-visible .x { opacity: .8; }
+  .tab .x:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
+  .tab .x svg { width: 12px; height: 12px; }
+  .waiting .dot, .state.waiting { color: var(--vscode-charts-yellow); }
+  .running .dot, .state.running { color: var(--vscode-charts-blue); }
+  .failed .dot, .state.failed { color: var(--vscode-errorForeground); }
+  .done .dot, .state.done { color: var(--vscode-charts-green); }
+  .tabs .icon.on { color: var(--vscode-foreground); background: var(--vscode-toolbar-hoverBackground); }
+  .tabs .badge { margin-left: 2px; font-size: .8em; padding: 0 4px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  .dash { flex: 1; overflow-y: auto; padding: 10px 14px; }
+  .dash-head { display: flex; align-items: center; justify-content: space-between; }
+  .dash h2 { font-size: 1.05em; margin: 4px 0; } .dash h3 { font-size: .95em; margin: 14px 0 4px; color: var(--vscode-descriptionForeground); }
+  .cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .card { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--vscode-panel-border); border-radius: 8px; }
+  .card.on { border-color: var(--vscode-focusBorder); }
+  .card .open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: transparent; border: none; color: inherit; padding: 0; }
+  .card .title { font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .n { display: inline-block; min-width: 1.4em; margin-right: 4px; color: var(--vscode-descriptionForeground); font-weight: normal; }
+  .card .facts, .card .agent { font-size: .85em; color: var(--vscode-descriptionForeground); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .local { color: var(--vscode-charts-green); } .card .remote { color: var(--vscode-charts-yellow); }
+  .card .actions { display: flex; gap: 4px; flex: none; }
+  .dash .hint { margin-top: 12px; font-size: .85em; color: var(--vscode-descriptionForeground); }
 `;

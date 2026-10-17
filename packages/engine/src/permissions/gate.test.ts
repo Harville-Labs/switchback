@@ -25,7 +25,7 @@ function setup(
   const config = SwitchbackConfig.parse({
     providers: { lp: { type: 'mock', tier: 'local' } },
     models: { local: { provider: 'lp', model: 'small', contextWindow: 32_000 } },
-    routing: { start: ['local'] },
+    routing: { current: ['local'] },
     permissions,
   });
   const lp = new ScriptedProvider('lp', 'local', script);

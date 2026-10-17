@@ -1,15 +1,15 @@
 /**
- * Reading roles (ADR 0015): one place for how `routing.start` and
+ * Reading roles (ADR 0015): one place for how `routing.current` and
  * `routing.escalate` form a ladder, and for the budget check every remote
  * call goes through. Pure, like the router.
  */
 import type { BudgetConfig, RoutingConfig } from './config.ts';
 
-type Roles = Pick<RoutingConfig, 'start' | 'escalate'>;
+type Roles = Pick<RoutingConfig, 'current' | 'escalate'>;
 
-/** The ladder's steps as chains: 0 is `start`, then each `escalate` step. */
+/** The ladder's steps as chains: 0 is `current`, then each `escalate` step. */
 export function ladderSteps(roles: Roles): string[][] {
-  return [roles.start, ...roles.escalate];
+  return [roles.current, ...roles.escalate];
 }
 
 /** Every alias in a role, once, in role order. */

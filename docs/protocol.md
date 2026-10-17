@@ -14,7 +14,7 @@ Daemon clients read the socket and token from the daemon info file (`connectDaem
 Write requests to stdin and read responses and notifications from stdout. stderr carries human-readable logs. The first request must be `initialize`:
 
 ```json
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"client":{"name":"my-client","version":"1.0"},"workspaceRoot":"/path/to/repo"}}
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":2,"client":{"name":"my-client","version":"1.0"},"workspaceRoot":"/path/to/repo"}}
 ```
 
 From TypeScript, use `@switchback/client`:
@@ -60,8 +60,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, `resources` (`uri`, `name`, …) and `prompts` (`name`, `arguments`, …), and error |
 | `usage.get` | `period?`: `today` \| `week` \| `month` (default); or `sessionId?` for one session and its subagents over their whole life (the receipt) | Spend, savings, the `referenceModel` savings are measured against, budget, remote cache hit rate, and breakdowns `byRule`, `byAgent`, `byModel` |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
-| `session.roles` | `{ sessionId }` | `SessionRoles`: `start`, `escalate`, `review` (`mode`, `models`), `subagents`, and which of them the session changed (`overridden`) |
-| `session.setRoles` | `{ sessionId, start?, escalate?, review?, subagents?, save?, reset? }` | `SessionRoles` plus `savedTo` when `save` wrote the user config. Changes apply to the session and its subagents; `reset` drops them first; keys an organization enforces are refused. Emits `roles.updated` |
+| `session.roles` | `{ sessionId }` | `SessionRoles`: `current`, `escalate`, `review` (`mode`, `models`), `subagents`, and which of them the session changed (`overridden`) |
+| `session.setRoles` | `{ sessionId, current?, escalate?, review?, subagents?, save?, reset? }` | `SessionRoles` plus `savedTo` when `save` wrote the user config. Changes apply to the session and its subagents; `reset` drops them first; keys an organization enforces are refused. Emits `roles.updated` |
 | `daemon.retire` | `{ token }` | `{ retired, reason? }`. Asks a shared daemon to exit so a newer Switchback can take over. Accepted before `initialize`, so it works across protocol versions. Refused while other clients are attached or a turn is running. |
 
 ## Events
@@ -107,3 +107,9 @@ JSON-RPC error codes: standard codes `-32700` to `-32603`, plus `-32000` not ini
 
 - **Additive changes** (new method, new event type, new optional field) don't bump the version. Clients must ignore unknown event types and fields.
 - **Breaking changes** (removing or renaming anything, changing semantics) bump the version. The VS Code extension and CLI ship together, but third-party clients may not.
+
+Version 2 renamed the `start` role to `current`: `SessionRoles.current`, `session.setRoles`' `current`, and `"current"` in `overridden`.
+
+## Several sessions at once
+
+Every client gets every session's events, each carrying its `sessionId` (and `parentSessionId` for subagents), so one client can keep several sessions live at once (the TUI's and VS Code's tabs) and show sessions running in other clients of a shared engine. `session.list` marks the ones running now. The clients keep their tabs with `reduceTabs` and `dashboardRows` in `@switchback/client/tabs`; nothing about tabs reaches the engine, and closing a tab doesn't stop its session.

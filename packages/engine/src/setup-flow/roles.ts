@@ -24,7 +24,7 @@ export async function chooseRoles(
   const roles = defaultRoles(plan);
   const chain = (v: string, flag: string) =>
     v.split(',').map((ref) => resolveAlias(plan, ref.trim(), flag));
-  if (flags.start?.length) roles.start = flags.start.flatMap((v) => chain(v, '--start'));
+  if (flags.current?.length) roles.current = flags.current.flatMap((v) => chain(v, '--current'));
   if (flags.escalate) roles.escalate = flags.escalate.map((v) => chain(v, '--escalate'));
   if (flags.reviewers)
     roles.review =
@@ -42,7 +42,7 @@ export async function chooseRoles(
     tier: m.tier,
   }));
   const asSession = (): SessionRoles => ({
-    start: roles.start,
+    current: roles.current,
     escalate: roles.escalate,
     review:
       roles.review === 'off'
@@ -56,28 +56,35 @@ export async function chooseRoles(
     p.note({ kind: 'roles', roles: asSession(), models });
     const action = await p.select('Which model does what', [
       { label: 'Looks good', value: 'done' as const },
-      { label: 'Change where turns start', value: 'start' as const },
+      { label: 'Change the current model', value: 'current' as const },
       { label: 'Change the escalation ladder', value: 'escalate' as const },
       { label: 'Change who reviews edits', value: 'review' as const },
       { label: 'Change the subagent model', value: 'subagents' as const },
     ]);
     if (action === 'done') return roles;
-    if (action === 'start') {
-      const first = await pickModel(p, plan, 'Which model should turns start on?', []);
+    if (action === 'current') {
+      const first = await pickModel(
+        p,
+        plan,
+        'Which model should be current (where turns start)?',
+        [],
+      );
       if (!first) continue;
-      roles.start = [first];
+      roles.current = [first];
       for (;;) {
         const backup = await pickModel(
           p,
           plan,
-          'Add a backup start model? It takes over when the first is down or a prompt is too big for it.',
-          roles.start,
+          'Add a backup for the current model? It takes over when the first is down or a prompt is too big for it.',
+          roles.current,
           'No more',
         );
         if (!backup) break;
-        roles.start.push(backup);
+        roles.current.push(backup);
       }
-      roles.escalate = roles.escalate.filter((step) => !step.some((a) => roles.start.includes(a)));
+      roles.escalate = roles.escalate.filter(
+        (step) => !step.some((a) => roles.current.includes(a)),
+      );
     }
     if (action === 'escalate') {
       roles.escalate = [];
@@ -87,8 +94,8 @@ export async function chooseRoles(
           plan,
           roles.escalate.length
             ? 'If that one struggles too, escalate to:'
-            : 'When the start model struggles, escalate to:',
-          [...roles.start, ...roles.escalate.flat()],
+            : 'When the current model struggles, escalate to:',
+          [...roles.current, ...roles.escalate.flat()],
           roles.escalate.length ? 'Nothing more' : 'Nothing: no escalation',
         );
         if (!next) break;

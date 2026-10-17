@@ -30,9 +30,15 @@ const session: SessionSummary = {
   usage: { inputTokens: 0, outputTokens: 0 },
   costUsd: 0,
 };
-const init = { agents: [{ name: 'build' }], models: [] } as unknown as InitializeResult;
+const init = {
+  agents: [{ name: 'build' }],
+  models: [
+    { alias: 'fast', ref: { provider: 'ollama', model: 'qwen3' }, tier: 'local' },
+    { alias: 'opus', ref: { provider: 'anthropic', model: 'claude-opus-5' }, tier: 'remote' },
+  ],
+} as unknown as InitializeResult;
 const roles: SessionRoles = {
-  start: ['fast'],
+  current: ['fast'],
   escalate: [['large'], ['opus']],
   review: { mode: 'auto', models: [] },
   overridden: [],
@@ -40,10 +46,12 @@ const roles: SessionRoles = {
 
 test('route, agent, and role controls render and post the right messages', async () => {
   await send({ type: 'ready', init, session, route: 'auto' });
-  await send({ type: 'roles', roles });
+  await send({ type: 'roles', roles, sessionId: 's1' });
   const controls = $('#controls');
   expect(controls.textContent).toContain('Agent build');
-  expect(controls.textContent).toContain('Start fast');
+  const model = $('select[data-current]') as HTMLSelectElement;
+  expect(model.value).toBe('fast');
+  expect(model.textContent).toContain('opus (claude-opus-5) · remote · step 2');
   expect(controls.textContent).toContain('Escalate large → opus');
   expect(controls.textContent).toContain('Review the escalation ladder');
   expect($('[data-route="auto"]').className).toBe('on');
@@ -55,6 +63,29 @@ test('route, agent, and role controls render and post the right messages', async
   expect(posted.at(-1)).toEqual({ type: 'chooseRole', role: 'escalate' });
   $('[data-agent]').click();
   expect(posted.at(-1)).toEqual({ type: 'chooseAgent' });
+});
+
+test('the model dropdown makes a model current, or opens the full picker', async () => {
+  const pick = (value: string) => {
+    const model = $('select[data-current]') as HTMLSelectElement;
+    model.value = value;
+    model.dispatchEvent(new window.Event('change', { bubbles: true }) as unknown as Event);
+  };
+  pick('opus');
+  expect(posted.at(-1)).toEqual({ type: 'setCurrent', alias: 'opus' });
+  // Until the engine says otherwise, the dropdown still shows the current model.
+  expect(($('select[data-current]') as HTMLSelectElement).value).toBe('fast');
+  pick(':choose');
+  expect(posted.at(-1)).toEqual({ type: 'chooseRole', role: 'current' });
+  expect($('select[data-current]').textContent).not.toContain('Make this my default');
+  await send({
+    type: 'roles',
+    sessionId: 's1',
+    roles: { ...roles, current: ['opus', 'fast'], overridden: ['current'] },
+  });
+  pick(':save');
+  expect(posted.at(-1)).toEqual({ type: 'saveRoles' });
+  await send({ type: 'roles', roles, sessionId: 's1' });
 });
 
 test('the step the session is on is highlighted; roles.updated refreshes the pills', async () => {
@@ -75,9 +106,15 @@ test('the step the session is on is highlighted; roles.updated refreshes the pil
   expect($('.pill .here').textContent).toBe('large');
   await send({
     type: 'event',
-    event: { type: 'roles.updated', sessionId: 's1', roles: { ...roles, start: ['opus'] } },
+    event: { type: 'roles.updated', sessionId: 's1', roles: { ...roles, current: ['opus'] } },
   });
-  expect($('[data-role="start"]').textContent).toContain('opus');
+  expect(($('select[data-current]') as HTMLSelectElement).value).toBe('opus');
+  // Another session's roles don't touch this one's controls.
+  await send({
+    type: 'event',
+    event: { type: 'roles.updated', sessionId: 'other', roles: { ...roles, current: ['fast'] } },
+  });
+  expect(($('select[data-current]') as HTMLSelectElement).value).toBe('opus');
 });
 
 test('an escalation asks to escalate or stay, not "remote or local"', async () => {
@@ -209,7 +246,7 @@ test('a pasted image waits above the input and goes with the next prompt', async
 });
 
 test('Escalate now asks the host to escalate', async () => {
-  await send({ type: 'roles', roles: { ...roles, escalate: [['large']] } });
+  await send({ type: 'roles', sessionId: 's1', roles: { ...roles, escalate: [['large']] } });
   $('[data-escalate-now]').click();
   expect(posted.at(-1)).toEqual({ type: 'command', name: 'up', args: [] });
 });
@@ -284,4 +321,51 @@ test('every kind of prompt answers: deny with a note, plans, and escalations', a
   });
   $('#prompts [data-esc="1"]').click();
   expect(posted.at(-1)).toEqual({ type: 'escalation', requestId: 'esc_1', approve: true });
+});
+
+test('tabs: a new tab, a background turn, the dashboard, and closing', async () => {
+  // One tab, nothing elsewhere: no strip.
+  expect($('#tabs').innerHTML).toBe('');
+  const second = { ...session, id: 's2', title: 'docs pass' };
+  await send({ type: 'session', session: second, tab: 'new' });
+  expect(window.document.querySelectorAll('#tabs .tab')).toHaveLength(2);
+  expect($('#tabs .tab.on').textContent).toContain('docs pass');
+
+  // The first tab works in the background; its prompt doesn't show here.
+  await send({ type: 'event', event: { type: 'turn.started', sessionId: 's1', turnId: 'b1' } });
+  await send({
+    type: 'event',
+    event: {
+      type: 'permission.requested',
+      sessionId: 's1',
+      requestId: 'bg',
+      tool: 'bash',
+      summary: 'rm -rf build',
+      input: {},
+    },
+  });
+  expect($('#prompts').textContent).not.toContain('rm -rf build');
+  expect($('#tabs [data-tab="s1"]').className).toContain('waiting');
+
+  $('[data-dashboard]').click();
+  expect(posted.at(-1)).toEqual({ type: 'listSessions' });
+  expect($('#dash').hidden).toBe(false);
+  expect($('#dash').textContent).toContain('waiting for you');
+
+  // Switching tells the host where prompts go now, and shows that tab's prompt.
+  ($('#dash .open[data-tab="s1"]') as HTMLElement).click();
+  expect(posted.at(-1)).toEqual({ type: 'switchTab', sessionId: 's1' });
+  expect($('#dash').hidden).toBe(true);
+  expect($('#prompts').textContent).toContain('rm -rf build');
+
+  ($('#tabs [data-close-tab="s2"]') as HTMLElement).click();
+  expect($('#tabs').innerHTML).toBe('');
+  type('/tab new');
+  key('Enter');
+  expect(posted.at(-1)).toEqual({ type: 'newTab' });
+  type('/tabs');
+  key('Enter');
+  expect($('#dash').hidden).toBe(false);
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  expect($('#dash').hidden).toBe(true);
 });

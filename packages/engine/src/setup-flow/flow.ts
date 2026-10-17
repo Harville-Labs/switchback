@@ -63,7 +63,7 @@ export async function runSetup(
   const usesRemote =
     escalatesRemote ||
     [
-      ...roles.start,
+      ...roles.current,
       roles.subagents ?? '',
       ...(Array.isArray(roles.review) ? roles.review.flat() : []),
     ].some((a) => tierOf(a) === 'remote');

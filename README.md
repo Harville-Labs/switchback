@@ -81,7 +81,7 @@ Every model call goes through the router, which picks the first matching rule:
 3. Context overflow: the prompt won't fit the current model's window
 4. Stickiness: stay on the step an escalation reached for a couple of calls
 5. Quality signals: repeated tool errors, malformed tool calls, loops, refusals, or failures. Each escalation moves one step up `routing.escalate`, which can hold any models, local or remote. Escalates automatically, asks first for remote steps, or does neither, per `routing.escalation.policy`.
-6. Default: the `routing.start` model
+6. Default: the current model (`routing.current`)
 
 Budget and availability guards then apply. Over budget means staying local; a provider that's down means falling back to the other tier. Each decision appears in the UI with its reason. Details are in [docs/routing.md](docs/routing.md).
 

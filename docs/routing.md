@@ -4,17 +4,17 @@ Switchback picks a model for every call the agent makes, not once per session, a
 
 ```jsonc
 "routing": {
-  "start":    ["laptop", "gpu-box"],        // where turns begin: the first that's up and fits
+  "current":  ["laptop", "gpu-box"],        // where turns begin: the first that's up and fits
   "escalate": ["large", ["opus", "sol"]]    // the ladder: one step per escalation
 }
 ```
 
-- **`start`** is a chain of alternatives. A prompt too big for the laptop model goes to the GPU box (`rule: context-fit`), and a laptop server that's down hands over to the next one (`rule: fallback`).
+- **`current`** is the current model: a chain of alternatives, the first one up that fits. A prompt too big for the laptop model goes to the GPU box (`rule: context-fit`), and a laptop server that's down hands over to the next one (`rule: fallback`).
 - **`escalate`** is a ladder. Each step is a model, or a chain of alternatives for the same step (`["opus", "sol"]`: Anthropic, or OpenAI if Anthropic is down). Each escalation moves one step up from where the session is.
 
 Any model can fill any role. Whether it's **local** (a model on your machine or network, free per token) or **remote** (a hosted model, billed per token) is a property of its provider, not of the role. It decides what costs money, what budgets cover, what `ask` prompts for, and what private content may reach. So all of these are ordinary configurations:
 
-| Setup | `start` | `escalate` |
+| Setup | `current` | `escalate` |
 |---|---|---|
 | Local first | `["fast"]` | `["large", "opus"]` |
 | All local | `["fast"]` | `["large"]` |
@@ -27,7 +27,7 @@ The reviewer of local edits (`review.model`, [review.md](review.md)) and the def
 
 ## Decision pipeline
 
-`Router.decide()` in `packages/router/src/router.ts` is a pure function of its input. Steps are numbered: 0 is `start`, 1 is the first `escalate` step, and so on. The first matching rule picks a target:
+`Router.decide()` in `packages/router/src/router.ts` is a pure function of its input. Steps are numbered: 0 is `current`, 1 is the first `escalate` step, and so on. The first matching rule picks a target:
 
 | # | Rule (`rule` in events) | Fires when | Target |
 |---|---|---|---|
@@ -39,7 +39,7 @@ The reviewer of local edits (`review.model`, [review.md](review.md)) and the def
 | 4 | `user-escalation` | You asked to escalate (`/up`, alt+↑ in the TUI, **Escalate now** in VS Code) | One step up from where the session is |
 | 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` calls | The step it reached; one step higher if the model there is struggling too |
 | 6 | `escalation` | A quality signal crossed its threshold (below) | One step up |
-| 7 | `default` | Nothing else matched | The `start` chain (the first step if `start` is empty) |
+| 7 | `default` | Nothing else matched | The `current` chain (the first step if `current` is empty) |
 
 Rule 6 follows `escalation.policy`; rule 4 doesn't, since you asked. Rules 3 to 6 count as escalations. A step that's down, too small for the prompt, or remote when remote isn't allowed is skipped on the way up.
 
@@ -65,20 +65,31 @@ Then five guards run on the target. They only ever act on remote models; a local
   "large": { "provider": "gpu-box", "model": "qwen3-coder-480b" },
   "opus":  { "provider": "anthropic", "model": "claude-opus-5" }
 },
-"routing": { "start": ["fast"], "escalate": ["large", "opus"] }   // fast → large → opus
+"routing": { "current": ["fast"], "escalate": ["large", "opus"] }   // fast → large → opus
 ```
 
 - Each escalation moves **one step** from where the session is. When `fast` gets stuck, the call goes to `large` (`3 consecutive tool errors; escalating to large (step 1 of 2)`). If `large` struggles too during its sticky calls, the next escalation goes to `opus`.
-- Stickiness keeps the session on the step it reached for `stickyTurns` model calls; then routing starts again from `start`.
+- Stickiness keeps the session on the step it reached for `stickyTurns` model calls; then routing comes back to `current`.
 - Local steps are free: `ask` doesn't prompt for them, budgets don't cover them, and they work with `allowRemote: false` and in [private sessions](privacy.md).
 - `policy: off` means no escalation on quality signals at any step.
 - An alias that isn't under `models` is a config error, so a typo can't silently remove a step.
 
-`switchback init` asks for your models first, then which model does what, with defaults filled in: the first local model starts, other local models come next on the ladder, then hosted models from cheapest to most expensive. Unattended, `--start`, `--escalate` (repeat for each step; commas for alternatives), `--reviewers`, and `--subagent-model` set the roles by model ID or alias. `switchback doctor` shows the roles, each model's tier, and its context window.
+`switchback init` asks for your models first, then which model does what, with defaults filled in: the first local model is current, other local models come next on the ladder, then hosted models from cheapest to most expensive. Unattended, `--current` (formerly `--start`, which still works), `--escalate` (repeat for each step; commas for alternatives), `--reviewers`, and `--subagent-model` set the roles by model ID or alias. `switchback doctor` shows the roles, each model's tier, and its context window.
 
 ## Changing roles during a session
 
-A session can change its own roles without touching any file: `/start`, `/escalate`, `/review with`, and `/subagent-model` in the TUI ([clients/tui.md](clients/tui.md)), or **Choose Models for This Session** in VS Code. Changes apply to that session and its subagents, show as `(this session)` in `/roles`, and are shared with every client attached to the session. Add `--save` (or **Save as Default**) to write them to your user config as the default for new sessions. Keys an organization enforces through its policy can't be changed. The protocol methods are `session.roles` and `session.setRoles` ([protocol.md](protocol.md)).
+### Picking the current model
+
+The **current model** is where your prompts run: the first model in `current` that's up and fits. It's the one people change most, so both clients put it a step away:
+
+- **VS Code**: the **Model** dropdown under the input lists every configured model, the current one first, each with its tier and the other roles it fills. Pick one and the next prompt runs on it.
+- **TUI**: `/current` with no argument opens the same list (↑/↓ and Enter, or a number); `/current <model> [backup...]` sets it directly. The welcome card and the status bar name it.
+
+Picking a model doesn't drop your fallback: the models that were current stay behind it as backups, in order, so a down server or an oversized prompt still has somewhere to go. Escalation climbs the ladder from wherever you are, as before. The change applies to the session; **Make this my default** in the dropdown, or `--save`, writes it to your user config.
+
+### Every role
+
+A session can change its own roles without touching any file: `/current`, `/escalate`, `/review with`, and `/subagent-model` in the TUI ([clients/tui.md](clients/tui.md)), or **Choose Models for This Session** in VS Code. Changes apply to that session and its subagents, show as `(this session)` in `/roles`, and are shared with every client attached to the session. Add `--save` (or **Save as Default**) to write them to your user config as the default for new sessions. Keys an organization enforces through its policy can't be changed. The protocol methods are `session.roles` and `session.setRoles` ([protocol.md](protocol.md)).
 
 ## Escalating yourself
 
@@ -113,7 +124,7 @@ The estimate covers the escalated call plus the `stickyTurns` calls that follow 
 
 ## Budgets and savings
 
-Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`: what the same call would have cost on the reference model, the first remote model in role order (`start`, then each `escalate` step). `switchback usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
+Every model call is written to the usage ledger with its cost. Local calls cost $0 but also record `savingsUsd`: what the same call would have cost on the reference model, the first remote model in role order (`current`, then each `escalate` step). `switchback usage`, `/usage`, and the VS Code status bar report spend against budget and the running savings figure.
 
 The savings figure is deliberately conservative. Run all-remote, most of each prompt would have been a cache read (the previous call in the session already sent it), so a local call that follows another within five minutes prices the repeated part of its prompt at the cache-read rate and only the new part at the input price. Output is priced at the output rate, with no cache-write premium. It's still an estimate: a remote model might have taken fewer or more steps, and local and remote tokenizers count differently.
 
@@ -149,16 +160,16 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
 
 ## Tuning
 
-- **Start model too weak for tool use?** Lower `maxMalformedToolCalls` to 1, add a bigger local model as the first `escalate` step, or give tool-heavy agents a stronger model with `model:` while keeping `explore` local.
+- **Current model too weak for tool use?** Lower `maxMalformedToolCalls` to 1, add a bigger local model as the first `escalate` step, or give tool-heavy agents a stronger model with `model:` while keeping `explore` local.
 - **Escalating too often on long sessions?** Raise the local model's `contextWindow` to match what your server actually loads (Ollama defaults to a small `num_ctx`; set it in the Modelfile). Keep `contextHeadroom` below 1 to leave room for output.
 - **Want approval for every dollar?** Use `policy: ask` plus a `dailyUsd` budget.
-- **Offline, or working on a client's code?** `allowRemote: false` for guaranteed zero spend. To spare the machine instead, put remote models in `start`.
+- **Offline, or working on a client's code?** `allowRemote: false` for guaranteed zero spend. To spare the machine instead, put remote models in `current`.
 
 ## Configuration reference
 
 ```jsonc
 "routing": {
-  "start": ["local"],             // where turns begin: a chain of alternatives
+  "current": ["local"],             // where turns begin: a chain of alternatives
   "escalate": [["remote"]],       // the ladder; each step an alias or a chain of alternatives
   "allowRemote": true,            // false: never call a remote model
   "escalation": {
@@ -174,19 +185,21 @@ A session's transcript is provider-neutral and append-only. When a turn moves be
 }
 ```
 
-There are no defaults for `start` and `escalate`: `switchback init` writes them, and an empty `start` with no escalation steps is reported by `switchback doctor`.
+There are no defaults for `current` and `escalate`: `switchback init` writes them, and an empty `current` with no escalation steps is reported by `switchback doctor`.
 
-Keys from before roles fail validation with a pointer to their replacement: `routing.local` (now `start`), `routing.remote` (now an `escalate` step), `routing.mode` (now the roles themselves, or `allowRemote: false`), `escalation.via` (now `escalate`), and the object form of `routing.fallback`. Re-running `switchback init` rewrites them.
+`routing.start`, this key's name before it was called `current`, still works: it's read as `routing.current` (which wins when a file sets both), and Switchback moves it to the new name the next time it writes that file. `--start` and `/start` still work too.
+
+Keys from before roles fail validation with a pointer to their replacement: `routing.local` (now `current`), `routing.remote` (now an `escalate` step), `routing.mode` (now the roles themselves, or `allowRemote: false`), `escalation.via` (now `escalate`), and the object form of `routing.fallback`. Re-running `switchback init` rewrites them.
 
 ## Long sessions
 
-Before routing each step, the engine checks the prompt against `compaction.threshold` (0.7) of the largest window in `start`. Past it, older messages are summarized into an appended marker and requests carry the summary plus the recent part of the conversation verbatim, so a long session keeps fitting the start model instead of drifting into `context-overflow` and staying up the ladder. Summaries are written by a local model in a role; a remote one is used only when no local model is reachable, remote is allowed, and the budget isn't spent, and then it shows as `rule: compaction`. The full transcript is never changed. Design: [ADR 0008](adr/0008-append-only-compaction.md).
+Before routing each step, the engine checks the prompt against `compaction.threshold` (0.7) of the largest window in `current`. Past it, older messages are summarized into an appended marker and requests carry the summary plus the recent part of the conversation verbatim, so a long session keeps fitting the current model instead of drifting into `context-overflow` and staying up the ladder. Summaries are written by a local model in a role; a remote one is used only when no local model is reachable, remote is allowed, and the budget isn't spent, and then it shows as `rule: compaction`. The full transcript is never changed. Design: [ADR 0008](adr/0008-append-only-compaction.md).
 
 ## Counting tokens
 
 The prompt size behind `context-overflow` and cost estimates comes from a BPE tokenizer (o200k) run over the system prompt, tool schemas, and transcript. Counts are cached per message, which is safe because transcripts are append-only, so each step only tokenizes what's new.
 
-No single tokenizer matches every model, so when the estimate is within 20% of a local start model's threshold, where the difference could flip the decision, the engine asks the local server for an exact count with the model's own tokenizer: llama.cpp and vLLM expose `/tokenize`. Servers without it (Ollama, LM Studio) keep the estimate. Hosted APIs are never asked; their windows are large enough that the estimate decides nothing close. `route.decided` reports the count it used as `inputTokens`.
+No single tokenizer matches every model, so when the estimate is within 20% of a local current model's threshold, where the difference could flip the decision, the engine asks the local server for an exact count with the model's own tokenizer: llama.cpp and vLLM expose `/tokenize`. Servers without it (Ollama, LM Studio) keep the estimate. Hosted APIs are never asked; their windows are large enough that the estimate decides nothing close. `route.decided` reports the count it used as `inputTokens`.
 
 ## Refusals
 
@@ -202,7 +215,7 @@ Remote calls are cheapest when they reuse the provider's prompt cache, which onl
 
 The engine also checks it at runtime. When a follow-up call to the same remote model, within five minutes and with at least 4,096 input tokens, reads nothing from the cache, it logs one warning per session: either the provider doesn't cache that model or something is changing the prefix. `switchback usage` reports the remote cache hit rate.
 
-Stickiness (`escalation.stickyTurns`) is a fixed number of model calls, not tied to cache state. We considered extending it while the remote cache is warm and decided against it: a warm cache makes a remote call cheaper, but a local call is still free, and stickiness exists to give a struggling task a few steps on the stronger model, not to save money. When routing returns to `start` and later escalates again, the first remote call may rewrite the cache; that cost is visible per rule in `switchback usage --by rule`.
+Stickiness (`escalation.stickyTurns`) is a fixed number of model calls, not tied to cache state. We considered extending it while the remote cache is warm and decided against it: a warm cache makes a remote call cheaper, but a local call is still free, and stickiness exists to give a struggling task a few steps on the stronger model, not to save money. When routing returns to `current` and later escalates again, the first remote call may rewrite the cache; that cost is visible per rule in `switchback usage --by rule`.
 
 ## Images
 

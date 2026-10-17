@@ -197,7 +197,7 @@ OpenCode serves each model on one of three APIs, and Switchback picks the matchi
 
 ### Claude Code and Codex, with your own sign-in
 
-If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a subscription or a key, Switchback can use them as models. They're coding agents rather than chat APIs, so a turn routed to one is handed to it whole: it works in the workspace with its own tools, and its answer joins the conversation like any model's. Everything else is the same as any model: put it in `routing.start` to start every turn there, in `routing.escalate` to take the turns that need it, or in `review.models`.
+If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a subscription or a key, Switchback can use them as models. They're coding agents rather than chat APIs, so a turn routed to one is handed to it whole: it works in the workspace with its own tools, and its answer joins the conversation like any model's. Everything else is the same as any model: put it in `routing.current` to start every turn there, in `routing.escalate` to take the turns that need it, or in `review.models`.
 
 ```jsonc
 "providers": {
@@ -208,7 +208,7 @@ If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a sub
   "sonnet": { "provider": "claude", "model": "claude-sonnet-5", "price": { "input": 0, "output": 0 } },
   "codex": { "provider": "codex", "model": "gpt-6-sol", "price": { "input": 0, "output": 0 } }
 },
-"routing": { "start": ["fast"], "escalate": [["sonnet"]] }
+"routing": { "current": ["fast"], "escalate": [["sonnet"]] }
 ```
 
 `switchback init` offers both (`--remote claude-code`, `--remote codex` unattended) and writes this for you.

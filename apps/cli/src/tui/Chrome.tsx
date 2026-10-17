@@ -68,12 +68,12 @@ export function Header({
   width: number;
 }) {
   const t = useTheme();
-  const start = roles?.start?.length ? describeAliases(roles.start, init) : undefined;
+  const current = roles?.current?.length ? describeAliases(roles.current, init) : undefined;
   const escalate = roles?.escalate?.length
     ? describeAliases(roles.escalate.flat(), init)
     : undefined;
   const rows: [string, string][] = [
-    ...(start ? ([['model', start]] as [string, string][]) : []),
+    ...(current ? ([['current', current]] as [string, string][]) : []),
     ...(escalate ? ([['escalates to', escalate]] as [string, string][]) : []),
     ['mode', modeLabel(mode)],
     ['directory', tildify(init.workspaceRoot)],
@@ -247,6 +247,7 @@ export function StatusBar({
   view,
   usage,
   mode,
+  current,
 }: {
   session: SessionSummary;
   route: RoutePreference;
@@ -254,6 +255,8 @@ export function StatusBar({
   view: ViewState;
   usage?: UsageReport;
   mode: PermissionMode;
+  /** The current model, shown while the session isn't up the ladder. */
+  current?: { model: string; tier: string };
 }) {
   const t = useTheme();
   const shells = runningShells(view.shells);
@@ -278,6 +281,12 @@ export function StatusBar({
           {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
           {ladder ? ` · ${ladder}` : ''}
         </Text>
+        {current && !ladder ? (
+          <Text color={current.tier === 'local' ? t.local : t.remote} dimColor>
+            {' · '}
+            {current.tier === 'local' ? '⌂' : '☁'} {current.model}
+          </Text>
+        ) : null}
         {view.private ? <Text color={t.accent}> · 🔒 local only</Text> : null}
         {shells ? (
           <Text color={t.warning}>

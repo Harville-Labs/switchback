@@ -5,9 +5,12 @@
 import {
   addInfo,
   childView,
+  currentChange,
+  dashboardRows,
   describeSession,
   escalateNotice,
   formatCommands,
+  formatDashboard,
   formatMcpServers,
   formatModels,
   formatPermissions,
@@ -27,11 +30,14 @@ import {
   type SlashCommand,
   type SwitchbackClient,
   subagentList,
+  type TabsState,
+  tabAt,
   type ViewState,
 } from '@switchback/client';
 import type {
   InitializeResult,
   RoutePreference,
+  SessionRoles,
   SessionSetRolesParams,
   SessionSummary,
   UsageReport,
@@ -46,6 +52,8 @@ Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
        become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
+Tabs: ctrl+t shows every session (open tabs, and ones working in other windows);
+      alt+1…9 or alt+←/→ switch tabs; /tab new opens one. A closed tab keeps running.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
@@ -77,6 +85,16 @@ export interface SlashContext {
   openPicker(): Promise<void>;
   /** Show the checkpoint picker. */
   openRewind(): Promise<void>;
+  /** Show the current-model picker. */
+  openModelPicker(): void;
+  /** The open tabs and the sessions the dashboard knows about. */
+  tabs: TabsState;
+  openDashboard(): void;
+  /** A new session in a new tab. */
+  newTab(agent?: string): Promise<void>;
+  /** Bring a session forward: its tab, or a new one if it isn't open here. */
+  showSession(sessionId: string): Promise<void>;
+  closeTab(sessionId: string): void;
   /** The color theme, and a way to change it (saved for next time). */
   theme: ThemeName;
   setTheme(name: ThemeName): void;
@@ -140,6 +158,8 @@ export async function resume(ctx: SlashContext, which: string | undefined): Prom
   const target = /^\d+$/.test(which) ? ctx.listed[Number(which) - 1]?.id : which;
   if (!target) return say(ctx, `no session ${which} in the last /sessions list`);
   if (target === ctx.session.id) return say(ctx, 'already in that session');
+  // Open in another tab: go there rather than showing it twice.
+  if (ctx.tabs.tabs.some((t) => t.session.id === target)) return ctx.showSession(target);
   try {
     const { session: s, messages } = await ctx.client.request('session.get', {
       sessionId: target,
@@ -213,6 +233,36 @@ async function copy(ctx: SlashContext, args: string[]): Promise<void> {
   );
 }
 
+/** `/current`: pick the current model from a list, or name it (more models are backups). */
+function current(ctx: SlashContext, args: string[]): Promise<void> | void {
+  const models = rest(args);
+  if (!models.length) return ctx.openModelPicker();
+  return changeRoles(ctx, { current: models, save: saving(args) }, `Current model: ${models[0]}.`);
+}
+
+/** The model picked in the `/current` picker becomes current; the previous ones stay as backups. */
+export function pickCurrent(
+  ctx: SlashContext,
+  roles: SessionRoles | undefined,
+  alias: string,
+): Promise<void> {
+  return changeRoles(ctx, currentChange(roles, alias), `Current model: ${alias}.`);
+}
+
+/** `/tab`: switch to tab n, open a new one, or close the one in front. */
+function tab(ctx: SlashContext, args: string[]): Promise<void> | void {
+  const [what = '', agent] = args;
+  if (what === 'new') return ctx.newTab(agent);
+  if (what === 'close') {
+    if (ctx.tabs.tabs.length === 1) return say(ctx, 'this is the only tab; /new starts over in it');
+    return ctx.closeTab(ctx.session.id);
+  }
+  const n = Number(what);
+  const target = Number.isInteger(n) ? tabAt(ctx.tabs, n) : undefined;
+  if (target) return ctx.showSession(target.session.id);
+  say(ctx, `${formatDashboard(dashboardRows(ctx.tabs))}\nusage: /tab <n> | new [agent] | close`);
+}
+
 const routeTo =
   (route: RoutePreference): Handler =>
   (ctx) => {
@@ -235,11 +285,9 @@ const HANDLERS: Record<string, Handler> = {
     const roles = await ctx.client.request('session.roles', { sessionId: ctx.session.id });
     ctx.setView((v) => addInfo({ ...v, roles }, formatRoles(roles, ctx.init.models)));
   },
-  start: (ctx, args) => {
-    const models = rest(args);
-    if (!models.length) return say(ctx, 'usage: /start <model> [backup...] [--save]');
-    return changeRoles(ctx, { start: models, save: saving(args) }, 'Turns start on the new model.');
-  },
+  current,
+  // The command's name before the role was called current.
+  start: current,
   escalate: (ctx, args) => {
     const steps = rest(args);
     if (!steps.length) return say(ctx, 'usage: /escalate <model|a,b> ... | none [--save]');
@@ -271,6 +319,8 @@ const HANDLERS: Record<string, Handler> = {
     );
   },
   new: (ctx) => newSession(ctx),
+  tabs: (ctx) => ctx.openDashboard(),
+  tab,
   sessions: listSessions,
   resume: (ctx, args) => resume(ctx, args[0]),
   usage: async (ctx, args) => {

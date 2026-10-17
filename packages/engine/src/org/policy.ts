@@ -52,7 +52,7 @@ function filterRoles(
   keep: (alias: string, role: string) => boolean,
 ): Pick<SwitchbackConfig, 'routing' | 'review' | 'subagents'> {
   const routing = structuredClone(config.routing);
-  routing.start = routing.start.filter((a) => keep(a, 'routing.start'));
+  routing.current = routing.current.filter((a) => keep(a, 'routing.current'));
   routing.escalate = routing.escalate
     .map((step) => step.filter((a) => keep(a, 'routing.escalate')))
     .filter((step) => step.length);
@@ -74,7 +74,7 @@ function roleAliases(layer: Record<string, unknown>): Set<string> {
   const subagents = (layer.subagents ?? {}) as Record<string, unknown>;
   const classifier = (routing.classifier ?? {}) as Record<string, unknown>;
   return new Set(
-    [routing.start, routing.escalate, review.models, classifier.model, subagents.model]
+    [routing.current, routing.escalate, review.models, classifier.model, subagents.model]
       .flat(2)
       .filter((a): a is string => typeof a === 'string'),
   );

@@ -18,7 +18,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 ╭──────────────────────────────────────────────────────╮
 │ ◆ Switchback v1.0.0                                  │
 │                                                      │
-│ model         qwen3-coder (local)                    │
+│ current       qwen3-coder (local)                    │
 │ escalates to  claude-opus-5 (remote)                 │
 │ mode          default                                │
 │ directory     ~/code/shop                            │
@@ -49,17 +49,32 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 ╭──────────────────────────────────────────────────────────────────────────╮
 │ ❯ Ask anything · / for commands · @ to mention a file                    │
 ╰──────────────────────────────────────────────────────────────────────────╯
- build · auto                                  82% context left · $0.014 · 52 tok/s
+ build · auto · ⌂ qwen3-coder                  82% context left · $0.014 · 52 tok/s
 ```
 
-- **The welcome card** names the model turns start on, what they escalate to, the permission mode, and the directory.
+- **The welcome card** names the current model (where your prompts run), what it escalates to, the permission mode, and the directory. The status bar names the current model too, until an escalation moves the session up the ladder. `/current` picks another ([routing.md](../routing.md#picking-the-current-model)).
 - **Tool calls** are `●` rows: what the call does and to what (`Read src/x.ts`, `Bash bun test`, `Update a.ts`), with what came of it under `⎿`: lines read, files listed, matches found, the first lines a command printed (and its exit code when it failed), or an edit's size and diff with line numbers. The dot is yellow while it runs, green when it worked, red when it failed.
 - **Exploring** — two or more reads, listings, and searches in a row — folds into one **Explored** block listing each call and what it found.
-- **Routing** shows a `⌂` (local) or `☁` (remote) line only when the model changes, with the reason; the welcome card covers where turns start.
+- **Routing** shows a `⌂` (local) or `☁` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
 - **Subagents** are rows of their own, with their tier, tool-call count, and current activity, and their latest steps indented under them while they run. Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did.
 - **While a turn runs**, a line above the input says what's happening (thinking, writing, running a tool, waiting on a subagent), for how long, about how many tokens the model has written, and on which model.
 - **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference, how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, and the last call's speed.
 - Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`. Your [custom commands](../commands-and-skills.md) follow under **Custom**.
+
+### Tabs
+
+Several sessions can be open at once, each in its own tab, and they all keep working: a turn in a tab you're not looking at runs to the end, and a permission or escalation prompt waits in its tab until you go there. With more than one tab open, a line above the transcript lists them by number, with a mark for what each needs: `?` waiting for you, `●` working, `✓` finished since you last looked, `✗` stopped with an error.
+
+```
+ ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session   ctrl+t tabs
+```
+
+- **Ctrl+T** opens the sessions dashboard: every open tab with what it's doing (`Bash bun test`, `Writing`, `Waiting on explore`), on which model, and what it has cost, then the sessions working or waiting in other windows on the same engine (another terminal, VS Code). ↑/↓ and Enter switch, a tab's number jumps to it, `n` opens a new tab, `x` closes the selected one, Esc goes back. Choosing a session from another window opens it here in a new tab, live.
+- **Alt+1…9** jumps to a tab, and **Alt+←/→** moves to the previous or next one. They work while a prompt is waiting, so you can leave it and come back.
+- `/tab new [agent]` opens a tab, `/tab <n>` switches, `/tab close` closes the one in front, and `/tab` alone prints the dashboard.
+- Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new`, `/agent`, and `/resume` change the session in the tab in front, as before; `/resume` of a session that's open in another tab switches to it.
+
+Tabs are the clients' own; the engine sends every session's events to every client, and both clients fold them with the same functions (`@switchback/client/tabs`), so the TUI and VS Code show the same states with the same words ([protocol.md](../protocol.md#several-sessions-at-once)).
 
 ### Scrolling and selecting
 
@@ -83,7 +98,9 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/up` (alt+↑) | Escalate: the turn's next step, or your next prompt, goes one step up the ladder ([routing.md](../routing.md#escalating-yourself)). On macOS Terminal, alt needs "Use Option as Meta key"; `/up` always works |
 | `/agent <name>` | New session with that agent |
 | `/agents` | List agents and where they came from |
-| `/new` | New session with the default agent |
+| `/new` | New session with the default agent, in the tab in front |
+| `/tabs` (ctrl+t) | The sessions dashboard: open tabs, then sessions working in other windows ([Tabs](#tabs)) |
+| `/tab [n\|new [agent]\|close]` | Switch to tab `n`, open a new tab, or close the one in front (its session keeps running) |
 | `/sessions` | Saved sessions in this workspace, newest first |
 | `/resume [n\|id]` | Switch to a saved session. With no argument, a picker: type to filter by title, agent, or ID, ↑/↓ to choose, Enter to open. `switchback --resume` opens it at startup, `-c` resumes the latest, `--session <id>` a specific one, and `switchback sessions [--json]` lists them for scripts |
 | `/subagents` | This session's subagents as a numbered tree |
@@ -98,7 +115,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
 | `/models` | Every configured model, its tier, and the roles it fills |
 | `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
-| `/start <model...>` | Where turns start (more models are backups for when it's down or too small) |
+| `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
 | `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
 | `/subagent-model <model>\|none` | Default model for subagents |
 | `/mode [default\|accept-edits\|plan\|bypass]` | Show or switch the permission mode ([permissions.md](../permissions.md#modes)) |
@@ -116,6 +133,8 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Enter during a turn | Queue the message: the model reads it at its next step (between tool calls), or as the next turn if it's already finishing. Queued messages show under the transcript |
 | `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt: cancel the turn and drop the queue. Otherwise it closes a menu |
 | `↑` on an empty prompt | Take back the last queued message to edit it |
+| Ctrl+T | The sessions dashboard ([Tabs](#tabs)) |
+| Alt+1…9, Alt+←/→ | Go to tab n, or the previous or next tab |
 | Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |

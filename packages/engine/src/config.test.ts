@@ -70,7 +70,7 @@ test('an unknown model in a role is a config error, not a silent gap', () => {
     JSON.stringify({
       providers: { ollama: { type: 'openai-compatible', baseUrl: 'http://localhost:11434/v1' } },
       models: { local: { provider: 'ollama', model: 'small' } },
-      routing: { start: ['local'], escalate: ['larg'] },
+      routing: { current: ['local'], escalate: ['larg'] },
     }),
   );
   expect(() => loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') })).toThrow(
@@ -81,7 +81,7 @@ test('an unknown model in a role is a config error, not a silent gap', () => {
 test('keys removed by role-based routing say what replaced them', () => {
   mkdirSync(join(dir, '.switchback'), { recursive: true });
   for (const [routing, message] of [
-    [{ local: ['a'] }, 'routing.local was renamed routing.start'],
+    [{ local: ['a'] }, 'routing.local was renamed routing.current'],
     [{ remote: ['a'] }, 'routing.remote was replaced by routing.escalate'],
     [{ mode: 'local-only' }, 'routing.allowRemote: false'],
     [{ escalation: { via: ['a'] } }, 'routing.escalation.via was replaced'],
@@ -182,4 +182,22 @@ test('a workspace at the home directory reads ~/.switchback once, as the user co
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('routing.start, the old name of routing.current, still loads; the new name wins', () => {
+  mkdirSync(join(dir, '.switchback'), { recursive: true });
+  const providers = { ollama: { type: 'openai-compatible', baseUrl: 'http://localhost:11434/v1' } };
+  const models = {
+    small: { provider: 'ollama', model: 'small' },
+    big: { provider: 'ollama', model: 'big' },
+  };
+  const file = join(dir, '.switchback', 'config.json');
+  writeFileSync(file, JSON.stringify({ providers, models, routing: { start: ['small'] } }));
+  const env = { SWITCHBACK_HOME: join(dir, 'home') };
+  expect(loadConfig(dir, env).config.routing.current).toEqual(['small']);
+  writeFileSync(
+    file,
+    JSON.stringify({ providers, models, routing: { start: ['small'], current: ['big'] } }),
+  );
+  expect(loadConfig(dir, env).config.routing.current).toEqual(['big']);
 });

@@ -5,17 +5,32 @@
  */
 import {
   AttentionTracker,
+  activeTab,
   addInfo,
   addUserPrompt,
+  closeTab,
   customCommands,
+  cycleTab,
+  dashboardRows,
+  fromTranscript,
+  initialTabs,
   initialView,
   isCustomCommand,
+  modelChoices,
   nextMode,
-  reduce,
+  openTab,
+  reduceTabs,
+  replaceActive,
   resolveEscalation,
   resolvePermission,
   type SlashCommand,
   type SwitchbackClient,
+  switchTab,
+  type TabsState,
+  tabAt,
+  trackSessions,
+  updateActiveView,
+  updateView,
   type ViewState,
 } from '@switchback/client';
 import type {
@@ -29,16 +44,18 @@ import type {
   UsageReport,
 } from '@switchback/protocol';
 import { Box, Text, useApp, useBoxMetrics, useInput, useStdout, useWindowSize } from 'ink';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
 import { PromptHistory } from './history.ts';
+import { ModelPicker } from './ModelPicker.tsx';
 import type { MouseInput } from './mouse.ts';
 import { terminalNotification } from './notify.ts';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
-import { escalateNow, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { escalateNow, pickCurrent, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { Dashboard, TabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
 import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
 
@@ -80,16 +97,30 @@ export function App({
   // A terminal that doesn't say how big it is (tests, some multiplexers) gets the classic size.
   const columns = size.columns || 80;
   const rows = size.rows || 24;
-  const [session, setSession] = useState(initialSession);
-  useEffect(() => onSession?.(session), [session, onSession]);
-  const [view, setView] = useState<ViewState>(() =>
-    warnings.reduce(
-      (v, w) => addInfo(v, w),
-      resumed
-        ? addInfo(resumed, `resumed "${initialSession.title || initialSession.id}"`)
-        : initialView(initialSession.id),
+  // Every open session is a tab; the one in front is `session` and `view`.
+  const [tabs, setTabs] = useState<TabsState>(() =>
+    initialTabs(
+      initialSession,
+      warnings.reduce(
+        (v, w) => addInfo(v, w),
+        resumed
+          ? addInfo(resumed, `resumed "${initialSession.title || initialSession.id}"`)
+          : initialView(initialSession.id),
+      ),
     ),
   );
+  const { session, view } = activeTab(tabs);
+  useEffect(() => onSession?.(session), [session, onSession]);
+  const setView = useCallback(
+    (update: (v: ViewState) => ViewState) => setTabs((t) => updateActiveView(t, update)),
+    [],
+  );
+  // The view follows with setView, so a replaced tab keeps its items until then.
+  const setSession = useCallback(
+    (s: SessionSummary) => setTabs((t) => replaceActive(t, s, (v) => v)),
+    [],
+  );
+  const dashRows = useMemo(() => dashboardRows(tabs), [tabs]);
   const [listed, setListed] = useState<SessionSummary[]>([]);
   // Items before this index are finished: their Markdown is rendered and cached.
   const [committed, setCommitted] = useState(0);
@@ -102,10 +133,15 @@ export function App({
   const [modes, setModes] = useState<PermissionMode[]>(['default', 'acceptEdits', 'plan']);
   const mode = view.mode ?? session.permissionMode ?? 'default';
   const [roles, setRoles] = useState<SessionRoles | undefined>();
+  const sessionRoles = view.roles ?? roles;
   /** Saved sessions while the picker is open. */
   const [picking, setPicking] = useState<SessionSummary[] | undefined>();
   /** Checkpoints while the rewind picker is open. */
   const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
+  /** The current-model picker (`/current`) is open. */
+  const [choosingModel, setChoosingModel] = useState(false);
+  /** The sessions dashboard (ctrl+t, `/tabs`) is open. */
+  const [dashboard, setDashboard] = useState(false);
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
   const [exitArmedAt, setExitArmedAt] = useState<number | undefined>();
   /** ctrl+o: reasoning, command output, and diffs in full. */
@@ -156,19 +192,41 @@ export function App({
     );
   }, [client]);
 
+  /** Titles, costs, and running flags for the tabs and the dashboard, from the engine. */
+  const refreshSessions = useCallback(() => {
+    client.request('session.list', {}).then(
+      (all) => setTabs((t) => trackSessions(t, all)),
+      () => {},
+    );
+  }, [client]);
+  useEffect(refreshSessions, [refreshSessions]);
+
   // One tracker for the app's life: it remembers when turns started.
   const [attention] = useState(() => new AttentionTracker(init.notifications));
   useEffect(() => {
     refreshUsage();
     return client.on((event) => {
-      setView((v) => reduce(v, event));
+      // Every session's events: each tab's view stays live, in front or not.
+      setTabs((t) => reduceTabs(t, event));
       const a = attention.observe(event);
       if (a) stdout.write(terminalNotification(a.message, init.notifications?.mode ?? 'system'));
       if (event.type === 'turn.completed' && event.sessionId === session.id) refreshUsage();
+      // A turn starting or ending names a title, or a session from another window.
+      if (
+        (event.type === 'turn.started' || event.type === 'turn.completed') &&
+        !event.parentSessionId
+      )
+        refreshSessions();
     });
-  }, [client, session.id, refreshUsage, attention, init.notifications, stdout]);
+  }, [client, session.id, refreshUsage, refreshSessions, attention, init.notifications, stdout]);
 
-  // A finished turn's items are final: render their Markdown once.
+  // A finished turn's items are final: render their Markdown once. Another
+  // tab in front is final up to its last prompt.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on switching tabs only
+  useEffect(() => {
+    const last = view.items.findLastIndex((i) => i.kind === 'user');
+    setCommitted(view.running ? Math.max(0, last) : view.items.length);
+  }, [session.id]);
   useEffect(() => {
     if (!view.running) setCommitted(view.items.length);
   }, [view.running, view.items.length]);
@@ -182,11 +240,34 @@ export function App({
     width,
     theme,
     expanded,
-    header: <Header init={init} roles={view.roles ?? roles} mode={mode} width={width} />,
-    headerKey: `${mode}|${JSON.stringify(view.roles ?? roles ?? null)}`,
+    header: <Header init={init} roles={sessionRoles} mode={mode} width={width} />,
+    headerKey: `${mode}|${JSON.stringify(sessionRoles ?? null)}`,
   });
   const scroll = useScroll(lines.length, height);
   useEffect(() => mouse?.onWheel((d) => scroll.by(d)), [mouse, scroll.by]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a tab comes forward at its end
+  useEffect(() => scroll.toEnd(), [session.id]);
+
+  /** A new session in a new tab, in front. */
+  const newTab = async (agent?: string) => {
+    try {
+      const s = await client.request('session.create', agent ? { agent } : {});
+      setTabs((t) => openTab(t, s));
+    } catch (err) {
+      setView((v) => addInfo(v, (err as Error).message));
+    }
+  };
+  /** Bring a session forward: its tab, or a new tab for one open in another window. */
+  const showSession = async (sessionId: string) => {
+    if (tabs.tabs.some((t) => t.session.id === sessionId))
+      return setTabs((t) => switchTab(t, sessionId));
+    try {
+      const { session: s, messages } = await client.request('session.get', { sessionId });
+      setTabs((t) => openTab(t, s, fromTranscript(s, messages)));
+    } catch (err) {
+      setView((v) => addInfo(v, (err as Error).message));
+    }
+  };
 
   const slash: SlashContext = {
     client,
@@ -215,6 +296,15 @@ export function App({
       setThemeName(name);
       saveTheme(name);
     },
+    openModelPicker: () => setChoosingModel(true),
+    tabs,
+    openDashboard: () => {
+      refreshSessions();
+      setDashboard(true);
+    },
+    newTab,
+    showSession,
+    closeTab: (sessionId) => setTabs((t) => closeTab(t, sessionId)),
   };
 
   const rewind = async (turnId: string, restore: SessionRewindParams['restore']) => {
@@ -253,6 +343,8 @@ export function App({
    * model at the next step (it shows once delivered) and `interrupt` starts it now.
    */
   const send = (text: string, delivery?: 'queue' | 'interrupt', images: PastedImage[] = []) => {
+    // Errors go to the tab that sent the prompt, wherever the user is by then.
+    const to = session.id;
     if (delivery !== 'queue')
       setView((v) =>
         addUserPrompt(
@@ -272,7 +364,11 @@ export function App({
       ...(delivery ? { delivery } : {}),
     };
     client.request('session.prompt', params).catch((err) => {
-      setView((v) => addInfo({ ...v, running: false }, `error: ${(err as Error).message}`));
+      setTabs((t) =>
+        updateView(t, to, (v) =>
+          addInfo({ ...v, running: false }, `error: ${(err as Error).message}`),
+        ),
+      );
     });
   };
 
@@ -285,6 +381,8 @@ export function App({
   };
 
   const permission = view.permissions[0];
+  const currentAlias = sessionRoles?.current?.[0];
+  const currentModel = init.models.find((m) => m.alias === currentAlias);
   const escalation = view.escalations[0];
 
   const answerPermission = (answer: PermissionAnswer) => {
@@ -307,7 +405,17 @@ export function App({
     if (key.pageUp) return scroll.page(-1);
     if (key.pageDown) return scroll.page(1);
     // The pickers, the prompts, and the input handle their own keys, Ctrl+C included.
-    if (picking || rewinding || permission || escalation) return;
+    if (picking || rewinding || choosingModel || dashboard) return;
+    // Tabs switch even while a prompt waits: the prompt stays with its tab.
+    if (key.ctrl && ch === 't') return slash.openDashboard();
+    if (key.meta && /^[1-9]$/.test(ch)) {
+      const tab = tabAt(tabs, Number(ch));
+      if (tab) setTabs((t) => switchTab(t, tab.session.id));
+      return;
+    }
+    if (key.meta && (key.leftArrow || key.rightArrow))
+      return setTabs((t) => cycleTab(t, key.leftArrow ? -1 : 1));
+    if (permission || escalation) return;
     if (key.ctrl && ch === 'o') return setExpanded((v) => !v);
     if (key.meta && key.upArrow) return void escalateNow(slash);
     if (key.tab && key.shift) {
@@ -320,6 +428,9 @@ export function App({
   return (
     <ThemeContext.Provider value={theme}>
       <Box flexDirection="column" height={rows} width={columns}>
+        <Box flexShrink={0}>
+          <TabBar rows={dashRows} width={columns} />
+        </Box>
         <Box ref={viewport} flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
           <Viewport lines={lines} height={height} scroll={scroll.scroll} unseen={scroll.unseen} />
         </Box>
@@ -360,10 +471,37 @@ export function App({
               onRewind={(turnId, restore) => void rewind(turnId, restore)}
             />
           ) : null}
+          {choosingModel ? (
+            <ModelPicker
+              choices={modelChoices(init.models, sessionRoles)}
+              onCancel={() => setChoosingModel(false)}
+              onPick={(alias) => {
+                setChoosingModel(false);
+                void pickCurrent(slash, sessionRoles, alias);
+              }}
+            />
+          ) : null}
+          {dashboard ? (
+            <Dashboard
+              rows={dashRows}
+              onCancel={() => setDashboard(false)}
+              onNew={() => {
+                setDashboard(false);
+                void newTab();
+              }}
+              onClose={(sessionId) => setTabs((t) => closeTab(t, sessionId))}
+              onOpen={(sessionId) => {
+                setDashboard(false);
+                void showSession(sessionId);
+              }}
+            />
+          ) : null}
           {view.running && !permission && !escalation ? <Working view={view} /> : null}
           <Box borderStyle="round" borderColor={view.running ? 'gray' : theme.brand} paddingX={1}>
             <PromptInput
-              focus={!permission && !escalation && !picking && !rewinding}
+              focus={
+                !permission && !escalation && !picking && !rewinding && !choosingModel && !dashboard
+              }
               custom={custom}
               resources={resources}
               onInterrupt={interrupt}
@@ -404,6 +542,9 @@ export function App({
             view={view}
             usage={usage}
             mode={mode}
+            current={
+              currentModel ? { model: currentModel.ref.model, tier: currentModel.tier } : undefined
+            }
           />
         </Box>
       </Box>

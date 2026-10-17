@@ -6,19 +6,36 @@ import { commandsFor } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
 import { formatSubagents, formatUsage, speedLabel } from '@switchback/client/format';
 import {
+  activeTab,
+  closeTab,
+  dashboardRows,
+  initialTabs,
+  openTab,
+  reduceTabs,
+  replaceActive,
+  switchTab,
+  type TabsState,
+  trackSessions,
+  updateActiveView,
+} from '@switchback/client/tabs';
+import {
   addInfo,
   addUserPrompt,
   fromTranscript,
   initialView,
-  reduce,
   resolveEscalation,
   resolvePermission,
   type ViewState,
 } from '@switchback/client/view';
-import type { PermissionMode, RoutePreference, SessionRoles } from '@switchback/protocol';
+import type {
+  InitializeResult,
+  PermissionMode,
+  RoutePreference,
+  SessionRoles,
+} from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
-import { renderControls as renderControlsHtml } from './controls.ts';
+import { CHOOSE_MODELS, renderControls as renderControlsHtml, SAVE_DEFAULT } from './controls.ts';
 import { PendingImages } from './images.ts';
 import {
   esc,
@@ -30,18 +47,44 @@ import {
 } from './render.ts';
 import { SlashMenu } from './slash-menu.ts';
 import { STYLES } from './styles.ts';
+import { renderDashboard, renderTabStrip } from './tabs-view.ts';
 
 declare function acquireVsCodeApi(): { postMessage(m: WebviewToHost): void };
 const vscode = acquireVsCodeApi();
 
+/**
+ * The view of the tab in front. Edits to it go back into `tabs` on every
+ * render (`syncTabs`); events and tab switches go through `tabs`.
+ */
 let view: ViewState = initialView('');
+/** Every open session; undefined until the engine is ready. */
+let tabs: TabsState | undefined;
 let route: RoutePreference = 'auto';
 let connected = false;
-let agent = '';
+let models: InitializeResult['models'] = [];
+/** The sessions dashboard is showing in place of the conversation. */
+let dashboard = false;
+/** Each session's roles, kept outside its view, which is rebuilt when it's resumed. */
+const rolesBy = new Map<string, SessionRoles>();
+
+/** The tabs with the latest edits to the view in front. */
+function syncTabs(): TabsState | undefined {
+  if (tabs) tabs = updateActiveView(tabs, () => view);
+  return tabs;
+}
+
+/** Change the tabs; the view follows the tab in front. */
+function setTabs(next: TabsState) {
+  const before = tabs?.active;
+  tabs = next;
+  view = activeTab(next).view;
+  if (next.active !== before) vscode.postMessage({ type: 'switchTab', sessionId: next.active });
+}
+
+const agentOf = () => (tabs ? activeTab(tabs).session.agent : '');
 /** The session's mode until a `mode.changed` event says otherwise. */
-let sessionMode: PermissionMode = 'default';
-/** Kept outside `view`, which is rebuilt when the session changes. */
-let roles: SessionRoles | undefined;
+const sessionModeOf = (): PermissionMode =>
+  (tabs ? activeTab(tabs).session.permissionMode : undefined) ?? 'default';
 
 const ICONS = {
   // The product mark: a path that doubles back on itself.
@@ -55,6 +98,8 @@ const ICONS = {
 const app = document.getElementById('app') as HTMLDivElement;
 app.innerHTML = `
 <style>${STYLES}</style>
+<nav id="tabs" class="tabs"></nav>
+<div id="dash" class="dash" hidden></div>
 <div id="log"></div>
 <div id="prompts"></div>
 <div id="todos"></div>
@@ -91,6 +136,8 @@ const queueEl = $<HTMLDivElement>('queue');
 const todosEl = $<HTMLDivElement>('todos');
 const menu = $<HTMLDivElement>('menu');
 const slashBtn = $<HTMLButtonElement>('slash');
+const tabsEl = $<HTMLElement>('tabs');
+const dashEl = $<HTMLDivElement>('dash');
 
 /** Subagent and reasoning sections the user opened; kept across re-renders. */
 const expanded = new Set<string>();
@@ -98,6 +145,8 @@ const expanded = new Set<string>();
 const WELCOME = `<div class="welcome">${ICONS.mark}<h1>Switchback</h1><p>Runs on your local model and escalates to a hosted one only when a turn needs it.</p><div class="keys"><span><kbd>/</kbd> commands</span><span><kbd>Enter</kbd> send</span><span><kbd>Shift</kbd>+<kbd>Enter</kbd> new line</span></div></div>`;
 
 function render() {
+  syncTabs();
+  renderTabs();
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   // Until the first prompt the session only has notices, so lead with the welcome.
   const fresh = !view.items.some((i) => i.kind !== 'info');
@@ -118,19 +167,109 @@ function render() {
 
 /** Routing, mode, agent, and the models in each role, each one click from its picker. */
 function renderControls() {
-  controls.innerHTML = renderControlsHtml({
+  const html = renderControlsHtml({
     route,
-    mode: view.mode ?? sessionMode,
-    agent,
-    roles,
+    mode: view.mode ?? sessionModeOf(),
+    agent: agentOf(),
+    roles: view.roles ?? rolesBy.get(view.sessionId),
+    models,
     ladderStep: view.ladder?.step ?? 0,
   });
+  // Unchanged controls stay put: rebuilding them would close an open model dropdown.
+  if (controls.innerHTML !== html) controls.innerHTML = html;
+}
+
+/** The tab strip, and the dashboard in place of the conversation while it's open. */
+function renderTabs() {
+  const rows = tabs ? dashboardRows(tabs) : [];
+  // One tab and nothing elsewhere needs no strip; Show Sessions in the title bar opens the dashboard.
+  const strip = rows.length > 1 || dashboard ? renderTabStrip(rows, dashboard) : '';
+  if (tabsEl.innerHTML !== strip) tabsEl.innerHTML = strip;
+  dashEl.hidden = !dashboard;
+  log.hidden = dashboard;
+  if (dashboard) {
+    const html = renderDashboard(rows);
+    if (dashEl.innerHTML !== html) dashEl.innerHTML = html;
+  }
+}
+
+function showTab(sessionId: string) {
+  dashboard = false;
+  const t = syncTabs();
+  if (!t) return;
+  if (t.tabs.some((x) => x.session.id === sessionId)) setTabs(switchTab(t, sessionId));
+  // Open in another window: the host fetches it, and it arrives as a new tab.
+  else vscode.postMessage({ type: 'switchTab', sessionId });
+  render();
+}
+
+function onTabClick(e: Event) {
+  const target = e.target as HTMLElement;
+  const close = target.closest<HTMLElement>('[data-close-tab]')?.dataset.closeTab;
+  const t = syncTabs();
+  if (close && t) {
+    e.stopPropagation();
+    setTabs(closeTab(t, close));
+    render();
+    return;
+  }
+  const tab = target.closest<HTMLElement>('[data-tab]')?.dataset.tab;
+  if (tab) return showTab(tab);
+  if (target.closest('[data-new-tab]')) {
+    dashboard = false;
+    vscode.postMessage({ type: 'newTab' });
+    return render();
+  }
+  if (target.closest('[data-dashboard]')) {
+    dashboard = !dashboard;
+    if (dashboard) vscode.postMessage({ type: 'listSessions' });
+    render();
+  }
+}
+tabsEl.addEventListener('click', onTabClick);
+dashEl.addEventListener('click', onTabClick);
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !dashboard) return;
+  dashboard = false;
+  render();
+});
+
+/** `/tabs` and `/tab [n|new|close]`, as in the TUI. */
+function runTabCommand(name: string, args: string[]) {
+  const t = syncTabs();
+  if (!t) return;
+  const [what = ''] = args;
+  if (name === 'tabs' || !what) {
+    dashboard = true;
+    vscode.postMessage({ type: 'listSessions' });
+  } else if (what === 'new') vscode.postMessage({ type: 'newTab' });
+  else if (what === 'close') {
+    if (t.tabs.length === 1) addNotice('this is the only tab; /new starts over in it');
+    else setTabs(closeTab(t, t.active));
+  } else {
+    const tab = t.tabs[Number(what) - 1];
+    if (tab) return showTab(tab.session.id);
+    addNotice('usage: /tab <n> | new | close');
+  }
+  render();
 }
 
 function setRoute(r: RoutePreference) {
   route = r;
   vscode.postMessage({ type: 'setRoute', route: r });
 }
+
+controls.addEventListener('change', (e) => {
+  const select = (e.target as HTMLElement).closest<HTMLSelectElement>('select[data-current]');
+  if (!select) return;
+  const value = select.value;
+  if (value === CHOOSE_MODELS) vscode.postMessage({ type: 'chooseRole', role: 'current' });
+  else if (value === SAVE_DEFAULT) vscode.postMessage({ type: 'saveRoles' });
+  else if (value) vscode.postMessage({ type: 'setCurrent', alias: value });
+  // Until roles.updated arrives, the dropdown shows what's current, not the menu entry.
+  controls.innerHTML = '';
+  renderControls();
+});
 
 controls.addEventListener('click', (e) => {
   const btn = (e.target as HTMLElement).closest('button');
@@ -312,6 +451,9 @@ function runCommand(name: string, args: string[]) {
     case 'subagents':
       addNotice(formatSubagents(view, 'Expand a subagent in the chat to see what it did.'));
       return;
+    case 'tab':
+    case 'tabs':
+      return runTabCommand(name, args);
     case 'copy': {
       const pick = pickCopy(view.items, args[0]);
       if ('error' in pick) addNotice(`copy: ${pick.error}`);
@@ -437,24 +579,42 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
     case 'ready':
       connected = true;
       route = m.route;
-      agent = m.session.agent;
-      sessionMode = m.session.permissionMode ?? 'default';
-      if (view.sessionId !== m.session.id) view = initialView(m.session.id);
+      models = m.init.models;
+      // A restarted engine starts over with one tab; the old ones are saved sessions.
+      if (!tabs?.tabs.some((t) => t.session.id === m.session.id)) {
+        tabs = initialTabs(m.session);
+        view = activeTab(tabs).view;
+      }
       break;
-    case 'session':
-      agent = m.session.agent;
-      sessionMode = m.session.permissionMode ?? 'default';
-      view = addInfo(
-        { ...initialView(m.session.id), items: view.items },
-        `new session · agent ${m.session.agent}`,
+    case 'session': {
+      const t = syncTabs();
+      if (!t) break;
+      const note = `new session · agent ${m.session.agent}`;
+      setTabs(
+        m.tab === 'new'
+          ? openTab(t, m.session, addInfo(initialView(m.session.id), note))
+          : replaceActive(t, m.session, (v) =>
+              addInfo({ ...initialView(m.session.id), items: v.items }, note),
+            ),
       );
       break;
-    case 'event':
-      view = reduce(view, m.event);
-      if (m.event.type === 'roles.updated') roles = m.event.roles;
+    }
+    case 'event': {
+      const t = syncTabs();
+      if (t) setTabs(reduceTabs(t, m.event));
+      if (m.event.type === 'roles.updated') rolesBy.set(m.event.sessionId, m.event.roles);
       break;
+    }
     case 'roles':
-      roles = m.roles;
+      rolesBy.set(m.sessionId, m.roles);
+      break;
+    case 'sessions': {
+      const t = syncTabs();
+      if (t) setTabs(trackSessions(t, m.sessions));
+      break;
+    }
+    case 'showDashboard':
+      dashboard = true;
       break;
     case 'route':
       route = m.route;
@@ -468,14 +628,21 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
     case 'commands':
       slash.setCustom(m.commands);
       break;
-    case 'history':
-      agent = m.session.agent;
-      sessionMode = m.session.permissionMode ?? 'default';
-      view = addInfo(
+    case 'history': {
+      const t = syncTabs();
+      if (!t) break;
+      dashboard = false;
+      const history = addInfo(
         fromTranscript(m.session, m.messages),
         `resumed "${m.session.title || m.session.id}"`,
       );
+      setTabs(
+        m.tab === 'new'
+          ? openTab(t, m.session, history)
+          : replaceActive(t, m.session, () => history),
+      );
       break;
+    }
     case 'prefill':
       input.value = m.text + input.value;
       autosize();

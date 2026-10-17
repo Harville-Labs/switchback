@@ -25,7 +25,7 @@ const MODELS: Record<string, ModelInfo> = {
   haiku: model('haiku', 'remote', 200_000),
 };
 
-const LADDER = { start: ['fast'], escalate: ['large', 'opus'] };
+const LADDER = { current: ['fast'], escalate: ['large', 'opus'] };
 
 function router(
   config: Record<string, unknown> = LADDER,
@@ -61,20 +61,20 @@ const on = (step: number, extra: Partial<RouteInput['signals']> = {}) =>
   signals({ stickyTurns: 2, escalationStep: step, ...extra });
 
 describe('roles', () => {
-  test('turns begin on the start model', () => {
+  test('turns begin on the current model', () => {
     const d = routed(router().decide(input()));
     expect(d).toMatchObject({ rule: 'default', model: { alias: 'fast' }, step: 0 });
   });
 
   test('all remote: start and escalate across remote models', () => {
-    const r = router({ start: ['haiku'], escalate: ['opus'] });
+    const r = router({ current: ['haiku'], escalate: ['opus'] });
     expect(routed(r.decide(input())).model.alias).toBe('haiku');
     const up = routed(r.decide(input({ signals: stuck })));
     expect(up).toMatchObject({ rule: 'escalation', model: { alias: 'opus' }, step: 1 });
   });
 
   test('all local: nothing remote is ever chosen', () => {
-    const r = router({ start: ['fast'], escalate: ['large'] });
+    const r = router({ current: ['fast'], escalate: ['large'] });
     expect(routed(r.decide(input({ signals: stuck }))).model.alias).toBe('large');
     expect(
       routed(r.decide(input({ signals: on(1, { consecutiveToolErrors: 3 }) }))).model.alias,
@@ -83,7 +83,7 @@ describe('roles', () => {
 
   test('a step can be a chain of alternatives', () => {
     const r = router(
-      { start: ['fast'], escalate: [['sonnet', 'opus']] },
+      { current: ['fast'], escalate: [['sonnet', 'opus']] },
       { sonnet: model('sonnet', 'remote', 400_000, false) },
     );
     const d = routed(r.decide(input({ signals: stuck })));
@@ -91,7 +91,7 @@ describe('roles', () => {
     expect(d.reason).toContain('sonnet is unavailable; using opus');
   });
 
-  test('with no start model, turns begin on the first step; with no models, blocked', () => {
+  test('with no current model, turns begin on the first step; with no models, blocked', () => {
     const d = routed(router({ escalate: ['opus'] }).decide(input()));
     expect(d).toMatchObject({ model: { alias: 'opus' }, step: 1 });
     expect(router({}).decide(input())).toMatchObject({ kind: 'block', rule: 'default' });
@@ -165,7 +165,7 @@ describe('escalation ladder', () => {
 
   test('escalating now climbs one step from where the session is, without asking', () => {
     const ask = { ...LADDER, escalation: { policy: 'ask' } };
-    // From the start model to the first step.
+    // From the current model to the first step.
     expect(routed(router(ask).decide(input({ escalateNow: true })))).toMatchObject({
       rule: 'user-escalation',
       model: { alias: 'large' },
@@ -207,14 +207,14 @@ describe('context overflow', () => {
   });
 
   test('a start chain prefers a member that fits before escalating', () => {
-    const r = router({ start: ['fast', 'large'], escalate: ['opus'] });
+    const r = router({ current: ['fast', 'large'], escalate: ['opus'] });
     const d = routed(r.decide(input({ estimatedInputTokens: 60_000 })));
     expect(d).toMatchObject({ rule: 'context-fit', model: { alias: 'large' }, step: 0 });
   });
 
   test('with images, a chain prefers a member that can see them', () => {
     const seeing = { large: { ...MODELS.large, vision: true } as ModelInfo };
-    const r = router({ start: ['fast', 'large'], escalate: ['opus'] }, seeing);
+    const r = router({ current: ['fast', 'large'], escalate: ['opus'] }, seeing);
     expect(routed(r.decide(input({ images: true })))).toMatchObject({
       rule: 'vision',
       model: { alias: 'large' },
@@ -229,7 +229,7 @@ describe('context overflow', () => {
   });
 
   test('with images and no member that can see them, the chain is unchanged', () => {
-    const r = router({ start: ['fast', 'large'], escalate: ['opus'] });
+    const r = router({ current: ['fast', 'large'], escalate: ['opus'] });
     expect(routed(r.decide(input({ images: true }))).model.alias).toBe('fast');
   });
 });
@@ -241,14 +241,14 @@ describe('tier filters and pins', () => {
       model: { alias: 'opus' },
       step: 2,
     });
-    const r = router({ start: ['haiku'], escalate: ['large', 'opus'] });
+    const r = router({ current: ['haiku'], escalate: ['large', 'opus'] });
     expect(routed(r.decide(input({ preference: 'local' }))).model.alias).toBe('large');
   });
 
   test('a tier with no model in any role is refused with a pointer to init', () => {
-    const d = router({ start: ['opus'] }).decide(input({ preference: 'local' }));
+    const d = router({ current: ['opus'] }).decide(input({ preference: 'local' }));
     expect(d).toMatchObject({ kind: 'block', rule: 'user-override' });
-    expect((d as { reason: string }).reason).toContain('no local model is in routing.start');
+    expect((d as { reason: string }).reason).toContain('no local model is in routing.current');
   });
 
   test('a user override beats an agent pin', () => {
@@ -267,7 +267,7 @@ describe('tier filters and pins', () => {
     expect(tier).toMatchObject({ rule: 'agent-pin', model: { alias: 'fast' } });
     // A tier pin with no model of that tier routes normally.
     const none = routed(
-      router({ start: ['opus'] }).decide(input({ agent: { name: 'explore', route: 'local' } })),
+      router({ current: ['opus'] }).decide(input({ agent: { name: 'explore', route: 'local' } })),
     );
     expect(none).toMatchObject({ rule: 'default', model: { alias: 'opus' } });
   });
@@ -321,7 +321,7 @@ describe('budgets', () => {
 });
 
 describe('outages', () => {
-  test('the start model down: the nearest step up', () => {
+  test('the current model down: the nearest step up', () => {
     const r = router(LADDER, { fast: model('fast', 'local', 32_000, false) });
     const d = routed(r.decide(input()));
     expect(d).toMatchObject({ rule: 'fallback', model: { alias: 'large' }, step: 1 });
@@ -350,7 +350,7 @@ describe('outages', () => {
 
   test('remote off: an outage never falls back to a remote model', () => {
     const r = router(
-      { start: ['fast'], escalate: ['opus'], allowRemote: false },
+      { current: ['fast'], escalate: ['opus'], allowRemote: false },
       { fast: model('fast', 'local', 32_000, false) },
     );
     expect(r.decide(input())).toMatchObject({ kind: 'block', rule: 'fallback' });
@@ -375,7 +375,7 @@ describe('privacy', () => {
   });
 
   test('never asks to escalate a private session', () => {
-    const r = router({ start: ['fast'], escalate: ['opus'], escalation: { policy: 'ask' } });
+    const r = router({ current: ['fast'], escalate: ['opus'], escalation: { policy: 'ask' } });
     const d = routed(r.decide(input({ signals: stuck, privacy })));
     expect(d).toMatchObject({ rule: 'privacy', model: { alias: 'fast' } });
   });
@@ -394,7 +394,7 @@ describe('privacy', () => {
 });
 
 describe('refusals', () => {
-  const r = router({ start: ['fast'], escalate: [['opus', 'sonnet'], 'haiku'] });
+  const r = router({ current: ['fast'], escalate: [['opus', 'sonnet'], 'haiku'] });
 
   test('retry on another model of the same step, and say who declined', () => {
     const d = routed(r.decide(input({ refused: ['opus'], refusalRetry: true })));
@@ -434,7 +434,7 @@ describe('agent budgets', () => {
   });
 
   test('spent with no local model: the subagent is stopped', () => {
-    const d = router({ start: ['haiku'], escalate: ['opus'] }).decide(
+    const d = router({ current: ['haiku'], escalate: ['opus'] }).decide(
       input({ signals: on(1), invocationBudget: budget(0.6) }),
     );
     expect(d).toMatchObject({ kind: 'block', rule: 'agent-budget' });

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SwitchbackClient, spawnEngine } from '@switchback/client';
 import { parseJsonc } from '@switchback/engine';
-import type { EngineEvent } from '@switchback/protocol';
+import { type EngineEvent, PROTOCOL_VERSION } from '@switchback/protocol';
 
 const home = mkdtempSync(join(tmpdir(), 'switchback-home-'));
 afterAll(() => rmSync(home, { recursive: true, force: true }));
@@ -23,7 +23,7 @@ test('serve --stdio completes a turn for an out-of-process client', async () => 
   });
   const client = new SwitchbackClient(transport);
   const init = await client.initialize({ name: 'e2e', version: '0' }, process.cwd());
-  expect(init.protocolVersion).toBe(1);
+  expect(init.protocolVersion).toBe(PROTOCOL_VERSION);
 
   const session = await client.request('session.create', {});
   const events: EngineEvent[] = [];

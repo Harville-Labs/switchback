@@ -83,7 +83,7 @@ function setup(answer: PermissionDecision = 'allow_once', fails = false) {
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
-      routing: { start: ['local'], allowRemote: false },
+      routing: { current: ['local'], allowRemote: false },
       permissions: { edit: 'allow' },
     }),
     providers: new Map<string, Provider>([['lp', lp]]),

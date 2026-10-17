@@ -32,7 +32,7 @@ Both clients show each review: `âœ“ Reviewed by claude-opus-5: approved`, or `â†
 
 Each round, the first reviewer from the current place in the ladder that:
 
-- **didn't write the change.** A model never reviews its own work. If the start model and a reviewer are the same model, that reviewer is passed over.
+- **didn't write the change.** A model never reviews its own work. If the current model and a reviewer are the same model, that reviewer is passed over.
 - **is up.**
 - **if remote, is allowed:** not with `routing.allowRemote: false`, an organization's remote switch, a spent budget, or a [private session](privacy.md). Local reviewers are free and always allowed, so private and offline sessions can still be reviewed.
 
@@ -56,7 +56,7 @@ A reviewer that fails or returns something unreadable is reported as skipped; th
   "large": { "provider": "gpu-box", "model": "qwen3-coder-480b" },
   "opus":  { "provider": "anthropic", "model": "claude-opus-5" }
 },
-"routing": { "start": ["fast"], "escalate": ["large", "opus"] },
+"routing": { "current": ["fast"], "escalate": ["large", "opus"] },
 "review": { "mode": "auto" }      // reviewers: large, then opus
 ```
 

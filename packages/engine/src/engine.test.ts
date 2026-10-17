@@ -31,7 +31,7 @@ function setup(
     permissions: { edit: 'allow', bash: 'deny' },
     ...overrides,
     routing: {
-      start: ['local'],
+      current: ['local'],
       escalate: [['remote']],
       ...(overrides as { routing?: object } | undefined)?.routing,
     },
@@ -74,7 +74,7 @@ describe('Engine', () => {
         local: { provider: 'lp', model: 'small' },
         remote: { provider: 'rp', model: 'big' },
       },
-      routing: { start: ['local'], escalate: [['remote']] },
+      routing: { current: ['local'], escalate: [['remote']] },
     });
     const lp = Object.assign(new ScriptedProvider('lp', 'local', [{ text: 'local' }]), {
       contextWindow: async () => ({ contextWindow: 1_000, source: 'test' }),
@@ -107,7 +107,7 @@ describe('Engine', () => {
       const config = SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' } },
         models: { m: { provider: 'lp', model: 'small', ...model } },
-        routing: { start: ['m'] },
+        routing: { current: ['m'] },
       });
       const lp = Object.assign(new ScriptedProvider('lp', 'local', [{ text: 'a' }]), {
         contextWindow: async () => ({ contextWindow: 6_000, source: 'test' }),
@@ -220,7 +220,7 @@ describe('Engine', () => {
           large: { provider: 'gp', model: 'large', contextWindow: 128_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: { start: ['local'], escalate: ['large', 'remote'] },
+        routing: { current: ['local'], escalate: ['large', 'remote'] },
         permissions: { edit: 'allow', bash: 'deny' },
       }),
       providers: new Map([
@@ -565,7 +565,7 @@ describe('several providers at once', () => {
           sol: { provider: 'openai', model: 'gpt-6-sol' },
           pro: { provider: 'deepseek', model: 'deepseek-v4-pro' },
         },
-        routing: { start: ['small', 'big'], escalate: [['sol', 'pro']] },
+        routing: { current: ['small', 'big'], escalate: [['sol', 'pro']] },
       }),
       providers: new Map<string, Provider>([
         ['laptop', laptop],
@@ -604,7 +604,7 @@ describe('refusal fallback', () => {
           opus: { provider: 'anthropic', model: 'claude-opus-5' },
           sol: { provider: 'openai', model: 'gpt-6-sol' },
         },
-        routing: { start: ['opus', 'sol'] },
+        routing: { current: ['opus', 'sol'] },
       }),
       providers: new Map<string, Provider>([
         ['anthropic', anthropic],
@@ -633,7 +633,7 @@ describe('refusal fallback', () => {
 
   test('with no other remote model the refusal ends the turn as a refusal', async () => {
     const { engine } = setup([], [{ text: 'no', stopReason: 'refusal' }], {
-      config: { routing: { start: ['remote'], escalate: [] } },
+      config: { routing: { current: ['remote'], escalate: [] } },
     });
     const r = await engine.runTurn(engine.createSession({}).id, 'hi');
     expect(r.stopReason).toBe('refusal');
@@ -649,7 +649,7 @@ describe('prompt caching', () => {
         { text: 'it says hello' },
         { text: 'second answer' },
       ],
-      { config: { routing: { start: ['remote'], escalate: [] } } },
+      { config: { routing: { current: ['remote'], escalate: [] } } },
     );
     const s = engine.createSession({});
     await engine.runTurn(s.id, 'read hello.txt');
@@ -687,7 +687,7 @@ describe('prompt caching', () => {
             ? { toolCalls: [{ name: 'read', input: { path: 'hello.txt', n: i } }], usage }
             : { text: 'done', usage },
         ),
-        { config: { routing: { start: ['remote'], escalate: [] } } },
+        { config: { routing: { current: ['remote'], escalate: [] } } },
       );
       await engine.runTurn(engine.createSession({}).id, 'go');
       return events.filter(
@@ -741,7 +741,7 @@ describe('per-agent budgets', () => {
           local: { provider: 'lp', model: 'small', contextWindow: 100_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: { start: ['local'], escalate: [['remote']], fallback: 'none' },
+        routing: { current: ['local'], escalate: [['remote']], fallback: 'none' },
       }),
       providers: new Map<string, Provider>([
         ['lp', lp],
@@ -816,7 +816,7 @@ describe('background subagents', () => {
       config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' } },
         models: { local: { provider: 'lp', model: 'small', contextWindow: 100_000 } },
-        routing: { start: ['local'], allowRemote: false },
+        routing: { current: ['local'], allowRemote: false },
       }),
       providers: new Map<string, Provider>([['lp', lp]]),
     });
@@ -896,7 +896,7 @@ describe('token counting', () => {
           local: { provider: 'lp', model: 'small', contextWindow },
           remote: { provider: 'rp', model: 'big', contextWindow: 1_000_000 },
         },
-        routing: { start: ['local'], escalate: [['remote']] },
+        routing: { current: ['local'], escalate: [['remote']] },
       }),
       providers: new Map<string, Provider>([
         ['lp', lp],
@@ -1025,11 +1025,11 @@ describe('session roles', () => {
     );
     const a = engine.createSession({});
     const b = engine.createSession({});
-    const roles = engine.setRoles({ sessionId: a.id, start: ['remote'] });
+    const roles = engine.setRoles({ sessionId: a.id, current: ['remote'] });
     expect(roles).toMatchObject({
-      start: ['remote'],
+      current: ['remote'],
       escalate: [['remote']],
-      overridden: ['start'],
+      overridden: ['current'],
     });
     expect(events.find((e) => e.type === 'roles.updated')).toMatchObject({ sessionId: a.id });
     expect((await engine.runTurn(a.id, 'hi')).text).toBe('remote');
@@ -1049,7 +1049,7 @@ describe('session roles', () => {
   test('unknown models are refused, and an organization can lock a role', () => {
     const { engine } = setup([], []);
     const s = engine.createSession({});
-    expect(() => engine.setRoles({ sessionId: s.id, start: ['ghost'] })).toThrow(
+    expect(() => engine.setRoles({ sessionId: s.id, current: ['ghost'] })).toThrow(
       '"ghost" is not a configured model',
     );
     const org = setup([], [], {
@@ -1068,7 +1068,9 @@ describe('session roles', () => {
     expect(() => org.engine.setRoles({ sessionId: o.id, escalate: [['local']] })).toThrow(
       "Acme's policy sets routing.escalate",
     );
-    expect(org.engine.setRoles({ sessionId: o.id, start: ['remote'] }).start).toEqual(['remote']);
+    expect(org.engine.setRoles({ sessionId: o.id, current: ['remote'] }).current).toEqual([
+      'remote',
+    ]);
   });
 
   test('save writes the roles to the user config as the default', () => {
@@ -1083,7 +1085,7 @@ describe('session roles', () => {
     });
     expect(r.savedTo).toBe(file);
     const saved = JSON.parse(readFileSync(file, 'utf8'));
-    expect(saved.routing).toEqual({ start: ['local'], escalate: [['remote']] });
+    expect(saved.routing).toEqual({ current: ['local'], escalate: [['remote']] });
     expect(saved.review).toEqual({ mode: 'auto', models: [['remote']] });
   });
 
@@ -1095,7 +1097,7 @@ describe('session roles', () => {
     await client.initialize({ name: 'test', version: '0' }, root);
     const session = await client.request('session.create', {});
     expect(await client.request('session.roles', { sessionId: session.id })).toMatchObject({
-      start: ['local'],
+      current: ['local'],
       overridden: [],
     });
     const changed = await client.request('session.setRoles', {

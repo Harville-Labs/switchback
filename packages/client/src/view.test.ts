@@ -348,7 +348,7 @@ describe('roles and the ladder', () => {
     },
   ];
   const roles = {
-    start: ['fast'],
+    current: ['fast'],
     escalate: [['large'], ['opus']],
     review: { mode: 'auto' as const, models: [] },
     overridden: ['escalate' as const],
@@ -378,7 +378,7 @@ describe('roles and the ladder', () => {
   test('roles and models read clearly, marking session changes', () => {
     expect(formatRoles(roles, models)).toBe(
       [
-        'start      fast (qwen3:8b, local)',
+        'current    fast (qwen3:8b, local)',
         'escalate   large (qwen3-coder-480b, local) → opus (claude-opus-5, remote)  (this session)',
         'review     the escalation ladder',
         'subagents  normal routing',

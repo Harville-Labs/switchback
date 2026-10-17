@@ -43,7 +43,7 @@ function setup(start: string, billing: 'subscription' | 'api' = 'subscription') 
       local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
       cc: { provider: 'claude', model: 'sonnet', contextWindow: 200_000 },
     },
-    routing: { start: [start], escalate: [['cc']] },
+    routing: { current: [start], escalate: [['cc']] },
   });
   const tasks: RuntimeTask[] = [];
   const lp = new ScriptedProvider('lp', 'local', [{ text: 'local answer' }]);

@@ -109,7 +109,7 @@ export class ModelDirectory {
     const routing = this.config.routing;
     // With several local models, ask the first reachable one whose threshold
     // is close; the others either clearly fit or clearly don't.
-    for (const alias of routing.start) {
+    for (const alias of routing.current) {
       const local = this.info(alias);
       if (local?.tier !== 'local' || !local.available) continue;
       if (!nearThreshold(estimate, local.contextWindow * routing.escalation.contextHeadroom))

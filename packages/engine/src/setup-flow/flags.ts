@@ -10,8 +10,8 @@ export interface SetupFlags {
   /** Local models in order of preference; `contextWindows` pairs with them by position. */
   localModels: string[];
   contextWindows: number[];
-  /** Roles by alias or model ID; defaults from `defaultRoles`. `start` is a chain. */
-  start?: string[];
+  /** Roles by alias or model ID; defaults from `defaultRoles`. `current` is a chain. */
+  current?: string[];
   /** Escalation steps in order; each an alias, or a comma-separated chain. */
   escalate?: string[];
   /** `off`, `ladder` (the escalation ladder), or comma-separated reviewers in order. */

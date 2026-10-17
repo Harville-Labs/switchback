@@ -12,7 +12,7 @@ test('escalating now sends the next prompt one step up, then stays there a while
       remote: { provider: 'rp', model: 'big', contextWindow: 200_000 },
     },
     // `ask` would prompt for an automatic escalation; the user's own doesn't.
-    routing: { start: ['local'], escalate: [['remote']], escalation: { policy: 'ask' } },
+    routing: { current: ['local'], escalate: [['remote']], escalation: { policy: 'ask' } },
   });
   const lp = new ScriptedProvider('lp', 'local', [{ text: 'local' }]);
   const rp = new ScriptedProvider('rp', 'remote', [{ text: 'remote' }, { text: 'remote again' }]);
