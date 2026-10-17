@@ -14,7 +14,8 @@ import type { AttachChoice, EditorContextState } from './context.ts';
 
 export type HostToWebview =
   | { type: 'ready'; init: InitializeResult; session: SessionSummary; route: RoutePreference }
-  | { type: 'session'; session: SessionSummary }
+  /** A new session: in the tab in front, or (`tab: 'new'`) in a new tab. */
+  | { type: 'session'; session: SessionSummary; tab?: 'new' }
   | { type: 'event'; event: EngineEvent }
   | { type: 'route'; route: RoutePreference }
   | { type: 'usage'; usage: UsageReport }
@@ -23,9 +24,14 @@ export type HostToWebview =
   | { type: 'context'; state: EditorContextState }
   /** Turn on the selection chip and focus the input (Ask About Selection). */
   | { type: 'attachSelection' }
-  | { type: 'history'; session: SessionSummary; messages: Message[] }
-  /** Which models fill the session's roles; sent whenever the session changes. */
-  | { type: 'roles'; roles: SessionRoles }
+  /** A saved session's history: in the tab in front, or (`tab: 'new'`) in a new tab. */
+  | { type: 'history'; session: SessionSummary; messages: Message[]; tab?: 'new' }
+  /** Which models fill a session's roles; sent whenever the session in front changes. */
+  | { type: 'roles'; roles: SessionRoles; sessionId: string }
+  /** The workspace's sessions, for the tabs' titles and the dashboard. */
+  | { type: 'sessions'; sessions: SessionSummary[] }
+  /** Show the sessions dashboard (Switchback: Show Sessions). */
+  | { type: 'showDashboard' }
   /** Custom slash commands, for the menu; sent on connect and after each turn. */
   | { type: 'commands'; commands: CustomCommandInfo[] }
   /** Output of a slash command the host ran, shown in the chat. */
@@ -57,6 +63,15 @@ export type WebviewToHost =
   | { type: 'escalation'; requestId: string; approve: boolean }
   | { type: 'setRoute'; route: RoutePreference }
   | { type: 'newSession'; agent?: string }
+  /** A new session in a new tab. */
+  | { type: 'newTab' }
+  /** Bring a session forward: its tab, or a new tab when it's open in another window. */
+  | { type: 'switchTab'; sessionId: string }
+  /** The dashboard opened: send the workspace's sessions. */
+  | { type: 'listSessions' }
+  /** The model dropdown: make a model current, or save the session's roles as the default. */
+  | { type: 'setCurrent'; alias: string }
+  | { type: 'saveRoles' }
   | { type: 'copy'; text: string }
   | { type: 'insert'; text: string }
   | { type: 'openLink'; href: string }
@@ -69,4 +84,4 @@ export type WebviewToHost =
   /** A slash command the webview can't run itself (`name` is from `SLASH_COMMANDS`). */
   | { type: 'command'; name: string; args: string[] };
 
-export type RoleName = 'start' | 'escalate' | 'review' | 'subagents';
+export type RoleName = 'current' | 'escalate' | 'review' | 'subagents';

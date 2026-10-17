@@ -77,7 +77,7 @@ function setup(local: Script, remote: Script, config: object = {}) {
         local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
         remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
       },
-      routing: { start: ['local'], escalate: [['remote']] },
+      routing: { current: ['local'], escalate: [['remote']] },
       permissions: { edit: 'allow' },
       review: { mode: 'auto' },
       ...config,
@@ -167,7 +167,7 @@ describe('draft locally, review with a stronger model', () => {
 
   test('never remote when remote models are off or for a private session', async () => {
     const a = setup([edit('a - b', 'a + b'), { text: 'ok' }], [{ text: APPROVE }], {
-      routing: { start: ['local'], escalate: [['remote']], allowRemote: false },
+      routing: { current: ['local'], escalate: [['remote']], allowRemote: false },
     });
     await a.engine.runTurn(a.engine.createSession({}).id, 'fix add');
     expect(reviews(a.events)).toMatchObject([
@@ -197,7 +197,7 @@ describe('draft locally, review with a stronger model', () => {
           reviewer: { provider: 'big', model: 'large-local', contextWindow: 128_000 },
         },
         permissions: { edit: 'allow' },
-        routing: { start: ['local'], allowRemote: false },
+        routing: { current: ['local'], allowRemote: false },
         review: { mode: 'auto', models: ['reviewer'] },
       }),
       providers: new Map([
@@ -277,7 +277,7 @@ describe('review ladder', () => {
           large: { provider: 'gp', model: 'large-local', contextWindow: 128_000 },
           remote: { provider: 'rp', model: 'claude-opus-5', contextWindow: 1_000_000 },
         },
-        routing: { start: ['local'], escalate: ['large', 'remote'] },
+        routing: { current: ['local'], escalate: ['large', 'remote'] },
         permissions: { edit: 'allow' },
         review: { mode: 'auto', maxRounds: 4 },
       }),
@@ -318,7 +318,7 @@ describe('review ladder', () => {
 
   test('no reviewer configured: skipped with the reason', async () => {
     const a = setup([edit('a - b', 'a + b'), { text: 'ok' }], [], {
-      routing: { start: ['local'] },
+      routing: { current: ['local'] },
     });
     await a.engine.runTurn(a.engine.createSession({}).id, 'fix add');
     expect(reviews(a.events)[0]?.summary).toContain('no reviewer is configured');

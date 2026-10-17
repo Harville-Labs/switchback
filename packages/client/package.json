@@ -8,8 +8,10 @@
     ".": "./src/index.ts",
     "./view": "./src/view.ts",
     "./format": "./src/format.ts",
+    "./models": "./src/models.ts",
     "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts",
+    "./tabs": "./src/tabs.ts",
     "./tool-display": "./src/tool-display.ts",
     "./worktrees": "./src/worktrees.ts"
   },

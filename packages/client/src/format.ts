@@ -358,10 +358,10 @@ export function formatReviewers(roles: SessionRoles, models?: ModelSummary[]): s
   return `the escalation ladder${roles.escalate.length ? '' : ' (empty: nobody reviews)'}`;
 }
 
-/** The roles a model fills: `start`, `step 2`, `reviews`, `subagents`. */
+/** The roles a model fills: `current`, `step 2`, `reviews`, `subagents`. */
 export function rolesOfModel(alias: string, roles: SessionRoles): string[] {
   return [
-    roles.start.includes(alias) ? 'start' : '',
+    roles.current.includes(alias) ? 'current' : '',
     ...roles.escalate.flatMap((step, i) => (step.includes(alias) ? [`step ${i + 1}`] : [])),
     roles.review.models.some((s) => s.includes(alias)) ? 'reviews' : '',
     roles.subagents === alias ? 'subagents' : '',
@@ -373,14 +373,14 @@ export function formatRoles(roles: SessionRoles, models: ModelSummary[]): string
   const mark = (k: SessionRoles['overridden'][number]) =>
     roles.overridden.includes(k) ? '  (this session)' : '';
   return [
-    `start      ${formatSteps([roles.start], models) || '(none)'}${mark('start')}`,
+    `current    ${formatSteps([roles.current], models) || '(none)'}${mark('current')}`,
     `escalate   ${formatSteps(roles.escalate, models) || '(nothing)'}${mark('escalate')}`,
     `review     ${formatReviewers(roles, models)}${mark('review')}`,
     `subagents  ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
   ].join('\n');
 }
 
-/** Where the session is on the escalation ladder, for a status line; empty at the start model. */
+/** Where the session is on the escalation ladder, for a status line; empty on the current model. */
 export function formatLadder(ladder: ViewState['ladder']): string {
   if (!ladder || ladder.step === 0) return '';
   const sticky = ladder.stickyTurns ? `, ${ladder.stickyTurns} more` : '';

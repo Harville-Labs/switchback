@@ -81,7 +81,7 @@ describe('images in a session', () => {
     const config = SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'small', contextWindow: 32_000, vision } },
-      routing: { start: ['local'] },
+      routing: { current: ['local'] },
       permissions: { read: 'allow' },
       ...extra,
     });

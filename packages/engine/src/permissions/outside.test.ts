@@ -50,7 +50,7 @@ function run(
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { m: { provider: 'lp', model: 'small', contextWindow: 32_000 } },
-      routing: { start: ['m'] },
+      routing: { current: ['m'] },
       ...config,
     }),
     providers: new Map<string, Provider>([['lp', lp]]),

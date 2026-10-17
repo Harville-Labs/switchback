@@ -125,7 +125,7 @@ export interface ViewState {
   context?: { tokens: number; window: number };
   /** The last call's speed, for status lines. */
   speed?: { model: string; tokensPerSecond: number };
-  /** Where the last call ran on the escalation ladder (`step` 0 is the start model). */
+  /** Where the last call ran on the escalation ladder (`step` 0 is the current model). */
   ladder?: { step: number; steps: number; model: string; stickyTurns?: number };
   /** The session's roles, once they're known (`session.roles`) or changed. */
   roles?: SessionRoles;

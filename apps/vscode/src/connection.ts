@@ -14,7 +14,7 @@ import { runChatCommand } from './chat-commands.ts';
 import type { EditorContext } from './context.ts';
 import { chooseEngine, type EngineBinary, findCli, probeVersion } from './engine-binary.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
-import { chooseAgent, chooseMode, chooseRole } from './pickers.ts';
+import { chooseAgent, chooseMode, chooseRole, setCurrentModel } from './pickers.ts';
 import type { EditReview } from './review.ts';
 import { VERSION } from './version.ts';
 
@@ -58,7 +58,10 @@ export async function resolveEngine(
 export class EngineConnection implements vscode.Disposable {
   client: SwitchbackClient | undefined;
   init: InitializeResult | undefined;
+  /** The session in the tab in front: where prompts go. */
   session: SessionSummary | undefined;
+  /** Sessions seen, by ID, so switching tabs needn't fetch a transcript. */
+  private readonly known = new Map<string, SessionSummary>();
   route: RoutePreference;
   context: EditorContext | undefined;
   /** Review of local edits for this window; undefined follows `review.mode`. */
@@ -167,6 +170,12 @@ export class EngineConnection implements vscode.Disposable {
       }
       if (event.type === 'turn.completed' && event.sessionId === this.session?.id)
         void this.sendCommands();
+      // Titles arrive with a session's first turn; the tabs and dashboard show them.
+      if (
+        (event.type === 'turn.started' || event.type === 'turn.completed') &&
+        !event.parentSessionId
+      )
+        void this.listSessions();
       if (event.type === 'log') this.log.appendLine(`[${event.level}] ${event.message}`);
       if (
         event.type === 'permission.requested' &&
@@ -186,7 +195,7 @@ export class EngineConnection implements vscode.Disposable {
     });
     this.init = init ?? (await client.initialize({ name: 'vscode', version: VERSION }, this.root));
     this.client = client;
-    this.session = await client.request('session.create', {});
+    this.session = this.remember(await client.request('session.create', {}));
     this.updateStatus(0);
     this.broadcast({ type: 'ready', init: this.init, session: this.session, route: this.route });
     if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
@@ -217,23 +226,59 @@ export class EngineConnection implements vscode.Disposable {
     if (pick) await this.showSession(pick.id);
   }
 
-  /** Make a saved session the chat's session and show its history. */
-  async showSession(sessionId: string): Promise<void> {
+  /** Make a saved session the chat's session and show its history (in a new tab with `tab`). */
+  async showSession(sessionId: string, tab?: 'new'): Promise<void> {
     const c = this.client;
     if (!c) return;
     const { session, messages } = await c.request('session.get', { sessionId });
-    this.session = session;
+    this.session = this.remember(session);
     this.updateStatus(session.costUsd);
-    this.broadcast({ type: 'history', session, messages });
+    this.broadcast({ type: 'history', session, messages, ...(tab ? { tab } : {}) });
     await this.sendRoles();
   }
 
-  async newSession(agent?: string) {
+  /** A new session, in the tab in front or (`tab`) in a new one. */
+  async newSession(agent?: string, tab?: 'new') {
     if (!this.client) return;
-    this.session = await this.client.request('session.create', agent ? { agent } : {});
+    this.session = this.remember(
+      await this.client.request('session.create', agent ? { agent } : {}),
+    );
     this.updateStatus(0);
-    this.broadcast({ type: 'session', session: this.session });
+    this.broadcast({ type: 'session', session: this.session, ...(tab ? { tab } : {}) });
     await this.sendRoles();
+  }
+
+  /**
+   * The chat brought a tab forward: its session gets the prompts now. One
+   * that's open in another window and not here yet opens in a new tab.
+   */
+  async switchTab(sessionId: string) {
+    if (sessionId === this.session?.id) return;
+    const known = this.known.get(sessionId);
+    if (!known) return this.showSession(sessionId, 'new');
+    this.session = known;
+    this.updateStatus(known.costUsd);
+    await this.sendRoles();
+  }
+
+  /** Every session in the workspace, for the tabs' titles and the dashboard. */
+  async listSessions() {
+    const sessions = await this.client?.request('session.list', {}).catch(() => undefined);
+    if (!sessions) return;
+    for (const s of sessions) this.remember(s);
+    this.broadcast({ type: 'sessions', sessions });
+  }
+
+  /** Show the dashboard in the chat (Switchback: Show Sessions). */
+  async showDashboard() {
+    await vscode.commands.executeCommand('switchback.chat.focus');
+    this.broadcast({ type: 'showDashboard' });
+    await this.listSessions();
+  }
+
+  private remember(s: SessionSummary): SessionSummary {
+    this.known.set(s.id, s);
+    return s;
   }
 
   setRoute(route: RoutePreference) {
@@ -326,6 +371,21 @@ export class EngineConnection implements vscode.Disposable {
       case 'newSession':
         await this.newSession(m.agent);
         return;
+      case 'newTab':
+        await this.newSession(undefined, 'new');
+        return;
+      case 'switchTab':
+        await this.switchTab(m.sessionId);
+        return;
+      case 'listSessions':
+        await this.listSessions();
+        return;
+      case 'setCurrent':
+        await setCurrentModel(this, { alias: m.alias });
+        return;
+      case 'saveRoles':
+        await setCurrentModel(this, { save: true });
+        return;
       case 'chooseRole':
         await chooseRole(this, m.role);
         return;
@@ -380,8 +440,9 @@ export class EngineConnection implements vscode.Disposable {
   /** Tell the chat which models fill the session's roles (after any session change). */
   async sendRoles() {
     this.ladder = undefined;
+    const sessionId = this.session?.id;
     const roles = await this.currentRoles().catch(() => undefined);
-    if (roles) this.broadcast({ type: 'roles', roles });
+    if (roles && sessionId) this.broadcast({ type: 'roles', roles, sessionId });
   }
 
   /** Custom commands to the menu; the engine rescans their files on each list. */

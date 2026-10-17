@@ -159,7 +159,7 @@ async function main() {
         'qwen3-coder': { provider: 'local', model: 'qwen3-coder', contextWindow: 65_536 },
         'claude-opus-5': { provider: 'cloud', model: 'claude-opus-5', contextWindow: 200_000 },
       },
-      routing: { start: ['qwen3-coder'], escalate: [['claude-opus-5']] },
+      routing: { current: ['qwen3-coder'], escalate: [['claude-opus-5']] },
       permissions: { allow: ['bash(bun test:*)'] },
     }),
   );

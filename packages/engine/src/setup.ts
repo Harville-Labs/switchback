@@ -13,7 +13,14 @@ import {
   type Price,
 } from '@switchback/providers';
 import { applyEdits, type JSONPath, modify } from 'jsonc-parser';
-import { deepMerge, layerProblem, parseJsonc, removedKeysIn } from './config.ts';
+import {
+  deepMerge,
+  layerProblem,
+  parseJsonc,
+  removedKeysIn,
+  renamedKeysIn,
+  withRenamedKeys,
+} from './config.ts';
 
 export {
   type DetectedModel,
@@ -113,7 +120,7 @@ export type RemoteAnswer =
  * reviewers are the escalation ladder), or reviewers in order.
  */
 export interface Roles {
-  start: string[];
+  current: string[];
   escalate: string[][];
   review: 'off' | 'ladder' | string[][];
   /** Default model for subagents that don't pin one; normal routing when unset. */
@@ -242,7 +249,7 @@ export function defaultRoles(models: PlannedModel[]): Roles {
   const ordered = [...locals, ...remotes];
   const [first, ...rest] = ordered;
   return {
-    start: first ? [first.alias] : [],
+    current: first ? [first.alias] : [],
     escalate: rest.map((m) => [m.alias]),
     review: 'off',
   };
@@ -396,7 +403,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
     if (!known.has(alias))
       throw new Error(`${role} names "${alias}", which isn't one of the chosen models`);
   };
-  for (const alias of roles.start) check(alias, 'start');
+  for (const alias of roles.current) check(alias, 'current');
   for (const step of roles.escalate) for (const alias of step) check(alias, 'escalate');
   if (Array.isArray(roles.review))
     for (const step of roles.review) for (const alias of step) check(alias, 'review');
@@ -404,7 +411,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
 
   // Every role is written in full, so re-running setup replaces earlier choices.
   const routing: Record<string, unknown> = {
-    start: roles.start,
+    current: roles.current,
     escalate: roles.escalate,
     escalation: { policy: a.escalationPolicy },
   };
@@ -473,6 +480,16 @@ export function writeConfigLayer(
   // failing on it.
   for (const { path } of removedKeysIn(parseJsonc(text)))
     if (path[0] && path[0] in layer) text = applyEdits(text, modify(text, path, undefined, {}));
+  // Renamed keys move to their new name, keeping their value, whatever the layer writes.
+  for (const { from, to } of renamedKeysIn(parseJsonc(text))) {
+    const value = withRenamedKeys(parseJsonc(text) as Record<string, unknown>);
+    const moved = to.reduce<unknown>((n, k) => (n as Record<string, unknown>)[k], value);
+    text = applyEdits(text, modify(text, from, undefined, {}));
+    text = applyEdits(
+      text,
+      modify(text, to, moved, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
+    );
+  }
   for (const key of options.replace ?? [])
     text = applyEdits(text, modify(text, [key], undefined, {}));
   const existing = parseJsonc(text) as Record<string, unknown>;

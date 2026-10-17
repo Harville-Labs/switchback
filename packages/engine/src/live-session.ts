@@ -59,7 +59,7 @@ export interface LiveSession {
   private?: string;
   /** Roles this session changed (`session.setRoles`); its subagents follow them. */
   roles?: {
-    start?: string[];
+    current?: string[];
     escalate?: string[][];
     review?: { mode?: 'off' | 'auto'; models?: string[][] };
     subagents?: string | null;

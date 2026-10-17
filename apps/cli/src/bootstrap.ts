@@ -53,10 +53,10 @@ export function mockify(config: SwitchbackConfig): SwitchbackConfig {
       maxOutputTokens: 16_000,
     };
   };
-  // A mock start model, and a mock remote step to escalate to, where the roles have none.
+  // A mock current model, and a mock remote step to escalate to, where the roles have none.
   if (!inRoles('local')) {
     add('local');
-    routing.start = ['local', ...routing.start.filter((a) => a !== 'local')];
+    routing.current = ['local', ...routing.current.filter((a) => a !== 'local')];
   }
   // Never invent remote models that policy or config has switched off.
   if (!inRoles('remote') && routing.allowRemote) {

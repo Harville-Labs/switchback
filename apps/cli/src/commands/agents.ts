@@ -170,7 +170,7 @@ async function interview(flags: AgentNewFlags, p: Prompter | undefined): Promise
           {
             label: 'Automatic',
             value: undefined,
-            hint: 'routes like any turn: the start model, escalating when needed',
+            hint: 'routes like any turn: the current model, escalating when needed',
           },
           { label: 'Any local model', value: 'local', hint: 'never costs money' },
           { label: 'Any hosted model', value: 'remote', hint: 'the first in your roles' },

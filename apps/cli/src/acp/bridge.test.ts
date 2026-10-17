@@ -26,7 +26,7 @@ async function editor(script: Script, answer = (_: acp.RequestPermissionRequest)
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { m: { provider: 'lp', model: 'small', contextWindow: 8_000 } },
-      routing: { start: ['m'] },
+      routing: { current: ['m'] },
       permissions: { edit: 'ask' },
     }),
     providers: new Map<string, Provider>([['lp', lp]]),

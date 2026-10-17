@@ -23,7 +23,7 @@ type ToolItem = Extract<ViewItem, { kind: 'tool' }>;
 
 /**
  * Route rows that add nothing: any decision that keeps the model already in
- * use, and the first one when it's just the start model (the header names it).
+ * use, and the first one when it's just the current model (the header names it).
  */
 export function quietRoutes(items: ViewItem[]): Set<string> {
   const quiet = new Set<string>();

@@ -75,7 +75,7 @@ function setup(childFails = false) {
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
-      routing: { start: ['local'], allowRemote: false },
+      routing: { current: ['local'], allowRemote: false },
       permissions: { edit: 'allow' },
     }),
     providers: new Map<string, Provider>([['lp', lp]]),
@@ -174,7 +174,7 @@ describe('worktree isolation', () => {
       config: SwitchbackConfig.parse({
         providers: { lp: { type: 'mock', tier: 'local' } },
         models: { local: { provider: 'lp', model: 'm', contextWindow: 100_000 } },
-        routing: { start: ['local'], escalate: [] },
+        routing: { current: ['local'], escalate: [] },
       }),
       providers: new Map<string, Provider>([['lp', lp]]),
     });

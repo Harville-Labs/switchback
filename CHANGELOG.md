@@ -4,6 +4,18 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **Tabs and a sessions dashboard, in the TUI and VS Code.** Open several sessions at once; a tab in the back keeps working and says when it needs you (`?` waiting, `●` working, `✓` finished, `✗` failed). The dashboard (Ctrl+T in the TUI, the grid button or **Switchback: Show Sessions** in VS Code) lists every open tab with what it's doing, its model, and its cost, then the sessions working or waiting in other windows on the shared engine; open one to follow it live. TUI: Alt+1…9 and Alt+←/→ switch, `/tab new|<n>|close`, `/tabs`. VS Code: a tab strip in the chat and **Switchback: New Tab**. Closing a tab doesn't stop its session (ADR 0021)
+- **VS Code: a model dropdown under the input** switches the current model for the session; the models that were current stay as backups. **Make this my default** saves it
+- **TUI: `/current` with no argument opens a model picker**, and the status bar names the current model
+
+### Changed
+- **The `start` role is now the current model**: `routing.current`, `/current`, `--current`, and **Model** in VS Code (ADR 0021). `routing.start`, `/start`, and `--start` still work; Switchback moves `routing.start` to `routing.current` the next time it writes your config
+- Protocol version 2: `SessionRoles.start` and `session.setRoles`' `start` are now `current`
+
+### Fixed
+- A permission prompt from a session open in another window no longer shows in this one's chat
+
 ## [1.3.2] - 2026-10-10
 
 ### Changed

@@ -107,7 +107,7 @@ describe('buildSetupConfig', () => {
     // Claude Code size aliases follow the first hosted provider.
     expect(parsed.models.small?.model).toBe('anthropic.claude-haiku-4-5');
     expect(parsed.routing).toMatchObject({
-      start: ['coder-7b'],
+      current: ['coder-7b'],
       escalate: [['claude-sonnet-5']],
       budget: { dailyUsd: 3 },
       escalation: { policy: 'ask' },
@@ -300,7 +300,7 @@ describe('buildSetupConfig', () => {
       ],
     });
     expect(defaultRoles(plan)).toEqual({
-      start: ['coder-7b'],
+      current: ['coder-7b'],
       escalate: [['big'], ['deepseek-v4-pro'], ['gpt-6-sol'], ['claude-opus-5']],
       review: 'off',
     });
@@ -314,7 +314,7 @@ describe('buildSetupConfig', () => {
         ],
       }),
     );
-    expect(hosted).toMatchObject({ start: ['claude-haiku-4-5'], escalate: [['claude-opus-5']] });
+    expect(hosted).toMatchObject({ current: ['claude-haiku-4-5'], escalate: [['claude-opus-5']] });
   });
 
   test('roles are written as chosen: any model anywhere, a review ladder, a subagent model', () => {
@@ -326,7 +326,7 @@ describe('buildSetupConfig', () => {
           { kind: 'anthropic', model: 'claude-opus-5' },
         ],
         roles: {
-          start: ['claude-haiku-4-5', 'coder-7b'],
+          current: ['claude-haiku-4-5', 'coder-7b'],
           escalate: [['big'], ['claude-opus-5']],
           review: [['big'], ['claude-opus-5']],
           subagents: 'coder-7b',
@@ -335,7 +335,7 @@ describe('buildSetupConfig', () => {
       }),
     );
     expect(parsed.routing).toMatchObject({
-      start: ['claude-haiku-4-5', 'coder-7b'],
+      current: ['claude-haiku-4-5', 'coder-7b'],
       escalate: [['big'], ['claude-opus-5']],
     });
     expect(parsed.review).toMatchObject({ mode: 'auto', models: [['big'], ['claude-opus-5']] });
@@ -351,7 +351,7 @@ describe('buildSetupConfig', () => {
     const layer = buildSetupConfig({
       locals: [local],
       remotes: [{ kind: 'openai', model: 'gpt-6-sol' }],
-      roles: { start: ['coder-7b'], escalate: [['gpt-6-sol']], review: 'ladder' },
+      roles: { current: ['coder-7b'], escalate: [['gpt-6-sol']], review: 'ladder' },
       escalationPolicy: 'auto',
     });
     expect(layer.review).toEqual({ mode: 'auto', models: [] });
@@ -362,10 +362,10 @@ describe('buildSetupConfig', () => {
       buildSetupConfig({
         locals: [local],
         remotes: [],
-        roles: { start: ['ghost'], escalate: [], review: 'off' },
+        roles: { current: ['ghost'], escalate: [], review: 'off' },
         escalationPolicy: 'auto',
       }),
-    ).toThrow('start names "ghost"');
+    ).toThrow('current names "ghost"');
   });
 
   test('several local servers: one provider per server; same-named models get distinct aliases', () => {
@@ -420,7 +420,7 @@ describe('writeConfigLayer', () => {
     expect(written.models.m.model).toBe('m');
     // The written project file loads cleanly through the normal path.
     const { config } = loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') });
-    expect(config.routing).toMatchObject({ start: ['m'], escalate: [] });
+    expect(config.routing).toMatchObject({ current: ['m'], escalate: [] });
   });
 
   test('re-running setup on an old file replaces the removed routing keys', () => {
@@ -436,15 +436,24 @@ describe('writeConfigLayer', () => {
     writeConfigLayer(file, {
       providers: { lp: { type: 'openai-compatible', baseUrl: 'http://localhost:1234/v1' } },
       models: { local: { provider: 'lp', model: 'm' } },
-      routing: { start: ['local'], escalate: [] },
+      routing: { current: ['local'], escalate: [] },
     });
     const text = readFileSync(file, 'utf8');
     expect(text).toContain('// keep me');
     expect(text).not.toContain('"mode"');
     expect((parseJsonc(text) as { routing: unknown }).routing).toMatchObject({
-      start: ['local'],
+      current: ['local'],
       budget: { dailyUsd: 2 },
     });
+  });
+
+  test('writing a layer moves routing.start to routing.current, whatever the layer writes', () => {
+    const file = join(dir, 'config.json');
+    writeFileSync(file, '{\n  // mine\n  "routing": { "start": ["a", "b"] }\n}\n');
+    writeConfigLayer(file, { notifications: { mode: 'bell' } }, { references: false });
+    const text = readFileSync(file, 'utf8');
+    expect(text).toContain('// mine');
+    expect((parseJsonc(text) as { routing: unknown }).routing).toEqual({ current: ['a', 'b'] });
   });
 
   test('keeps the user’s comments and formatting', () => {
@@ -528,7 +537,7 @@ test('writing a section migrates every removed key in it, review.model included'
     writeConfigLayer(file, {
       providers: { lp: { type: 'openai-compatible', baseUrl: 'http://localhost:1234/v1' } },
       models: { m: { provider: 'lp', model: 'm' } },
-      routing: { start: ['m'], escalate: [] },
+      routing: { current: ['m'], escalate: [] },
       review: { mode: 'off', models: [] },
     });
     const written = parseJsonc(readFileSync(file, 'utf8')) as Record<
@@ -561,5 +570,5 @@ test('Claude Code and Codex logins are models like any other, free on a subscrip
   expect(cc).toMatchObject({ model: 'claude-sonnet-5', price: { input: 0, output: 0 } });
   expect(referenceProblem(parsed)).toBeUndefined();
   // They can start turns or be escalated to, like any model.
-  expect(parsed.routing.start.length + parsed.routing.escalate.length).toBe(2);
+  expect(parsed.routing.current.length + parsed.routing.escalate.length).toBe(2);
 });

@@ -26,7 +26,7 @@ test("your AGENTS.md comes before the project's, and both reach subagents", asyn
     config: SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { m: { provider: 'lp', model: 'small', contextWindow: 8_000 } },
-      routing: { start: ['m'] },
+      routing: { current: ['m'] },
     }),
     providers: new Map<string, Provider>([['lp', lp]]),
     userInstructions: 'Use plain words.\n',

@@ -17,7 +17,9 @@ On other platforms, install the `switchback` CLI and the extension uses it from 
 ## Features
 
 - **Chat** with streaming answers, tool activity, and subagents you can expand to see their own work
-- **Routing you can see**: Auto, Local, or Remote buttons above the input, and the models that start, escalate, and review shown right there; click one to change it for the session or save it as your default. Every escalation shows the rule that fired and why
+- **Pick the model in one click**: a model dropdown under the input switches the current model for the session, with the models that were current kept as backups
+- **Routing you can see**: Auto, Local, or Remote buttons under the input, and the models that escalate and review shown right there; click one to change it for the session or save it as your default. Every escalation shows the rule that fired and why
+- **Tabs and a sessions dashboard**: run several sessions side by side; background tabs keep working and say when they need you, and the dashboard shows every session, including ones running in the terminal UI or another window
 - **Edit review**: proposed edits open in the diff editor with Accept and Reject buttons
 - **Editor context**: send the selection, the active file, or its problems with one click, or use **Ask About Selection** from the editor context menu
 - **Cost and savings** in the status bar: session cost, daily budget, and what you saved compared with running everything remotely
@@ -29,6 +31,7 @@ The extension is a thin client of the same engine as the `switchback` terminal U
 <p>
   <img alt="An escalation prompt: the reason, the hosted model, and its estimated cost" src="https://raw.githubusercontent.com/Harville-Labs/switchback/main/apps/vscode/media/screenshots/vscode-escalation.png" width="49%">
   <img alt="A proposed edit's diff, waiting for approval" src="https://raw.githubusercontent.com/Harville-Labs/switchback/main/apps/vscode/media/screenshots/vscode-review.png" width="49%">
+  <img alt="The sessions dashboard: open tabs and what each is doing, and a session working in the terminal" src="https://raw.githubusercontent.com/Harville-Labs/switchback/main/apps/vscode/media/screenshots/vscode-sessions.png" width="49%">
 </p>
 
 ## Settings

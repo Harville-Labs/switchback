@@ -75,7 +75,7 @@ function engineFor(
   models: Record<string, unknown>,
   providers: Record<string, unknown>,
   // Typed, so a removed routing key fails to compile instead of being dropped.
-  routing: { start?: string[]; escalate?: string[][]; allowRemote?: boolean } = {},
+  routing: { current?: string[]; escalate?: string[][]; allowRemote?: boolean } = {},
 ) {
   const config = SwitchbackConfig.parse({
     providers,
@@ -139,7 +139,7 @@ describe.skipIf(!LIVE || !local)('local model', () => {
         },
       },
       { local: { type: 'openai-compatible', baseUrl: local?.baseUrl, tier: 'local' } },
-      { start: ['local'], allowRemote: false },
+      { current: ['local'], allowRemote: false },
     );
 
   test(
@@ -188,7 +188,7 @@ for (const kind of hosted) {
         const { engine, events } = engineFor(
           { remote: remoteModel },
           { [kind]: { type: kind } },
-          { start: ['remote'] },
+          { current: ['remote'] },
         );
         const id = await scenarioRead(engine, events, 'remote');
         const cost = engine.getSession(id).session.costUsd;
@@ -204,7 +204,7 @@ for (const kind of hosted) {
         const { engine } = engineFor(
           { remote: remoteModel },
           { [kind]: { type: kind } },
-          { start: ['remote'] },
+          { current: ['remote'] },
         );
         await scenarioEdit(engine, 'remote');
       },
@@ -217,7 +217,7 @@ for (const kind of hosted) {
         const { engine, events } = engineFor(
           { remote: remoteModel },
           { [kind]: { type: kind } },
-          { start: ['remote'] },
+          { current: ['remote'] },
         );
         await scenarioDelegate(engine, events, 'remote');
       },

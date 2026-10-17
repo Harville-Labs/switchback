@@ -42,8 +42,8 @@ export const ModelChain = z
  * privacy, and `allowRemote`, never which role a model can fill.
  */
 export const RoutingConfig = z.object({
-  /** Where turns begin: a chain of alternatives. */
-  start: ModelChain.default([]),
+  /** The current model: where turns begin, then backups, as a chain of alternatives. */
+  current: ModelChain.default([]),
   /**
    * The escalation ladder. Each escalation moves one step up; each step is an
    * alias or a chain of alternatives (`["large", ["remote", "remote-aws"]]`).

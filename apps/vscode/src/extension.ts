@@ -175,6 +175,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
 
   context.subscriptions.push(
     vscode.commands.registerCommand('switchback.newSession', () => engine?.newSession()),
+    vscode.commands.registerCommand('switchback.newTab', () =>
+      engine?.newSession(undefined, 'new'),
+    ),
+    vscode.commands.registerCommand('switchback.showSessions', () => engine?.showDashboard()),
     vscode.commands.registerCommand('switchback.openSession', () => engine?.openSession()),
     vscode.commands.registerCommand('switchback.rewind', () => engine && chooseRewind(engine)),
     vscode.commands.registerCommand('switchback.acceptEdit', answerEdit('allow_once')),
@@ -219,7 +223,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     vscode.commands.registerCommand('switchback.setRoute', async () => {
       const pick = await vscode.window.showQuickPick(
         [
-          { label: 'auto', description: 'Start on the start model; escalate when it struggles' },
+          { label: 'auto', description: 'Run on the current model; escalate when it struggles' },
           { label: 'local', description: 'Only local models for the next prompts' },
           { label: 'remote', description: 'Only hosted models for the next prompts' },
         ],

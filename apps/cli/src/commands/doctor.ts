@@ -104,9 +104,9 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   }
   if (!roleAliases(r).some((a) => config.models[a])) {
     problems++;
-    out('  ✗ no model is in routing.start or routing.escalate; run `switchback init`');
-  } else if (!r.start.some((a) => config.models[a])) {
-    out('  no start model: turns begin on step 1');
+    out('  ✗ no model is in routing.current or routing.escalate; run `switchback init`');
+  } else if (!r.current.some((a) => config.models[a])) {
+    out('  no current model: turns begin on step 1');
   }
 
   section('Instructions', 'in every session and subagent');

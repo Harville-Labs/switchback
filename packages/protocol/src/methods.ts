@@ -14,7 +14,7 @@ import {
 } from './transcript.ts';
 import type { WorktreeDiff, WorktreeInfo, WorktreesDiffParams } from './worktrees.ts';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export const RoutePreference = z.enum(['auto', 'local', 'remote']);
 export type RoutePreference = z.infer<typeof RoutePreference>;
@@ -57,17 +57,18 @@ export interface DaemonRetireResult {
 }
 
 /**
- * Which models do what in a session (ADR 0015): where turns start, the
+ * Which models do what in a session (ADR 0015): the current model (where turns
+ * begin, then backups), the
  * escalation ladder, the reviewers (`models: []` means the ladder), and the
  * default model for subagents. All by model alias.
  */
 export interface SessionRoles {
-  start: string[];
+  current: string[];
   escalate: string[][];
   review: { mode: 'off' | 'auto'; models: string[][] };
   subagents?: string;
   /** Roles this session changed; the rest follow the config. */
-  overridden: ('start' | 'escalate' | 'review' | 'subagents')[];
+  overridden: ('current' | 'escalate' | 'review' | 'subagents')[];
 }
 
 export const SessionRolesParams = z.object({ sessionId: z.string() });
@@ -76,7 +77,7 @@ export type SessionRolesParams = z.infer<typeof SessionRolesParams>;
 const Step = z.array(z.string().min(1)).min(1);
 export const SessionSetRolesParams = z.object({
   sessionId: z.string(),
-  start: Step.optional(),
+  current: Step.optional(),
   escalate: z.array(Step).optional(),
   review: z
     .object({ mode: z.enum(['off', 'auto']).optional(), models: z.array(Step).optional() })

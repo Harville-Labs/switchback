@@ -61,11 +61,11 @@ export class SessionPolicy {
   /** The router for a session: the config's, or one with the session's own roles. */
   routerFor(s: LiveSession): Router {
     const own = this.deps.sessions.top(s).roles;
-    if (!own?.start && !own?.escalate) return this.router;
+    if (!own?.current && !own?.escalate) return this.router;
     const roles = this.rolesOf(s);
     return this.newRouter({
       ...this.deps.config().routing,
-      start: roles.start,
+      current: roles.current,
       escalate: roles.escalate,
     });
   }

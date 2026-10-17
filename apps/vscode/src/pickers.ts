@@ -2,7 +2,13 @@
  * QuickPick flows that change a session: roles (ADR 0015), review, and the
  * agent for a new session. Shared by the command palette and the chat view.
  */
-import { formatReviewers, formatSteps, MODE_DESCRIPTIONS, modeLabel } from '@switchback/client';
+import {
+  currentChange,
+  formatReviewers,
+  formatSteps,
+  MODE_DESCRIPTIONS,
+  modeLabel,
+} from '@switchback/client';
 import type { InitializeResult, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
@@ -38,9 +44,9 @@ export async function chooseModels(engine: EngineConnection): Promise<void> {
   const pick = await vscode.window.showQuickPick(
     [
       {
-        label: 'Start with',
-        description: formatSteps([roles.start]) || 'none',
-        role: 'start' as const,
+        label: 'Current model',
+        description: formatSteps([roles.current]) || 'none',
+        role: 'current' as const,
       },
       {
         label: 'Escalate to',
@@ -101,12 +107,17 @@ async function roleChange(
   switch (role) {
     case 'reset':
       return { reset: true };
-    case 'start': {
-      const start = await pickOrdered('Start with (then backups, in order)', models, [], false);
-      return start?.length ? { start } : undefined;
+    case 'current': {
+      const current = await pickOrdered(
+        'Current model (then backups, in order)',
+        models,
+        [],
+        false,
+      );
+      return current?.length ? { current } : undefined;
     }
     case 'escalate': {
-      const ladder = await pickOrdered('Escalate to (in order)', models, roles.start, true);
+      const ladder = await pickOrdered('Escalate to (in order)', models, roles.current, true);
       return ladder ? { escalate: ladder.map((a) => [a]) } : undefined;
     }
     case 'review': {
@@ -155,6 +166,32 @@ async function reviewChange(
   return reviewers?.length
     ? { review: { mode: 'auto', models: reviewers.map((a) => [a]) } }
     : undefined;
+}
+
+/**
+ * The chat's model dropdown: make a model current for this session (the
+ * previous ones stay as backups), or save the session's choice as the default.
+ */
+export async function setCurrentModel(
+  engine: EngineConnection,
+  choice: { alias: string } | { save: true },
+): Promise<void> {
+  const { client, session } = engine;
+  const roles = await engine.currentRoles();
+  if (!client || !session || !roles) return;
+  try {
+    if ('save' in choice) {
+      const r = await client.request('session.setRoles', { sessionId: session.id, save: true });
+      void vscode.window.showInformationMessage(`Saved as your default in ${r.savedTo}.`);
+      return;
+    }
+    await client.request('session.setRoles', {
+      sessionId: session.id,
+      ...currentChange(roles, choice.alias),
+    });
+  } catch (err) {
+    void vscode.window.showErrorMessage(`Switchback: ${(err as Error).message}`);
+  }
 }
 
 /** Switch the session's permission mode. */

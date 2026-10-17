@@ -13,7 +13,7 @@ export interface SignalSnapshot {
   stickyTurns: number;
   /**
    * The escalation step the session is on while `stickyTurns` lasts: 0 is
-   * `routing.start`, k the k-th `routing.escalate` step.
+   * `routing.current`, k the k-th `routing.escalate` step.
    */
   escalationStep: number;
   /** The last call ended in refusal, max_tokens, or a provider error. */

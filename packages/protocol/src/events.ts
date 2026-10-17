@@ -34,10 +34,10 @@ export type EngineEvent =
       inputTokens?: number;
       /** The chosen model's context window, so clients can show how full it is. */
       contextWindow?: number;
-      /** Where the model is on the escalation ladder: 0 is `start`, `steps` the top. */
+      /** Where the model is on the escalation ladder: 0 is `current`, `steps` the top. */
       step?: number;
       steps?: number;
-      /** Calls left before routing returns to `start` after an escalation. */
+      /** Calls left before routing returns to `current` after an escalation. */
       stickyTurns?: number;
     } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)

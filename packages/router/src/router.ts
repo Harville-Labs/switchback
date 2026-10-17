@@ -6,7 +6,7 @@
  * with a human-readable reason. The engine owns all I/O. This keeps routing
  * explainable in the UI and exhaustively testable.
  *
- * Roles (ADR 0015): step 0 is `routing.start`, and steps 1..n are
+ * Roles (ADR 0015): step 0 is `routing.current`, and steps 1..n are
  * `routing.escalate`. Any model can be on any step; whether it's local or
  * remote only matters to the guards (privacy, `allowRemote`, budgets) and to
  * `ask` prompts, which are about spending money.
@@ -111,7 +111,7 @@ export class Router {
         return {
           kind: 'block',
           rule,
-          reason: `${reason}, but no ${tier} model is in routing.start or routing.escalate; run \`switchback init\``,
+          reason: `${reason}, but no ${tier} model is in routing.current or routing.escalate; run \`switchback init\``,
         };
       return this.route(rung.choice, rule, reason, false, rung.step);
     };
@@ -155,21 +155,21 @@ export class Router {
     const escalated = this.escalate(ctx, start, at);
     if (escalated) return escalated;
 
-    // 7. Default: the start chain, or the first step if there is none.
-    if (start.model) return this.route(start, 'default', 'the start model');
+    // 7. Default: the current chain, or the first step if there is none.
+    if (start.model) return this.route(start, 'default', 'the current model');
     const first = this.ladder.climb(ctx, 0);
     if (first)
       return this.route(
         first.choice,
         'default',
-        'no start model configured; using the first escalation step',
+        'no current model configured; using the first escalation step',
         false,
         first.step,
       );
     return {
       kind: 'block',
       rule: 'default',
-      reason: 'no model is configured (routing.start is empty); run `switchback init`',
+      reason: 'no model is configured (routing.current is empty); run `switchback init`',
     };
   }
 

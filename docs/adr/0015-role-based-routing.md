@@ -1,6 +1,6 @@
 # 0015: Role-based routing
 
-**Status:** Accepted · 2026-10-01
+**Status:** Accepted · 2026-10-01 · `start` renamed `current` by [0021](0021-current-model-and-tabs.md)
 
 ## Context
 

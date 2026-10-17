@@ -31,7 +31,11 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
-  { name: 'auto', group: 'Routing', description: 'start on the start model; escalate when stuck' },
+  {
+    name: 'auto',
+    group: 'Routing',
+    description: 'run on the current model; escalate when stuck',
+  },
   { name: 'local', group: 'Routing', description: 'only local models for the next prompts' },
   { name: 'remote', group: 'Routing', description: 'only hosted models for the next prompts' },
   {
@@ -47,6 +51,17 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'start a new session with an agent',
   },
   { name: 'agents', group: 'Session', description: 'list agents' },
+  {
+    name: 'tab',
+    args: '[n|new [agent]|close]',
+    group: 'Session',
+    description: 'switch to a tab, open a new one, or close this one (it keeps running)',
+  },
+  {
+    name: 'tabs',
+    group: 'Session',
+    description: 'every session: open tabs, and ones working in other windows (ctrl+t)',
+  },
   { name: 'sessions', group: 'Session', description: 'list saved sessions in this workspace' },
   {
     name: 'resume',
@@ -95,10 +110,10 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'which model does what in this session; reset follows config',
   },
   {
-    name: 'start',
-    args: '<model...>',
+    name: 'current',
+    args: '[model...]',
     group: 'Models',
-    description: 'where turns start (more models are backups)',
+    description: 'the current model: no argument picks from a list (more models are backups)',
   },
   {
     name: 'escalate',

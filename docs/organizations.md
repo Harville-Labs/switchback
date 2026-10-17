@@ -37,7 +37,7 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
     },
     // A user's own local model (alias "local") starts; the company GPU takes
     // prompts too big for it, and everything when the user has no local model.
-    "routing": { "start": ["local", "acme-coder"], "escalate": [["remote"]] }
+    "routing": { "current": ["local", "acme-coder"], "escalate": [["remote"]] }
   },
   "enforced": {                                     // a config layer above everything; users can't override
     "permissions": {

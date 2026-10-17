@@ -10,6 +10,15 @@ import { filterSessions, SessionPicker } from './SessionPicker.tsx';
 const CTRL_C = '\x03';
 const ENTER = '\r';
 const tick = () => new Promise((r) => setTimeout(r, 20));
+/** The transcript lays out a frame or two after it changes; wait for it. */
+async function frameWith(ui: { lastFrame(): string | undefined }, text: string | RegExp) {
+  for (let i = 0; i < 50; i++) {
+    const frame = ui.lastFrame() ?? '';
+    if (typeof text === 'string' ? frame.includes(text) : text.test(frame)) return frame;
+    await tick();
+  }
+  return ui.lastFrame() ?? '';
+}
 
 const session = (id: string, title: string, agent = 'build'): SessionSummary => ({
   id,
@@ -175,6 +184,97 @@ describe('Ctrl+C in the app', () => {
     expect(calls).toContain('session.list');
     expect(ui.lastFrame()).toContain('Resume a session');
     expect(ui.lastFrame()).toContain('fix the parser');
+  });
+});
+
+describe('the current model and tabs in the app', () => {
+  const init = {
+    protocolVersion: 2,
+    engineVersion: '0',
+    workspaceRoot: '/tmp',
+    models: [
+      { alias: 'fast', ref: { provider: 'ollama', model: 'qwen3' }, tier: 'local' },
+      { alias: 'opus', ref: { provider: 'anthropic', model: 'claude-opus-5' }, tier: 'remote' },
+    ],
+    agents: [],
+  } satisfies InitializeResult;
+  const roles = {
+    current: ['fast'],
+    escalate: [['opus']],
+    review: { mode: 'off', models: [] },
+    overridden: [],
+  };
+
+  function app() {
+    const calls: { method: string; params: unknown }[] = [];
+    let created = 0;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        calls.push({ method, params });
+        if (method === 'permissions.list') return { modes: ['default'], levels: {}, rules: [] };
+        if (method === 'usage.get') throw new Error('not needed');
+        if (method === 'session.list') return [session('s1', 'fix the parser')];
+        if (method === 'commands.list') return [];
+        if (method === 'mcp.list') return { servers: [] };
+        if (method === 'session.roles') return roles;
+        if (method === 'session.setRoles')
+          return { ...roles, ...(params as object), overridden: ['current'] };
+        if (method === 'session.create') return session(`new${++created}`, '');
+        return {};
+      },
+      on: () => () => {},
+    } as unknown as SwitchbackClient;
+    const ui = render(
+      <App
+        client={client}
+        init={init}
+        initialSession={session('s1', '')}
+        initialRoute="auto"
+        warnings={[]}
+      />,
+    );
+    return { ui, calls };
+  }
+
+  test('/current with no model opens a picker; the pick becomes current, backed by the old one', async () => {
+    const { ui, calls } = app();
+    await tick();
+    expect(ui.lastFrame()).toContain('⌂ qwen3');
+    ui.stdin.write('/current');
+    await tick();
+    ui.stdin.write(ENTER);
+    await tick();
+    expect(ui.lastFrame()).toContain('Current model');
+    expect(ui.lastFrame()).toContain('● current');
+    ui.stdin.write('2');
+    await tick();
+    await tick();
+    expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
+      current: ['opus', 'fast'],
+    });
+    expect(await frameWith(ui, 'Current model: opus.')).toContain('Current model: opus.');
+  });
+
+  test('ctrl+t shows the sessions; n opens a new tab, and the tab bar appears', async () => {
+    const { ui, calls } = app();
+    await tick();
+    ui.stdin.write('\x14');
+    await tick();
+    expect(ui.lastFrame()).toContain('Sessions');
+    expect(ui.lastFrame()).toContain('fix the parser');
+    ui.stdin.write('n');
+    await tick();
+    expect(calls.some((c) => c.method === 'session.create')).toBe(true);
+    expect(ui.lastFrame()).toContain('1 fix the parser');
+    expect(ui.lastFrame()).toContain('2 new session');
+    // alt+1 goes back to the first tab.
+    ui.stdin.write('\x1b1');
+    await tick();
+    ui.stdin.write('/tab');
+    await tick();
+    ui.stdin.write(ENTER);
+    await tick();
+    expect(await frameWith(ui, /1\* · fix the parser/)).toMatch(/1\* · fix the parser/);
   });
 });
 

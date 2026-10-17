@@ -72,6 +72,18 @@
         "icon": "$(add)"
       },
       {
+        "command": "switchback.newTab",
+        "title": "New Tab",
+        "category": "Switchback",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "switchback.showSessions",
+        "title": "Show Sessions (Tabs and Other Windows)",
+        "category": "Switchback",
+        "icon": "$(layout)"
+      },
+      {
         "command": "switchback.cancel",
         "title": "Cancel Running Turn",
         "category": "Switchback"
@@ -165,6 +177,11 @@
       "view/title": [
         {
           "command": "switchback.openSession",
+          "when": "view == switchback.chat",
+          "group": "navigation"
+        },
+        {
+          "command": "switchback.showSessions",
           "when": "view == switchback.chat",
           "group": "navigation"
         },
@@ -272,7 +289,7 @@
           {
             "id": "setUp",
             "title": "Choose your models",
-            "description": "Pick where turns start and what they escalate to: local, hosted, or both.\n[Set Up Models](command:switchback.runSetup)",
+            "description": "Pick your current model (where prompts run) and what it escalates to: local, hosted, or both.\n[Set Up Models](command:switchback.runSetup)",
             "media": {
               "markdown": "media/walkthrough/setup.md"
             },

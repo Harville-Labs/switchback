@@ -104,7 +104,7 @@ describe('hooks in a session', () => {
     const config = SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'small', contextWindow: 32_000 } },
-      routing: { start: ['local'] },
+      routing: { current: ['local'] },
       permissions,
       hooks,
     });
@@ -187,7 +187,7 @@ describe('hooks in a session', () => {
     const config = SwitchbackConfig.parse({
       providers: { lp: { type: 'mock', tier: 'local' } },
       models: { local: { provider: 'lp', model: 'small', contextWindow: 32_000 } },
-      routing: { start: ['local'] },
+      routing: { current: ['local'] },
       permissions: { bash: 'ask' },
       hooks: { Notification: [{ hooks: [cmd('cat > notified.json')] }] },
     });
