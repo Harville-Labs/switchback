@@ -219,7 +219,7 @@ export function renderPrompt(view: ViewState): string {
   }
   const escl = view.escalations[0];
   if (escl)
-    return `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}? ${esc(escl.reason)}<div class="actions"><button class="btn" data-esc="1">Escalate</button><button class="btn secondary" data-esc="0">Stay on the current model</button></div></div>`;
+    return `<div class="prompt">Escalate to <b>${esc(escl.target.model)}</b>${escl.estimatedCostUsd !== undefined ? ` <span class="estimate">(${esc(estimateLabel(escl.estimatedCostUsd))})</span>` : ''}?<div class="hint">${esc(escl.reason)}</div><div class="actions"><button class="btn" data-esc="1">Escalate</button><button class="btn secondary" data-esc="0">Stay on the current model</button></div></div>`;
   return '';
 }
 

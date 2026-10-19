@@ -130,6 +130,8 @@ test('an escalation asks to escalate or stay, not "remote or local"', async () =
   });
   expect($('#prompts').textContent).toContain('Escalate');
   expect($('#prompts').textContent).toContain('Stay on the current model');
+  // The reason is its own line, not run on after the question.
+  expect($('#prompts .hint')?.textContent).toBe('3 consecutive tool errors');
 });
 
 const type = (text: string) => {
