@@ -181,6 +181,19 @@ export const SwitchbackConfig = z.object({
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
+  /**
+   * Retries of a model call that failed before any output with a retryable
+   * error (connection, 429, 5xx), before the router falls back to another model.
+   */
+  retry: z
+    .object({
+      /** Retries after the first attempt; 0 falls back at once. */
+      attempts: z.number().int().min(0).max(10).default(5),
+      /** Delay before the first retry; each later one doubles, with jitter. */
+      initialDelayMs: z.number().int().positive().default(1000),
+      maxDelayMs: z.number().int().positive().default(30_000),
+    })
+    .prefault({}),
   /** Review of edits by another model (docs/review.md). */
   review: z
     .object({

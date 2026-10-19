@@ -253,6 +253,8 @@ describe('Engine', () => {
     const { engine, rp } = setup(
       [{ error: new ProviderError('connection refused', 'lp', true) }],
       [{ text: 'remote answer' }],
+      // Retries are covered in retry.test.ts; this is the fallback after them.
+      { config: { retry: { attempts: 0 } } },
     );
     const s = engine.createSession({});
     const r = await engine.runTurn(s.id, 'hi');

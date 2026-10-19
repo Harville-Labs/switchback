@@ -244,6 +244,9 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | `subagents.budgetUsd` | none | Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it |
 | `subagents.model` | none | Model alias for subagents whose agent doesn't pin a model or tier; otherwise they route like any turn |
 | `maxStepsPerTurn` | 50 | Model calls per user prompt before stopping |
+| `retry.attempts` | 5 | Retries of a model call that failed with a retryable error (connection, 429, 5xx) before any output streamed. After the last one, the provider is marked down and the router falls back. 0 falls back at once |
+| `retry.initialDelayMs` | 1000 | Delay before the first retry; each later retry doubles it, with jitter |
+| `retry.maxDelayMs` | 30000 | Longest delay between retries |
 | `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |
 | `compaction.threshold` | 0.7 | Fraction of the largest local context window (the remote window when there's no local model) that triggers it |
 | `compaction.keepRecent` | 0.25 | Fraction of that window kept verbatim at the end of the conversation |

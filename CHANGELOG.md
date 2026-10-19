@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **An unavailable model is retried with backoff before the router falls back.** A call that fails with a connection error, 429, or 5xx before any output is retried up to 5 times, waiting 1s, 2s, 4s, and so on (at most 30s), with a notice each time. Set `retry.attempts`, `retry.initialDelayMs`, and `retry.maxDelayMs` to change it; `retry.attempts: 0` falls back at once as before
+
 ## [1.4.0] - 2026-10-17
 
 ### Added

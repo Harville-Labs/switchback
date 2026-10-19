@@ -1004,6 +1004,30 @@
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
+    "retry": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "default": 5,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "initialDelayMs": {
+          "default": 1000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxDelayMs": {
+          "default": 30000,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
     "review": {
       "default": {},
       "type": "object",

@@ -6,6 +6,7 @@
 import type { Message, ModelRef, RoutePreference, StopReason } from '@switchback/protocol';
 import { type ChatEvent, type Provider, ProviderError, type ToolSpec } from '@switchback/providers';
 import { ladderSteps, type ModelInfo, type Router, stepOf } from '@switchback/router';
+import pRetry from 'p-retry';
 import { isAgentCli, runAgentCliTurn } from './agent-cli-turn.ts';
 import type { AgentDefinition } from './agents.ts';
 import { contextOf } from './compaction.ts';
@@ -161,7 +162,7 @@ export class AgentLoop {
       let done: Done;
       let decodeMs: number | undefined;
       try {
-        ({ done, decodeMs } = await this.call(
+        ({ done, decodeMs } = await this.callWithRetry(
           s,
           provider,
           model,
@@ -274,6 +275,46 @@ export class AgentLoop {
     return { agent, tools, catalog, specs, specsJson: JSON.stringify(specs) };
   }
 
+  /**
+   * `call`, retried with backoff while the model is unavailable (`retry` config).
+   * Only failures before any output are retried: a retry after streamed text
+   * would show that text twice.
+   */
+  private callWithRetry(
+    s: LiveSession,
+    provider: Provider,
+    model: ModelInfo,
+    specs: ToolSpec[],
+    inputTokens: number,
+    turnId: string,
+    signal: AbortSignal,
+  ): Promise<{ done: Done; decodeMs?: number }> {
+    const { attempts, initialDelayMs, maxDelayMs } = this.host.config().retry;
+    let streamed = false;
+    const onOutput = () => {
+      streamed = true;
+    };
+    return pRetry(
+      () => this.call(s, provider, model, specs, inputTokens, turnId, signal, onOutput),
+      {
+        retries: attempts,
+        minTimeout: initialDelayMs,
+        maxTimeout: maxDelayMs,
+        randomize: true,
+        signal,
+        shouldRetry: ({ error, attemptNumber, retryDelay }) => {
+          if (streamed || !(error instanceof ProviderError) || !error.retryable) return false;
+          const seconds = Math.max(1, Math.round(retryDelay / 1000));
+          this.host.notify(
+            'warn',
+            `${model.alias} is unavailable (${error.message}); retry ${attemptNumber} of ${attempts} in ${seconds}s`,
+          );
+          return true;
+        },
+      },
+    );
+  }
+
   /** One streamed model call; deltas go out as events, the result comes back. */
   private async call(
     s: LiveSession,
@@ -283,6 +324,7 @@ export class AgentLoop {
     inputTokens: number,
     turnId: string,
     signal: AbortSignal,
+    onOutput: () => void,
   ): Promise<{ done: Done; decodeMs?: number }> {
     const effort = this.host.config().models[model.alias]?.effort;
     // A fresh array (so providers never observe later appends), built from
@@ -300,7 +342,10 @@ export class AgentLoop {
       ...(effort ? { effort } : {}),
       signal,
     })) {
-      if (ev.type !== 'done') firstToken ??= performance.now();
+      if (ev.type !== 'done' && firstToken === undefined) {
+        firstToken = performance.now();
+        onOutput();
+      }
       if (ev.type === 'text.delta')
         this.host.emit({ type: 'text.delta', ...scope(s), turnId, text: ev.text });
       else if (ev.type === 'reasoning.delta')
