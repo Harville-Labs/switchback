@@ -1,6 +1,7 @@
 /**
- * Setup, start to finish: local endpoints, remote providers, which model does
- * what, escalation and budgets, then the config file and command permissions.
+ * Setup, start to finish: on a new install, another agent's setup to start
+ * from; local endpoints, remote providers, which model does what, escalation
+ * and budgets, then the config file and command permissions.
  * `switchback init` runs it with terminal prompts; clients run it over the
  * protocol (protocol-prompter.ts), so everyone sets up the same way. With no
  * prompter, the flags answer everything (unattended).
@@ -15,6 +16,7 @@ import { setupUserPermissions } from './permissions.ts';
 import { asking, type SetupPrompter, say } from './prompter.ts';
 import { chooseRemotes } from './remote.ts';
 import { chooseRoles } from './roles.ts';
+import { offerStartFrom } from './start-from.ts';
 
 export interface SetupResult {
   /** `nothing`: the person chose not to write anything. */
@@ -41,15 +43,23 @@ export async function runSetup(
     (flags.scope ?? 'user') === 'user'
       ? switchbackPaths(deps.env).configFile
       : projectPaths(flags.cwd).configFile;
-  if (
-    existsSync(file) &&
-    p &&
-    !(await p.confirm(`${file} exists. Update it? A backup is kept at .bak.`))
-  )
+  const firstRun = !existsSync(file);
+  if (!firstRun && p && !(await p.confirm(`${file} exists. Update it? A backup is kept at .bak.`)))
     return { outcome: 'nothing', file };
 
-  const locals = await chooseLocals(flags, ui, deps.detect);
-  const remotes = await chooseRemotes(flags, ui, locals.length === 0, deps.list);
+  const imported = await offerStartFrom(flags, ui, firstRun, deps.env);
+  let locals = imported?.locals ?? [];
+  let remotes = imported?.remotes ?? [];
+  // Unattended, flags add models to an import; asked, the person decides.
+  const more = !imported
+    ? true
+    : p
+      ? await p.confirm('Add other models too?', !locals.length && !remotes.length)
+      : false;
+  if (more || (!p && flags.localModels.length))
+    locals = [...locals, ...(await chooseLocals(flags, ui, deps.detect))];
+  if (more || (!p && flags.remotes.length))
+    remotes = [...remotes, ...(await chooseRemotes(flags, ui, locals.length === 0, deps.list))];
   if (!locals.length && !remotes.length) {
     if (!p) throw new SetupError('pick at least one model, local or hosted');
     say(ui, 'No models chosen, so nothing was written. Run setup any time to add them.', 'detail');
@@ -57,7 +67,15 @@ export async function runSetup(
   }
 
   const plan = planModels({ locals, remotes });
-  const roles = await chooseRoles(flags, ui, plan);
+  // The model the other agent started with stays current unless a flag says otherwise.
+  const startedWith = imported?.current
+    ? plan[[...locals, ...remotes].indexOf(imported.current)]?.alias
+    : undefined;
+  const roles = await chooseRoles(
+    startedWith && !flags.current?.length ? { ...flags, current: [startedWith] } : flags,
+    ui,
+    plan,
+  );
   const tierOf = (alias: string) => plan.find((m) => m.alias === alias)?.tier;
   const escalatesRemote = roles.escalate.flat().some((a) => tierOf(a) === 'remote');
   const usesRemote =
@@ -107,6 +125,7 @@ export async function runSetup(
     escalationPolicy,
     ...(budget ? { budget } : {}),
   });
+  if (imported && Object.keys(imported.mcpServers).length) layer.mcpServers = imported.mcpServers;
   if (p) {
     p.note({ kind: 'config', file, layer });
     if (!(await p.confirm('Write it?'))) return { outcome: 'nothing', file };
@@ -117,7 +136,7 @@ export async function runSetup(
     `Wrote ${result.file}${result.backup ? ` (previous version: ${result.backup})` : ''}`,
     'success',
   );
-  await setupUserPermissions(flags, ui, deps.env);
+  await setupUserPermissions(flags, ui, deps.env, imported?.permissions);
   return {
     outcome: 'written',
     file: result.file,
