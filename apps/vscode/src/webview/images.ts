@@ -5,7 +5,7 @@
  * is an image and what fits.
  */
 import { MAX_IMAGE_BYTES } from '@switchback/protocol';
-import { esc } from './markdown.ts';
+import { esc } from './escape.ts';
 
 export interface PendingImage {
   name: string;
