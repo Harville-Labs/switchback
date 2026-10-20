@@ -10,7 +10,6 @@ import type {
   PermissionsListResult,
   SessionRoles,
   ShellInfo,
-  UsageReport,
 } from '@switchback/protocol';
 import type { TodoItem, ViewItem, ViewState } from './view.ts';
 
@@ -152,81 +151,6 @@ export function toolLabel(name: string, input: unknown): string {
       return arg ? `${name.toLowerCase()} ${arg}` : name.toLowerCase();
     }
   }
-}
-
-export type UsageBreakdown = 'rule' | 'agent' | 'model';
-
-/**
- * Plain-text usage summary shared by `switchback usage`, the TUI's `/usage`, and
- * VS Code. `by` adds a breakdown table.
- */
-export function formatUsage(u: UsageReport, by?: UsageBreakdown): string {
-  const $ = (n: number) => `$${n.toFixed(2)}`;
-  const tok = (n: number) => n.toLocaleString('en-US');
-  const { local, remote } = u.byTier;
-  const lines = [
-    `Usage ${u.period.from} to ${u.period.to}`,
-    `  local   ${tok(local.usage.inputTokens)} in / ${tok(local.usage.outputTokens)} out   ${$(0)}`,
-    `  remote  ${tok(remote.usage.inputTokens)} in / ${tok(remote.usage.outputTokens)} out   ${$(remote.costUsd)}${u.remoteCacheHitRate !== undefined ? `   cache hits ${Math.round(u.remoteCacheHitRate * 100)}%` : ''}`,
-    `  saved   ~${$(u.estimatedSavingsUsd)} vs. running everything remotely`,
-    `  budget  today ${$(u.budget.spentTodayUsd)}${u.budget.dailyUsd ? ` of ${$(u.budget.dailyUsd)}` : ''}, month ${$(u.budget.spentMonthUsd)}${u.budget.monthlyUsd ? ` of ${$(u.budget.monthlyUsd)}` : ''}`,
-  ];
-  const rows = by === 'rule' ? u.byRule : by === 'agent' ? u.byAgent : by ? u.byModel : undefined;
-  if (by && rows) {
-    lines.push('', `By ${by}`);
-    const width = Math.max(by.length, ...rows.map((r) => r.key.length));
-    for (const r of rows) {
-      lines.push(
-        `  ${r.key.padEnd(width)}  ${String(r.calls).padStart(5)} calls  ${tok(r.usage.inputTokens + (r.usage.cacheReadTokens ?? 0)).padStart(12)} in  ${$(r.costUsd).padStart(9)}${by === 'model' && r.tokensPerSecond !== undefined ? `  ${speedLabel(r.tokensPerSecond).padStart(11)}` : ''}`,
-      );
-    }
-    if (rows.length === 0) lines.push('  no model calls in this period');
-  }
-  return lines.join('\n');
-}
-
-/**
- * The savings receipt: what a session (with its subagents) cost, against what
- * the same work would have cost on the reference remote model.
- */
-export function formatReceipt(u: UsageReport, title = 'This session'): string {
-  const $ = (n: number) => (n > 0 && n < 0.01 ? '<$0.01' : `$${n.toFixed(2)}`);
-  const tok = (n: number) =>
-    n >= 1_000_000
-      ? `${(n / 1_000_000).toFixed(1)}M`
-      : n >= 1000
-        ? `${Math.round(n / 1000)}k`
-        : String(n);
-  const { local, remote } = u.byTier;
-  const localTokens = local.usage.inputTokens + (local.usage.cacheReadTokens ?? 0);
-  const remoteTokens = remote.usage.inputTokens + (remote.usage.cacheReadTokens ?? 0);
-  const allRemote = remote.costUsd + u.estimatedSavingsUsd;
-  const lines = [
-    title,
-    `  local    ${$(0).padStart(7)}   ${tok(localTokens)} tokens in, ${tok(local.usage.outputTokens)} out`,
-    `  remote   ${$(remote.costUsd).padStart(7)}   ${tok(remoteTokens)} tokens in, ${tok(remote.usage.outputTokens)} out`,
-  ];
-  if (u.referenceModel && u.estimatedSavingsUsd > 0) {
-    const pct = allRemote > 0 ? Math.round((u.estimatedSavingsUsd / allRemote) * 100) : 0;
-    lines.push(
-      `  all-remote on ${u.referenceModel} would have cost ~${$(allRemote)}`,
-      `  saved    ~${$(u.estimatedSavingsUsd)} (${pct}%)`,
-    );
-  } else if (!u.referenceModel && localTokens > 0) {
-    lines.push('  (configure a remote model to see what running locally saved)');
-  }
-  return lines.join('\n');
-}
-
-/** One line for the end of a headless run: `cost $0.04 · saved ~$0.61 (94%) vs. claude-opus-5`. */
-export function receiptLine(u: UsageReport): string {
-  const cost = u.byTier.remote.costUsd;
-  const allRemote = cost + u.estimatedSavingsUsd;
-  const saved =
-    u.referenceModel && u.estimatedSavingsUsd > 0
-      ? ` · saved ~$${u.estimatedSavingsUsd.toFixed(2)} (${Math.round((u.estimatedSavingsUsd / allRemote) * 100)}%) vs. all-remote on ${u.referenceModel}`
-      : '';
-  return `cost $${cost.toFixed(4)}${saved}`;
 }
 
 /** Every subagent in the tree, depth-first, for numbered listings. */
