@@ -39,6 +39,7 @@ import {
   type SetupStartParams,
   type ShellInfo,
   type UsagePeriod,
+  type UsageRange,
   type UsageReport,
   type WorktreeDiff,
   type WorktreeInfo,
@@ -324,10 +325,10 @@ export class Engine {
     return this.p.ledger.entriesSince(sinceIso);
   }
 
-  usage(period?: UsagePeriod, sessionId?: string): UsageReport {
+  usage(span?: UsagePeriod | UsageRange, sessionId?: string): UsageReport {
     return this.p.ledger.report(
       this.options.config.routing.budget,
-      period,
+      span,
       sessionId ? this.p.sessions.tree(sessionId) : undefined,
     );
   }

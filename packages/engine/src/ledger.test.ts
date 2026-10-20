@@ -76,6 +76,23 @@ describe('usage breakdowns', () => {
     expect(today.byRule?.map((r) => r.key)).toEqual(['escalation', 'default', 'unrecorded']);
   });
 
+  test('a range includes both end days and lists each day with calls', () => {
+    const r = ledgerWith(fixture()).report({}, { from: '2026-09-22', to: '2026-09-23' });
+    expect(r.period).toEqual({ from: '2026-09-22', to: '2026-09-23' });
+    expect(r.byTier.remote.costUsd).toBeCloseTo(0.2);
+    expect(r.byDay?.map((d) => [d.key, d.calls])).toEqual([
+      ['2026-09-22', 1],
+      ['2026-09-23', 1],
+    ]);
+    const month = ledgerWith(fixture()).report({}, 'month');
+    expect(month.byDay?.map((d) => d.key)).toEqual([
+      '2026-09-02',
+      '2026-09-22',
+      '2026-09-23',
+      '2026-09-27',
+    ]);
+  });
+
   test('remote cache hit rate counts cached reads against all remote input', () => {
     const week = ledgerWith(fixture()).report({}, 'week');
     // Two remote calls: 2000 uncached + 4000 cached input tokens.

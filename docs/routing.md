@@ -144,7 +144,10 @@ Each entry also records the routing `rule` and the `agent`, so you can see why m
 switchback usage --period week --by rule    # escalation vs. context-overflow vs. sticky ...
 switchback usage --by agent                 # which agents cost the most
 switchback usage --by model --json
+switchback usage --from 2026-10-01 --to 2026-10-15   # any span of days (UTC, both ends included)
 ```
+
+`--period` is `today`, `week` (the last 7 days), `month` (the default), `year`, or `all`. In a terminal, `switchback usage` opens a dashboard: spend, savings, and budget for the period, a chart per day (per month for long spans), and the breakdown. Number keys or Tab pick the period, ← and → step to earlier and later ones, `m` switches the chart between spend, savings, tokens, and calls, `b` switches the breakdown, and `q` quits. Piped or with `--json`, it prints the report instead.
 
 The remote cache hit rate (cached input tokens over all remote input tokens) is shown alongside. A low rate on long remote runs usually means something is changing the prompt prefix.
 
