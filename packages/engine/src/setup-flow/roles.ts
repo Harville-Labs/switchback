@@ -24,7 +24,12 @@ export async function chooseRoles(
   const roles = defaultRoles(plan);
   const chain = (v: string, flag: string) =>
     v.split(',').map((ref) => resolveAlias(plan, ref.trim(), flag));
-  if (flags.current?.length) roles.current = flags.current.flatMap((v) => chain(v, '--current'));
+  if (flags.current?.length) {
+    // The suggested order stays the ladder, less the models now current.
+    const order = [...roles.current.map((a) => [a]), ...roles.escalate];
+    roles.current = flags.current.flatMap((v) => chain(v, '--current'));
+    roles.escalate = order.filter((step) => !step.some((a) => roles.current.includes(a)));
+  }
   if (flags.escalate) roles.escalate = flags.escalate.map((v) => chain(v, '--escalate'));
   if (flags.reviewers)
     roles.review =

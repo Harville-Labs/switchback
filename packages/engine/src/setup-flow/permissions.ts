@@ -13,6 +13,7 @@ import { switchbackPaths } from '../paths.ts';
 import { detectPresets, PERMISSION_PRESETS, setupPermissions } from '../permissions/defaults.ts';
 import { writeConfigLayer } from '../setup.ts';
 import type { SetupFlags } from './flags.ts';
+import type { ImportedPermissions } from './from-opencode.ts';
 import { asking, type SetupPrompter, say } from './prompter.ts';
 
 type Rules = Partial<Record<'allow' | 'ask' | 'deny', string[]>>;
@@ -21,6 +22,8 @@ export async function setupUserPermissions(
   flags: SetupFlags,
   ui: SetupPrompter | undefined,
   env: Record<string, string | undefined> = process.env,
+  /** Levels and rules from another agent's setup, added to what's written. */
+  imported?: ImportedPermissions,
 ) {
   const p = asking(ui);
   const policy = readCachedPolicy(env)?.policy;
@@ -56,7 +59,7 @@ export async function setupUserPermissions(
       }),
     );
   }
-  const next = setupPermissions(existing, presets);
+  const next = withImported(setupPermissions(existing, presets), existing, imported);
   if (!next) {
     say(ui, 'Nothing to add.', 'detail');
     return;
@@ -67,6 +70,7 @@ export async function setupUserPermissions(
   );
   const parts = [
     ...(fresh ? ['read-only commands'] : []),
+    ...(imported?.allow.length ? ['what your previous agent allowed'] : []),
     ...picked.map((name) => `${name} test and build commands`),
   ];
   const runs =
@@ -93,6 +97,26 @@ export function presetCommands(allow: string[]): string {
   return [...groups]
     .map(([head, tails]) => (tails.length ? `${head} ${tails.join('/')}` : head))
     .join(', ');
+}
+
+/** Imported levels, and imported rules added to the lists (rules are never removed). */
+function withImported(
+  next: Rules | undefined,
+  existing: Rules,
+  imported: ImportedPermissions | undefined,
+): Record<string, unknown> | undefined {
+  if (!imported) return next;
+  const list = (k: 'allow' | 'ask' | 'deny') => [
+    ...new Set([...(next?.[k] ?? existing[k] ?? []), ...imported[k]]),
+  ];
+  const deny = list('deny');
+  return {
+    ...imported.levels,
+    ...(imported.outsideWorkspace ? { outsideWorkspace: imported.outsideWorkspace } : {}),
+    allow: list('allow'),
+    ask: list('ask'),
+    ...(deny.length ? { deny } : {}),
+  };
 }
 
 function tildify(path: string): string {

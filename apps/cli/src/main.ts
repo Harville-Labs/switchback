@@ -60,6 +60,8 @@ run options (scripts and CI; the prompt can also come on stdin)
 
 init options (all optional; prompts cover anything not given)
   --scope <s>              user | project (default: user)
+  --from <agent>           Start from another agent's setup: opencode (asked on
+                           a first run when its config is found)
   --local-url <url>        Local server to probe, e.g. http://gpu-box:8000/v1
   --local-model <name>     Local model name as the server lists it. Repeat for
                            fallbacks and bigger-context models, in order
@@ -162,6 +164,7 @@ async function main(argv: string[]): Promise<number> {
       'max-steps': { type: 'string' },
       instructions: { type: 'string' },
       scope: { type: 'string' },
+      from: { type: 'string' },
       'local-url': { type: 'string', multiple: true },
       'local-model': { type: 'string', multiple: true },
       'context-window': { type: 'string', multiple: true },
@@ -252,7 +255,8 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'init': {
       const { init } = await import('./commands/init.ts');
-      const { REMOTE_KINDS } = await import('@switchback/engine');
+      const { HARNESSES, REMOTE_KINDS } = await import('@switchback/engine');
+      const from = oneOf('from', values.from, Object.keys(HARNESSES) as (keyof typeof HARNESSES)[]);
       const contextWindows = (values['context-window'] ?? []).map(
         (v) => positive('context-window', v) as number,
       );
@@ -271,6 +275,7 @@ async function main(argv: string[]): Promise<number> {
         yes: values.yes,
         noLocal: values['no-local'],
         ...(scope ? { scope } : {}),
+        ...(from ? { from } : {}),
         localUrls: values['local-url'] ?? [],
         localModels: values['local-model'] ?? [],
         contextWindows,
