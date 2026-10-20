@@ -12,6 +12,8 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 const mode = (f: string) => statSync(f).mode & 0o777;
+// Windows has no POSIX permission bits to check.
+const posix = test.skipIf(process.platform === 'win32');
 
 test('only literal secrets count; {env:NAME} references do not', () => {
   expect(holdsSecret({ providers: { a: { apiKey: '{env:A_KEY}' } } })).toBe(false);
@@ -19,7 +21,7 @@ test('only literal secrets count; {env:NAME} references do not', () => {
   expect(holdsSecret({ mcpServers: { s: { headers: { 'X-Token': 'abc' } } } })).toBe(true);
 });
 
-test('a file holding a pasted key, and its backup, are readable by their owner alone', () => {
+posix('a file holding a pasted key, and its backup, are readable by their owner alone', () => {
   const file = join(dir, 'config.json');
   writeFileSync(file, '{}\n', { mode: 0o644 });
   const layer = buildSetupConfig({
@@ -57,7 +59,7 @@ test('a pasted key replaces the {env:NAME} reference', () => {
   });
 });
 
-test('a file without secrets keeps its permissions', () => {
+posix('a file without secrets keeps its permissions', () => {
   const file = join(dir, 'config.json');
   writeFileSync(file, '{}\n', { mode: 0o644 });
   writeConfigLayer(

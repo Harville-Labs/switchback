@@ -93,7 +93,9 @@ test('a client runs the whole setup over the protocol, and the config is written
   };
   expect(config.providers.deepseek).toEqual({ type: 'deepseek', apiKey: 'sk-test' });
   // The pasted key is readable by its owner alone, and isn't shown back.
-  expect(statSync(join(home, 'config.json')).mode & 0o777).toBe(0o600);
+  // Windows has no POSIX permission bits to check.
+  if (process.platform !== 'win32')
+    expect(statSync(join(home, 'config.json')).mode & 0o777).toBe(0o600);
   expect(JSON.stringify(events)).not.toContain('sk-test');
   expect(config.routing.budget.monthlyUsd).toBe(5);
   expect(config.permissions.allow).toContain('bash(git status:*)');
