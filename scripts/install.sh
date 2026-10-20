@@ -93,9 +93,10 @@ detect_platform() {
     arm64 | aarch64) ARCH=arm64 ;;
     *) fail "Switchback has no build for $(uname -m) processors (only x64 and arm64)." ;;
   esac
-  # A shell running under Rosetta reports x86_64 on an Apple silicon Mac.
-  if [ "$OS" = darwin ] && [ "$ARCH" = x64 ] &&
-    [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = 1 ]; then
+  # A shell running under Rosetta reports x86_64 on an Apple silicon Mac. Intel Macs have no build.
+  if [ "$OS" = darwin ] && [ "$ARCH" = x64 ]; then
+    [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = 1 ] ||
+      fail "Switchback has no build for Intel Macs, only Apple silicon."
     ARCH=arm64
   fi
   if [ "$OS" = linux ] && { ls /lib/ld-musl-* >/dev/null 2>&1 || ldd --version 2>&1 | grep -qi musl; }; then

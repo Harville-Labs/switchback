@@ -51,10 +51,13 @@ export function releasePlatform(platform: NodeJS.Platform, arch: string): string
   if (!os || !cpu)
     throw new UpdateError(`Switchback has no build for ${platform}-${arch}. See ${RELEASES}.`);
   if (os === 'windows') return 'windows-x64.exe'; // Windows on Arm runs the x64 build.
-  // An x64 binary under Rosetta on Apple silicon: move to the native build.
+  // An x64 binary under Rosetta on Apple silicon: move to the native build. Intel Macs have none.
   if (os === 'darwin' && cpu === 'x64') {
     const translated = spawnSync('sysctl', ['-n', 'sysctl.proc_translated'], { encoding: 'utf8' });
     if (translated.stdout?.trim() === '1') return 'darwin-arm64';
+    throw new UpdateError(
+      `Switchback has no build for Intel Macs, only Apple silicon. See ${RELEASES}.`,
+    );
   }
   return `${os}-${cpu}`;
 }

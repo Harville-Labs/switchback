@@ -6,7 +6,7 @@ A local-first coding agent from Harville Labs. Most turns run on a model on your
 
 ## Get started
 
-1. Install the extension. It includes the Switchback engine for macOS (Apple silicon and Intel), Linux (x64 and arm64), and Windows (x64), so there is nothing else to install.
+1. Install the extension. It includes the Switchback engine for macOS (Apple silicon), Linux (x64 and arm64), and Windows (x64), so there is nothing else to install.
 2. Open the **Switchback** view in the activity bar.
 3. Run **Switchback: Set Up Models** from the command palette. Point it at a local model server (Ollama, LM Studio, llama.cpp, or vLLM), add an API key for a hosted provider, or both.
 

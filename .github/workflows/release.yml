@@ -38,7 +38,6 @@ jobs:
           - { os: windows-latest, target: bun-windows-x64, platform: windows-x64, native: true, ext: .exe }
           # cross-compiled: no hosted runner guaranteed for these on private repos
           - { os: ubuntu-latest, target: bun-linux-arm64, platform: linux-arm64, native: false }
-          - { os: macos-latest, target: bun-darwin-x64, platform: darwin-x64, native: false }
     runs-on: ${{ matrix.os }}
     env:
       OUT: dist/switchback-${{ needs.verify.outputs.version }}-${{ matrix.platform }}${{ matrix.ext }}
@@ -76,7 +75,6 @@ jobs:
           # One .vsix per platform with the engine binary inside, plus a universal
           # one that uses `switchback` from PATH.
           - { target: darwin-arm64, platform: darwin-arm64 }
-          - { target: darwin-x64, platform: darwin-x64 }
           - { target: linux-x64, platform: linux-x64 }
           - { target: linux-arm64, platform: linux-arm64 }
           - { target: win32-x64, platform: windows-x64, ext: .exe }

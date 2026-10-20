@@ -133,4 +133,6 @@ test('release asset names per platform', () => {
   expect(releasePlatform('linux', 'arm64')).toBe('linux-arm64');
   expect(releasePlatform('win32', 'arm64')).toBe('windows-x64.exe');
   expect(() => releasePlatform('freebsd', 'x64')).toThrow('no build for freebsd-x64');
+  // The test runner isn't under Rosetta, so this is an Intel Mac.
+  expect(() => releasePlatform('darwin', 'x64')).toThrow('no build for Intel Macs');
 });

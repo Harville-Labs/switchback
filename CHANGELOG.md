@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Removed
+- **No more Intel Mac build.** Releases no longer include a `darwin-x64` binary or `.vsix`. On an Intel Mac, the installer and `switchback self-update` now say there is no build instead of failing to download one. Apple silicon under Rosetta still gets the arm64 build
+
 ## [1.6.0] - 2026-10-20
 
 ### Added
