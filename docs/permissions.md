@@ -108,7 +108,7 @@ Setup also offers presets for test, build, and lint commands (Bun, npm, pnpm, Ca
 
 ### Answering a prompt
 
-With `ask`, the engine emits `permission.requested` and waits. For `edit` and `write` the request includes a unified diff of the change, which both clients show. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked.
+With `ask`, the engine emits `permission.requested` and waits. Only the tab showing the session that asked (or the session a subagent works for) shows the prompt and notifies you; other tabs and other windows attached to the same engine don't. For `edit` and `write` the request includes a unified diff of the change, which both clients show. If building the preview shows the call would fail (for example `oldString` isn't in the file), the model gets that error and you aren't asked.
 
 - **Allow once**: this call only.
 - **Always this session**: allow rules for this call, shown in the prompt (`bash(git status:*)`, `edit`, `webfetch(domain:bun.sh)`, `mcp__github`), for the rest of the engine's lifetime.

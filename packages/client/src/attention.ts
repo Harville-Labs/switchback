@@ -4,6 +4,7 @@
  * client decides how (the TUI asks the terminal, VS Code shows a notification).
  */
 import type { EngineEvent, NotificationSettings } from '@switchback/protocol';
+import type { SessionScope } from './session-scope.ts';
 
 export interface Attention {
   /** Why: an answer is needed now, or a long turn is done. */
@@ -18,13 +19,15 @@ export class AttentionTracker {
   private started = new Map<string, number>();
 
   constructor(
+    /** Only this client's sessions: another window's prompts aren't for this one. */
+    private readonly scope: SessionScope,
     private readonly settings: NotificationSettings = DEFAULT_NOTIFICATIONS,
     private readonly now: () => number = Date.now,
   ) {}
 
   /** What to tell the user about this event, if anything. */
   observe(event: EngineEvent): Attention | undefined {
-    if (this.settings.mode === 'off') return undefined;
+    if (!this.scope.observe(event) || this.settings.mode === 'off') return undefined;
     switch (event.type) {
       case 'permission.requested':
         return {

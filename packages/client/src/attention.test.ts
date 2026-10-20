@@ -1,6 +1,14 @@
 import { expect, test } from 'bun:test';
 import type { EngineEvent } from '@switchback/protocol';
 import { AttentionTracker } from './attention.ts';
+import { SessionScope } from './session-scope.ts';
+
+/** This window's sessions: just `s`. */
+const scope = (): SessionScope => {
+  const it = new SessionScope();
+  it.add('s');
+  return it;
+};
 
 const started = (turnId: string, parentSessionId?: string): EngineEvent => ({
   type: 'turn.started',
@@ -19,7 +27,7 @@ const completed = (
 });
 
 test('asks for attention when an answer is needed', () => {
-  const t = new AttentionTracker();
+  const t = new AttentionTracker(scope());
   const ask = (plan?: string) =>
     t.observe({
       type: 'permission.requested',
@@ -48,7 +56,7 @@ test('asks for attention when an answer is needed', () => {
 
 test('long top-level turns notify when they end; short, cancelled, and subagent turns do not', () => {
   let now = 0;
-  const t = new AttentionTracker({ mode: 'system', afterSeconds: 30 }, () => now);
+  const t = new AttentionTracker(scope(), { mode: 'system', afterSeconds: 30 }, () => now);
   t.observe(started('long'));
   t.observe(started('short'));
   t.observe(started('child', 'parent'));
@@ -70,7 +78,7 @@ test('long top-level turns notify when they end; short, cancelled, and subagent 
 });
 
 test('off is silent, and afterSeconds 0 only asks', () => {
-  const off = new AttentionTracker({ mode: 'off', afterSeconds: 30 });
+  const off = new AttentionTracker(scope(), { mode: 'off', afterSeconds: 30 });
   expect(
     off.observe({
       type: 'escalation.requested',
@@ -81,8 +89,33 @@ test('off is silent, and afterSeconds 0 only asks', () => {
     }),
   ).toBeUndefined();
   let now = 0;
-  const asksOnly = new AttentionTracker({ mode: 'bell', afterSeconds: 0 }, () => now);
+  const asksOnly = new AttentionTracker(scope(), { mode: 'bell', afterSeconds: 0 }, () => now);
   asksOnly.observe(started('t'));
   now = 1_000_000;
   expect(asksOnly.observe(completed('t', 'end_turn'))).toBeUndefined();
+});
+
+test("another window's prompts and turns don't ask for attention here", () => {
+  let now = 0;
+  const t = new AttentionTracker(scope(), { mode: 'system', afterSeconds: 30 }, () => now);
+  expect(
+    t.observe({
+      type: 'permission.requested',
+      sessionId: 'elsewhere',
+      requestId: 'r',
+      tool: 'bash',
+      summary: 'run `ls`',
+      input: {},
+    }),
+  ).toBeUndefined();
+  t.observe({ type: 'turn.started', sessionId: 'elsewhere', turnId: 't' });
+  now = 95_000;
+  expect(
+    t.observe({
+      type: 'turn.completed',
+      sessionId: 'elsewhere',
+      turnId: 't',
+      stopReason: 'end_turn',
+    }),
+  ).toBeUndefined();
 });

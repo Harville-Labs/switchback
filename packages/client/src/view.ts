@@ -183,7 +183,15 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
     return resolvePermission(state, event.requestId, event.decision);
   if (event.type === 'escalation.resolved') return resolveEscalation(state, event.requestId);
 
-  // Permission prompts can come from any descendant session.
+  // Prompts come from this session or a descendant. A shared engine sends
+  // every client every session's events, so one from elsewhere isn't ours to answer.
+  if (
+    (event.type === 'permission.requested' || event.type === 'escalation.requested') &&
+    !owns(state, event.sessionId) &&
+    !(event.parentSessionId && owns(state, event.parentSessionId))
+  )
+    return state;
+
   if (event.type === 'permission.requested') {
     return {
       ...state,
@@ -204,7 +212,7 @@ export function reduce(state: ViewState, event: EngineEvent): ViewState {
     };
   }
 
-  // Escalation prompts can come from any descendant; they're answered at the top.
+  // A descendant's escalation is answered at the top.
   if (event.type === 'escalation.requested' && event.sessionId !== state.sessionId) {
     const agent = agentOf(state, event.sessionId);
     return {

@@ -23,6 +23,7 @@ import {
   replaceActive,
   resolveEscalation,
   resolvePermission,
+  SessionScope,
   type SlashCommand,
   type SwitchbackClient,
   switchTab,
@@ -201,8 +202,14 @@ export function App({
   }, [client]);
   useEffect(refreshSessions, [refreshSessions]);
 
+  // Sessions opened in a tab here. A shared daemon sends this window other
+  // windows' events too, and their prompts mustn't notify here.
+  const [scope] = useState(() => new SessionScope());
+  useEffect(() => {
+    for (const t of tabs.tabs) scope.add(t.session.id);
+  }, [tabs.tabs, scope]);
   // One tracker for the app's life: it remembers when turns started.
-  const [attention] = useState(() => new AttentionTracker(init.notifications));
+  const [attention] = useState(() => new AttentionTracker(scope, init.notifications));
   useEffect(() => {
     refreshUsage();
     return client.on((event) => {
