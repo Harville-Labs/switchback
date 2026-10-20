@@ -14,6 +14,7 @@ import {
   type SessionRewindResult,
   type SessionSummary,
 } from '@switchback/protocol';
+import type { Effort } from '@switchback/providers';
 import type { Checkpoints } from './checkpoints.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
@@ -54,6 +55,15 @@ export class SessionControls {
     assertModeAllowed(mode, this.host.org());
     this.changeMode(this.host.top(this.deps.sessions.live(sessionId)), mode, false);
     return { mode };
+  }
+
+  /** `session.setEffort`. Only the top-level session's own calls use it; subagents keep theirs. */
+  setEffort(sessionId: string, effort: Effort | null): { effort?: Effort } {
+    const top = this.host.top(this.deps.sessions.live(sessionId));
+    if (effort) top.effort = effort;
+    else delete top.effort;
+    this.host.emit({ type: 'effort.changed', ...scope(top), ...(effort ? { effort } : {}) });
+    return effort ? { effort } : {};
   }
 
   /** `permissions.list`: the rules in effect, with their sources, and the session's mode. */

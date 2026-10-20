@@ -9,6 +9,7 @@ import {
   RpcError,
   type SessionSummary,
 } from '@switchback/protocol';
+import type { Effort } from '@switchback/providers';
 import type { AgentCatalog } from './agent-catalog.ts';
 import type { SwitchbackConfig } from './config.ts';
 import { hashesOf, type Instructions } from './instructions-live.ts';
@@ -31,6 +32,7 @@ export interface NewSession {
   worktree?: Worktree;
   permissionMode?: PermissionMode;
   instructions?: string;
+  effort?: Effort;
 }
 
 export interface SessionFactoryDeps {
@@ -61,6 +63,11 @@ export class SessionFactory {
     if (!params.parentId) this.deps.agents.refresh();
     const agent = this.deps.agents.get(agentName);
     if (!agent) throw new RpcError(ErrorCode.InvalidParams, `unknown agent "${agentName}"`);
+    if (!params.parentId && agent.mode === 'subagent')
+      throw new RpcError(
+        ErrorCode.InvalidParams,
+        `agent "${agent.name}" is a subagent; it runs through the task tool. Start the session with a primary agent, or set mode: all in its definition`,
+      );
     if (params.permissionMode) assertModeAllowed(params.permissionMode, this.deps.org());
     const wt = params.worktree;
     const instructions = this.deps.instructions();
@@ -86,7 +93,12 @@ export class SessionFactory {
     };
     return this.deps.sessions.create(
       header,
-      params.permissionMode && !params.parentId ? { mode: params.permissionMode } : {},
+      params.parentId
+        ? {}
+        : {
+            ...(params.permissionMode ? { mode: params.permissionMode } : {}),
+            ...(params.effort ? { effort: params.effort } : {}),
+          },
     );
   }
 
@@ -119,7 +131,10 @@ export class SessionFactory {
       ...(live?.controller ? { running: true } : {}),
       ...(header.parentId
         ? {}
-        : { permissionMode: live?.mode ?? this.deps.config().permissions.defaultMode }),
+        : {
+            permissionMode: live?.mode ?? this.deps.config().permissions.defaultMode,
+            ...(live?.effort ? { effort: live.effort } : {}),
+          }),
     };
   }
 }

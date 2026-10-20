@@ -2,7 +2,7 @@
  * The configuration file format, validated with Zod (docs/configuration.md).
  * `bun run schema` writes the JSON Schema from it.
  */
-import { PermissionMode } from '@switchback/protocol';
+import { EffortLevel, PermissionMode } from '@switchback/protocol';
 import { ProviderConfig } from '@switchback/providers';
 import { ModelChain, RoutingConfig } from '@switchback/router';
 import { z } from 'zod';
@@ -33,7 +33,7 @@ export const ModelConfig = z.object({
    */
   contextWindow: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().default(16_000),
-  effort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+  effort: EffortLevel.optional(),
   /**
    * Whether the model can read images. Known for catalog models; others are
    * taken to be text-only unless this says so.
@@ -49,6 +49,40 @@ export const ModelConfig = z.object({
     .optional(),
 });
 export type ModelConfig = z.infer<typeof ModelConfig>;
+
+/** A comma-separated string or a list, as agent files write them. */
+const NameList = z.union([z.string(), z.array(z.string())]);
+
+/**
+ * An agent's settings (docs/subagents.md). Agent file frontmatter uses the
+ * same fields; in config every field is optional, so an entry can adjust an
+ * agent defined elsewhere, or define a new one with a description and prompt.
+ */
+export const AgentConfig = z.object({
+  /** Frontmatter only: the agent's name when it differs from the file name. */
+  name: z.string().optional(),
+  description: z.string().optional(),
+  /** The system prompt (in a file, the Markdown body). */
+  prompt: z.string().optional(),
+  /** `primary`: runs sessions only. `subagent`: runs only through the task tool. `all`: both. */
+  mode: z.enum(['primary', 'subagent', 'all']).optional(),
+  tools: NameList.optional(),
+  /** `local`, `remote`, `inherit`, or a model alias. */
+  model: z.string().optional(),
+  route: z.enum(['auto', 'local', 'remote']).optional(),
+  /** Reasoning effort for this agent's model calls, whichever model routing picks. */
+  effort: EffortLevel.optional(),
+  /** Model calls per turn for this agent; default `maxStepsPerTurn`. */
+  maxSteps: z.number().int().positive().optional(),
+  /** Agents this one may delegate to, by name or `*` pattern; `[]` turns delegation off. */
+  agents: NameList.optional(),
+  budgetUsd: z.number().nonnegative().optional(),
+  isolation: z.literal('worktree').optional(),
+  runtime: z.string().optional(),
+  /** Remove the agent, built-in or not. */
+  disable: z.boolean().optional(),
+});
+export type AgentConfig = z.infer<typeof AgentConfig>;
 
 export const SwitchbackConfig = z.object({
   $schema: z.string().optional(),
@@ -169,6 +203,8 @@ export const SwitchbackConfig = z.object({
     )
     .default({}),
   defaultAgent: z.string().default('build'),
+  /** Agents defined or adjusted in config, by name; they win over agent files. */
+  agents: z.record(z.string(), AgentConfig).default({}),
   subagents: z
     .object({
       maxConcurrent: z.number().int().positive().default(4),
@@ -177,6 +213,8 @@ export const SwitchbackConfig = z.object({
       budgetUsd: z.number().nonnegative().optional(),
       /** Model alias for subagents whose agent doesn't pin a model or tier; else normal routing. */
       model: z.string().optional(),
+      /** Reasoning effort for subagents whose agent doesn't set one; else the model's. */
+      effort: EffortLevel.optional(),
     })
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */

@@ -116,6 +116,10 @@ export interface OrgInfo {
   version: string;
 }
 
+/** How hard a model reasons before answering; adapters map it to each provider's control. */
+export const EffortLevel = z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+export type EffortLevel = z.infer<typeof EffortLevel>;
+
 export const SessionCreateParams = z.object({
   agent: z.string().optional(),
   title: z.string().optional(),
@@ -123,6 +127,8 @@ export const SessionCreateParams = z.object({
   permissionMode: PermissionMode.optional(),
   /** Added to the session's system prompt (headless runs' `--instructions`). */
   instructions: z.string().max(20_000).optional(),
+  /** Reasoning effort for this session's model calls, over its agent's and models' own. */
+  effort: EffortLevel.optional(),
 });
 export type SessionCreateParams = z.infer<typeof SessionCreateParams>;
 
@@ -141,6 +147,8 @@ export interface SessionSummary {
   running?: boolean;
   /** Top-level sessions: the permission mode in effect. */
   permissionMode?: PermissionMode;
+  /** Top-level sessions: the reasoning effort the session set, if any. */
+  effort?: EffortLevel;
 }
 
 export const SessionGetParams = z.object({ sessionId: z.string() });
@@ -270,6 +278,13 @@ export type SessionCompactParams = z.infer<typeof SessionCompactParams>;
 export const SessionSetModeParams = z.object({ sessionId: z.string(), mode: PermissionMode });
 export type SessionSetModeParams = z.infer<typeof SessionSetModeParams>;
 
+/** `null` clears it: calls use the agent's or the model's effort again. */
+export const SessionSetEffortParams = z.object({
+  sessionId: z.string(),
+  effort: EffortLevel.nullable(),
+});
+export type SessionSetEffortParams = z.infer<typeof SessionSetEffortParams>;
+
 export const PermissionsListParams = z.object({ sessionId: z.string().optional() });
 export type PermissionsListParams = z.infer<typeof PermissionsListParams>;
 
@@ -310,9 +325,13 @@ export type EscalationRespondParams = z.infer<typeof EscalationRespondParams>;
 export interface AgentSummary {
   name: string;
   description: string;
-  source: 'builtin' | 'user' | 'project';
+  source: 'builtin' | 'user' | 'project' | 'config';
+  /** `primary`: runs sessions. `subagent`: runs through the task tool. `all`: both. */
+  mode: 'primary' | 'subagent' | 'all';
   route: RoutePreference;
   model?: string;
+  /** Reasoning effort for the agent's model calls. */
+  effort?: string;
   /** Remote spend allowed per invocation as a subagent. */
   budgetUsd?: number;
 }
@@ -453,6 +472,8 @@ export interface Methods {
   };
   /** Switch a session's permission mode; refused for modes the organization rules out. */
   'session.setMode': { params: SessionSetModeParams; result: { mode: PermissionMode } };
+  /** Set or clear a top-level session's reasoning effort. */
+  'session.setEffort': { params: SessionSetEffortParams; result: { effort?: EffortLevel } };
   'permissions.list': { params: PermissionsListParams; result: PermissionsListResult };
   /** Background shells, all or one session's. */
   'shells.list': { params: ShellsListParams; result: ShellInfo[] };

@@ -3,6 +3,7 @@
  * client folds them into its view through `reduce()` in @switchback/client.
  */
 import type {
+  EffortLevel,
   OrgInfo,
   PermissionDecision,
   PermissionMode,
@@ -42,6 +43,8 @@ export type EngineEvent =
     } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
+  /** The session's reasoning effort; none means the agent's or model's own. */
+  | ({ type: 'effort.changed'; effort?: EffortLevel } & SessionScoped)
   /** The session's queued prompts changed. */
   | ({ type: 'queue.updated'; queued: QueuedPrompt[] } & SessionScoped)
   /** A queued prompt reached the model; clients show it as the user's message now. */
@@ -127,6 +130,10 @@ export type EngineEvent =
       background?: boolean;
       /** Set when it works in its own git worktree. */
       worktree?: WorktreeStart;
+      /** The model alias the parent chose for this task, when it chose one. */
+      model?: string;
+      /** The reasoning effort it runs with, when the agent or the parent set one. */
+      effort?: string;
     } & SessionScoped)
   | ({
       type: 'subagent.completed';

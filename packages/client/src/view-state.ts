@@ -53,6 +53,10 @@ export type ViewItem =
       toolCalls: number;
       /** The parent didn't wait; the report arrives later as a message. */
       background?: boolean;
+      /** The model alias the parent chose for it. */
+      model?: string;
+      /** The reasoning effort it runs with. */
+      effort?: string;
       /** Its git worktree: the branch while it runs, and what it left once it's done. */
       worktree?: { branch: string } & Partial<WorktreeOutcome>;
     }
@@ -133,6 +137,12 @@ export interface ViewState {
   private?: string;
   /** The permission mode (top-level sessions). */
   mode?: PermissionMode;
+  /**
+   * Reasoning effort the session set (top-level sessions), once it changes
+   * while this view watches; null when it was cleared. Before that, the
+   * session summary has it (`sessionEffort`).
+   */
+  effort?: string | null;
   /** Background shells started by this session or its subagents, by ID. */
   shells?: Record<string, ShellInfo>;
   /** Prompts sent during the running turn, waiting for its next step. */

@@ -65,8 +65,11 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     () => options.config,
     now,
   );
-  const agents: AgentCatalog = new AgentCatalog(options.agents, options.agentDirs, (m) =>
-    io.notify('warn', m),
+  const agents: AgentCatalog = new AgentCatalog(
+    options.agents,
+    options.agentDirs,
+    () => options.config,
+    (m) => io.notify('warn', m),
   );
   const library: Library = new Library(options.library ?? { commands: [], skills: [] }, (m) =>
     io.notify('warn', m),
@@ -206,7 +209,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     ledger: ledger,
     router: (s) => policy.routerFor(s),
     agent: (name) => agents.get(name),
-    agents: () => agents.all(),
+    subagentsOf: (agent) => agents.subagentsOf(agent),
     mcp: () => io.mcp(),
     interaction: () => options.interaction ?? 'prompt',
     beforeStep: (s, turnId) => {

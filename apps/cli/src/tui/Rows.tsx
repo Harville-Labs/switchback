@@ -7,6 +7,7 @@ import {
   isQuietTool,
   reviewLines,
   speedLabel,
+  subagentDetail,
   tailLines,
   toolResult,
   toolTitle,
@@ -314,11 +315,7 @@ export function Item({
               {icon} {item.agent}
             </Text>{' '}
             {item.task}
-            <Text dimColor>
-              {item.background ? ' · background' : ''}
-              {item.tier ? ` · ${item.tier}` : ''} · {item.toolCalls} tool calls
-              {item.status === 'running' && item.activity ? ` · ${item.activity}` : ''}
-            </Text>
+            <Text dimColor> · {subagentDetail(item)}</Text>
           </Text>
           {item.worktree ? <Text dimColor>{`  ${worktreeLabel(item.worktree)}`}</Text> : null}
         </Box>

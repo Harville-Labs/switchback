@@ -8,7 +8,9 @@ import {
   currentChange,
   dashboardRows,
   describeSession,
+  effortNotice,
   escalateNotice,
+  formatAgents,
   formatCommands,
   formatDashboard,
   formatMcpServers,
@@ -25,10 +27,12 @@ import {
   initialView,
   MODE_DESCRIPTIONS,
   modeLabel,
+  parseEffort,
   parseMode,
   pickCopy,
   type SlashCommand,
   type SwitchbackClient,
+  sessionEffort,
   subagentList,
   type TabsState,
   tabAt,
@@ -308,15 +312,7 @@ const HANDLERS: Record<string, Handler> = {
   agents: async (ctx) => {
     // Asked each time, so agents created meanwhile (switchback agents new) show up.
     const agents = await ctx.client.request('agents.list', {}).catch(() => ctx.init.agents);
-    say(
-      ctx,
-      agents
-        .map(
-          (a) =>
-            `${a.name} [${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}]: ${a.description}`,
-        )
-        .join('\n'),
-    );
+    say(ctx, formatAgents(agents));
   },
   new: (ctx) => newSession(ctx),
   tabs: (ctx) => ctx.openDashboard(),
@@ -389,6 +385,17 @@ const HANDLERS: Record<string, Handler> = {
     } catch (err) {
       say(ctx, `mode: ${(err as Error).message}`);
     }
+  },
+  effort: async (ctx, args) => {
+    if (!args[0]) return say(ctx, effortNotice(sessionEffort(ctx.view, ctx.session)));
+    const effort = parseEffort(args[0]);
+    if (effort === undefined)
+      return say(ctx, 'usage: /effort none|low|medium|high|xhigh|max|default');
+    const set = await ctx.client.request('session.setEffort', {
+      sessionId: ctx.session.id,
+      effort,
+    });
+    say(ctx, effortNotice(set.effort));
   },
   permissions: async (ctx) => {
     const p = await ctx.client.request('permissions.list', { sessionId: ctx.session.id });

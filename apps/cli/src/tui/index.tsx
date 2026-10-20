@@ -1,5 +1,10 @@
 import { fromTranscript, type ViewState } from '@switchback/client';
-import type { PermissionMode, RoutePreference, SessionSummary } from '@switchback/protocol';
+import type {
+  EffortLevel,
+  PermissionMode,
+  RoutePreference,
+  SessionSummary,
+} from '@switchback/protocol';
 import { render } from 'ink';
 import { type CommonFlags, connectShared } from '../bootstrap.ts';
 import { App } from './App.tsx';
@@ -15,6 +20,7 @@ export async function tui(
     /** Attach to (or start) the workspace's shared daemon. */
     daemon: boolean;
     permissionMode?: PermissionMode;
+    effort?: EffortLevel;
     /** Open the session picker (`--resume`). */
     pickSession?: boolean;
   },
@@ -42,9 +48,18 @@ export async function tui(
   session ??= await client.request('session.create', {
     ...(opts.agent ? { agent: opts.agent } : {}),
     ...(opts.permissionMode ? { permissionMode: opts.permissionMode } : {}),
+    ...(opts.effort ? { effort: opts.effort } : {}),
   });
   if (opts.permissionMode && session.permissionMode !== opts.permissionMode)
     await client.request('session.setMode', { sessionId: session.id, mode: opts.permissionMode });
+  if (opts.effort && session.effort !== opts.effort)
+    session = {
+      ...session,
+      ...(await client.request('session.setEffort', {
+        sessionId: session.id,
+        effort: opts.effort,
+      })),
+    };
   const mouse = mouseInput();
   let open = session;
   const app = render(

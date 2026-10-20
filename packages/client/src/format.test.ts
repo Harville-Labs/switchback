@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test';
-import { formatPermissions, permissionWhy } from './format.ts';
+import {
+  effortNotice,
+  formatAgents,
+  formatPermissions,
+  parseEffort,
+  permissionWhy,
+  sessionEffort,
+  subagentDetail,
+} from './format.ts';
 
 test('/permissions groups rules by source and wraps long lists', () => {
   const allow = Array.from({ length: 12 }, (_, i) => `bash(tool${i}:*)`);
@@ -32,4 +40,57 @@ test('a permission prompt says why it asks: an ask rule, or another reason', () 
     'Asking because: outside the workspace.',
   );
   expect(permissionWhy({})).toBeUndefined();
+});
+
+test('/effort takes a level or default, and says what follows from it', () => {
+  expect(parseEffort('HIGH')).toBe('high');
+  expect(parseEffort('default')).toBeNull();
+  expect(parseEffort('extreme')).toBeUndefined();
+  expect(effortNotice('max')).toContain('effort: max');
+  expect(effortNotice(undefined)).toContain('following');
+});
+
+test("a session's effort comes from the latest change, else its summary", () => {
+  expect(sessionEffort({}, { effort: 'low' })).toBe('low');
+  expect(sessionEffort({ effort: 'high' }, { effort: 'low' })).toBe('high');
+  expect(sessionEffort({ effort: null }, { effort: 'low' })).toBeUndefined();
+});
+
+test('/agents shows mode, route, model, and effort only when they differ from the defaults', () => {
+  const text = formatAgents([
+    { name: 'build', description: 'builds', source: 'builtin', mode: 'primary', route: 'auto' },
+    {
+      name: 'explore',
+      description: 'searches',
+      source: 'config',
+      mode: 'subagent',
+      route: 'local',
+      effort: 'low',
+    },
+    {
+      name: 'plan',
+      description: 'plans',
+      source: 'builtin',
+      mode: 'all',
+      route: 'auto',
+      model: 'big',
+    },
+  ] as Parameters<typeof formatAgents>[0]);
+  expect(text.split('\n')).toEqual([
+    'build [builtin, primary]: builds',
+    'explore [config, subagent, local, effort low]: searches',
+    'plan [builtin, big]: plans',
+  ]);
+});
+
+test('a subagent row names the model and effort its parent chose', () => {
+  const row = {
+    kind: 'subagent',
+    status: 'done',
+    model: 'remote',
+    effort: 'max',
+    tier: 'remote',
+    toolCalls: 3,
+  } as unknown as Parameters<typeof subagentDetail>[0];
+  expect(subagentDetail(row)).toBe('remote · effort max · remote · 3 tool calls');
 });

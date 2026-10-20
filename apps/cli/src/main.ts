@@ -2,7 +2,12 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { RemoteKind } from '@switchback/engine';
-import { PermissionMode, RoutePreference, SWITCHBACK_BRANCH } from '@switchback/protocol';
+import {
+  EffortLevel,
+  PermissionMode,
+  RoutePreference,
+  SWITCHBACK_BRANCH,
+} from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 
 const MIN_BUN = [1, 4, 0];
@@ -41,6 +46,7 @@ Options
   -r, --resume       Pick a saved session to resume
   --session <id>     Resume a specific session
   --permission-mode <m>  default | acceptEdits | plan | bypassPermissions
+  --effort <e>       Reasoning effort for the session: none | low | medium | high | xhigh | max
                      (default: permissions.defaultMode)
   --no-daemon        TUI: use a private engine instead of the shared one
   --yes              run: approve tool permissions; init: no prompts
@@ -159,6 +165,7 @@ async function main(argv: string[]): Promise<number> {
       resume: { type: 'boolean', short: 'r', default: false },
       session: { type: 'string' },
       'permission-mode': { type: 'string' },
+      effort: { type: 'string' },
       output: { type: 'string' },
       allow: { type: 'string', multiple: true },
       deny: { type: 'string', multiple: true },
@@ -226,7 +233,8 @@ async function main(argv: string[]): Promise<number> {
     values['permission-mode'],
     PermissionMode.options,
   );
-  const mode = permissionMode ? { permissionMode } : {};
+  const effort = oneOf('effort', values.effort, EffortLevel.options);
+  const mode = { ...(permissionMode ? { permissionMode } : {}), ...(effort ? { effort } : {}) };
   const scope = oneOf('scope', values.scope, ['user', 'project'] as const);
   const [command, ...rest] = positionals;
 

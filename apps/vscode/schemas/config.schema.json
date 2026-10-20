@@ -973,6 +973,87 @@
       "default": "build",
       "type": "string"
     },
+    "agents": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["primary", "subagent", "all"]
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string",
+            "enum": ["auto", "local", "remote"]
+          },
+          "effort": {
+            "type": "string",
+            "enum": ["none", "low", "medium", "high", "xhigh", "max"]
+          },
+          "maxSteps": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "agents": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "budgetUsd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "isolation": {
+            "type": "string",
+            "const": "worktree"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "disable": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
     "subagents": {
       "default": {},
       "type": "object",
@@ -995,6 +1076,10 @@
         },
         "model": {
           "type": "string"
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high", "xhigh", "max"]
         }
       }
     },

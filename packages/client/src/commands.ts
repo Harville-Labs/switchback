@@ -88,6 +88,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     clients: ['tui'],
   },
   {
+    name: 'effort',
+    args: '[none|low|medium|high|xhigh|max|default]',
+    group: 'Routing',
+    description: "how hard this session's models reason; default follows the agent and models",
+  },
+  {
     name: 'mode',
     args: '[default|accept-edits|plan|bypass]',
     group: 'Permissions',

@@ -6,6 +6,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ### Added
 - **`switchback usage` is a dashboard in a terminal.** Pick today, the last 7 days, the month, the year, or all time, step back through earlier periods with ← and →, and see spend, savings, budget meters, how tokens split between local and remote models, a chart per day or month, and the breakdown by rule, agent, or model. `--from`/`--to` report any span of days, `--period` also takes `year` and `all`, and piped output and `--json` work as before. The `usage.get` protocol method takes a `range` and returns `byDay`
+- **Agents have modes, limits, and their own reasoning effort.** An agent's `mode` says whether it runs as a session's agent, as a subagent, or both; `effort` and `maxSteps` set its reasoning effort and step limit; and `agents` limits which subagents it may call (an empty list removes its `task` tool). The new `agents` config key adds agents, changes built-ins field by field, and turns them off with `disable: true`. `explore` now runs at `low` effort
+- **The parent picks a subagent's model and effort per task.** The `task` tool takes `model` and `effort`; an agent pinned to the local model refuses a remote one. `subagents.effort` sets the default for subagents whose agent sets none
+- **`/effort` changes reasoning effort for the current session.** It overrides the agent's and model's effort for that session only, and `/effort default` goes back. `--effort` sets it at launch, it works the same in VS Code, and the protocol adds `session.setEffort`, `effort` on `session.create`, and the `effort.changed` event
 
 ### Removed
 - **No more Intel Mac build.** Releases no longer include a `darwin-x64` binary or `.vsix`. On an Intel Mac, the installer and `switchback self-update` now say there is no build instead of failing to download one. Apple silicon under Rosetta still gets the arm64 build

@@ -12,12 +12,14 @@ Subagents are both a quality feature and a cost feature:
 
 ## Built-in agents
 
-| Agent | Tools | Routing | Use |
-|---|---|---|---|
-| `build` | all | auto | Default primary agent for coding work |
-| `explore` | read, glob, grep | **local** | Find files, symbols, and usages; returns a summary |
-| `plan` | read, glob, grep | auto | Produce an implementation plan without editing |
-| `general` | all | auto | Delegated multi-step tasks |
+| Agent | Mode | Tools | Routing | Use |
+|---|---|---|---|---|
+| `build` | primary | all | auto | Default primary agent for coding work |
+| `explore` | subagent | read, glob, grep | **local**, effort `low` | Find files, symbols, and usages; returns a summary |
+| `plan` | all | read, glob, grep | auto | Produce an implementation plan without editing |
+| `general` | subagent | all | auto | Delegated multi-step tasks |
+
+Change any of them, or turn them off, with the config `agents` key ([below](#agents-in-config)).
 
 ## Defining agents
 
@@ -40,6 +42,10 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `tools` | comma list or YAML list | Tool names (`read`, `grep`, `bash`, `task`, ...), case-insensitive. MCP tools: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`small`, `medium`, `large`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Same effect as `model: local`/`remote` |
+| `mode` | `primary`, `subagent`, `all` | Where it can run: as a session's agent (`/agent`, `--agent`), through the `task` tool, or both. Defaults to `all` |
+| `effort` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Reasoning effort for its model calls, over the model's own `effort` (see [Reasoning effort](#reasoning-effort)) |
+| `maxSteps` | number | Model calls per turn, over `maxStepsPerTurn` |
+| `agents` | comma list or YAML list of names or globs | The subagents it may call with `task` (`explore, review-*`). Omit for every subagent; an empty list removes its `task` tool. No agent can call a `primary`-mode agent |
 | `runtime` | name under `runtimes` | Run on an external agent runtime such as Claude Code (see below) |
 | `isolation` | `worktree` | Always run this agent in its own git worktree (see below) |
 | `budgetUsd` | dollars | Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |
@@ -63,6 +69,29 @@ Later locations override earlier ones by name:
 1. Built-ins
 2. `~/.switchback/agents/*.md` (user)
 3. `.switchback/agents/*.md` (project)
+4. The `agents` key in config (user, then project)
+
+### Agents in config
+
+The `agents` key takes the same fields as the frontmatter, plus `prompt` for the system prompt and `disable`. An entry for an existing agent changes only the fields it sets; an entry for a new name needs a `description` and a `prompt`.
+
+```jsonc
+"agents": {
+  "explore": { "effort": "medium", "model": "small" },   // tune a built-in
+  "general": { "disable": true },                        // turn one off
+  "build": { "agents": ["explore", "review-*"] },        // limit what it may delegate to
+  "review-security": {
+    "description": "Reviews a diff for security bugs. Use after changing auth or input handling.",
+    "prompt": "You review diffs for security bugs; report each with file:line.",
+    "mode": "subagent",
+    "tools": "read, grep, glob",
+    "effort": "high",
+    "maxSteps": 20
+  }
+}
+```
+
+`/agents` and `switchback agents` show `config` as the source of an agent the config changed last.
 
 Files that fail to parse are skipped and reported by `switchback doctor` and at startup. They never prevent the engine from starting.
 
@@ -75,6 +104,8 @@ Files that fail to parse are skipped and reported by `switchback doctor` and at 
 ```json
 { "agent": "explore", "description": "find auth middleware", "prompt": "Find where HTTP auth is enforced..." }
 ```
+
+The parent can also choose, for one task, `model` (any configured model alias, over the agent's own) and `effort`. Switchback refuses a `model` that isn't configured, a remote model for an agent pinned to `local`, and any `model` for an agent on an external runtime, and the parent gets the reason as the task result. The subagent row shows the model and effort it ran with.
 
 - The subagent starts with an empty transcript. `prompt` has to be self-contained, because the subagent can't see the parent conversation.
 - Only the subagent's final text returns to the parent. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model.
@@ -157,8 +188,20 @@ With `"background": true` the call returns at once with the task's ID and the pa
 | `subagents.maxConcurrent` | 4 | Concurrent subagents per depth level. Extra calls queue. |
 | `subagents.maxDepth` | 2 | Agents at this depth don't get the `task` tool. |
 | `subagents.model` | none | Model for subagents whose agent doesn't pin a model or tier, for example a cheap local one for every delegated search. Any alias, local or remote. |
-| `maxStepsPerTurn` | 50 | Applies to each subagent turn too. |
+| `subagents.effort` | none | Reasoning effort for subagents whose agent sets none. |
+| `maxStepsPerTurn` | 50 | Applies to each subagent turn too, unless its agent sets `maxSteps`. |
 | `subagents.budgetUsd` | none | Remote spend per invocation for agents without their own `budgetUsd`. |
+
+## Reasoning effort
+
+Each model call gets the first effort set, most specific first:
+
+1. The `effort` on the `task` call (subagents), or the session's effort from `/effort` or `--effort` (top level)
+2. The agent's `effort`
+3. `subagents.effort` (subagents only)
+4. The model's own `effort` in `models.<alias>`, its default
+
+`/effort` changes only the session you're in: subagents keep their own, and nothing is written to config. Models that don't support reasoning ignore it. See [configuration.md](configuration.md#modelsalias).
 
 ## Patterns
 

@@ -16,6 +16,7 @@ import {
   type Attachment,
   type CheckpointInfo,
   type CustomCommandInfo,
+  type EffortLevel,
   type EngineEvent,
   ErrorCode,
   type InitializeResult,
@@ -277,6 +278,11 @@ export class Engine {
   /** `session.setMode`. */
   setMode(sessionId: string, mode: PermissionMode): { mode: PermissionMode } {
     return this.p.controls.setMode(sessionId, mode);
+  }
+
+  /** `session.setEffort`. */
+  setEffort(sessionId: string, effort: EffortLevel | null): { effort?: EffortLevel } {
+    return this.p.controls.setEffort(sessionId, effort);
   }
 
   /** `permissions.list`. */

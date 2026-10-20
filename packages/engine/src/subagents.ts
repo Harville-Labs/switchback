@@ -7,10 +7,11 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { RoutePreference, WorktreeOutcome } from '@switchback/protocol';
 import type { AgentDefinition } from './agents.ts';
+import { type SwitchbackConfig, tierOfModel } from './config.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { switchbackPaths } from './paths.ts';
 import { Semaphore } from './semaphore.ts';
-import { type SubagentResult, ToolError, truncate } from './tools/index.ts';
+import { type SubagentOptions, type SubagentResult, ToolError, truncate } from './tools/index.ts';
 import { createWorktree, finishWorktree, type Worktree } from './worktree.ts';
 import { parseShortstat, writeBranchMeta } from './worktree-info.ts';
 
@@ -59,11 +60,15 @@ export class Subagents {
     prompt: string,
     description: string,
     signal: AbortSignal,
-    options: { background?: boolean; isolation?: 'worktree' } = {},
+    options: SubagentOptions = {},
   ): Promise<SubagentResult> {
     const config = this.host.config();
     const slots = this.slotsFor(parent.depth + 1, config.subagents.maxConcurrent);
     const def = this.deps.agent(agent);
+    if (options.model) {
+      const problem = taskModelProblem(config, def, options.model);
+      if (problem) throw new ToolError(problem);
+    }
     const worktree =
       options.isolation === 'worktree' || def?.isolation === 'worktree'
         ? await this.createWorktree(parent)
@@ -85,6 +90,12 @@ export class Subagents {
       });
     const limitUsd = def?.budgetUsd ?? config.subagents.budgetUsd;
     if (limitUsd !== undefined) child.budget = { agent, limitUsd };
+    const { model, effort = def?.effort } = options;
+    if (options.model || options.effort)
+      child.task = {
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.effort ? { effort: options.effort } : {}),
+      };
     const background = options.background === true;
     // Background work outlives the turn that started it; the session cancels it.
     parent.bgController ??= new AbortController();
@@ -100,6 +111,8 @@ export class Subagents {
           agent,
           task: description,
           ...(background ? { background } : {}),
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {}),
           ...(worktree ? { worktree: { branch: worktree.branch, path: worktree.path } } : {}),
         });
         // The brief was written with the parent's context, so it's private if that is.
@@ -266,4 +279,24 @@ async function finishIsolated(
   } catch (err) {
     return kept(`Could not finish the worktree (${(err as Error).message}); it is kept`);
   }
+}
+
+/**
+ * Why the parent can't run `agent` on `model` for one task, or undefined when
+ * it can. A per-task model never lets an orchestrator move a local-only agent
+ * to a remote provider, and external runtimes pick their own model.
+ */
+export function taskModelProblem(
+  config: SwitchbackConfig,
+  agent: AgentDefinition | undefined,
+  model: string,
+): string | undefined {
+  if (agent?.runtime)
+    return `agent "${agent.name}" runs on ${agent.runtime}, which chooses its own model; omit model`;
+  const tier = tierOfModel(config, model);
+  if (!tier)
+    return `unknown model "${model}"; configured models: ${Object.keys(config.models).join(', ') || 'none'}`;
+  if (agent?.route === 'local' && tier === 'remote')
+    return `agent "${agent.name}" stays local, so it can't run on remote model "${model}"; pick a local model or omit model`;
+  return undefined;
 }

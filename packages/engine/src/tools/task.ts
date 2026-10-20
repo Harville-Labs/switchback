@@ -1,3 +1,4 @@
+import { EffortLevel } from '@switchback/protocol';
 import { z } from 'zod';
 import { defineTool, ToolError } from './tool.ts';
 
@@ -19,6 +20,15 @@ export const taskTool = defineTool({
       .describe(
         'Work in a separate git worktree and branch, so parallel editors never conflict; the report includes the branch and diff to merge',
       ),
+    effort: EffortLevel.optional().describe(
+      "Reasoning effort for this task: low for lookups and mechanical edits, high or above for hard debugging or design. Omit to use the agent's default",
+    ),
+    model: z
+      .string()
+      .optional()
+      .describe(
+        "A configured model alias to run this task on, instead of the agent's default. Omit unless the task needs a specific model",
+      ),
   }),
   permission: 'none',
   mutating: false,
@@ -29,19 +39,12 @@ export const taskTool = defineTool({
       throw new ToolError(
         `unknown agent "${input.agent}"; available: ${ctx.agentCatalog.map((a) => a.name).join(', ')}`,
       );
+    const { agent, prompt, description, ...options } = input;
     if (input.background) {
-      const started = await ctx.runSubagent(input.agent, input.prompt, input.description, {
-        background: true,
-        ...(input.isolation ? { isolation: input.isolation } : {}),
-      });
-      return `Started background task ${started.sessionId} (${input.agent}: ${input.description}). Its report will arrive as a message when it finishes; continue with other work and don't wait for it.`;
+      const started = await ctx.runSubagent(agent, prompt, description, options);
+      return `Started background task ${started.sessionId} (${agent}: ${description}). Its report will arrive as a message when it finishes; continue with other work and don't wait for it.`;
     }
-    const result = await ctx.runSubagent(
-      input.agent,
-      input.prompt,
-      input.description,
-      input.isolation ? { isolation: input.isolation } : {},
-    );
+    const result = await ctx.runSubagent(agent, prompt, description, options);
     if (!result.ok) throw new ToolError(`subagent failed: ${result.text}`);
     return result.text || '(subagent returned no text)';
   },

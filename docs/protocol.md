@@ -34,7 +34,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | Method | Params | Result |
 |---|---|---|
 | `initialize` | `protocolVersion`, `client`, `workspaceRoot` | Engine version, models, agents, `notifications` settings, and `org` when an organization policy applies |
-| `session.create` | `agent?`, `title?`, `permissionMode?` | `SessionSummary` (with the mode in `permissionMode`) |
+| `session.create` | `agent?`, `title?`, `permissionMode?`, `effort?` | `SessionSummary` (with the mode in `permissionMode`) |
 | `session.list` | none | Top-level sessions |
 | `session.get` | `sessionId` | Summary and full transcript |
 | `session.prompt` | `sessionId`, `text`, `route?` (`auto`\|`local`\|`remote`), `review?` (boolean; overrides `review.mode`), `delivery?` (`queue`\|`interrupt`) | `{ turnId, queued? }`, returned immediately; progress arrives as events. While a turn runs, the prompt is queued for the model's next step (`queued` is its ID; anything still queued when the turn ends starts the next one), or with `delivery: "interrupt"` the running turn is cancelled and this prompt starts at once. `session.cancel` drops the queue. `attachments?` adds context: `{kind: "file", path, startLine?, endLine?}` (read from the workspace by the engine), `{kind: "text", label, text}`, or `{kind: "image", name, data}` (base64; the engine checks the bytes are a PNG, JPEG, GIF, or WebP of at most 3.75 MB). These, and `@path` mentions in the text, become user-message parts marked `attachment`: text, or `image` parts for images (an image file attached or mentioned becomes one too). A tool result can carry `images` (`read` on an image file). |
@@ -46,6 +46,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`), `feedback?` | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config. With `deny`, `feedback` is what the user wants instead, and the model gets it with the refusal |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
+| `session.setEffort` | `{ sessionId, effort }` (`none`\|`low`\|`medium`\|`high`\|`xhigh`\|`max`, or `null` for the default) | `{ effort? }`. Reasoning effort for this session's own model calls, over its agent's and model's; subagents keep theirs. Emits `effort.changed` |
 | `shells.list` | `{ sessionId? }` | `ShellInfo[]`: background shells, all or one session's |
 | `worktrees.list` | `{}` | `WorktreeInfo[]`: branches isolated subagents made in this repository, newest first, with state (`running`, `ready`, `merged`, `kept`), size, commits ahead, and who made each and why |
 | `worktrees.diff` | `{ branch }` | `WorktreeDiff`: a `switchback/*` branch's stat, unified diff, and each changed file before and after |
@@ -78,6 +79,7 @@ A shared daemon sends every attached client every session's events, so a client 
 | `queue.updated` | The session's queued prompts changed (`queued`: id and text of each) |
 | `queue.delivered` | A queued prompt reached the model at a step boundary; clients show it as the user's message then |
 | `shell.updated` | A background shell started, exited, or was stopped (`shell`: id, command, status, exit code) |
+| `effort.changed` | A session's reasoning effort changed (`session.setEffort`); no `effort` means back to the default |
 | `mode.changed` | A session's permission mode changed (`session.setMode`, or a plan was approved) |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local; `denied` that the call never ran; `diff`, on an edit or write, what it changed (for display; the model never sees it) |
@@ -86,13 +88,13 @@ A shared daemon sends every attached client every session's events, so a client 
 | `permission.requested` | Waiting on `permission.respond`; for edits, `preview` is a unified diff (may be truncated) and `proposed` the complete new file. `rules` is what `allow_always` would grant (absent when `askRule` names an ask rule, which asks every time); `reason` says why else it asks (`outside the workspace`, `Switchback's own configuration`, `running outside the OS sandbox`, a hook); `plan` is set when the model asks to leave plan mode |
 | `permission.resolved` / `escalation.resolved` | The request was answered (by any client) or cancelled; clients clear their prompts |
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
-| `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait. For an isolated subagent, `worktree` carries its branch and path at the start, and at the end whether it changed anything, files, insertions, deletions, and `kept` (the path) if its worktree was kept |
+| `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait. `model` and `effort` are set when the parent chose them for this task. For an isolated subagent, `worktree` carries its branch and path at the start, and at the end whether it changed anything, files, insertions, deletions, and `kept` (the path) if its worktree was kept |
 | `usage.updated` | Cumulative session usage, cost, and `savingsUsd` |
 | `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config); carries `org` and human-readable `notes` |
-| `setup.ask` | A setup question for the client that started it (`setupId`, `requestId`, `question`: text, number, confirm, select, multiSelect, or search, with options and a default) |
+| `setup.ask` | A setup question for the client that started it (`setupId`, `requestId`, `question`: text, number, confirm, select, multiSelect, or search, with options and a default). A text question with `secret: true` (an API key) should hide what's typed |
 | `setup.note` | Something setup tells the person between questions: text with a tone, the roles (`/roles`), or the config about to be written |
 | `setup.finished` | How setup ended: `written` (with `file`), `nothing`, `cancelled`, or `failed` (with `message`) |
 | `log` | Engine diagnostics |

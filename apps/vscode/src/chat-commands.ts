@@ -4,7 +4,9 @@
  * as the command palette, since a picker beats typing model names.
  */
 import {
+  effortNotice,
   escalateNotice,
+  formatAgents,
   formatMcpServers,
   formatModels,
   formatPermissions,
@@ -13,6 +15,7 @@ import {
   formatUsage,
   formatWorktreeDiff,
   formatWorktrees,
+  parseEffort,
   parseMode,
 } from '@switchback/client';
 import * as vscode from 'vscode';
@@ -35,14 +38,7 @@ export async function runChatCommand(
       return args[0] ? engine.newSession(args[0]) : chooseAgent(engine);
     case 'agents': {
       const agents = await c.request('agents.list', {}).catch(() => engine.init?.agents ?? []);
-      return info(
-        agents
-          .map(
-            (a) =>
-              `${a.name} [${a.source}${a.route !== 'auto' ? `, ${a.route}` : ''}]: ${a.description}`,
-          )
-          .join('\n'),
-      );
+      return info(formatAgents(agents));
     }
     case 'sessions':
     case 'resume':
@@ -86,6 +82,17 @@ export async function runChatCommand(
         .request('session.setMode', { sessionId: session.id, mode })
         .catch((err: Error) => info(`mode: ${err.message}`));
       return;
+    }
+    case 'effort': {
+      if (!args[0]) return info(effortNotice(session.effort));
+      const effort = parseEffort(args[0]);
+      if (effort === undefined)
+        return info('usage: /effort none|low|medium|high|xhigh|max|default');
+      const set = await c.request('session.setEffort', { sessionId: session.id, effort });
+      // The summary is this client's copy; keep it current for the next bare /effort.
+      if (set.effort) session.effort = set.effort;
+      else delete session.effort;
+      return info(effortNotice(set.effort));
     }
     case 'permissions':
       return info(

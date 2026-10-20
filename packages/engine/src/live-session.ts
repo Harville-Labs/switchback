@@ -16,6 +16,7 @@ import type {
   Tier,
   Usage,
 } from '@switchback/protocol';
+import type { Effort } from '@switchback/providers';
 import type { SignalTracker } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import type { InstructionHashes } from './instructions-live.ts';
@@ -32,6 +33,8 @@ export interface LiveSession {
   controller?: AbortController;
   /** Subagent invocations: remote spend allowed for this session and its descendants. */
   budget?: { agent: string; limitUsd: number };
+  /** Chosen by the parent for this subagent invocation, over the agent's own settings. */
+  task?: { model?: string; effort?: Effort };
   /** Why the last turn stopped with an error, reported to a parent agent. */
   lastError?: string;
   /** Background subagents still running, by child session ID. */
@@ -68,6 +71,8 @@ export interface LiveSession {
   redacted?: number;
   /** Top-level sessions: the permission mode; subagents follow their top-level session's. */
   mode?: PermissionMode;
+  /** Top-level sessions: reasoning effort for every call, over the agent's and model's own. */
+  effort?: Effort;
   /** The mode the model was last told about (plan mode reminders). */
   toldMode?: PermissionMode;
   /** The AGENTS.md hashes the model was last told about; worked out from the transcript when unset. */

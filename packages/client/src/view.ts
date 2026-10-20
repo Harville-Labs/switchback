@@ -280,6 +280,8 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       return { ...state, roles: event.roles };
     case 'mode.changed':
       return { ...state, mode: event.mode };
+    case 'effort.changed':
+      return { ...state, effort: event.effort ?? null };
     case 'queue.updated':
       return { ...state, queue: event.queued };
     case 'queue.delivered':
@@ -347,6 +349,8 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         status: 'running',
         toolCalls: 0,
         ...(event.background ? { background: true } : {}),
+        ...(event.model ? { model: event.model } : {}),
+        ...(event.effort ? { effort: event.effort } : {}),
         ...(event.worktree ? { worktree: { branch: event.worktree.branch } } : {}),
       });
       return {

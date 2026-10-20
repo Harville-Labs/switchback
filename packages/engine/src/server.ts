@@ -29,6 +29,7 @@ import {
   SessionPromptParams,
   SessionRewindParams,
   SessionRolesParams,
+  SessionSetEffortParams,
   SessionSetModeParams,
   SessionSetRolesParams,
   SetupAnswerParams,
@@ -140,6 +141,10 @@ export function serve(
       case 'session.setMode': {
         const p = parse(SessionSetModeParams, req.params);
         return engine.setMode(p.sessionId, p.mode);
+      }
+      case 'session.setEffort': {
+        const p = parse(SessionSetEffortParams, req.params);
+        return engine.setEffort(p.sessionId, p.effort);
       }
       case 'shells.list':
         return engine.shells(parse(ShellsListParams, req.params).sessionId);

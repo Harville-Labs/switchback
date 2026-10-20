@@ -5,6 +5,7 @@ import {
   formatTodos,
   modeLabel,
   runningShells,
+  sessionEffort,
   speedLabel,
   type TodoItem,
   type ViewState,
@@ -261,6 +262,7 @@ export function StatusBar({
   const t = useTheme();
   const shells = runningShells(view.shells);
   const ladder = formatLadder(view.ladder);
+  const effort = sessionEffort(view, session);
   const left = view.context ? 1 - view.context.tokens / view.context.window : undefined;
   const budget = usage?.budget;
   const right = [
@@ -279,6 +281,7 @@ export function StatusBar({
         <Text dimColor>
           {session.agent} · {route}
           {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
+          {effort ? ` · effort ${effort}` : ''}
           {ladder ? ` · ${ladder}` : ''}
         </Text>
         {current && !ladder ? (

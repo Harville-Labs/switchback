@@ -265,7 +265,8 @@ export async function chooseRewind(engine: EngineConnection): Promise<void> {
 
 /** Start a new session with an agent the user picks. */
 export async function chooseAgent(engine: EngineConnection): Promise<void> {
-  const agents = engine.init?.agents ?? [];
+  // Subagent-only agents run through the task tool, not as a session's agent.
+  const agents = (engine.init?.agents ?? []).filter((a) => a.mode !== 'subagent');
   const pick = await vscode.window.showQuickPick(
     agents.map((a) => ({
       label: a.name,

@@ -10,17 +10,30 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { AgentSummary, RoutePreference } from '@switchback/protocol';
+import type { Effort } from '@switchback/providers';
+import { Glob } from 'bun';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { AgentConfig, type SwitchbackConfig } from './config-schema.ts';
+
+export type AgentMode = 'primary' | 'subagent' | 'all';
 
 export interface AgentDefinition {
   name: string;
   description: string;
   prompt: string;
+  /** Where it can run: as a session's agent (`primary`), through the task tool (`subagent`), or both. */
+  mode: AgentMode;
   /** Tool names this agent may use; undefined means all tools. */
   tools?: string[];
   route: RoutePreference;
   /** Model alias pin, e.g. `small` or `local`. */
   model?: string;
+  /** Reasoning effort for its model calls, over the model's own `effort`. */
+  effort?: Effort;
+  /** Model calls per turn, over `maxStepsPerTurn`. */
+  maxSteps?: number;
+  /** Agents it may delegate to (names or `*` patterns); undefined means every subagent. */
+  agents?: string[];
   /** Remote spend allowed per subagent invocation (including its own subagents). */
   budgetUsd?: number;
   /** Run as a subagent in its own git worktree. */
@@ -37,6 +50,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     description: 'Default coding agent with full tool access.',
     prompt:
       "You are a software engineering agent working in the user's repository. Read code before changing it, make focused edits, and verify your work by running the project's checks when possible. Delegate broad searches or independent sub-tasks to subagents with the task tool.",
+    mode: 'primary',
     route: 'auto',
     source: 'builtin',
   },
@@ -46,9 +60,11 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
       'Fast read-only search across the codebase. Use for finding files, symbols, and usages; returns a concise summary.',
     prompt:
       'You are a read-only search agent. Find what was asked using glob, grep, and read. Do not modify anything. Reply with a concise summary: the relevant file paths with line numbers and one line on why each matters.',
+    mode: 'subagent',
     tools: ['read', 'glob', 'grep'],
     // Searching is high-volume and low-difficulty: exactly what local models are for.
     route: 'local',
+    effort: 'low',
     source: 'builtin',
   },
   {
@@ -56,6 +72,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     description: 'Read-only architect that produces a step-by-step implementation plan.',
     prompt:
       'You are a software architect. Investigate the code with read-only tools and produce a concrete, ordered implementation plan naming the files to change and the risks. Do not modify anything.',
+    mode: 'all',
     tools: ['read', 'glob', 'grep'],
     route: 'auto',
     source: 'builtin',
@@ -65,6 +82,7 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     description: 'General-purpose subagent for multi-step tasks that need full tool access.',
     prompt:
       'You are a subagent completing a delegated task. Work autonomously, then reply with a concise report of what you did and found; the report is all the caller will see.',
+    mode: 'subagent',
     route: 'auto',
     source: 'builtin',
   },
@@ -78,49 +96,92 @@ export function parseAgentFile(
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
   if (!match) throw new Error(`${file}: missing YAML frontmatter`);
   const meta = (parseYaml(match[1] ?? '') ?? {}) as Record<string, unknown>;
-  const name = typeof meta.name === 'string' ? meta.name : basename(file, '.md');
-  const description = typeof meta.description === 'string' ? meta.description : '';
-  if (!description) throw new Error(`${file}: frontmatter needs a description`);
-
-  let tools: string[] | undefined;
-  const rawTools = meta.tools;
-  if (typeof rawTools === 'string' || Array.isArray(rawTools)) {
-    const list = (Array.isArray(rawTools) ? rawTools : rawTools.split(','))
-      .map((t) => String(t).trim())
-      .filter(Boolean);
-    // MCP tool names (`mcp__server__tool`) are case-sensitive; built-in names aren't.
-    tools = [...new Set(list.map((t) => (t.startsWith('mcp__') ? t : t.toLowerCase())))];
+  // YAML reads an empty `tools:` as null; treat any null field as left out.
+  const parsed = AgentConfig.safeParse(
+    Object.fromEntries(Object.entries(meta).filter(([, v]) => v !== null)),
+  );
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(`${file}: ${issue?.path.join('.') || 'frontmatter'}: ${issue?.message}`);
   }
+  const name = parsed.data.name ?? basename(file, '.md');
+  const fields = { ...parsed.data, prompt: (match[2] ?? '').trim() };
+  if (!fields.description?.trim()) throw new Error(`${file}: frontmatter needs a description`);
+  return { ...applyAgentConfig(undefined, name, fields, source), file };
+}
 
-  // `model` is a tier (local/remote), `inherit` (route like the parent), or any
-  // configured model alias.
-  let route: RoutePreference = 'auto';
-  let model: string | undefined;
-  const rawModel = typeof meta.model === 'string' ? meta.model.trim() : undefined;
-  if (rawModel === 'local' || rawModel === 'remote') route = rawModel;
-  else if (rawModel && rawModel !== 'inherit') model = rawModel;
-  if (meta.route === 'local' || meta.route === 'remote' || meta.route === 'auto')
-    route = meta.route;
-  let budgetUsd: number | undefined;
-  if (meta.budgetUsd !== undefined) {
-    budgetUsd = Number(meta.budgetUsd);
-    if (!Number.isFinite(budgetUsd) || budgetUsd < 0)
-      throw new Error(`${file}: budgetUsd must be a non-negative number of dollars`);
-  }
-
-  return {
+/**
+ * An agent with config fields applied: on top of `base` when there is one
+ * (config adjusting an existing agent), else as a new agent, which needs a
+ * description.
+ */
+export function applyAgentConfig(
+  base: AgentDefinition | undefined,
+  name: string,
+  cfg: AgentConfig,
+  source: AgentDefinition['source'],
+): AgentDefinition {
+  const description = cfg.description?.trim() || base?.description;
+  if (!description) throw new Error(`agent "${name}" needs a description`);
+  const agent: AgentDefinition = {
+    ...(base ?? { prompt: '', mode: 'all', route: 'auto' }),
     name,
     description,
-    prompt: (match[2] ?? '').trim(),
-    ...(tools ? { tools } : {}),
-    route,
-    ...(model ? { model } : {}),
-    ...(budgetUsd !== undefined ? { budgetUsd } : {}),
-    ...(meta.isolation === 'worktree' ? { isolation: 'worktree' as const } : {}),
-    ...(typeof meta.runtime === 'string' && meta.runtime ? { runtime: meta.runtime } : {}),
+    // The last layer that changed it, which is where to look to change it again.
     source,
-    file,
   };
+  if (cfg.prompt !== undefined) agent.prompt = cfg.prompt.trim();
+  if (cfg.mode) agent.mode = cfg.mode;
+  if (cfg.tools !== undefined)
+    // MCP tool names (`mcp__server__tool`) are case-sensitive; built-in names aren't.
+    agent.tools = names(cfg.tools).map((t) => (t.startsWith('mcp__') ? t : t.toLowerCase()));
+  // `model` is a tier (local/remote), `inherit` (route like the parent), or any
+  // configured model alias.
+  const model = cfg.model?.trim();
+  if (model === 'local' || model === 'remote' || model === 'inherit') {
+    delete agent.model;
+    agent.route = model === 'inherit' ? 'auto' : model;
+  } else if (model) agent.model = model;
+  if (cfg.route) agent.route = cfg.route;
+  if (cfg.effort) agent.effort = cfg.effort;
+  if (cfg.maxSteps !== undefined) agent.maxSteps = cfg.maxSteps;
+  if (cfg.agents !== undefined) agent.agents = names(cfg.agents);
+  if (cfg.budgetUsd !== undefined) agent.budgetUsd = cfg.budgetUsd;
+  if (cfg.isolation) agent.isolation = cfg.isolation;
+  if (cfg.runtime) agent.runtime = cfg.runtime;
+  return agent;
+}
+
+function names(list: string | string[]): string[] {
+  return [
+    ...new Set((Array.isArray(list) ? list : list.split(',')).map((t) => t.trim()).filter(Boolean)),
+  ];
+}
+
+/**
+ * Reasoning effort for a model call, most specific first: the parent's choice
+ * for this task (subagents) or the user's for this session (top level), the
+ * agent's, the subagent default, then the model's own.
+ */
+export function reasoningEffort(
+  config: Pick<SwitchbackConfig, 'models' | 'subagents'>,
+  agent: AgentDefinition,
+  alias: string,
+  session: { depth: number; effort?: Effort; task?: { effort?: Effort } },
+): Effort | undefined {
+  return (
+    session.task?.effort ??
+    session.effort ??
+    agent.effort ??
+    (session.depth > 0 ? config.subagents.effort : undefined) ??
+    config.models[alias]?.effort
+  );
+}
+
+/** Whether `parent` may hand work to `child` through the task tool. */
+export function canDelegate(parent: AgentDefinition, child: AgentDefinition): boolean {
+  if (child.mode === 'primary') return false;
+  return !parent.agents || parent.agents.some((p) => new Glob(p).match(child.name));
 }
 
 export interface AgentLoadResult {
@@ -154,8 +215,10 @@ export function summarize(agent: AgentDefinition): AgentSummary {
     name: agent.name,
     description: agent.description,
     source: agent.source,
+    mode: agent.mode,
     route: agent.route,
     ...(agent.model ? { model: agent.model } : {}),
+    ...(agent.effort ? { effort: agent.effort } : {}),
     ...(agent.budgetUsd !== undefined ? { budgetUsd: agent.budgetUsd } : {}),
   };
 }

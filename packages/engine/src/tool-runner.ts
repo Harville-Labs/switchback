@@ -8,7 +8,13 @@ import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
 import { privateToolUse } from './privacy.ts';
 import type { Skill } from './skills.ts';
-import type { CommandRunner, SubagentResult, Tool, ToolContext } from './tools/index.ts';
+import type {
+  CommandRunner,
+  SubagentOptions,
+  SubagentResult,
+  Tool,
+  ToolContext,
+} from './tools/index.ts';
 
 export type Interaction = 'prompt' | 'approve' | 'deny';
 
@@ -23,7 +29,7 @@ export interface ToolRunnerDeps {
     prompt: string,
     description: string,
     signal: AbortSignal,
-    options?: { background?: boolean; isolation?: 'worktree' },
+    options?: SubagentOptions,
   ): Promise<SubagentResult>;
   /** An edit or write is about to run; review remembers the file's content first. */
   noteEdit(s: LiveSession, path: string, writer: string): void;

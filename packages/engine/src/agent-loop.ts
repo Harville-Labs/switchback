@@ -4,11 +4,17 @@
  */
 
 import type { Message, ModelRef, RoutePreference, StopReason } from '@switchback/protocol';
-import { type ChatEvent, type Provider, ProviderError, type ToolSpec } from '@switchback/providers';
+import {
+  type ChatEvent,
+  type Effort,
+  type Provider,
+  ProviderError,
+  type ToolSpec,
+} from '@switchback/providers';
 import { ladderSteps, type ModelInfo, type Router, stepOf } from '@switchback/router';
 import pRetry from 'p-retry';
 import { isAgentCli, runAgentCliTurn } from './agent-cli-turn.ts';
-import type { AgentDefinition } from './agents.ts';
+import { type AgentDefinition, reasoningEffort } from './agents.ts';
 import { contextOf } from './compaction.ts';
 import type { Compactor } from './compactor.ts';
 import { estimateEscalationCost } from './estimate.ts';
@@ -34,7 +40,8 @@ export interface AgentLoopDeps {
   ledger: UsageLedger;
   router(s: LiveSession): Router;
   agent(name: string): AgentDefinition | undefined;
-  agents(): AgentDefinition[];
+  /** The agents this one may delegate to. */
+  subagentsOf(agent: AgentDefinition): AgentDefinition[];
   mcp(): McpHub | undefined;
   interaction(): Interaction;
   /** Waiting reports and queued prompts join the conversation here, between steps. */
@@ -70,7 +77,8 @@ export class AgentLoop {
     let refusalRetry = false;
     let failures = 0;
 
-    for (let step = 0; step < config().maxStepsPerTurn; step++) {
+    const maxSteps = agent.maxSteps ?? config().maxStepsPerTurn;
+    for (let step = 0; step < maxSteps; step++) {
       if (signal.aborted) return 'cancelled';
       await models.refreshHealth(signal);
       await this.deps.beforeStep(s, turnId);
@@ -168,6 +176,7 @@ export class AgentLoop {
           model,
           specs,
           inputTokens,
+          reasoningEffort(this.host.config(), agent, model.alias, s),
           turnId,
           signal,
         ));
@@ -249,7 +258,7 @@ export class AgentLoop {
       type: 'error',
       ...scope(s),
       turnId,
-      message: `stopped after ${config().maxStepsPerTurn} steps`,
+      message: `stopped after ${maxSteps} steps`,
     });
     return 'max_tokens';
   }
@@ -264,13 +273,14 @@ export class AgentLoop {
       (t) => !agent.tools || allowsMcpTool(agent.tools, t.name),
     );
     // Built-ins first in their fixed order, then MCP tools by name: a stable cache prefix.
-    const tools = [...toolsFor(agent.tools, s.depth === 0), ...mcpTools].filter(
-      (t) => t.name !== 'task' || canDelegate,
-    );
     const catalog = this.deps
-      .agents()
+      .subagentsOf(agent)
       .filter((a) => a.name !== s.header.agent || s.depth === 0)
       .map((a) => ({ name: a.name, description: a.description }));
+    // No task tool when there's no one to delegate to (`agents: []`, or depth).
+    const tools = [...toolsFor(agent.tools, s.depth === 0), ...mcpTools].filter(
+      (t) => t.name !== 'task' || (canDelegate && catalog.length > 0),
+    );
     const specs = tools.map((t) => toolSpec(t, { agentCatalog: catalog }));
     return { agent, tools, catalog, specs, specsJson: JSON.stringify(specs) };
   }
@@ -286,6 +296,7 @@ export class AgentLoop {
     model: ModelInfo,
     specs: ToolSpec[],
     inputTokens: number,
+    effort: Effort | undefined,
     turnId: string,
     signal: AbortSignal,
   ): Promise<{ done: Done; decodeMs?: number }> {
@@ -295,7 +306,7 @@ export class AgentLoop {
       streamed = true;
     };
     return pRetry(
-      () => this.call(s, provider, model, specs, inputTokens, turnId, signal, onOutput),
+      () => this.call(s, provider, model, specs, inputTokens, effort, turnId, signal, onOutput),
       {
         retries: attempts,
         minTimeout: initialDelayMs,
@@ -322,11 +333,11 @@ export class AgentLoop {
     model: ModelInfo,
     specs: ToolSpec[],
     inputTokens: number,
+    effort: Effort | undefined,
     turnId: string,
     signal: AbortSignal,
     onOutput: () => void,
   ): Promise<{ done: Done; decodeMs?: number }> {
-    const effort = this.host.config().models[model.alias]?.effort;
     // A fresh array (so providers never observe later appends), built from
     // the latest compaction marker; for remote models, with secrets redacted.
     const outbound = await this.outbound(s, model, s.header.system, contextOf(s.messages));
@@ -380,8 +391,12 @@ export class AgentLoop {
       .some((a) => a !== model.alias && !refused.includes(a) && models[a]);
   }
 
-  /** The agent's own model pin; for a subagent without one, the subagent model. */
+  /**
+   * The parent's choice for this task, else the agent's own model pin; for a
+   * subagent without either, the subagent model.
+   */
   private pinnedModel(s: LiveSession, agent: AgentDefinition): { model?: string } {
+    if (s.task?.model) return { model: s.task.model };
     if (agent.model) return { model: agent.model };
     const fallback = this.host.rolesOf(s).subagents;
     return s.depth > 0 && agent.route === 'auto' && fallback ? { model: fallback } : {};

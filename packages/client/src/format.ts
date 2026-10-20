@@ -3,6 +3,7 @@
  * reports both clients and `switchback` commands print (/usage, /roles, ...).
  */
 import type {
+  AgentSummary,
   InitializeResult,
   McpServerInfo,
   ModelRef,
@@ -11,6 +12,7 @@ import type {
   SessionRoles,
   ShellInfo,
 } from '@switchback/protocol';
+import { EffortLevel } from '@switchback/protocol';
 import type { TodoItem, ViewItem, ViewState } from './view.ts';
 
 export function compactedLabel(messages: number, before: number, after: number): string {
@@ -153,11 +155,70 @@ export function toolLabel(name: string, input: unknown): string {
   }
 }
 
+type SubagentRow = Extract<ViewItem, { kind: 'subagent' }>;
+
+/** The detail after a subagent row's task: `background · large · effort high · remote · 3 tool calls`. */
+export function subagentDetail(row: SubagentRow): string {
+  return [
+    row.background ? 'background' : undefined,
+    row.model,
+    row.effort ? `effort ${row.effort}` : undefined,
+    row.tier,
+    `${row.toolCalls} tool calls`,
+    row.status === 'running' ? row.activity : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** `/agents`: one line per agent with where it runs and how it's tuned. */
+export function formatAgents(agents: AgentSummary[]): string {
+  return agents
+    .map((a) => {
+      const tags = [
+        a.source,
+        a.mode === 'all' ? undefined : a.mode,
+        a.route === 'auto' ? undefined : a.route,
+        a.model,
+        a.effort ? `effort ${a.effort}` : undefined,
+      ].filter(Boolean);
+      return `${a.name} [${tags.join(', ')}]: ${a.description}`;
+    })
+    .join('\n');
+}
+
+/**
+ * An effort as people type it for `/effort`: a level, or `default` (also
+ * `auto`, `reset`) for null, which clears the session's choice. Undefined
+ * when it's neither.
+ */
+export function parseEffort(input: string): EffortLevel | null | undefined {
+  const key = input.toLowerCase();
+  if (key === 'default' || key === 'auto' || key === 'reset') return null;
+  const level = EffortLevel.safeParse(key);
+  return level.success ? level.data : undefined;
+}
+
+/** The effort a session set, from the latest event or else its summary. */
+export function sessionEffort(
+  view: Pick<ViewState, 'effort'>,
+  session: { effort?: string },
+): string | undefined {
+  return view.effort === undefined ? session.effort : (view.effort ?? undefined);
+}
+
+/** What `/effort` says about a session's effort. */
+export function effortNotice(effort: string | undefined): string {
+  return effort
+    ? `effort: ${effort} for this session's model calls; /effort default follows the agent and models again`
+    : "effort: following the agent's and each model's setting";
+}
+
 /** Every subagent in the tree, depth-first, for numbered listings. */
 export function subagentList(
   state: ViewState,
   depth = 0,
-): { id: string; depth: number; row: Extract<ViewItem, { kind: 'subagent' }> }[] {
+): { id: string; depth: number; row: SubagentRow }[] {
   return state.items.flatMap((it) =>
     it.kind === 'subagent'
       ? [

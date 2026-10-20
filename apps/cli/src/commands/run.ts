@@ -7,6 +7,7 @@
  */
 import { receiptLine } from '@switchback/client';
 import {
+  type EffortLevel,
   isSessionEvent,
   type PermissionMode,
   type RoutePreference,
@@ -24,6 +25,7 @@ export interface RunFlags extends CommonFlags {
   /** Review of local edits; undefined follows `review.mode`. */
   review?: boolean;
   permissionMode?: PermissionMode;
+  effort?: EffortLevel;
   /** Added to this run's system prompt. */
   instructions?: string;
   /** Continue a saved session instead of starting one: an ID, or `latest`. */
@@ -95,12 +97,15 @@ async function session(
     const id =
       flags.resume === 'latest' ? (await client.request('session.list', {}))[0]?.id : flags.resume;
     if (id) await client.request('session.get', { sessionId: id });
+    if (id && flags.effort)
+      await client.request('session.setEffort', { sessionId: id, effort: flags.effort });
     return id;
   }
   const s = await client.request('session.create', {
     ...(flags.agent ? { agent: flags.agent } : {}),
     ...(flags.permissionMode ? { permissionMode: flags.permissionMode } : {}),
     ...(flags.instructions ? { instructions: flags.instructions } : {}),
+    ...(flags.effort ? { effort: flags.effort } : {}),
   });
   return s.id;
 }

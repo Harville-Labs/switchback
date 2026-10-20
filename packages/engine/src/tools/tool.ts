@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { ImagePart } from '@switchback/protocol';
-import type { ToolSpec } from '@switchback/providers';
+import type { Effort, ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
 import type { Skill } from '../skills.ts';
@@ -20,6 +20,16 @@ export interface SubagentResult {
   private?: string;
 }
 
+/** How the parent wants a delegated task run. */
+export interface SubagentOptions {
+  background?: boolean;
+  isolation?: 'worktree';
+  /** A model alias for this task, over the agent's own. */
+  model?: string;
+  /** Reasoning effort for this task, over the agent's own. */
+  effort?: Effort;
+}
+
 export interface ToolContext {
   workspaceRoot: string;
   sessionId: string;
@@ -29,7 +39,7 @@ export interface ToolContext {
     agent: string,
     prompt: string,
     description: string,
-    options?: { background?: boolean; isolation?: 'worktree' },
+    options?: SubagentOptions,
   ) => Promise<SubagentResult>;
   /** Names and descriptions of agents available as subagents. */
   agentCatalog: { name: string; description: string }[];
