@@ -13,6 +13,7 @@
     "./commands": "./src/commands.ts",
     "./tabs": "./src/tabs.ts",
     "./tool-display": "./src/tool-display.ts",
+    "./usage": "./src/usage.ts",
     "./worktrees": "./src/worktrees.ts"
   },
   "dependencies": {

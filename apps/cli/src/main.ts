@@ -20,8 +20,9 @@ Usage
   switchback agents [new]            List agents, or create one (interview, optional drafted prompt)
   switchback sessions                List this workspace's saved sessions [--json]
   switchback worktrees [branch]      Branches isolated subagents made, or one branch's diff [--json]
-  switchback usage                   Show spend, savings, cache hits, and budget
-                                  [--period today|week|month] [--by rule|agent|model]
+  switchback usage                   Spend, savings, cache hits, and budget (interactive in a terminal)
+                                  [--period today|week|month|year|all] [--from <day> [--to <day>]]
+                                  [--by rule|agent|model] [--json]
   switchback telemetry [action]      status | on | off | preview (anonymous, off by default)
   switchback sandbox [action]        install | uninstall: the command sandbox's one-time setup (Windows)
   switchback self-update [version]   Update to the newest release (or the given one); --check only reports
@@ -203,6 +204,7 @@ async function main(argv: string[]): Promise<number> {
       budget: { type: 'string' },
       isolation: { type: 'string' },
       period: { type: 'string' },
+      to: { type: 'string' },
       telemetry: { type: 'string' },
       review: { type: 'boolean' },
       'no-review': { type: 'boolean' },
@@ -445,6 +447,8 @@ async function main(argv: string[]): Promise<number> {
         json: values.json,
         ...(values.by ? { by: values.by } : {}),
         ...(values.period ? { period: values.period } : {}),
+        ...(values.from ? { from: values.from } : {}),
+        ...(values.to ? { to: values.to } : {}),
       });
     }
     default:

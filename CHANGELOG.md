@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **`switchback usage` is a dashboard in a terminal.** Pick today, the last 7 days, the month, the year, or all time, step back through earlier periods with ← and →, and see spend, savings, budget meters, how tokens split between local and remote models, a chart per day or month, and the breakdown by rule, agent, or model. `--from`/`--to` report any span of days, `--period` also takes `year` and `all`, and piped output and `--json` work as before. The `usage.get` protocol method takes a `range` and returns `byDay`
+
 ### Removed
 - **No more Intel Mac build.** Releases no longer include a `darwin-x64` binary or `.vsix`. On an Intel Mac, the installer and `switchback self-update` now say there is no build instead of failing to download one. Apple silicon under Rosetta still gets the arm64 build
 

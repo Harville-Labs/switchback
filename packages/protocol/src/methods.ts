@@ -330,9 +330,19 @@ export interface CustomCommandInfo {
 export const UsagePeriod = z.enum(['today', 'week', 'month']);
 export type UsagePeriod = z.infer<typeof UsagePeriod>;
 
+const IsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected a UTC date as YYYY-MM-DD');
+
+/** Days are UTC, as the ledger records them; both ends are included. */
+export const UsageRange = z
+  .object({ from: IsoDay, to: IsoDay })
+  .refine((r) => r.from <= r.to, 'from must not be after to');
+export type UsageRange = z.infer<typeof UsageRange>;
+
 export const UsageGetParams = z.object({
   /** `week` is the last 7 days including today. Defaults to the calendar month. */
   period: UsagePeriod.optional(),
+  /** Any span of days, instead of a period. */
+  range: UsageRange.optional(),
   /** A session and its subagents over their whole life, instead of a period (the receipt). */
   sessionId: z.string().optional(),
 });
@@ -400,6 +410,8 @@ export interface UsageReport {
   byRule?: UsageRow[];
   byAgent?: UsageRow[];
   byModel?: UsageRow[];
+  /** One row per UTC day that had model calls (key `YYYY-MM-DD`), oldest first. */
+  byDay?: UsageRow[];
   /** Share of remote input tokens served from the provider's prompt cache (0 to 1). */
   remoteCacheHitRate?: number;
 }

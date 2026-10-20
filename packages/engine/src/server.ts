@@ -172,7 +172,7 @@ export function serve(
         return engine.listCommands();
       case 'usage.get': {
         const p = parse(UsageGetParams, req.params);
-        return engine.usage(p.period, p.sessionId);
+        return engine.usage(p.range ?? p.period, p.sessionId);
       }
       case 'shutdown':
         // onShutdown runs after the reply is sent (see below).

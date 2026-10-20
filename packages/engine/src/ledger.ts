@@ -14,6 +14,7 @@ import {
   type Tier,
   type Usage,
   type UsagePeriod,
+  type UsageRange,
   type UsageReport,
   type UsageRow,
 } from '@switchback/protocol';
@@ -207,26 +208,33 @@ export class UsageLedger {
   }
 
   /**
-   * Usage for a period, or for a set of sessions (a session and its
-   * subagents) over their whole life.
+   * Usage for a period or a range of days, or for a set of sessions (a
+   * session and its subagents) over their whole life.
    */
   report(
     budget: { dailyUsd?: number; monthlyUsd?: number },
-    period: UsagePeriod = 'month',
+    span: UsagePeriod | UsageRange = 'month',
     sessions?: Set<string>,
   ): UsageReport {
     const now = this.now();
     const today = now.toISOString().slice(0, 10);
     let from =
-      period === 'today'
-        ? today
-        : period === 'week'
-          ? new Date(now.getTime() - 6 * 86_400_000).toISOString().slice(0, 10)
-          : `${today.slice(0, 7)}-01`;
+      typeof span === 'object'
+        ? span.from
+        : span === 'today'
+          ? today
+          : span === 'week'
+            ? new Date(now.getTime() - 6 * 86_400_000).toISOString().slice(0, 10)
+            : `${today.slice(0, 7)}-01`;
+    let to = typeof span === 'object' ? span.to : today;
+    // ISO timestamps sort as strings; `to` is a whole day, so compare its prefix.
     const entries = sessions
       ? this.entries.filter((e) => sessions.has(e.sessionId))
-      : this.entries.filter((e) => e.ts >= from);
-    if (sessions) from = entries[0]?.ts.slice(0, 10) ?? today;
+      : this.entries.filter((e) => e.ts >= from && e.ts.slice(0, 10) <= to);
+    if (sessions) {
+      from = entries[0]?.ts.slice(0, 10) ?? today;
+      to = today;
+    }
     const byTier: UsageReport['byTier'] = {
       local: { usage: emptyUsage(), costUsd: 0 },
       remote: { usage: emptyUsage(), costUsd: 0 },
@@ -240,7 +248,7 @@ export class UsageLedger {
     const spend = this.spend();
     const hitRate = cacheHitRate(byTier.remote.usage);
     return {
-      period: { from, to: today },
+      period: { from, to },
       byTier,
       estimatedSavingsUsd: savings,
       ...(this.referenceModel ? { referenceModel: this.referenceModel } : {}),
@@ -253,6 +261,9 @@ export class UsageLedger {
       byRule: groupUsage(entries, (e) => e.rule ?? 'unrecorded'),
       byAgent: groupUsage(entries, (e) => e.agent ?? 'unrecorded'),
       byModel: groupUsage(entries, (e) => `${e.model.provider}/${e.model.model}`),
+      byDay: groupUsage(entries, (e) => e.ts.slice(0, 10)).sort((a, b) =>
+        a.key.localeCompare(b.key),
+      ),
       ...(hitRate !== undefined ? { remoteCacheHitRate: hitRate } : {}),
     };
   }

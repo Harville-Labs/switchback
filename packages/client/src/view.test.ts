@@ -4,13 +4,12 @@ import {
   estimateLabel,
   formatLadder,
   formatModels,
-  formatReceipt,
   formatRoles,
   formatTodos,
-  formatUsage,
   reviewLines,
   speedLabel,
 } from './format.ts';
+import { formatReceipt, formatUsage } from './usage.ts';
 import { childView, fromTranscript, initialView, reduce, type TodoItem } from './view.ts';
 
 const session: SessionSummary = {
