@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-20
+
 ### Added
 - **Start from your OpenCode setup.** On a first run, when an OpenCode config is found, `switchback init` first asks whether to start from it: its models (the main one stays current), MCP servers, and permissions come over and are shown before anything is written; API keys stay where OpenCode keeps them, and setup names the environment variables Switchback needs. `--from opencode` does it unattended (ADR 0022)
 
