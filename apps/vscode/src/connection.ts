@@ -2,7 +2,13 @@
  * The extension's connection to an engine: starting or attaching to it,
  * relaying its events to the chat, and forwarding the chat's actions.
  */
-import { connectDaemon, formatLadder, SwitchbackClient, spawnEngine } from '@switchback/client';
+import {
+  connectDaemon,
+  formatLadder,
+  SessionScope,
+  SwitchbackClient,
+  spawnEngine,
+} from '@switchback/client';
 import type {
   InitializeResult,
   RoutePreference,
@@ -62,6 +68,8 @@ export class EngineConnection implements vscode.Disposable {
   session: SessionSummary | undefined;
   /** Sessions seen, by ID, so switching tabs needn't fetch a transcript. */
   private readonly known = new Map<string, SessionSummary>();
+  /** Sessions opened in this window; a shared daemon also reports other windows'. */
+  readonly scope = new SessionScope();
   route: RoutePreference;
   context: EditorContext | undefined;
   /** Review of local edits for this window; undefined follows `review.mode`. */
@@ -153,6 +161,7 @@ export class EngineConnection implements vscode.Disposable {
       });
     });
     client.on((event) => {
+      const mine = this.scope.observe(event);
       this.broadcast({ type: 'event', event });
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
@@ -178,6 +187,7 @@ export class EngineConnection implements vscode.Disposable {
         void this.listSessions();
       if (event.type === 'log') this.log.appendLine(`[${event.level}] ${event.message}`);
       if (
+        mine &&
         event.type === 'permission.requested' &&
         event.proposed &&
         vscode.workspace
@@ -195,7 +205,7 @@ export class EngineConnection implements vscode.Disposable {
     });
     this.init = init ?? (await client.initialize({ name: 'vscode', version: VERSION }, this.root));
     this.client = client;
-    this.session = this.remember(await client.request('session.create', {}));
+    this.session = this.open(await client.request('session.create', {}));
     this.updateStatus(0);
     this.broadcast({ type: 'ready', init: this.init, session: this.session, route: this.route });
     if (this.context) this.broadcast({ type: 'context', state: this.context.state() });
@@ -231,7 +241,7 @@ export class EngineConnection implements vscode.Disposable {
     const c = this.client;
     if (!c) return;
     const { session, messages } = await c.request('session.get', { sessionId });
-    this.session = this.remember(session);
+    this.session = this.open(session);
     this.updateStatus(session.costUsd);
     this.broadcast({ type: 'history', session, messages, ...(tab ? { tab } : {}) });
     await this.sendRoles();
@@ -240,9 +250,7 @@ export class EngineConnection implements vscode.Disposable {
   /** A new session, in the tab in front or (`tab`) in a new one. */
   async newSession(agent?: string, tab?: 'new') {
     if (!this.client) return;
-    this.session = this.remember(
-      await this.client.request('session.create', agent ? { agent } : {}),
-    );
+    this.session = this.open(await this.client.request('session.create', agent ? { agent } : {}));
     this.updateStatus(0);
     this.broadcast({ type: 'session', session: this.session, ...(tab ? { tab } : {}) });
     await this.sendRoles();
@@ -256,7 +264,7 @@ export class EngineConnection implements vscode.Disposable {
     if (sessionId === this.session?.id) return;
     const known = this.known.get(sessionId);
     if (!known) return this.showSession(sessionId, 'new');
-    this.session = known;
+    this.session = this.open(known);
     this.updateStatus(known.costUsd);
     await this.sendRoles();
   }
@@ -279,6 +287,12 @@ export class EngineConnection implements vscode.Disposable {
   private remember(s: SessionSummary): SessionSummary {
     this.known.set(s.id, s);
     return s;
+  }
+
+  /** A session shown in a tab here: its prompts and notifications belong to this window. */
+  private open(s: SessionSummary): SessionSummary {
+    this.scope.add(s.id);
+    return this.remember(s);
   }
 
   setRoute(route: RoutePreference) {

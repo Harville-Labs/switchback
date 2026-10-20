@@ -6,6 +6,7 @@ export * from './copy.ts';
 export * from './daemon.ts';
 export * from './format.ts';
 export * from './models.ts';
+export * from './session-scope.ts';
 export * from './setup.ts';
 export * from './spawn.ts';
 export * from './tabs.ts';

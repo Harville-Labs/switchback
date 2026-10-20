@@ -117,9 +117,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     }
     engine = new EngineConnection(root, log, status, review, bundled);
     engine.context = editorContext;
+    const connection = engine;
     engine.onMessage((m) => {
       chat.post(m);
-      attention.observe(m);
+      attention.observe(m, connection.scope);
     });
     try {
       await engine.start();

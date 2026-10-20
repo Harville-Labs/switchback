@@ -68,6 +68,8 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 
 Sent as notifications: `{"jsonrpc":"2.0","method":"event","params":{...}}`. Every event except `log` carries `sessionId`. Events from subagents also carry `parentSessionId`.
 
+A shared daemon sends every attached client every session's events, so a client can show sessions working in other windows. A client acts on a prompt (`permission.requested`, `escalation.requested`) only for a session it opened, or a subagent of one: `reduce()` drops prompts from sessions outside the view, and `SessionScope` in `@switchback/client` tells notifications and editor-side reviews which sessions belong to this client.
+
 | `type` | Meaning |
 |---|---|
 | `turn.started` / `turn.completed` | Turn boundaries; `completed` has `stopReason` |
