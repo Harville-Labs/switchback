@@ -25,3 +25,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0019](0019-switchback-domains.md) | Switchback's own domains: switchback.sh for the site and docs, app.switchback.sh for the console | Accepted |
 | [0020](0020-private-console.md) | The hosted console is private; Switchback is Apache-2.0 throughout | Accepted |
 | [0021](0021-current-model-and-tabs.md) | The start role is the current model, chosen from a dropdown; tabs and a sessions dashboard in both clients | Accepted |
+| [0022](0022-start-from-another-agent.md) | A first setup can start from another agent's setup (OpenCode), copied once and shown before it's written | Accepted |

@@ -4,6 +4,8 @@ import type { RemoteKind } from '../setup.ts';
 export interface SetupFlags {
   cwd: string;
   yes: boolean;
+  /** Start from another coding agent's setup (ADR 0022). */
+  from?: 'opencode';
   scope?: 'user' | 'project';
   /** Extra server URLs to probe. */
   localUrls: string[];

@@ -1,6 +1,6 @@
 /** The slash command menu above the composer, as HTML. */
 import type { SlashCommand } from '@switchback/client/commands';
-import { esc } from './markdown.ts';
+import { esc } from './escape.ts';
 
 /**
  * One row per command, with a heading wherever the group changes. Filtered

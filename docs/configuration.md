@@ -21,6 +21,7 @@ Next to each config file, `agents/`, `commands/`, and `skills/` folders hold [ag
 
 ```sh
 switchback init              # interactive: detect local servers, choose models, budgets
+switchback init --yes --from opencode   # start from your OpenCode setup, unattended
 switchback init --yes --local-model <name> --remote anthropic   # unattended
 switchback init --yes --no-local --remote openrouter --remote-model qwen/qwen3-coder
 switchback init --yes --no-local --remote azure-openai --resource acme-ai \
@@ -31,12 +32,26 @@ switchback config edit       # open the user config in $EDITOR (--scope project 
 switchback config schema     # JSON Schema for editor validation
 ```
 
-`switchback init` asks for your models in two parts:
+On a first run, if another coding agent's config is found here, setup first asks whether to start from it (see [Starting from OpenCode](#starting-from-opencode)). Otherwise, `switchback init` asks for your models in two parts:
 
 1. **Local endpoints.** "Do you have any local model endpoints?" Enter each server's URL; servers already running here (Ollama on 11434, LM Studio on 1234, llama.cpp on 8080, vLLM on 8000, and others) are found first and offered as the answer. Each endpoint's models come up as a checklist (arrow keys, space to pick, Enter when done), with tool-calling support and the context size the server loads; the context size is asked only when the server can't say. Then "Any more local endpoints?"
 2. **Remote providers.** "Set up any remote providers?" Pick a provider, answer its setup (model, region, resource, ...), then "Any additional remote providers?" Pick the same provider again for a second model from it.
 
 Then it asks which model does what, and writes a config layer, to the user config unless you pass `--scope project`. It edits an existing file in place, keeping unrelated keys, comments, and formatting, and saves the previous version as `config.json.bak`. Every prompt has a flag; see `switchback --help`.
+
+### Starting from OpenCode
+
+When there's no Switchback config yet and an OpenCode config is found, the first question is "Coming from another coding agent?". Pick **Start from my OpenCode setup** and Switchback reads OpenCode's config once ([ADR 0022](adr/0022-start-from-another-agent.md)): `~/.config/opencode/opencode.json` (or `$XDG_CONFIG_HOME/opencode/`), `$OPENCODE_CONFIG`, and the project's `opencode.json` or `opencode.jsonc` from the git root down to the current directory, merged in OpenCode's order. Then it asks whether to add other models, and carries on with roles, budgets, and the preview as usual. `--from opencode` does the same unattended.
+
+| OpenCode | Becomes |
+|---|---|
+| `model`, `small_model`, agents' `model`, and every model of a provider with `options.baseURL` | Models. `model` is the current model |
+| `anthropic`, `openai`, `deepseek`, `google`, `openrouter`, `opencode` (Zen), `opencode-go`, `amazon-bedrock` (Claude), `google-vertex-anthropic`, `azure` | The matching provider, with its region, profile, project, or resource |
+| A custom provider (`@ai-sdk/openai-compatible` or `@ai-sdk/openai` with `baseURL`) | A local endpoint when its host is this machine or a private network, else an OpenAI-compatible provider, with `limit` and `cost` as `contextWindow`, `maxOutputTokens`, and `price` |
+| `mcp` (`local`, `remote`) | `mcpServers` (`command`/`args`/`env`, `url`/`headers`) |
+| `permission` (`*`, `read`, `edit`, `shell`/`bash`, `webfetch`, `websearch`, `external_directory`) and the old `tools` switches | `permissions` levels and `allow`/`ask`/`deny` rules, added to the starting rules |
+
+Not brought over, each listed with a reason during setup: API keys written into the config or stored by `/connect` (put them in environment variables; `{env:NAME}` references carry over), OAuth for MCP servers, providers Switchback doesn't have, and OpenCode's agents, commands, plugins, formatters, and LSP settings. `AGENTS.md`, which both read, needs nothing. OpenCode allows edits and commands unless told otherwise, while Switchback asks first; an OpenCode config without `permission` leaves Switchback's defaults. OpenCode lets the last matching pattern win and Switchback lets deny beat ask beat allow, so a translated rule set is never looser than the original.
 
 Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config, and your own settings for one project in `.switchback/config.local.json`.
 
