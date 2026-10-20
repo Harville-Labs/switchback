@@ -20,7 +20,12 @@ async function connect() {
   const engine = new Engine({
     workspaceRoot: dir,
     config: SwitchbackConfig.parse({}),
-    setup: { detect: async () => [], list: async () => [], env: { SWITCHBACK_HOME: home } },
+    setup: {
+      detect: async () => [],
+      list: async () => [],
+      // HOME too, or setup finds the developer's own OpenCode config and asks about it.
+      env: { SWITCHBACK_HOME: home, HOME: home },
+    },
     reloadConfig: () => loadConfig(dir, { SWITCHBACK_HOME: home }),
   });
   const [server, client] = createTransportPair();
