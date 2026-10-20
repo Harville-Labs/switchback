@@ -1,5 +1,5 @@
 /** Interactive prompts for setup flows: arrow keys to choose, type to filter long lists. */
-import { checkbox, confirm, input, search, select } from '@inquirer/prompts';
+import { checkbox, confirm, input, password, search, select } from '@inquirer/prompts';
 import { Fzf } from 'fzf';
 
 const color = process.stdout.isTTY;
@@ -61,7 +61,11 @@ export class Prompter {
   /** Nothing to release; kept so callers can treat prompts as a resource. */
   close() {}
 
-  async text(question: string, fallback?: string): Promise<string> {
+  async text(question: string, fallback?: string, opts?: { secret?: boolean }): Promise<string> {
+    if (opts?.secret)
+      return (
+        await asked(password({ message: message(question), mask: true }, this.context))
+      ).trim();
     const answer = await asked(
       input(
         { message: message(question), ...(fallback ? { default: fallback } : {}) },

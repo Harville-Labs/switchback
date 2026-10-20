@@ -82,6 +82,7 @@ export async function askSetupQuestion(q: SetupQuestion): Promise<Answer> {
         title: TITLE,
         prompt: q.question,
         ...(q.default !== undefined ? { value: q.default } : {}),
+        ...(q.secret ? { password: true } : {}),
         ignoreFocusOut: true,
       });
       return got ?? null;

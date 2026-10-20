@@ -8,6 +8,7 @@
  */
 import { existsSync } from 'node:fs';
 import type { detectLocalServers, listModels } from '@switchback/providers';
+import { redactConfig } from '../config.ts';
 import { projectPaths, switchbackPaths } from '../paths.ts';
 import { buildSetupConfig, planModels, type SetupAnswers, writeConfigLayer } from '../setup.ts';
 import { SetupError, type SetupFlags } from './flags.ts';
@@ -59,7 +60,10 @@ export async function runSetup(
   if (more || (!p && flags.localModels.length))
     locals = [...locals, ...(await chooseLocals(flags, ui, deps.detect))];
   if (more || (!p && flags.remotes.length))
-    remotes = [...remotes, ...(await chooseRemotes(flags, ui, locals.length === 0, deps.list))];
+    remotes = [
+      ...remotes,
+      ...(await chooseRemotes(flags, ui, locals.length === 0, deps.list, deps.env)),
+    ];
   if (!locals.length && !remotes.length) {
     if (!p) throw new SetupError('pick at least one model, local or hosted');
     say(ui, 'No models chosen, so nothing was written. Run setup any time to add them.', 'detail');
@@ -127,7 +131,8 @@ export async function runSetup(
   });
   if (imported && Object.keys(imported.mcpServers).length) layer.mcpServers = imported.mcpServers;
   if (p) {
-    p.note({ kind: 'config', file, layer });
+    // Pasted keys aren't shown back.
+    p.note({ kind: 'config', file, layer: redactConfig(layer) as Record<string, unknown> });
     if (!(await p.confirm('Write it?'))) return { outcome: 'nothing', file };
   }
   const result = writeConfigLayer(file, layer);

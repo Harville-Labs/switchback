@@ -49,11 +49,12 @@ function protocolPrompter(
     return choice.value;
   };
   return {
-    async text(question, fallback) {
+    async text(question, fallback, opts) {
       const a = await ask({
         kind: 'text',
         question,
         ...(fallback !== undefined ? { default: fallback } : {}),
+        ...(opts?.secret ? { secret: true } : {}),
       });
       if (typeof a !== 'string') throw wrong('text');
       return a.trim() || fallback || '';

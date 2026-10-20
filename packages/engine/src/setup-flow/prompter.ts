@@ -15,7 +15,8 @@ export interface SetupChoice<T> {
 }
 
 export interface SetupPrompter {
-  text(question: string, fallback?: string): Promise<string>;
+  /** With `secret`, what's typed isn't shown (API keys). */
+  text(question: string, fallback?: string, opts?: { secret?: boolean }): Promise<string>;
   number(question: string, fallback?: number): Promise<number | undefined>;
   confirm(question: string, fallback?: boolean): Promise<boolean>;
   select<T>(question: string, options: SetupChoice<T>[], defaultIndex?: number): Promise<T>;

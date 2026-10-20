@@ -1,13 +1,11 @@
 /** Setup: hosted providers, their models, and credentials. */
 import {
+  aliasModels,
   CATALOG,
-  CREDENTIAL_ENV,
   type HostedProviderKind,
-  hasAnthropicCredentials,
   type ListedModel,
   listModels,
   OPENCODE_BASE_URL,
-  OPENCODE_KEY_ENV,
   openCodeApi,
 } from '@switchback/providers';
 import {
@@ -19,6 +17,7 @@ import {
   type RemoteKind,
 } from '../setup.ts';
 import { SetupError, type SetupFlags } from './flags.ts';
+import { askApiKey, credentialHint, type Env, hasKey, keyEnv } from './keys.ts';
 import { asking, type SetupPrompter, say } from './prompter.ts';
 
 type List = typeof listModels;
@@ -27,49 +26,6 @@ export const remoteLabel = (kind: RemoteKind) => {
   const { name, detail } = REMOTE_PROVIDERS[kind];
   return detail ? `${name} (${detail})` : name;
 };
-
-export function credentialHint(kind: RemoteKind): string {
-  switch (kind) {
-    case 'claude-code':
-      return Bun.which('claude')
-        ? 'uses your `claude` sign-in'
-        : 'install Claude Code and sign in with `claude`';
-    case 'codex':
-      return Bun.which('codex')
-        ? 'uses your `codex` sign-in'
-        : 'install Codex and sign in with `codex login`';
-    case 'anthropic':
-      return hasAnthropicCredentials()
-        ? 'credentials found'
-        : 'needs ANTHROPIC_API_KEY or `ant auth login`';
-    case 'openai':
-    case 'deepseek':
-    case 'gemini': {
-      const env = CREDENTIAL_ENV[kind] as string;
-      return process.env[env] ? 'credentials found' : `needs ${env}`;
-    }
-    case 'bedrock':
-      return 'AWS credentials';
-    case 'anthropic-aws':
-      return 'AWS credentials and a Claude workspace ID';
-    case 'foundry':
-      return process.env.ANTHROPIC_FOUNDRY_API_KEY
-        ? 'credentials found'
-        : 'needs ANTHROPIC_FOUNDRY_API_KEY';
-    case 'vertex':
-      return 'gcloud application-default credentials';
-    case 'azure-openai':
-      return process.env.AZURE_OPENAI_API_KEY
-        ? 'credentials found'
-        : 'AZURE_OPENAI_API_KEY or Entra ID, and a deployment';
-    case 'openrouter':
-      return process.env.OPENROUTER_API_KEY ? 'credentials found' : 'needs OPENROUTER_API_KEY';
-    case 'opencode':
-      return process.env[OPENCODE_KEY_ENV] ? 'credentials found' : `needs ${OPENCODE_KEY_ENV}`;
-    case 'openai-compatible':
-      return 'base URL and API key';
-  }
-}
 
 /**
  * Hosted models: a provider at a time, each with its own setup. `suggest`
@@ -82,6 +38,7 @@ export async function chooseRemotes(
   suggest = true,
   /** Model listing; tests pass their own. */
   list: List = listModels,
+  env: Env = process.env,
 ): Promise<RemoteAnswer[]> {
   const p = asking(ui);
   if (!p) {
@@ -90,7 +47,7 @@ export async function chooseRemotes(
     const kinds = flags.remotes.filter((k): k is RemoteKind => k !== 'none');
     const out: RemoteAnswer[] = [];
     for (const [i, kind] of kinds.entries())
-      out.push(await chooseRemote(kind, flags.remoteModels[i], flags, ui, list));
+      out.push(...(await chooseRemote(kind, flags.remoteModels[i], flags, ui, list, env)));
     return out;
   }
   if (!(await p.confirm('Set up any remote providers?', suggest))) return [];
@@ -98,23 +55,30 @@ export async function chooseRemotes(
   for (;;) {
     const kind: RemoteKind = await p.select(
       'Which provider?',
-      REMOTE_KINDS.map((k) => ({ label: remoteLabel(k), value: k, hint: credentialHint(k) })),
+      REMOTE_KINDS.map((k) => ({ label: remoteLabel(k), value: k, hint: credentialHint(k, env) })),
     );
-    chosen.push(await chooseRemote(kind, undefined, flags, ui, list));
+    chosen.push(...(await chooseRemote(kind, undefined, flags, ui, list, env)));
     if (!(await p.confirm('Any additional remote providers?', false))) break;
   }
   return chosen;
 }
 
+/** One provider's answers: one model, or every model a subscription covers. */
 async function chooseRemote(
   kind: RemoteKind,
   modelFlag: string | undefined,
   flags: SetupFlags,
   ui: SetupPrompter | undefined,
   list: List,
-): Promise<RemoteAnswer> {
+  env: Env,
+): Promise<RemoteAnswer[]> {
   const p = asking(ui);
-  const env = process.env;
+  const label = REMOTE_PROVIDERS[kind].name;
+  // Asked only when the provider wouldn't find a key on its own.
+  const apiKey = async (envName = keyEnv(kind)) =>
+    hasKey(kind, env) ? undefined : askApiKey(label, envName, flags, ui);
+  const withKey = <T extends object>(answer: T, key: string | undefined) =>
+    key ? { ...answer, apiKey: key } : answer;
 
   if (kind === 'openai-compatible' || kind === 'openrouter') {
     const baseUrl =
@@ -128,12 +92,16 @@ async function chooseRemote(
       (kind === 'openrouter'
         ? 'OPENROUTER_API_KEY'
         : p
-          ? await p.text('Environment variable holding the API key')
+          ? await p.text('Environment variable holding the API key (leave empty to paste one)')
           : undefined);
+    const key = apiKeyEnv
+      ? env[apiKeyEnv]
+        ? undefined
+        : await askApiKey(label, apiKeyEnv, flags, ui)
+      : await optionalKey(label, flags, ui);
     // Most endpoints list their models; some also give context lengths and prices.
-    const listed = await list(baseUrl, {
-      ...(apiKeyEnv && env[apiKeyEnv] ? { apiKey: env[apiKeyEnv] } : {}),
-    }).catch((err: Error) => {
+    const listKey = key ?? (apiKeyEnv ? env[apiKeyEnv] : undefined);
+    const listed = await list(baseUrl, listKey ? { apiKey: listKey } : {}).catch((err: Error) => {
       say(ui, `Couldn't list models (${err.message}); enter one by hand.`, 'detail');
       return [];
     });
@@ -165,20 +133,36 @@ async function chooseRemote(
         `$${found.price.input} / $${found.price.output} per M tokens, from the model list`,
         'detail',
       );
-    return {
-      kind,
-      baseUrl: baseUrl.replace(/\/+$/, ''),
-      model,
-      contextWindow,
-      ...(found?.maxOutputTokens ? { maxOutputTokens: found.maxOutputTokens } : {}),
-      ...(found?.price ? { price: found.price } : {}),
-      ...(apiKeyEnv ? { apiKeyEnv } : {}),
-    };
+    return [
+      withKey(
+        {
+          kind,
+          baseUrl: baseUrl.replace(/\/+$/, ''),
+          model,
+          contextWindow,
+          ...(found?.maxOutputTokens ? { maxOutputTokens: found.maxOutputTokens } : {}),
+          ...(found?.price ? { price: found.price } : {}),
+          ...(apiKeyEnv ? { apiKeyEnv } : {}),
+        },
+        key,
+      ),
+    ];
   }
 
-  if (kind === 'opencode') return chooseOpenCode(modelFlag, flags, ui, list);
+  if (kind === 'opencode')
+    return [withKey(await chooseOpenCode(modelFlag, flags, ui, list), await apiKey())];
 
   const catalog = CATALOG[catalogFor(kind) as HostedProviderKind];
+  if ((kind === 'claude-code' || kind === 'codex') && !modelFlag) {
+    const hint = credentialHint(kind, env);
+    if (hint.startsWith('install'))
+      say(ui, `${label}: ${hint} before Switchback can use it.`, 'warning');
+    // A plan covers all its models, so there's nothing to choose: the medium
+    // and large ones go in the ladder, and the rest are added when config loads.
+    say(ui, `Every model on your plan is added, and new ones appear on the next launch.`, 'detail');
+    const { medium, large } = aliasModels(catalogFor(kind) as HostedProviderKind);
+    return [...new Set([medium.id, large.id])].map((model) => ({ kind, model }));
+  }
   const model =
     modelFlag ??
     (p
@@ -196,18 +180,19 @@ async function chooseRemote(
       `--remote-model must be one of ${catalog.models.map((m) => m.id).join(', ')}`,
     );
   }
-  const hint = credentialHint(kind);
-  if (hint.startsWith('needs') || hint.startsWith('install'))
-    say(ui, `${remoteLabel(kind)} ${hint} before Switchback can use it.`, 'warning');
-
   switch (kind) {
     case 'anthropic':
     case 'openai':
     case 'deepseek':
     case 'gemini':
+      return [withKey({ kind, model }, await apiKey())];
     case 'claude-code':
-    case 'codex':
-      return { kind, model };
+    case 'codex': {
+      const hint = credentialHint(kind, env);
+      if (hint.startsWith('install'))
+        say(ui, `${label}: ${hint} before Switchback can use it.`, 'warning');
+      return [{ kind, model }];
+    }
     case 'bedrock': {
       const region =
         flags.region ??
@@ -224,7 +209,7 @@ async function chooseRemote(
         'Bedrock bills differently from the Anthropic API; set models.<alias>.price for accurate savings.',
         'detail',
       );
-      return { kind, model, region, ...(profile ? { profile } : {}) };
+      return [{ kind, model, region, ...(profile ? { profile } : {}) }];
     }
     case 'vertex': {
       const fallbackProject = env.GOOGLE_CLOUD_PROJECT ?? env.CLOUDSDK_CORE_PROJECT;
@@ -232,7 +217,7 @@ async function chooseRemote(
         flags.projectId ?? (p ? await p.text('GCP project ID', fallbackProject) : fallbackProject);
       if (!projectId) throw new SetupError('Vertex AI needs a project ID (--project-id)');
       const region = flags.region ?? (p ? await p.text('Region', 'global') : 'global');
-      return { kind, model, projectId, region };
+      return [{ kind, model, projectId, region }];
     }
     case 'anthropic-aws': {
       const region =
@@ -249,7 +234,7 @@ async function chooseRemote(
         (p
           ? await p.text('AWS profile (leave empty for the default chain)', env.AWS_PROFILE)
           : env.AWS_PROFILE);
-      return { kind, model, region, workspaceId, ...(profile ? { profile } : {}) };
+      return [{ kind, model, region, workspaceId, ...(profile ? { profile } : {}) }];
     }
     case 'azure-openai': {
       const resource =
@@ -263,9 +248,7 @@ async function chooseRemote(
               {
                 label: 'API key',
                 value: 'key' as const,
-                hint: env.AZURE_OPENAI_API_KEY
-                  ? 'AZURE_OPENAI_API_KEY found'
-                  : 'AZURE_OPENAI_API_KEY',
+                hint: hasKey(kind, env) ? 'key found' : 'paste one or set AZURE_OPENAI_API_KEY',
               },
               {
                 label: 'Microsoft Entra ID',
@@ -279,13 +262,18 @@ async function chooseRemote(
         'Prices are OpenAI list prices; Azure billing can differ, so set models.<alias>.price if it does.',
         'detail',
       );
-      return {
-        kind,
-        model,
-        deployment: deployment || model,
-        resource,
-        ...(auth === 'entra' ? { auth } : {}),
-      };
+      return [
+        withKey(
+          {
+            kind,
+            model,
+            deployment: deployment || model,
+            resource,
+            ...(auth === 'entra' ? { auth } : {}),
+          },
+          auth === 'entra' ? undefined : await apiKey(),
+        ),
+      ];
     }
     case 'foundry': {
       const resource =
@@ -294,9 +282,28 @@ async function chooseRemote(
           ? await p.text('Foundry resource name', env.ANTHROPIC_FOUNDRY_RESOURCE)
           : env.ANTHROPIC_FOUNDRY_RESOURCE);
       if (!resource) throw new SetupError('Microsoft Foundry needs --resource');
-      return { kind, model, resource };
+      return [withKey({ kind, model, resource }, await apiKey())];
     }
   }
+}
+
+/**
+ * A key for an OpenAI-compatible server that names no variable for one. Many
+ * local gateways need none, so an empty answer is fine and isn't warned about.
+ */
+async function optionalKey(
+  label: string,
+  flags: SetupFlags,
+  ui: SetupPrompter | undefined,
+): Promise<string | undefined> {
+  const p = asking(ui);
+  if (!p || flags.scope === 'project') return undefined;
+  const key = await p.text(`API key for ${label} (leave empty if it needs none)`, undefined, {
+    secret: true,
+  });
+  if (!key) return undefined;
+  say(ui, 'The key goes in your user config, which only you can read.', 'detail');
+  return key;
 }
 
 /** OpenCode: the plan, then a model from its live list (the list needs no key). */
@@ -345,13 +352,6 @@ async function chooseOpenCode(
     flags.remoteContextWindow ??
     (p ? await p.number('Context window (tokens)', 128_000) : undefined) ??
     128_000;
-  const hint = credentialHint('opencode');
-  if (hint.startsWith('needs'))
-    say(
-      ui,
-      `OpenCode ${hint} (from the OpenCode console) before Switchback can use it.`,
-      'warning',
-    );
   return { kind: 'opencode', plan, model, contextWindow };
 }
 

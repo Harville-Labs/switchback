@@ -20,7 +20,8 @@ export interface SetupOption {
  * search an index, or with `freeText` what was typed. Null cancels setup.
  */
 export type SetupQuestion =
-  | { kind: 'text'; question: string; default?: string }
+  /** `secret`: hide what's typed, as for a password. */
+  | { kind: 'text'; question: string; default?: string; secret?: boolean }
   | { kind: 'number'; question: string; default?: number }
   | { kind: 'confirm'; question: string; default: boolean }
   | { kind: 'select'; question: string; options: SetupOption[]; default: number }

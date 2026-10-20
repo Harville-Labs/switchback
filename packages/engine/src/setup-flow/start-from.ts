@@ -8,10 +8,8 @@ import { homedir } from 'node:os';
 import { REMOTE_PROVIDERS } from '../setup.ts';
 import { SetupError, type SetupFlags } from './flags.ts';
 import { findOpenCodeConfigs, type Imported, readOpenCode } from './from-opencode.ts';
+import { type Env, hasKey, keyEnv } from './keys.ts';
 import { asking, type SetupPrompter, say } from './prompter.ts';
-import { credentialHint } from './remote.ts';
-
-type Env = Record<string, string | undefined>;
 
 export const HARNESSES = {
   opencode: { name: 'OpenCode', find: findOpenCodeConfigs, read: readOpenCode },
@@ -29,7 +27,7 @@ export async function offerStartFrom(
     const h = HARNESSES[flags.from];
     const files = h.find(flags.cwd, env);
     if (!files.length) throw new SetupError(`--from ${flags.from}: no ${h.name} config found`);
-    return report(h.name, h.read(files, env), ui);
+    return report(h.name, h.read(files, env), ui, env);
   }
   if (!p || !firstRun) return undefined;
   const found = Object.entries(HARNESSES)
@@ -50,11 +48,11 @@ export async function offerStartFrom(
   if (!pick) return undefined;
   const h = HARNESSES[pick];
   const chosen = found.find((x) => x.id === pick);
-  return report(h.name, h.read(chosen?.files ?? [], env), ui);
+  return report(h.name, h.read(chosen?.files ?? [], env), ui, env);
 }
 
 /** What came over and what didn't, before the rest of setup builds on it. */
-function report(name: string, got: Imported, ui: SetupPrompter | undefined): Imported {
+function report(name: string, got: Imported, ui: SetupPrompter | undefined, env: Env): Imported {
   say(ui, `From ${name}`, 'heading');
   const models = [...got.locals.map((l) => l.model), ...got.remotes.map((r) => r.model)];
   say(
@@ -75,8 +73,9 @@ function report(name: string, got: Imported, ui: SetupPrompter | undefined): Imp
   // Credentials stay where that agent keeps them; say what Switchback will need.
   const hints = new Set<string>();
   for (const r of got.remotes) {
-    const hint = credentialHint(r.kind);
-    if (hint.startsWith('needs')) hints.add(`${REMOTE_PROVIDERS[r.kind].name} ${hint}`);
+    const name = keyEnv(r.kind);
+    if (name && !r.apiKey && !hasKey(r.kind, env))
+      hints.add(`${REMOTE_PROVIDERS[r.kind].name} needs ${name}`);
   }
   for (const h of hints) say(ui, h, 'warning');
   for (const s of got.skipped) say(ui, `Not brought over: ${s}`, 'warning');

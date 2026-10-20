@@ -3,8 +3,6 @@
  * lives in @switchback/providers (it's also used at runtime). Used by `switchback init`; kept here (not in the CLI) so any
  * client can drive setup through the same logic.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import {
   aliasModels,
   CATALOG,
@@ -12,15 +10,6 @@ import {
   type HostedProviderKind,
   type Price,
 } from '@switchback/providers';
-import { applyEdits, type JSONPath, modify } from 'jsonc-parser';
-import {
-  deepMerge,
-  layerProblem,
-  parseJsonc,
-  removedKeysIn,
-  renamedKeysIn,
-  withRenamedKeys,
-} from './config.ts';
 
 export {
   type DetectedModel,
@@ -84,7 +73,10 @@ export interface LocalAnswer {
   apiKeyEnv?: string;
 }
 
-export type RemoteAnswer =
+/** What setup asked about one hosted model. `apiKey`: a key pasted during setup. */
+export type RemoteAnswer = RemoteChoice & { apiKey?: string };
+
+type RemoteChoice =
   | {
       kind: 'anthropic' | 'openai' | 'deepseek' | 'gemini' | 'claude-code' | 'codex';
       model: string;
@@ -255,6 +247,11 @@ export function defaultRoles(models: PlannedModel[]): Roles {
   };
 }
 
+/** A key pasted during setup is written as is, in place of any `{env:NAME}` reference. */
+function withPastedKey(providers: Record<string, unknown>, id: string, r: RemoteAnswer): void {
+  if (r.apiKey) providers[id] = { ...(providers[id] as object), apiKey: r.apiKey };
+}
+
 /** Build the config layer described by the answers. */
 export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   if (!a.locals.length && !a.remotes.length) {
@@ -298,6 +295,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
         hostedIds.set(key, id);
         providers[id] = { type: 'opencode', plan: r.plan };
       }
+      withPastedKey(providers, id, r);
       models[alias] = {
         provider: id,
         model: r.model,
@@ -319,6 +317,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
           ...(r.apiKeyEnv ? { apiKey: `{env:${r.apiKeyEnv}}` } : {}),
         };
       }
+      withPastedKey(providers, id, r);
       models[alias] = {
         provider: id,
         model: r.model,
@@ -357,6 +356,7 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       hostedIds.set(key, id);
       providers[id] = providerConfig;
     }
+    withPastedKey(providers, id, r);
     const catalog = catalogFor(r.kind) as HostedProviderKind;
     // Bedrock model IDs carry the `anthropic.` prefix; everywhere else uses bare IDs.
     const wire = (m: string) => (r.kind === 'bedrock' ? `anthropic.${m}` : m);
@@ -434,75 +434,4 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
   };
 }
 
-export interface WriteResult {
-  file: string;
-  backup?: string;
-  config: Record<string, unknown>;
-}
-
-/** Each leaf of a layer as a JSON path; arrays and empty objects are leaves. */
-function leaves(layer: Record<string, unknown>, prefix: JSONPath = []): [JSONPath, unknown][] {
-  return Object.entries(layer).flatMap(([k, v]) =>
-    v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length
-      ? leaves(v as Record<string, unknown>, [...prefix, k])
-      : [[[...prefix, k], v] as [JSONPath, unknown]],
-  );
-}
-
-/**
- * Merge a layer into a config file (creating it if needed), validating the
- * result against the schema first. Edits are applied in place, so the user's
- * comments and formatting survive; the previous file is still kept as `.bak`.
- */
-export function writeConfigLayer(
-  file: string,
-  layer: Record<string, unknown>,
-  options: {
-    /**
-     * Check that aliases resolve within this file alone. Off when the caller
-     * already checked them against the merged config (models may live in
-     * another file, an org policy, or the project config).
-     */
-    references?: boolean;
-    /** Top-level sections to replace whole rather than merge into. */
-    replace?: string[];
-  } = {},
-): WriteResult {
-  let text = '{}';
-  let backup: string | undefined;
-  if (existsSync(file)) {
-    text = readFileSync(file, 'utf8');
-    backup = `${file}.bak`;
-    copyFileSync(file, backup);
-  }
-  // Keys role-based routing removed (ADR 0015) under a section this layer
-  // writes are deleted, so re-running setup migrates an old file instead of
-  // failing on it.
-  for (const { path } of removedKeysIn(parseJsonc(text)))
-    if (path[0] && path[0] in layer) text = applyEdits(text, modify(text, path, undefined, {}));
-  // Renamed keys move to their new name, keeping their value, whatever the layer writes.
-  for (const { from, to } of renamedKeysIn(parseJsonc(text))) {
-    const value = withRenamedKeys(parseJsonc(text) as Record<string, unknown>);
-    const moved = to.reduce<unknown>((n, k) => (n as Record<string, unknown>)[k], value);
-    text = applyEdits(text, modify(text, from, undefined, {}));
-    text = applyEdits(
-      text,
-      modify(text, to, moved, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
-    );
-  }
-  for (const key of options.replace ?? [])
-    text = applyEdits(text, modify(text, [key], undefined, {}));
-  const existing = parseJsonc(text) as Record<string, unknown>;
-  const merged = deepMerge(existing, layer);
-  const problem = layerProblem(merged, { references: options.references !== false });
-  if (problem) throw new Error(`setup produced an invalid config: ${problem}`);
-  for (const [path, value] of leaves(layer)) {
-    text = applyEdits(
-      text,
-      modify(text, path, value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
-    );
-  }
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, text.endsWith('\n') ? text : `${text}\n`);
-  return { file, ...(backup ? { backup } : {}), config: merged };
-}
+export { type WriteResult, writeConfigLayer } from './config-write.ts';

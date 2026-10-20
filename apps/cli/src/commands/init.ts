@@ -74,7 +74,7 @@ export function drawNote(note: SetupNote): string {
 /** The terminal prompts, as setup asks for them; a blank line before each question keeps steps apart. */
 function terminal(p: Prompter): SetupPrompter {
   return {
-    text: (q, fallback) => p.text(q, fallback),
+    text: (q, fallback, opts) => p.text(q, fallback, opts),
     number: (q, fallback) => p.number(q, fallback),
     confirm: (q, fallback) => p.confirm(`\n${q}`, fallback),
     select: (q, options, i) => p.select(`\n${q}`, options, i),
