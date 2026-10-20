@@ -8,7 +8,10 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Start from your OpenCode setup.** On a first run, when an OpenCode config is found, `switchback init` first asks whether to start from it: its models (the main one stays current), MCP servers, and permissions come over and are shown before anything is written; API keys stay where OpenCode keeps them, and setup names the environment variables Switchback needs. `--from opencode` does it unattended (ADR 0022)
 
 ### Fixed
+- **Config changes made outside a running engine take effect.** The shared engine reloads `~/.switchback/config.json` and the project's config files when they change, so `switchback init` in a terminal, `switchback config edit`, and editor saves apply without closing every client first. A file that doesn't parse is reported and the config in effect stays
+- **`switchback doctor` points out `~/.config/switchback` and `~/.local/share/switchback`** left from before 1.1.0, which nothing reads
 - **Setting the current model during setup (`--current`) no longer leaves it on the escalation ladder too**
+- VS Code webview tests no longer fail depending on which test file loads the Markdown renderer first
 
 ## [1.5.0] - 2026-10-19
 

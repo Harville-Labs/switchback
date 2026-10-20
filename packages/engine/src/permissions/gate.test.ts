@@ -192,10 +192,12 @@ describe('rules at the prompt', () => {
       bypassDisabled: false,
       userPermissionsDisabled: true,
     };
+    // `echo`, not a build tool: on macOS `/usr/bin/make` is an xcrun shim that can take
+    // seconds on a cold machine, and only the asking matters here.
     const { engine, events } = setup(
       [
-        { toolCalls: [{ name: 'bash', input: { command: 'make' } }] },
-        { toolCalls: [{ name: 'bash', input: { command: 'make' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] },
         { text: 'done' },
       ],
       { bash: 'ask' },

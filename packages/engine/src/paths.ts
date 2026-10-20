@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -41,4 +42,18 @@ export function projectPaths(root: string) {
     /** Project instructions, in the open AGENTS.md convention (agents.md). */
     instructionsFile: join(root, 'AGENTS.md'),
   };
+}
+
+/**
+ * Where Switchback kept its files before 1.1.0 (`~/.config/switchback`,
+ * `~/.local/share/switchback`), when they're still there. Nothing reads them;
+ * `doctor` points them out so a stale copy isn't mistaken for the config.
+ */
+export function legacyDirs(env: Record<string, string | undefined> = process.env): string[] {
+  const home = env.HOME ?? homedir();
+  return [
+    join(env.XDG_CONFIG_HOME ?? join(home, '.config'), 'switchback'),
+    join(env.XDG_DATA_HOME ?? join(home, '.local', 'share'), 'switchback'),
+    // Unless SWITCHBACK_HOME points there, which makes it the current home.
+  ].filter((dir) => existsSync(dir) && dir !== switchbackHome(env));
 }

@@ -46,6 +46,7 @@ import {
 import type { Price } from '@switchback/providers';
 import { type AgentSpec, draftWithSummarizer } from './authoring.ts';
 import { referenceModel, type SwitchbackConfig } from './config.ts';
+import { ConfigWatcher } from './config-watch.ts';
 import type { EngineOptions } from './engine-options.ts';
 import { assembleEngine, type EngineParts } from './engine-parts.ts';
 import { changeNote } from './instructions-live.ts';
@@ -69,6 +70,7 @@ export const ENGINE_VERSION = '1.5.0';
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
   private mcp: McpHub | undefined;
+  private configWatch: ConfigWatcher | undefined;
   private readonly setupRuns: SetupRuns;
   /** The collaborators (engine-parts.ts). */
   private readonly p: EngineParts;
@@ -79,13 +81,7 @@ export class Engine {
       options.workspaceRoot,
       (e) => this.emit(e),
       options.setup,
-      () => {
-        try {
-          if (options.reloadConfig) this.applyConfig(options.reloadConfig());
-        } catch (err) {
-          this.notify('error', `the new configuration wasn't applied: ${(err as Error).message}`);
-        }
-      },
+      () => this.reloadConfig(),
     );
     this.p = assembleEngine(options, {
       emit: (e) => this.emit(e),
@@ -95,6 +91,25 @@ export class Engine {
     this.p.instructions.watch?.((scopes) =>
       this.emit({ type: 'config.updated', notes: scopes.map(changeNote) }),
     );
+    if (options.reloadConfig)
+      this.configWatch = new ConfigWatcher(Object.values(this.p.configFiles), () =>
+        this.reloadConfig(),
+      );
+  }
+
+  /** Load the config from disk again and apply it, unless nothing in it changed. */
+  private reloadConfig(): void {
+    if (!this.options.reloadConfig) return;
+    try {
+      const next = this.options.reloadConfig();
+      // Setup's write is seen twice (its own reload, then the watcher); apply it once.
+      const same =
+        JSON.stringify(next.config) === JSON.stringify(this.options.config) &&
+        JSON.stringify(next.rules) === JSON.stringify(this.options.rules);
+      if (!same) this.applyConfig(next);
+    } catch (err) {
+      this.notify('error', `the new configuration wasn't applied: ${(err as Error).message}`);
+    }
   }
 
   private startMcp(config: SwitchbackConfig): McpHub | undefined {
@@ -390,6 +405,7 @@ export class Engine {
 
   async shutdown(): Promise<void> {
     this.p.instructions.close();
+    this.configWatch?.close();
     await this.p.commands.close();
     for (const s of this.p.sessions.inMemory()) {
       s.controller?.abort();
