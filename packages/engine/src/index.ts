@@ -19,6 +19,12 @@ export * from './server.ts';
 export * from './setup.ts';
 export * from './setup-flow/index.ts';
 export * from './store.ts';
+export {
+  type DiscoveredModels,
+  readDiscovered,
+  refreshSubscriptionModels,
+  withSubscriptionModels,
+} from './subscription-models.ts';
 export * from './telemetry.ts';
 export * from './tokens.ts';
 export * from './tools/index.ts';

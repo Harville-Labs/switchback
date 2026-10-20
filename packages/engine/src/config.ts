@@ -30,6 +30,7 @@ import { readCachedPolicy } from './org/store.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { RuleLayers } from './permissions/layers.ts';
 import type { SourcedRule } from './permissions/policy.ts';
+import { readDiscovered, withSubscriptionModels } from './subscription-models.ts';
 import { isTrusted } from './trust.ts';
 
 export * from './config-removed.ts';
@@ -201,6 +202,7 @@ export function loadConfig(
   // The environment's opt-out beats every config file, including an org's.
   if (telemetryOptedOut(env))
     config = { ...config, telemetry: { ...config.telemetry, enabled: false } };
+  config = withSubscriptionModels(config, readDiscovered(env));
   let skipped: string[] = [];
   if (org) ({ config, notes: skipped } = dropMissingPolicyAliases(config, org));
   const problem = referenceProblem(config);
@@ -431,6 +433,9 @@ export function configJsonSchema(): Record<string, unknown> {
   };
 }
 
+/** Config keys whose values are treated as secrets. */
+export const SECRET_KEY = /key|token|secret|password/i;
+
 /** Copy of a config with secret-looking values replaced, for display. */
 export function redactConfig(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactConfig);
@@ -438,9 +443,7 @@ export function redactConfig(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value).map(([k, v]) => [
         k,
-        /key|token|secret|password/i.test(k) && typeof v === 'string' && v
-          ? '<redacted>'
-          : redactConfig(v),
+        SECRET_KEY.test(k) && typeof v === 'string' && v ? '<redacted>' : redactConfig(v),
       ]),
     );
   }

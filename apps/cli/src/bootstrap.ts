@@ -11,6 +11,7 @@ import {
   readTelemetryState,
   recordEngineEvent,
   refreshPolicy,
+  refreshSubscriptionModels,
   roleAliases,
   type SwitchbackConfig,
   sendTelemetry,
@@ -75,7 +76,7 @@ function load(flags: CommonFlags) {
 export function createEngine(
   flags: CommonFlags,
   interaction: EngineOptions['interaction'],
-  options: { syncOrg?: boolean; telemetry?: boolean } = {},
+  options: { syncOrg?: boolean; telemetry?: boolean; refreshModels?: boolean } = {},
 ) {
   try {
     const loaded = load(flags);
@@ -89,6 +90,13 @@ export function createEngine(
       ...(loaded.org ? { org: loaded.org } : {}),
     });
     if (options.telemetry && !flags.mock) startTelemetry(engine, loaded);
+    // New models on a Claude or ChatGPT plan show up without re-running setup.
+    if (options.refreshModels && !flags.mock)
+      void refreshSubscriptionModels(loaded.config, process.env)
+        .then((changed) => changed && engine.applyConfig(load(flags)))
+        .catch((err: Error) =>
+          engine.notify('warn', `couldn't refresh plan models: ${err.message}`),
+        );
     if (options.syncOrg && readAuth()) {
       // Long-running engines follow policy updates live.
       new OrgSync({
@@ -154,7 +162,11 @@ export async function connectInProcess(
   options: { syncOrg?: boolean } = {},
 ) {
   await refreshOrgPolicyQuickly();
-  const { engine, agentErrors } = createEngine(flags, interaction, { ...options, telemetry: true });
+  const { engine, agentErrors } = createEngine(flags, interaction, {
+    ...options,
+    telemetry: true,
+    refreshModels: true,
+  });
   const [serverSide, clientSide] = createTransportPair();
   serve(engine, serverSide);
   const client = new SwitchbackClient(clientSide);

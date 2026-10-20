@@ -213,6 +213,8 @@ If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a sub
 
 `switchback init` offers both (`--remote claude-code`, `--remote codex` unattended) and writes this for you.
 
+- **Models.** You don't list them. Every model the sign-in offers is available under its own ID as alias (`claude-opus-5`, `gpt-6-sol`), unless config already names that model or uses that alias. Each launch of the TUI or `serve` asks the CLI in the background what it offers now (Claude Code through the Agent SDK's model list, Codex through `codex app-server`'s `model/list`), so a newly released model shows up without updating Switchback. The answer is kept in `~/.switchback/data/subscription-models.json`; until the first answer, the catalog's models stand in. Setup puts the medium and large models in the escalation ladder; `--remote-model` picks one instead.
+
 - **Sign-in.** They use whatever the CLI is signed in with: your Claude or ChatGPT plan, or a key. Switchback runs `claude` or `codex` from `PATH` (or `executable`), else the copy its SDK ships with, which uses the same sign-in. A turn that can't run (not signed in, say) fails with the CLI's explanation.
 - **Cost.** `billing: "subscription"` (the default) records their turns as free, so they don't count toward budgets; `"api"` records the cost the CLI reports. Setup gives their models a zero `price`, so escalation prompts don't show an estimate.
 - **Context.** Each keeps its own session, resumed on its next turn in the same Switchback session, so it remembers its earlier work. When it takes over from another model, it's told what it missed: a digest of the conversation since its last turn, then the request.
