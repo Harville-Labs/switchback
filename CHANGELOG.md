@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-20
+
 ### Added
 - **`switchback usage` is a dashboard in a terminal.** Pick today, the last 7 days, the month, the year, or all time, step back through earlier periods with ← and →, and see spend, savings, budget meters, how tokens split between local and remote models, a chart per day or month, and the breakdown by rule, agent, or model. `--from`/`--to` report any span of days, `--period` also takes `year` and `all`, and piped output and `--json` work as before. The `usage.get` protocol method takes a `range` and returns `byDay`
 - **Agents have modes, limits, and their own reasoning effort.** An agent's `mode` says whether it runs as a session's agent, as a subagent, or both; `effort` and `maxSteps` set its reasoning effort and step limit; and `agents` limits which subagents it may call (an empty list removes its `task` tool). The new `agents` config key adds agents, changes built-ins field by field, and turns them off with `disable: true`. `explore` now runs at `low` effort
@@ -11,6 +13,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **`/effort` changes reasoning effort for the current session.** It overrides the agent's and model's effort for that session only, and `/effort default` goes back. `--effort` sets it at launch, it works the same in VS Code, and the protocol adds `session.setEffort`, `effort` on `session.create`, and the `effort.changed` event
 - **A Claude or ChatGPT plan brings all its models.** Claude Code and Codex providers get every model their sign-in offers without listing them in config. Switchback asks the CLIs at launch (Codex through `codex app-server`, Claude Code through the Agent SDK) and caches the answer in `subscription-models.json` in the data folder, so newly released models show up without an update or re-running setup. Setup no longer asks which Claude Code or Codex model to add; `--remote-model` still picks one
 - **Setup asks for an API key** for every provider that signs in with one (Anthropic, OpenAI, Azure OpenAI, DeepSeek, Gemini, Foundry, OpenCode, OpenRouter, and optionally OpenAI-compatible servers) when none is in the environment. The key is typed hidden, saved only in the user config, which setup makes readable by you alone, and never shown back. A project config never gets a key, and leaving the answer empty keeps reading the environment variable. `setup.ask` questions carry `secret: true` for this
+
+### Fixed
+- **A permission prompt shows only in the client that owns the session.** A terminal chat's prompt no longer pops up in VS Code, and the reverse
 
 ### Removed
 - **No more Intel Mac build.** Releases no longer include a `darwin-x64` binary or `.vsix`. On an Intel Mac, the installer and `switchback self-update` now say there is no build instead of failing to download one. Apple silicon under Rosetta still gets the arm64 build

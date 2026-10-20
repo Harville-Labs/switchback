@@ -1,2 +1,2 @@
 /** The extension's version; `scripts/release.ts` keeps it in step with the CLI and engine. */
-export const VERSION = '1.6.0';
+export const VERSION = '2.0.0';
