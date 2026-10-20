@@ -23,7 +23,8 @@ import {
 import type { TodoItem, ViewItem, ViewState } from '@switchback/client/view';
 import { worktreeLabel } from '@switchback/client/worktrees';
 import type { PermissionDecision } from '@switchback/protocol';
-import { esc, renderMarkdown } from './markdown.ts';
+import { esc } from './escape.ts';
+import { renderMarkdown } from './markdown.ts';
 
 export { esc };
 

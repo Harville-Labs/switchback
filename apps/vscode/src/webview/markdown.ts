@@ -6,9 +6,8 @@
  */
 import DOMPurify from 'dompurify';
 import { Marked } from 'marked';
+import { esc } from './escape.ts';
 
-/** Escape text for HTML: model output is never markup. */
-export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const SAFE_URL = /^(?:https?:|mailto:)/i;
 
 const marked = new Marked({

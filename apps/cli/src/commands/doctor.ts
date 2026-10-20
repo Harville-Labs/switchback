@@ -5,8 +5,10 @@ import {
   configRoles,
   instructionFiles,
   instructionsUsage,
+  legacyDirs,
   modelSummaries,
   roleAliases,
+  switchbackHome,
   tierOfModel,
 } from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
@@ -32,6 +34,12 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   out(heading(style, 'Config files'));
   if (loaded.sources.length === 0) out(dim('  (none; using built-in defaults)'));
   for (const s of loaded.sources) out(`  ${tildify(s, homedir())}`);
+  for (const dir of legacyDirs())
+    out(
+      yellow(
+        `  ! ${tildify(dir, homedir())} is from before 1.1.0 and isn't read; move what you need into ${tildify(switchbackHome(), homedir())}, then delete it`,
+      ),
+    );
 
   if (loaded.org) {
     const o = loaded.org;

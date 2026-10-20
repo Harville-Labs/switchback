@@ -235,6 +235,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
 
   return {
     now,
+    configFiles,
     instructions,
     models,
     ledger,

@@ -4,6 +4,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Fixed
+- **Config changes made outside a running engine take effect.** The shared engine reloads `~/.switchback/config.json` and the project's config files when they change, so `switchback init` in a terminal, `switchback config edit`, and editor saves apply without closing every client first. A file that doesn't parse is reported and the config in effect stays
+- **`switchback doctor` points out `~/.config/switchback` and `~/.local/share/switchback`** left from before 1.1.0, which nothing reads
+- VS Code webview tests no longer fail depending on which test file loads the Markdown renderer first
+
 ## [1.5.0] - 2026-10-19
 
 ### Added
