@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-21
+
 ### Added
 - **Starting from OpenCode reads its newer config format.** `providers` with `package` and `settings.baseURL`, a model's `modelID`, agents' `provider/model#variant`, the `permissions` list, and `mcp.servers` come over like the older `provider`, `permission`, and `mcp`
 - **Sampling settings per model.** `temperature`, `topP`, `topK`, and `body` (extra request fields such as vLLM's `min_p` or `chat_template_kwargs`) go with every request to that model, on every provider that takes them. Starting from OpenCode brings a model's `body` over as these, a `#variant` with its own `body` as a model of its own, and image input as `vision`
