@@ -32,7 +32,7 @@ Servers started with an API key (`llama-server --api-key`, `vllm serve --api-key
 }
 ```
 
-`switchback init` detects these servers and fills this in for you. There is no default local model.
+`switchback init`, or `/init` inside Switchback, detects these servers and fills this in for you. There is no default local model.
 
 Choosing a local model:
 

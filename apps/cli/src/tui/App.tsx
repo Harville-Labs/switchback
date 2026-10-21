@@ -47,6 +47,7 @@ import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
+import { useSetup } from './SetupPanel.tsx';
 import { cycleModel, pickModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
 import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
@@ -141,6 +142,8 @@ export function App({
   /** ctrl+o: reasoning, command output, and diffs in full. */
   const [expanded, setExpanded] = useState(false);
   const [themeName, setThemeName] = useState<ThemeName>(initialTheme);
+  const setup = useSetup(client, (text) => setView((v) => addInfo(v, text)));
+  const modal = Boolean(picking || rewinding || choosingModel || dashboard || setup.active);
   const theme = THEMES[themeName];
   useEffect(() => {
     if (exitArmedAt === undefined) return;
@@ -239,6 +242,7 @@ export function App({
       saveTheme(name);
     },
     openModelPicker: setChoosingModel,
+    openSetup: setup.start,
     focusedSubagent: focusedRow?.agent,
     tabs,
     openDashboard: () => {
@@ -349,7 +353,7 @@ export function App({
     tabs,
     setTabs,
     page: scroll.page,
-    modal: Boolean(picking || rewinding || choosingModel || dashboard),
+    modal,
     prompting: Boolean(permission || escalation),
     openDashboard: slash.openDashboard,
     toggleExpanded: () => setExpanded((v) => !v),
@@ -418,6 +422,7 @@ export function App({
               }}
             />
           ) : null}
+          {setup.panel}
           {dashboard ? (
             <Dashboard
               rows={dashRows}
@@ -436,9 +441,7 @@ export function App({
           {view.running && !permission && !escalation ? <Working view={view} /> : null}
           <Box borderStyle="round" borderColor={view.running ? 'gray' : theme.brand} paddingX={1}>
             <PromptInput
-              focus={
-                !permission && !escalation && !picking && !rewinding && !choosingModel && !dashboard
-              }
+              focus={!permission && !escalation && !modal}
               custom={custom}
               resources={resources}
               onInterrupt={interrupt}

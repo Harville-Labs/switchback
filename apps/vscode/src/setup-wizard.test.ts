@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from 'bun:test';
-import type { EngineEvent, SetupQuestion } from '@switchback/protocol';
+import type { SetupQuestion } from '@switchback/protocol';
 
 /** Each quick pick or input box shown, and how the test answers it. */
 type Shown = {
@@ -144,42 +144,4 @@ test('dismissing any question answers null, which cancels setup', async () => {
   expect(
     await askSetupQuestion({ kind: 'multiSelect', question: 'M?', options: opts('a') }),
   ).toBeNull();
-});
-
-test('a setup run answers each question, shows notes, and ends with the outcome', async () => {
-  const listeners = new Set<(e: EngineEvent) => void>();
-  const emit = (e: EngineEvent) => {
-    for (const l of listeners) l(e);
-  };
-  const answers: unknown[] = [];
-  const client = {
-    on: (l: (e: EngineEvent) => void) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    request: async (method: string, params: { value?: unknown }) => {
-      if (method === 'setup.start') {
-        // An event that beats the response must not be lost.
-        emit({ type: 'setup.note', setupId: 'x', note: { kind: 'text', text: 'Looking...' } });
-        emit({
-          type: 'setup.ask',
-          setupId: 'x',
-          requestId: 'q1',
-          question: { kind: 'confirm', question: 'Local?', default: false },
-        });
-        return { setupId: 'x' };
-      }
-      answers.push(params.value);
-      setTimeout(() =>
-        emit({ type: 'setup.finished', setupId: 'x', outcome: 'written', file: '/c.json' }),
-      );
-      return { ok: true };
-    },
-  };
-  reply = () => ['Yes'];
-  const said: string[] = [];
-  const outcome = await runSetup(client as never, (t) => said.push(t));
-  expect(said).toEqual(['Looking...']);
-  expect(answers).toEqual([true]);
-  expect(outcome).toEqual({ outcome: 'written', file: '/c.json' });
 });

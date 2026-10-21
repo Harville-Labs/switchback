@@ -54,7 +54,7 @@ bun run dev -- --mock          # try the TUI with scripted models, no setup need
 bun run dev -- init
 ```
 
-Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` sets it up. Running `switchback` for the first time with no config offers to run setup.
+Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` (or `/init` inside Switchback) sets it up. Running `switchback` for the first time with no config offers to run setup.
 
 In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/usage` shows spend and savings, and `esc` cancels.
 

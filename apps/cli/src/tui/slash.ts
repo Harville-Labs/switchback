@@ -97,6 +97,8 @@ export interface SlashContext {
   openRewind(): Promise<void>;
   /** Show the current-model picker. */
   openModelPicker(role: ChosenRole): void;
+  /** Run setup (`/init`), as `switchback init` does. */
+  openSetup(): void;
   /** The agent of the subagent shown in place of the session (Tab), if any. */
   focusedSubagent?: string;
   /** The open tabs and the sessions the dashboard knows about. */
@@ -478,6 +480,8 @@ const HANDLERS: Record<string, Handler> = {
     ctx.setTheme(name as ThemeName);
     say(ctx, `theme: ${name}`);
   },
+  init: (ctx) => ctx.openSetup(),
+  setup: (ctx) => ctx.openSetup(),
   exit: (ctx) => ctx.exit(),
   quit: (ctx) => ctx.exit(),
 };

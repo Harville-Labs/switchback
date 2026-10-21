@@ -182,7 +182,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'colors for the terminal UI',
     clients: ['tui'],
   },
-  { name: 'setup', group: 'Extension', description: 'set up models', clients: ['vscode'] },
+  {
+    name: 'init',
+    group: 'Models',
+    description: 'set up models and providers, as switchback init does',
+  },
   { name: 'logs', group: 'Extension', description: 'show engine logs', clients: ['vscode'] },
   { name: 'restart', group: 'Extension', description: 'restart the engine', clients: ['vscode'] },
   { name: 'exit', group: 'Extension', description: 'quit', clients: ['tui'] },

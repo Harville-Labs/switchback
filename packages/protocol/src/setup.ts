@@ -55,7 +55,7 @@ export type SetupAnswerParams = z.infer<typeof SetupAnswerParams>;
 export const SetupCancelParams = z.object({ setupId: z.string() });
 export type SetupCancelParams = z.infer<typeof SetupCancelParams>;
 
-/** How a setup ended. `written`: a config file was written (restart the engine to use it). */
+/** How a setup ended. `written`: a config file was written; the engine watches it and applies it. */
 export interface SetupOutcome {
   outcome: 'written' | 'nothing' | 'cancelled' | 'failed';
   file?: string;

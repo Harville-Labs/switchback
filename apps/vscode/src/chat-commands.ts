@@ -124,6 +124,7 @@ export async function runChatCommand(
         `${diff.branch}: ${diff.stat.split('\n').at(-1)?.trim() ?? ''} (opened in the diff editor)`,
       );
     }
+    case 'init':
     case 'setup':
       await vscode.commands.executeCommand('switchback.runSetup');
       return;

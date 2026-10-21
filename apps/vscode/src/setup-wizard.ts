@@ -4,13 +4,8 @@
  * engine's, the same as `switchback init`; this only draws questions and
  * returns answers. Dismissing a question (Escape) cancels setup.
  */
-import { formatSetupNote, type SwitchbackClient } from '@switchback/client';
-import type {
-  EngineEvent,
-  SetupAnswerParams,
-  SetupOutcome,
-  SetupQuestion,
-} from '@switchback/protocol';
+import { formatSetupNote, runSetupOver, type SwitchbackClient } from '@switchback/client';
+import type { SetupAnswerParams, SetupOutcome, SetupQuestion } from '@switchback/protocol';
 import * as vscode from 'vscode';
 
 type Answer = SetupAnswerParams['value'];
@@ -119,47 +114,10 @@ export async function askSetupQuestion(q: SetupQuestion): Promise<Answer> {
   }
 }
 
-/**
- * Run setup to the end: questions as quick picks, notes into the chat (`say`).
- * Resolves with how it ended; on `written`, restart the engine to use the new
- * config.
- */
+/** Run setup to the end: questions as quick picks, notes into the chat (`say`). */
 export function runSetup(
   client: SwitchbackClient,
   say: (text: string) => void,
 ): Promise<SetupOutcome> {
-  return new Promise((resolve, reject) => {
-    let setupId: string | undefined;
-    // Events can arrive before setup.start returns the ID; hold them until then.
-    const early: EngineEvent[] = [];
-    const handle = (e: EngineEvent): void => {
-      if (e.type !== 'setup.ask' && e.type !== 'setup.note' && e.type !== 'setup.finished') return;
-      if (!setupId) {
-        early.push(e);
-        return;
-      }
-      if (e.setupId !== setupId) return;
-      if (e.type === 'setup.note') say(formatSetupNote(e.note));
-      if (e.type === 'setup.ask')
-        void askSetupQuestion(e.question)
-          .then((value) => client.request('setup.answer', { requestId: e.requestId, value }))
-          .catch(reject);
-      if (e.type === 'setup.finished') {
-        off();
-        const { type: _, setupId: __, ...outcome } = e;
-        resolve(outcome);
-      }
-    };
-    const off = client.on(handle);
-    client.request('setup.start', {}).then(
-      (r) => {
-        setupId = r.setupId;
-        for (const e of early.splice(0)) handle(e);
-      },
-      (err) => {
-        off();
-        reject(err);
-      },
-    );
-  });
+  return runSetupOver(client, { ask: askSetupQuestion, note: (n) => say(formatSetupNote(n)) });
 }
