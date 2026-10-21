@@ -1,16 +1,18 @@
-/** `/current` with no argument: choose the current model. ↑/↓ to choose, Enter to switch. */
-import type { ModelChoice } from '@switchback/client';
+/** `/current` or `/model` with no argument: choose a role's model. ↑/↓ to choose, Enter to switch. */
+import type { ChosenRole, ModelChoice } from '@switchback/client';
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Keys } from './Chrome.tsx';
 import { useTheme } from './theme.ts';
 
 export function ModelPicker({
+  role = 'current',
   choices,
   onPick,
   onCancel,
 }: {
-  /** The current model first, as `modelChoices` orders them. */
+  role?: ChosenRole;
+  /** The role's model first, as `modelChoices` orders them. */
   choices: ModelChoice[];
   onPick: (alias: string) => void;
   onCancel: () => void;
@@ -29,7 +31,7 @@ export function ModelPicker({
 
   return (
     <Box borderStyle="round" borderColor={t.accent} paddingX={1} flexDirection="column">
-      <Text bold>Current model</Text>
+      <Text bold>{role === 'current' ? 'Current model' : 'Subagent model'}</Text>
       {choices.length === 0 ? (
         <Text dimColor>No models configured; run switchback init.</Text>
       ) : (
@@ -46,7 +48,9 @@ export function ModelPicker({
                 {c.model === c.alias ? '' : `  ${c.model}`} · {c.tier}
                 {c.roles.length ? ` · ${c.roles.join(', ')}` : ''}
               </Text>
-              {c.current ? <Text color={t.accent}> ● current</Text> : null}
+              {c.current ? (
+                <Text color={t.accent}> ● {role === 'current' ? 'current' : 'in use'}</Text>
+              ) : null}
             </Text>
           );
         })

@@ -122,6 +122,14 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'the current model: no argument picks from a list (more models are backups)',
   },
   {
+    name: 'model',
+    args: '[model]',
+    group: 'Models',
+    description:
+      "the model for what's in front: /current, or the subagent model in a subagent's view",
+    clients: ['tui'],
+  },
+  {
     name: 'escalate',
     args: '<step...>|none',
     group: 'Models',
@@ -211,8 +219,9 @@ export function commandsFor(
 }
 
 /**
- * Commands matching what's typed after `/`: name prefixes first, then names
- * that contain the query, in catalog order within each. Descriptions are
+ * Commands matching what's typed after `/`: an exact name first, so Enter
+ * runs what was typed, then name prefixes, then names that contain the
+ * query, in catalog order within each. Descriptions are
  * searched from three characters on; shorter queries match too much prose.
  */
 export function matchCommands(
@@ -223,7 +232,9 @@ export function matchCommands(
   const q = query.trim().toLowerCase();
   const all = commandsFor(client, custom);
   if (!q) return all;
-  const prefix = all.filter((c) => c.name.startsWith(q));
+  const prefix = all
+    .filter((c) => c.name.startsWith(q))
+    .sort((a, b) => Number(b.name === q) - Number(a.name === q));
   const contains = all.filter(
     (c) =>
       !prefix.includes(c) &&

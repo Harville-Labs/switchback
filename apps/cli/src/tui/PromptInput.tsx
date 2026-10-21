@@ -78,6 +78,10 @@ interface Props {
   recall: () => string | undefined;
   /** Ctrl+V found no image on the clipboard. */
   onNoImage?: () => void;
+  /** Tab with no menu open. */
+  onTab?: () => void;
+  /** Ctrl+W on an empty input (with text in it, Ctrl+W deletes a word). */
+  onCloseTab?: () => void;
   /** Where Ctrl+V gets an image (base64); the system clipboard unless a test says otherwise. */
   clipboardImage?: () => Promise<string | undefined>;
 }
@@ -101,6 +105,8 @@ export function PromptInput({
   onCancel,
   recall,
   onNoImage,
+  onTab,
+  onCloseTab,
   clipboardImage = readClipboardImage,
 }: Props) {
   const [state, setState] = useState<EditorState>(empty);
@@ -227,6 +233,8 @@ export function PromptInput({
         if (key.escape) return setMenuClosed(true);
       }
 
+      // Tab with no menu open moves through the session and its subagents; ctrl+tab is the app's.
+      if (key.tab && !key.ctrl && !key.shift) return onTab?.();
       if (key.escape) {
         if (busy && state.value.trim()) {
           onSubmitNow(expandPastes(state.value, pastes), attachedImages(state.value, pastes));
@@ -272,7 +280,7 @@ export function PromptInput({
       if (key.home || (key.ctrl && input === 'a')) return setState(lineStart(state));
       if (key.end || (key.ctrl && input === 'e')) return setState(lineEnd(state));
       if (key.ctrl && input === 'u') return edit(deleteToLineStart(state));
-      if (key.ctrl && input === 'w') return edit(deleteWord(state));
+      if (key.ctrl && input === 'w') return state.value ? edit(deleteWord(state)) : onCloseTab?.();
       // Most terminals send DEL (0x7f) for Backspace, which Ink reports either way.
       if (key.backspace) {
         // A paste chip goes in one keystroke, like the paste that made it.

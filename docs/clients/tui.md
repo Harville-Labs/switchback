@@ -23,7 +23,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 │ mode          default                                │
 │ directory     ~/code/shop                            │
 ╰──────────────────────────────────────────────────────╯
-  / commands · @ files · shift+tab mode · ctrl+o expand · PgUp/PgDn scroll
+  / commands · @ files · tab subagents · shift+tab mode · ctrl+o expand · PgUp/PgDn scroll
 
 › where is the retry logic?
 
@@ -66,15 +66,20 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 Several sessions can be open at once, each in its own tab, and they all keep working: a turn in a tab you're not looking at runs to the end, and a permission or escalation prompt waits in its tab until you go there. With more than one tab open, a line above the transcript lists them by number, with a mark for what each needs: `?` waiting for you, `●` working, `✓` finished since you last looked, `✗` stopped with an error.
 
 ```
- ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session   ctrl+t tabs
+ ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session   ctrl+tab next · ctrl+t all
 ```
 
 - **Ctrl+T** opens the sessions dashboard: every open tab with what it's doing (`Bash bun test`, `Writing`, `Waiting on explore`), on which model, and what it has cost, then the sessions working or waiting in other windows on the same engine (another terminal, VS Code). ↑/↓ and Enter switch, a tab's number jumps to it, `n` opens a new tab, `x` closes the selected one, Esc goes back. Choosing a session from another window opens it here in a new tab, live.
-- **Alt+1…9** jumps to a tab, and **Alt+←/→** moves to the previous or next one. They work while a prompt is waiting, so you can leave it and come back.
+- **Ctrl+Tab** and **Ctrl+Shift+Tab** move to the next or previous tab, **Alt+1…9** jumps to a tab, **Alt+←/→** moves too, and a click on a tab brings it forward. They work while a prompt is waiting, so you can leave it and come back. Terminals send Ctrl+Tab only with kitty's keyboard protocol (kitty, Ghostty, WezTerm, foot) or xterm's `modifyOtherKeys`; Alt+←/→ works everywhere.
+- **Ctrl+W** on an empty prompt closes the tab in front; with text typed, it deletes a word.
 - `/tab new [agent]` opens a tab, `/tab <n>` switches, `/tab close` closes the one in front, and `/tab` alone prints the dashboard.
 - Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new`, `/agent`, and `/resume` change the session in the tab in front, as before; `/resume` of a session that's open in another tab switches to it.
 
 Tabs are the clients' own; the engine sends every session's events to every client, and both clients fold them with the same functions (`@switchback/client/tabs`), so the TUI and VS Code show the same states with the same words ([protocol.md](../protocol.md#several-sessions-at-once)).
+
+### Subagents
+
+While subagents run, **Tab** (with no menu open) shows the next one in place of the session: its header names the agent and its task, the status bar says `↳ viewing explore (tab)`, and the transcript is the subagent's own. Tab after the last one comes back to the session. There, `/model` picks the model for subagents started from then on; in the session's own view, `/model` is `/current`. Prompts always go to the session, and sending one brings it back into view.
 
 ### Scrolling and selecting
 
@@ -116,6 +121,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/models` | Every configured model, its tier, and the roles it fills |
 | `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
 | `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
+| `/model [model]` | The model for what's in front: `/current` in the session's view, the subagent model in a subagent's ([Subagents](#subagents)) |
 | `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
 | `/subagent-model <model>\|none` | Default model for subagents |
 | `/effort [none\|low\|medium\|high\|xhigh\|max\|default]` | Show or set reasoning effort for this session's own model calls (`switchback --effort` at startup). Subagents keep theirs; `default` goes back to the agent's or model's ([subagents.md](../subagents.md#reasoning-effort)) |
@@ -130,12 +136,13 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
 | Option/Alt+Enter, Ctrl+J, or `\` then Enter | Newline |
 | Paste | Arrives whole (bracketed paste), so newlines in it never send the prompt. Terminal colors and control characters are removed. A paste of 12 lines or 1,500 characters or more shows as a chip, `[Pasted text #1 · 240 lines]`, that Backspace deletes in one go and that expands to the full text when you send. A file dragged into the terminal becomes an `@` mention when it's in the workspace |
-| Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word |
+| Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word (on an empty prompt, Ctrl+W closes the tab) |
 | Enter during a turn | Queue the message: the model reads it at its next step (between tool calls), or as the next turn if it's already finishing. Queued messages show under the transcript |
 | `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt: cancel the turn and drop the queue. Otherwise it closes a menu |
 | `↑` on an empty prompt | Take back the last queued message to edit it |
 | Ctrl+T | The sessions dashboard ([Tabs](#tabs)) |
-| Alt+1…9, Alt+←/→ | Go to tab n, or the previous or next tab |
+| Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |
+| Tab | Show the next running subagent, then back to the session ([Subagents](#subagents)) |
 | Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |

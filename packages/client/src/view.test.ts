@@ -10,7 +10,14 @@ import {
   speedLabel,
 } from './format.ts';
 import { formatReceipt, formatUsage } from './usage.ts';
-import { childView, fromTranscript, initialView, reduce, type TodoItem } from './view.ts';
+import {
+  childView,
+  fromTranscript,
+  initialView,
+  nextFocus,
+  reduce,
+  type TodoItem,
+} from './view.ts';
 
 const session: SessionSummary = {
   id: 'ses_1',
@@ -328,6 +335,13 @@ describe('subagent tree', () => {
       status: 'ok',
       toolCalls: 1,
     });
+  });
+
+  test('tab cycles from the session through each subagent, depth-first, and back', () => {
+    expect(nextFocus(view, undefined)).toBe('c1');
+    expect(nextFocus(view, 'c1')).toBe('g1');
+    expect(nextFocus(view, 'g1')).toBeUndefined();
+    expect(nextFocus(view, undefined, -1)).toBe('g1');
   });
 
   test('prompts from any depth surface at the top, labeled by agent', () => {

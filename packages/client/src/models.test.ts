@@ -33,3 +33,13 @@ test('picking a model keeps the previous ones as backups, in order', () => {
   expect(currentChange(roles, 'fast')).toEqual({ current: ['fast', 'large'] });
   expect(currentChange(undefined, 'fast')).toEqual({ current: ['fast'] });
 });
+
+test('choosing the subagent model lists the one subagents use first', () => {
+  const choices = modelChoices(models, { ...roles, subagents: 'fast' }, 'subagents');
+  expect(choices.map((c) => [c.alias, c.current])).toEqual([
+    ['fast', true],
+    ['large', false],
+    ['opus', false],
+  ]);
+  expect(choices[0]?.roles).toEqual(['current']);
+});

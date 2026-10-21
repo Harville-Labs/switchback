@@ -4,6 +4,7 @@
  */
 import {
   addInfo,
+  type ChosenRole,
   childView,
   currentChange,
   dashboardRows,
@@ -57,7 +58,10 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
        become a chip, dragged-in files become @ mentions; ↑/↓ browse history;
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
 Tabs: ctrl+t shows every session (open tabs, and ones working in other windows);
-      alt+1…9 or alt+←/→ switch tabs; /tab new opens one. A closed tab keeps running.
+      ctrl+tab / ctrl+shift+tab, alt+←/→, alt+1…9, or a click switch tabs;
+      ctrl+w on an empty prompt closes one (it keeps running); /tab new opens one.
+      Tab shows each subagent in turn, then the session again; /model there
+      picks the subagent model.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
@@ -90,7 +94,9 @@ export interface SlashContext {
   /** Show the checkpoint picker. */
   openRewind(): Promise<void>;
   /** Show the current-model picker. */
-  openModelPicker(): void;
+  openModelPicker(role: ChosenRole): void;
+  /** The agent of the subagent shown in place of the session (Tab), if any. */
+  focusedSubagent?: string;
   /** The open tabs and the sessions the dashboard knows about. */
   tabs: TabsState;
   openDashboard(): void;
@@ -240,17 +246,45 @@ async function copy(ctx: SlashContext, args: string[]): Promise<void> {
 /** `/current`: pick the current model from a list, or name it (more models are backups). */
 function current(ctx: SlashContext, args: string[]): Promise<void> | void {
   const models = rest(args);
-  if (!models.length) return ctx.openModelPicker();
+  if (!models.length) return ctx.openModelPicker('current');
   return changeRoles(ctx, { current: models, save: saving(args) }, `Current model: ${models[0]}.`);
 }
 
-/** The model picked in the `/current` picker becomes current; the previous ones stay as backups. */
-export function pickCurrent(
+/** `/subagent-model`: the model subagents start on. */
+function subagentModel(ctx: SlashContext, args: string[]): Promise<void> | void {
+  const [model] = rest(args);
+  if (!model) return say(ctx, 'usage: /subagent-model <model>|none [--save]');
+  return changeRoles(
+    ctx,
+    { subagents: model === 'none' ? null : model, save: saving(args) },
+    'Subagent model changed. Subagents started from now on use it.',
+  );
+}
+
+/** `/model`: the model for what's in front, the session's or (viewing one) its subagents'. */
+function model(ctx: SlashContext, args: string[]): Promise<void> | void {
+  if (!ctx.focusedSubagent) return current(ctx, args);
+  if (!rest(args).length) return ctx.openModelPicker('subagents');
+  return subagentModel(ctx, args);
+}
+
+/**
+ * The model picked in the `/current` or `/model` picker takes the role. A new
+ * current model keeps the previous ones as backups.
+ */
+export function pickModel(
   ctx: SlashContext,
   roles: SessionRoles | undefined,
+  role: ChosenRole,
   alias: string,
 ): Promise<void> {
-  return changeRoles(ctx, currentChange(roles, alias), `Current model: ${alias}.`);
+  return role === 'current'
+    ? changeRoles(ctx, currentChange(roles, alias), `Current model: ${alias}.`)
+    : changeRoles(
+        ctx,
+        { subagents: alias },
+        `Subagent model: ${alias}. Subagents started from now on use it.`,
+      );
 }
 
 /** `/tab`: switch to tab n, open a new one, or close the one in front. */
@@ -298,15 +332,8 @@ const HANDLERS: Record<string, Handler> = {
     const escalate = steps[0] === 'none' ? [] : steps.map((step) => step.split(','));
     return changeRoles(ctx, { escalate, save: saving(args) }, 'New escalation ladder.');
   },
-  'subagent-model': (ctx, args) => {
-    const [model] = rest(args);
-    if (!model) return say(ctx, 'usage: /subagent-model <model>|none [--save]');
-    return changeRoles(
-      ctx,
-      { subagents: model === 'none' ? null : model, save: saving(args) },
-      'Subagent model changed.',
-    );
-  },
+  'subagent-model': subagentModel,
+  model,
   review,
   agent: (ctx, args) => newSession(ctx, args[0]),
   agents: async (ctx) => {

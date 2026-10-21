@@ -37,6 +37,10 @@ test('name prefixes rank ahead of other matches', () => {
   expect(matchCommands('zzz', 'tui')).toEqual([]);
 });
 
+test('an exact command name comes before longer names it begins', () => {
+  expect(matchCommands('model', 'tui')[0]?.name).toBe('model');
+});
+
 test('formatCommands puts every description in one column', () => {
   const commands = commandsFor('tui');
   const lines = formatCommands('tui').split('\n');

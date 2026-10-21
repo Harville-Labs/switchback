@@ -8,6 +8,7 @@ import {
   sessionEffort,
   speedLabel,
   type TodoItem,
+  type ViewItem,
   type ViewState,
 } from '@switchback/client';
 import type {
@@ -22,6 +23,8 @@ import type {
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
 import { type Theme, useTheme } from './theme.ts';
+
+type SubagentRow = Extract<ViewItem, { kind: 'subagent' }>;
 
 export function tildify(path: string): string {
   const home = homedir();
@@ -103,8 +106,25 @@ export function Header({
         ))}
       </Box>
       <Text dimColor>
-        {'  '}/ commands · @ files · shift+tab mode · ctrl+o expand · PgUp/PgDn scroll
+        {'  '}/ commands · @ files · tab subagents · shift+tab mode · ctrl+o expand · PgUp/PgDn
+        scroll
       </Text>
+    </Box>
+  );
+}
+
+/** Over a subagent's transcript, in place of the welcome card: whose it is and how to leave. */
+export function SubagentHeader({ row }: { row: SubagentRow }) {
+  const t = useTheme();
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text wrap="truncate-end">
+        <Text color={t.accent} bold>
+          ↳ {row.agent}
+        </Text>
+        <Text dimColor> · {row.task}</Text>
+      </Text>
+      <Text dimColor>{'  '}tab next subagent · /model its model · prompts go to the session</Text>
     </Box>
   );
 }
@@ -248,6 +268,7 @@ export function StatusBar({
   view,
   usage,
   mode,
+  viewing,
   current,
 }: {
   session: SessionSummary;
@@ -256,6 +277,8 @@ export function StatusBar({
   view: ViewState;
   usage?: UsageReport;
   mode: PermissionMode;
+  /** The agent of the subagent in view (Tab), if one is. */
+  viewing?: string;
   /** The current model, shown while the session isn't up the ladder. */
   current?: { model: string; tier: string };
 }) {
@@ -276,6 +299,12 @@ export function StatusBar({
   return (
     <Box justifyContent="space-between" paddingX={1} gap={2}>
       <Text wrap="truncate-end">
+        {viewing ? (
+          <Text color={t.accent} bold>
+            ↳ viewing {viewing} <Text dimColor>(tab)</Text>
+            {' · '}
+          </Text>
+        ) : null}
         <ModeBadge mode={mode} />
         {mode !== 'default' ? <Text dimColor> · </Text> : null}
         <Text dimColor>

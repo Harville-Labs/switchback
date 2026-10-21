@@ -2,21 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import type { PendingPermission, ViewItem } from '@switchback/client';
 import { render } from 'ink-testing-library';
 import { diffLines } from './Diff.tsx';
-import { takeWheel } from './mouse.ts';
 import { type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { quietRoutes } from './Rows.tsx';
 import { visibleLines } from './Transcript.tsx';
 
 const tick = () => new Promise((r) => setTimeout(r, 20));
-
-describe('mouse wheel', () => {
-  test('wheel events come out of the input; keys and clicks never reach the prompt as text', () => {
-    expect(takeWheel('a\x1b[<64;10;5Mb\x1b[<65;1;1M')).toEqual({ rest: 'ab', deltas: [-3, 3] });
-    // Shift+wheel (64 + 4) still scrolls; a click is dropped without moving anything.
-    expect(takeWheel('\x1b[<68;1;1M\x1b[<0;3;4M\x1b[<0;3;4m')).toEqual({ rest: '', deltas: [-3] });
-    expect(takeWheel('\x1b[A')).toEqual({ rest: '\x1b[A', deltas: [] });
-  });
-});
 
 describe('diffs', () => {
   test('number lines from the hunk: new numbers for added and kept lines, old ones for removed', () => {

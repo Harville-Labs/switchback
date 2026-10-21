@@ -4,13 +4,11 @@
  * the bottom. The transcript scrolls with Page Up/Down and the mouse wheel.
  */
 import {
-  AttentionTracker,
   activeTab,
   addInfo,
   addUserPrompt,
+  type ChosenRole,
   closeTab,
-  customCommands,
-  cycleTab,
   dashboardRows,
   fromTranscript,
   initialTabs,
@@ -19,17 +17,12 @@ import {
   modelChoices,
   nextMode,
   openTab,
-  reduceTabs,
   replaceActive,
   resolveEscalation,
   resolvePermission,
-  SessionScope,
-  type SlashCommand,
   type SwitchbackClient,
   switchTab,
   type TabsState,
-  tabAt,
-  trackSessions,
   updateActiveView,
   updateView,
   type ViewState,
@@ -37,26 +30,25 @@ import {
 import type {
   CheckpointInfo,
   InitializeResult,
-  PermissionMode,
   RoutePreference,
   SessionRewindParams,
-  SessionRoles,
   SessionSummary,
-  UsageReport,
 } from '@switchback/protocol';
-import { Box, Text, useApp, useBoxMetrics, useInput, useStdout, useWindowSize } from 'ink';
+import { Box, Text, useApp, useBoxMetrics, useStdout, useWindowSize } from 'ink';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Header, Queue, StatusBar, Todos, Working } from './Chrome.tsx';
+import { Header, Queue, StatusBar, SubagentHeader, Todos, Working } from './Chrome.tsx';
+import { useEngineFeeds } from './feeds.ts';
+import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
+import { useAppKeys } from './keys.ts';
 import { ModelPicker } from './ModelPicker.tsx';
 import type { MouseInput } from './mouse.ts';
-import { terminalNotification } from './notify.ts';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
-import { escalateNow, pickCurrent, resume, runSlashCommand, type SlashContext } from './slash.ts';
-import { Dashboard, TabBar } from './Tabs.tsx';
+import { escalateNow, pickModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
 import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
 
@@ -122,6 +114,8 @@ export function App({
     [],
   );
   const dashRows = useMemo(() => dashboardRows(tabs), [tabs]);
+  const spans = useTabBar(dashRows, columns, mouse, setTabs);
+  const { focused, row: focusedRow, shown, next, unfocus } = useSubagentFocus(view, session.id);
   const [listed, setListed] = useState<SessionSummary[]>([]);
   // Items before this index are finished: their Markdown is rendered and cached.
   const [committed, setCommitted] = useState(0);
@@ -129,18 +123,21 @@ export function App({
   /** Review of local edits; undefined follows `review.mode` in config. */
   const [review, setReview] = useState<boolean | undefined>(undefined);
   const [history] = useState(() => new PromptHistory(init.workspaceRoot));
-  const [usage, setUsage] = useState<UsageReport | undefined>();
-  /** Modes this session may cycle through; an organization can rule out bypass. */
-  const [modes, setModes] = useState<PermissionMode[]>(['default', 'acceptEdits', 'plan']);
+  const { usage, setUsage, modes, roles, custom, resources, refreshSessions } = useEngineFeeds(
+    client,
+    init,
+    session.id,
+    tabs,
+    setTabs,
+  );
   const mode = view.mode ?? session.permissionMode ?? 'default';
-  const [roles, setRoles] = useState<SessionRoles | undefined>();
   const sessionRoles = view.roles ?? roles;
   /** Saved sessions while the picker is open. */
   const [picking, setPicking] = useState<SessionSummary[] | undefined>();
   /** Checkpoints while the rewind picker is open. */
   const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
-  /** The current-model picker (`/current`) is open. */
-  const [choosingModel, setChoosingModel] = useState(false);
+  /** The role whose model is being picked (`/current`, `/model`). */
+  const [choosingModel, setChoosingModel] = useState<ChosenRole | undefined>();
   /** The sessions dashboard (ctrl+t, `/tabs`) is open. */
   const [dashboard, setDashboard] = useState(false);
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
@@ -149,18 +146,6 @@ export function App({
   const [expanded, setExpanded] = useState(false);
   const [themeName, setThemeName] = useState<ThemeName>(initialTheme);
   const theme = THEMES[themeName];
-  /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
-  const [custom, setCustom] = useState<SlashCommand[]>([]);
-  /** MCP resources, as `server:uri`, for @ completion. */
-  const [resources, setResources] = useState<string[]>([]);
-  useEffect(() => {
-    client.request('mcp.list', {}).then(
-      ({ servers }) =>
-        setResources(servers.flatMap((s) => (s.resources ?? []).map((r) => `${s.name}:${r.uri}`))),
-      () => {},
-    );
-  }, [client]);
-
   useEffect(() => {
     if (exitArmedAt === undefined) return;
     const timer = setTimeout(() => setExitArmedAt(undefined), EXIT_WINDOW_MS);
@@ -175,57 +160,6 @@ export function App({
   useEffect(() => {
     if (pickSession) void openPicker();
   }, []);
-
-  useEffect(() => {
-    client.request('permissions.list', { sessionId: session.id }).then(
-      (p) => setModes(p.modes),
-      () => {},
-    );
-    client.request('session.roles', { sessionId: session.id }).then(setRoles, () => {});
-  }, [client, session.id]);
-
-  const refreshUsage = useCallback(() => {
-    client.request('usage.get', {}).then(setUsage, () => {});
-    // Command files can change between turns; the engine rescans them on each list.
-    client.request('commands.list', {}).then(
-      (c) => setCustom(customCommands(c)),
-      () => {},
-    );
-  }, [client]);
-
-  /** Titles, costs, and running flags for the tabs and the dashboard, from the engine. */
-  const refreshSessions = useCallback(() => {
-    client.request('session.list', {}).then(
-      (all) => setTabs((t) => trackSessions(t, all)),
-      () => {},
-    );
-  }, [client]);
-  useEffect(refreshSessions, [refreshSessions]);
-
-  // Sessions opened in a tab here. A shared daemon sends this window other
-  // windows' events too, and their prompts mustn't notify here.
-  const [scope] = useState(() => new SessionScope());
-  useEffect(() => {
-    for (const t of tabs.tabs) scope.add(t.session.id);
-  }, [tabs.tabs, scope]);
-  // One tracker for the app's life: it remembers when turns started.
-  const [attention] = useState(() => new AttentionTracker(scope, init.notifications));
-  useEffect(() => {
-    refreshUsage();
-    return client.on((event) => {
-      // Every session's events: each tab's view stays live, in front or not.
-      setTabs((t) => reduceTabs(t, event));
-      const a = attention.observe(event);
-      if (a) stdout.write(terminalNotification(a.message, init.notifications?.mode ?? 'system'));
-      if (event.type === 'turn.completed' && event.sessionId === session.id) refreshUsage();
-      // A turn starting or ending names a title, or a session from another window.
-      if (
-        (event.type === 'turn.started' || event.type === 'turn.completed') &&
-        !event.parentSessionId
-      )
-        refreshSessions();
-    });
-  }, [client, session.id, refreshUsage, refreshSessions, attention, init.notifications, stdout]);
 
   // A finished turn's items are final: render their Markdown once. Another
   // tab in front is final up to its last prompt.
@@ -242,18 +176,23 @@ export function App({
   const viewport = useRef(null);
   const { height } = useBoxMetrics(viewport);
   const lines = useTranscriptLines({
-    view,
-    committed,
+    view: shown,
+    // A subagent's items are final up to its task while it runs.
+    committed: shown === view ? committed : shown.running ? 0 : shown.items.length,
     width,
     theme,
     expanded,
-    header: <Header init={init} roles={sessionRoles} mode={mode} width={width} />,
-    headerKey: `${mode}|${JSON.stringify(sessionRoles ?? null)}`,
+    header: focusedRow ? (
+      <SubagentHeader row={focusedRow} />
+    ) : (
+      <Header init={init} roles={sessionRoles} mode={mode} width={width} />
+    ),
+    headerKey: `${focused}|${mode}|${JSON.stringify(sessionRoles ?? null)}`,
   });
   const scroll = useScroll(lines.length, height);
   useEffect(() => mouse?.onWheel((d) => scroll.by(d)), [mouse, scroll.by]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a tab comes forward at its end
-  useEffect(() => scroll.toEnd(), [session.id]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a tab or subagent comes forward at its end
+  useEffect(() => scroll.toEnd(), [session.id, focused]);
 
   /** A new session in a new tab, in front. */
   const newTab = async (agent?: string) => {
@@ -303,7 +242,8 @@ export function App({
       setThemeName(name);
       saveTheme(name);
     },
-    openModelPicker: () => setChoosingModel(true),
+    openModelPicker: setChoosingModel,
+    focusedSubagent: focusedRow?.agent,
     tabs,
     openDashboard: () => {
       refreshSessions();
@@ -342,6 +282,8 @@ export function App({
     history.add(raw);
     scroll.toEnd();
     if (text.startsWith('/') && !isCustomCommand(text, custom)) return runSlashCommand(slash, text);
+    // Prompts go to the session, so it comes back into view.
+    unfocus();
     send(text, view.running ? 'queue' : undefined, images);
   };
 
@@ -407,36 +349,26 @@ export function App({
     setView((v) => resolveEscalation(v, escalation.requestId));
   };
 
-  useInput((ch, key) => {
-    // Scrolling works whatever has focus.
-    if (key.pageUp) return scroll.page(-1);
-    if (key.pageDown) return scroll.page(1);
-    // The pickers, the prompts, and the input handle their own keys, Ctrl+C included.
-    if (picking || rewinding || choosingModel || dashboard) return;
-    // Tabs switch even while a prompt waits: the prompt stays with its tab.
-    if (key.ctrl && ch === 't') return slash.openDashboard();
-    if (key.meta && /^[1-9]$/.test(ch)) {
-      const tab = tabAt(tabs, Number(ch));
-      if (tab) setTabs((t) => switchTab(t, tab.session.id));
-      return;
-    }
-    if (key.meta && (key.leftArrow || key.rightArrow))
-      return setTabs((t) => cycleTab(t, key.leftArrow ? -1 : 1));
-    if (permission || escalation) return;
-    if (key.ctrl && ch === 'o') return setExpanded((v) => !v);
-    if (key.meta && key.upArrow) return void escalateNow(slash);
-    if (key.tab && key.shift) {
+  useAppKeys({
+    tabs,
+    setTabs,
+    page: scroll.page,
+    modal: Boolean(picking || rewinding || choosingModel || dashboard),
+    prompting: Boolean(permission || escalation),
+    openDashboard: slash.openDashboard,
+    toggleExpanded: () => setExpanded((v) => !v),
+    escalate: () => void escalateNow(slash),
+    nextMode: () =>
       client
         .request('session.setMode', { sessionId: session.id, mode: nextMode(mode, modes) })
-        .catch((err: Error) => setView((v) => addInfo(v, `mode: ${err.message}`)));
-    }
+        .catch((err: Error) => setView((v) => addInfo(v, `mode: ${err.message}`))),
   });
 
   return (
     <ThemeContext.Provider value={theme}>
       <Box flexDirection="column" height={rows} width={columns}>
         <Box flexShrink={0}>
-          <TabBar rows={dashRows} width={columns} />
+          <TabBar spans={spans} />
         </Box>
         <Box ref={viewport} flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
           <Viewport lines={lines} height={height} scroll={scroll.scroll} unseen={scroll.unseen} />
@@ -480,11 +412,12 @@ export function App({
           ) : null}
           {choosingModel ? (
             <ModelPicker
-              choices={modelChoices(init.models, sessionRoles)}
-              onCancel={() => setChoosingModel(false)}
+              role={choosingModel}
+              choices={modelChoices(init.models, sessionRoles, choosingModel)}
+              onCancel={() => setChoosingModel(undefined)}
               onPick={(alias) => {
-                setChoosingModel(false);
-                void pickCurrent(slash, sessionRoles, alias);
+                setChoosingModel(undefined);
+                void pickModel(slash, sessionRoles, choosingModel, alias);
               }}
             />
           ) : null}
@@ -526,6 +459,8 @@ export function App({
                   client.request('session.cancel', { sessionId: session.id }).catch(() => {});
               }}
               recall={recall}
+              onTab={next}
+              onCloseTab={() => setTabs((t) => closeTab(t, session.id))}
               busy={view.running}
               history={history.list()}
               root={init.workspaceRoot}
@@ -549,6 +484,7 @@ export function App({
             view={view}
             usage={usage}
             mode={mode}
+            viewing={focusedRow?.agent}
             current={
               currentModel ? { model: currentModel.ref.model, tier: currentModel.tier } : undefined
             }

@@ -182,6 +182,28 @@ export function agentOf(state: ViewState, sessionId: string): string | undefined
   return undefined;
 }
 
+/**
+ * Which session to show after `focused` when cycling: the session itself,
+ * then each subagent depth-first, then the session again (undefined).
+ */
+export function nextFocus(
+  state: ViewState,
+  focused: string | undefined,
+  delta = 1,
+): string | undefined {
+  const order = [undefined, ...subagentIds(state)];
+  const at = Math.max(0, order.indexOf(focused));
+  return order[(((at + delta) % order.length) + order.length) % order.length];
+}
+
+function subagentIds(state: ViewState): string[] {
+  return state.items.flatMap((it) =>
+    it.kind === 'subagent'
+      ? [it.id, ...(state.children[it.id] ? subagentIds(state.children[it.id] as ViewState) : [])]
+      : [],
+  );
+}
+
 /** A descendant's view (drill-down), or undefined if it isn't part of this tree. */
 export function childView(state: ViewState, sessionId: string): ViewState | undefined {
   if (state.sessionId === sessionId) return state;
