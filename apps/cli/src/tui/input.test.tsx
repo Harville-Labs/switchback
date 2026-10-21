@@ -111,6 +111,32 @@ describe('during a turn', () => {
   });
 });
 
+describe('newlines', () => {
+  test('ctrl+j adds one, as a bare newline or in kitty keyboard protocol form', async () => {
+    const got: string[] = [];
+    const ui = render(
+      <PromptInput
+        focus
+        busy={false}
+        placeholder="Ask"
+        history={[]}
+        root="/tmp"
+        custom={[]}
+        onSubmit={(t) => got.push(t)}
+        onInterrupt={() => {}}
+        onSubmitNow={() => {}}
+        onCancel={() => {}}
+        recall={() => undefined}
+      />,
+    );
+    for (const key of ['a', '\n', 'b', '\x1b[106;5u', 'c', ENTER]) {
+      ui.stdin.write(key);
+      await tick();
+    }
+    expect(got).toEqual(['a\nb\nc']);
+  });
+});
+
 describe('Ctrl+C in the app', () => {
   const init = {
     protocolVersion: 1,

@@ -83,6 +83,9 @@ export async function tui(
       // Full screen, like an editor: the shell's scrollback is back as it was on exit.
       alternateScreen: true,
       stdin: mouse.stdin,
+      // Where the terminal supports kitty's keyboard protocol, keys it would
+      // otherwise merge arrive distinct: ctrl+tab, shift+enter, ctrl+i vs tab.
+      kittyKeyboard: { mode: 'auto' },
     },
   );
   try {

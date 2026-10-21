@@ -25,8 +25,9 @@ export function useAppKeys(k: AppKeys): void {
     if (k.modal) return;
     // Tabs switch even while a prompt waits: the prompt stays with its tab.
     if (key.ctrl && ch === 't') return k.openDashboard();
-    // Terminals send ctrl+tab only with kitty's keyboard protocol or xterm's
-    // modifyOtherKeys (mouse.ts translates the latter); alt+←/→ works everywhere.
+    // Terminals send ctrl+tab only with kitty's keyboard protocol (index.tsx
+    // asks for it) or xterm's modifyOtherKeys (mouse.ts translates that), and
+    // only when the terminal hasn't bound it to its own tabs.
     if (key.tab && key.ctrl) return k.setTabs((t) => cycleTab(t, key.shift ? -1 : 1));
     if (key.meta && /^[1-9]$/.test(ch)) {
       const tab = tabAt(k.tabs, Number(ch));

@@ -66,11 +66,11 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 Several sessions can be open at once, each in its own tab, and they all keep working: a turn in a tab you're not looking at runs to the end, and a permission or escalation prompt waits in its tab until you go there. With more than one tab open, a line above the transcript lists them by number, with a mark for what each needs: `?` waiting for you, `●` working, `✓` finished since you last looked, `✗` stopped with an error.
 
 ```
- ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session   ctrl+tab next · ctrl+t all
+ ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session   click a tab · ctrl+t all
 ```
 
 - **Ctrl+T** opens the sessions dashboard: every open tab with what it's doing (`Bash bun test`, `Writing`, `Waiting on explore`), on which model, and what it has cost, then the sessions working or waiting in other windows on the same engine (another terminal, VS Code). ↑/↓ and Enter switch, a tab's number jumps to it, `n` opens a new tab, `x` closes the selected one, Esc goes back. Choosing a session from another window opens it here in a new tab, live.
-- **Ctrl+Tab** and **Ctrl+Shift+Tab** move to the next or previous tab, **Alt+1…9** jumps to a tab, **Alt+←/→** moves too, and a click on a tab brings it forward. They work while a prompt is waiting, so you can leave it and come back. Terminals send Ctrl+Tab only with kitty's keyboard protocol (kitty, Ghostty, WezTerm, foot) or xterm's `modifyOtherKeys`; Alt+←/→ works everywhere.
+- **Ctrl+Tab** and **Ctrl+Shift+Tab** move to the next or previous tab, **Alt+1…9** jumps to a tab, **Alt+←/→** moves too, and a click on a tab brings it forward. They work while a prompt is waiting, so you can leave it and come back. Switchback turns on kitty's keyboard protocol in terminals that support it (kitty, Ghostty, WezTerm, foot, iTerm2), so Ctrl+Tab and Shift+Enter arrive as themselves. A terminal's own shortcuts still come first: kitty, Ghostty, WezTerm, iTerm2, and Terminal.app use Ctrl+Tab to switch their own tabs, so it reaches Switchback only once you unbind it there (in Ghostty, `keybind = ctrl+tab=unbind`; in kitty, `map ctrl+tab`). A click on a tab and Ctrl+T work in every terminal.
 - **Ctrl+W** on an empty prompt closes the tab in front; with text typed, it deletes a word.
 - `/tab new [agent]` opens a tab, `/tab <n>` switches, `/tab close` closes the one in front, and `/tab` alone prints the dashboard.
 - Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new`, `/agent`, and `/resume` change the session in the tab in front, as before; `/resume` of a session that's open in another tab switches to it.

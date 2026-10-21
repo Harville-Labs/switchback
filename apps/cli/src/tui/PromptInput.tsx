@@ -243,7 +243,11 @@ export function PromptInput({
         if (!state.value) onCancel();
         return;
       }
-      const newline = (key.return && (key.meta || key.shift)) || (input === '\n' && !key.return);
+      // Ctrl+J is a bare \n, or under kitty's keyboard protocol, j with ctrl.
+      const newline =
+        (key.return && (key.meta || key.shift)) ||
+        (input === '\n' && !key.return) ||
+        (key.ctrl && input === 'j');
       if (newline) return edit(insert(state, '\n'));
       if (key.return) {
         if (state.value.slice(0, state.cursor).endsWith('\\')) {

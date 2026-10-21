@@ -88,7 +88,7 @@ export function TabBar({ spans }: { spans: TabSpan[] }) {
             </Text>
           </Text>
         ))}
-        <Text dimColor>{'  '}ctrl+tab next · ctrl+t all</Text>
+        <Text dimColor>{'  '}click a tab · ctrl+t all</Text>
       </Text>
     </Box>
   );
