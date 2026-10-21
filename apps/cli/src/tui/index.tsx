@@ -11,6 +11,7 @@ import { CLI_VERSION, type CommonFlags, checksForUpdates, connectShared } from '
 import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
 import { mouseInput } from './mouse.ts';
+import type { Opening } from './SetupPanel.tsx';
 import { savedTheme } from './theme.ts';
 
 /** How long launch waits on a release lookup still running once the session is ready. */
@@ -26,8 +27,8 @@ export async function tui(
     daemon: boolean;
     permissionMode?: PermissionMode;
     effort?: EffortLevel;
-    /** Open the session picker (`--resume`). */
-    pickSession?: boolean;
+    /** What to open over the prompt first. */
+    opening?: Opening;
   },
 ): Promise<number> {
   if (!process.stdin.isTTY) {
@@ -81,7 +82,7 @@ export async function tui(
       initialSession={session}
       {...(history ? { initialView: history } : {})}
       initialRoute={opts.route}
-      pickSession={opts.pickSession ?? false}
+      {...(opts.opening ? { opening: opts.opening } : {})}
       warnings={warnings}
       initialTheme={savedTheme()}
       mouse={mouse}

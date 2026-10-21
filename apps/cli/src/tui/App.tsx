@@ -47,7 +47,7 @@ import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
-import { useSetup } from './SetupPanel.tsx';
+import { type Opening, useSetup } from './SetupPanel.tsx';
 import { cycleModel, pickModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
 import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
@@ -61,8 +61,8 @@ interface Props {
   initialView?: ViewState;
   initialRoute: RoutePreference;
   warnings: string[];
-  /** Open the session picker first (`switchback --resume`). */
-  pickSession?: boolean;
+  /** What to open over the prompt first. */
+  opening?: Opening;
   initialTheme?: ThemeName;
   /** Wheel events, when the terminal reports them. */
   mouse?: MouseInput;
@@ -80,7 +80,7 @@ export function App({
   initialView: resumed,
   initialRoute,
   warnings,
-  pickSession = false,
+  opening,
   initialTheme = 'dark',
   mouse,
   onSession,
@@ -157,7 +157,8 @@ export function App({
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: only on the first render
   useEffect(() => {
-    if (pickSession) void openPicker();
+    if (opening === 'sessions') void openPicker();
+    else if (opening) setup.start(opening.setup);
   }, []);
 
   // A finished turn's items are final: render their Markdown once. Another

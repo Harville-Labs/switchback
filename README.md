@@ -38,7 +38,7 @@ For VS Code alone, install **Switchback** from the [Marketplace](https://marketp
 Start a local model server (Ollama, LM Studio, llama.cpp, or vLLM) with a model that supports tool calling, then:
 
 ```sh
-switchback init                   # detects your local server, picks models, writes the config
+switchback init                   # opens Switchback on setup: finds your local server, picks models
 switchback doctor                 # check config, providers, and agents
 switchback                        # open the TUI in the current directory
 switchback run "explain src/index.ts"   # headless, one prompt
@@ -54,7 +54,7 @@ bun run dev -- --mock          # try the TUI with scripted models, no setup need
 bun run dev -- init
 ```
 
-Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` (or `/init` inside Switchback) sets it up. Running `switchback` for the first time with no config offers to run setup.
+Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` (or `/init` inside Switchback) sets it up. Running `switchback` for the first time with no config opens on setup.
 
 In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/usage` shows spend and savings, and `esc` cancels.
 

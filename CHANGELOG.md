@@ -12,6 +12,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **`/init` runs setup inside Switchback.** The TUI asks setup's questions in a panel above the prompt, the same ones `switchback init` asks, and the new config is in use as soon as it's saved. VS Code's `/setup` is `/init` too
 
 ### Changed
+- **`switchback init` opens Switchback on setup,** and so does a first run with no config, instead of asking in the terminal before the UI opens. With any answer given as a flag, or `--yes`, `switchback init` still asks in the terminal
 - **Web search runs without asking.** `permissions.websearch` is a level of its own, default `allow`: only the query leaves the machine, to the search backend. Fetching a page still asks under `permissions.web`, and `web: deny` turns both off
 - **The docs tool tells the model that config changes apply live.** It used to say they needed a restart, so the model told people to restart when they didn't have to
 

@@ -73,7 +73,7 @@ mock.module('vscode', () => ({
   },
 }));
 
-const { askSetupQuestion, runSetup } = await import('./setup-wizard.ts');
+const { askSetupQuestion } = await import('./setup-wizard.ts');
 
 beforeEach(() => {
   shown = [];

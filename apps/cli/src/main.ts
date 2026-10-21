@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import type { RemoteKind } from '@switchback/engine';
+import type { SetupFlags as InitFlags, RemoteKind } from '@switchback/engine';
 import {
   EffortLevel,
   PermissionMode,
@@ -16,7 +16,7 @@ const HELP = `switchback ${CLI_VERSION}: local-first coding agent with remote es
 
 Usage
   switchback [options]               Open the terminal UI in the current directory
-  switchback init                    Set up local and remote models (writes a config file)
+  switchback init                    Open the terminal UI on setup: local and remote models
   switchback run "<prompt>"          Run one prompt headlessly and print the answer
   switchback config [action]         path | show | schema | edit
   switchback doctor                  Check configuration, providers, and agents
@@ -65,7 +65,7 @@ run options (scripts and CI; the prompt can also come on stdin)
   -v, --version      Print version
   -h, --help         Print this help
 
-init options (all optional; prompts cover anything not given)
+init options (any of these asks the rest as terminal prompts; with --yes, none)
   --scope <s>              user | project (default: user)
   --from <agent>           Start from another agent's setup: opencode (asked on
                            a first run when its config is found)
@@ -83,13 +83,11 @@ init options (all optional; prompts cover anything not given)
   --no-local               Remote only
   --remote <r>             anthropic | openai | deepseek | gemini | bedrock | vertex |
                            anthropic-aws | foundry | azure-openai | openrouter |
-                           openai-compatible | none.
-                           Repeat for fallbacks
+                           openai-compatible | none. Repeat for fallbacks
   --remote-model <m>       Model ID per --remote, in order (see \`switchback init\`)
   --remote-url <url>       openai-compatible: API base URL
   --remote-key-env <var>   openai-compatible, openrouter: env var holding the API key
-  --remote-context-window <n>  openai-compatible: context window, when its model
-                           listing doesn't say
+  --remote-context-window <n>  openai-compatible: context window, when its listing doesn't say
   --region <r>             Bedrock or Vertex region
   --profile <p>            AWS profile (Bedrock)
   --project-id <id>        GCP project (Vertex)
@@ -237,24 +235,24 @@ async function main(argv: string[]): Promise<number> {
   const mode = { ...(permissionMode ? { permissionMode } : {}), ...(effort ? { effort } : {}) };
   const scope = oneOf('scope', values.scope, ['user', 'project'] as const);
   const [command, ...rest] = positionals;
+  const daemon = !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON;
 
   switch (command) {
     case undefined: {
-      if (!common.mock && process.stdin.isTTY) {
-        const { needsSetup } = await import('./bootstrap.ts');
-        if (needsSetup(common.cwd)) {
-          const { offerSetup } = await import('./commands/init.ts');
-          const code = await offerSetup(common.cwd);
-          if (code !== 0) return code;
-        }
-      }
+      const { needsSetup } = await import('./bootstrap.ts');
+      // First run: Switchback opens on setup, which can be answered "no" throughout.
+      const firstRun = !common.mock && process.stdin.isTTY && needsSetup(common.cwd);
       const { tui } = await import('./tui/index.tsx');
       return tui({
         ...common,
-        daemon: !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON,
+        daemon,
         route: route.data,
         ...mode,
-        ...(values.resume ? { pickSession: true } : {}),
+        ...(firstRun
+          ? { opening: { setup: {} } }
+          : values.resume
+            ? { opening: 'sessions' as const }
+            : {}),
         ...(values.agent ? { agent: values.agent } : {}),
         ...(values.session
           ? { resume: values.session }
@@ -264,7 +262,7 @@ async function main(argv: string[]): Promise<number> {
       });
     }
     case 'init': {
-      const { init } = await import('./commands/init.ts');
+      const { answersGiven, init } = await import('./commands/init.ts');
       const { HARNESSES, REMOTE_KINDS } = await import('@switchback/engine');
       const from = oneOf('from', values.from, Object.keys(HARNESSES) as (keyof typeof HARNESSES)[]);
       const contextWindows = (values['context-window'] ?? []).map(
@@ -280,7 +278,7 @@ async function main(argv: string[]): Promise<number> {
       const policy = oneOf('policy', values.policy, ['auto', 'ask', 'off'] as const);
       const dailyBudget = positive('daily-budget', values['daily-budget']);
       const monthlyBudget = positive('monthly-budget', values['monthly-budget']);
-      return init({
+      const flags: InitFlags = {
         cwd: common.cwd,
         yes: values.yes,
         noLocal: values['no-local'],
@@ -320,6 +318,15 @@ async function main(argv: string[]): Promise<number> {
         ...(values.telemetry
           ? { telemetry: oneOf('telemetry', values.telemetry, ['on', 'off'] as const) === 'on' }
           : {}),
+      };
+      if (values.yes || !process.stdin.isTTY || answersGiven(flags)) return init(flags);
+      // Plain `switchback init` is `/init`: Switchback opens on setup.
+      const { tui } = await import('./tui/index.tsx');
+      return tui({
+        ...common,
+        daemon,
+        route: route.data,
+        opening: { setup: scope ? { scope } : {} },
       });
     }
     case 'config': {
@@ -370,7 +377,7 @@ async function main(argv: string[]): Promise<number> {
       const { acpServer } = await import('./commands/acp.ts');
       return acpServer({
         ...common,
-        daemon: !values['no-daemon'] && !process.env.SWITCHBACK_NO_DAEMON,
+        daemon,
       });
     }
     case 'agents': {

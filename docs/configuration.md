@@ -17,12 +17,12 @@ Next to each config file, `agents/`, `commands/`, and `skills/` folders hold [ag
 
 `SWITCHBACK_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/AGENTS.md`, `<dir>/agents/`, `<dir>/commands/`, `<dir>/skills/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
-Running engines follow edits to these files: `switchback init` in a terminal, `switchback config edit`, or your editor. The shared engine that the TUI and VS Code attach to reloads the config when a file changes, without a restart; a file that doesn't parse is reported and the config in effect stays. Versions before 1.1.0 kept files in `~/.config/switchback` and `~/.local/share/switchback`; nothing reads those now, and `switchback doctor` points them out.
+Running engines follow edits to these files: `switchback init` or `/init`, `switchback config edit`, or your editor. The shared engine that the TUI and VS Code attach to reloads the config when a file changes, without a restart; a file that doesn't parse is reported and the config in effect stays. Versions before 1.1.0 kept files in `~/.config/switchback` and `~/.local/share/switchback`; nothing reads those now, and `switchback doctor` points them out.
 
 ## Setting up
 
 ```sh
-switchback init              # interactive: detect local servers, choose models, budgets
+switchback init              # opens Switchback on setup: detect local servers, choose models
 switchback init --yes --from opencode   # start from your OpenCode setup, unattended
 switchback init --yes --local-model <name> --remote anthropic   # unattended
 switchback init --yes --no-local --remote openrouter --remote-model qwen/qwen3-coder
@@ -33,6 +33,8 @@ switchback config show       # effective merged config (secrets redacted)
 switchback config edit       # open the user config in $EDITOR (--scope project for the project file)
 switchback config schema     # JSON Schema for editor validation
 ```
+
+Plain `switchback init` opens the terminal UI and asks its questions there, as `/init` does. Give any answer as a flag, or `--yes`, and it asks the rest as prompts in the terminal instead, for scripts and unattended installs.
 
 On a first run, if another coding agent's config is found here, setup first asks whether to start from it (see [Starting from OpenCode](#starting-from-opencode)). Otherwise, `switchback init` asks for your models in two parts:
 
@@ -71,7 +73,7 @@ The VS Code extension validates both files against the schema and offers autocom
 
 ## Built-in defaults
 
-There are **no default providers or models**, local or remote. Switchback doesn't choose a vendor for you; `switchback init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `switchback` offers setup.
+There are **no default providers or models**, local or remote. Switchback doesn't choose a vendor for you; `switchback init` writes the ones you pick. With nothing configured, `doctor` reports what's missing and `switchback` opens on setup.
 
 Models fill roles ([routing.md](routing.md)): `routing.current` is the current model, where turns begin (with backups after it), and `routing.escalate` is the ladder above it. `routing.start`, its old name, still works and is moved to `routing.current` the next time Switchback writes the file. Any model can fill any role, so all-local, all-remote, and mixed setups are the same config with different models:
 

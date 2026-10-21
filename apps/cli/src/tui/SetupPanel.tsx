@@ -1,17 +1,27 @@
 /**
- * `/init` in the TUI: the engine's setup, the same questions `switchback init`
- * and VS Code ask, drawn as a panel above the prompt. Notes go into the
- * transcript. Esc on any question cancels setup, as dismissing does in VS Code.
+ * `/init` and `switchback init` in the TUI: the engine's setup, the same
+ * questions VS Code asks, drawn as a panel above the prompt, then what
+ * `afterSetup` asks about this machine. Notes go into the transcript. Esc on
+ * any question cancels setup, as dismissing does in VS Code.
  */
 import { formatSetupNote, runSetupOver, type SwitchbackClient } from '@switchback/client';
-import type { SetupAnswerParams, SetupOutcome, SetupQuestion } from '@switchback/protocol';
+import type {
+  SetupAnswerParams,
+  SetupOutcome,
+  SetupQuestion,
+  SetupStartParams,
+} from '@switchback/protocol';
 import { Fzf } from 'fzf';
 import { Box, Text, useInput } from 'ink';
 import { type ReactNode, useRef, useState } from 'react';
+import { afterSetup } from '../commands/after-setup.ts';
 import { Keys } from './Chrome.tsx';
 import { useTheme } from './theme.ts';
 
 type Answer = SetupAnswerParams['value'];
+
+/** What the TUI opens over the prompt at launch: the session picker (`--resume`) or setup. */
+export type Opening = 'sessions' | { setup: SetupStartParams };
 
 /** Rows of a long list shown at once, around the selected one. */
 const WINDOW = 10;
@@ -39,25 +49,34 @@ export function useSetup(client: SwitchbackClient, say: (text: string) => void) 
   }>();
   const running = useRef(false);
   const asked = useRef(0);
-  const start = () => {
+  const ask = (q: SetupQuestion) =>
+    new Promise<Answer>((resolve) => {
+      asked.current += 1;
+      setAsking({
+        n: asked.current,
+        q,
+        answer: (v) => {
+          setAsking(undefined);
+          resolve(v);
+        },
+      });
+    });
+  const note = (n: Parameters<typeof formatSetupNote>[0]) => say(formatSetupNote(n));
+  const start = (params: SetupStartParams = {}) => {
     if (running.current) return say('Setup is already running.');
     running.current = true;
-    runSetupOver(client, {
-      ask: (q) =>
-        new Promise<Answer>((resolve) => {
-          asked.current += 1;
-          setAsking({
-            n: asked.current,
-            q,
-            answer: (v) => {
-              setAsking(undefined);
-              resolve(v);
-            },
-          });
-        }),
-      note: (note) => say(formatSetupNote(note)),
-    })
-      .then((r) => say(setupEnded(r)))
+    runSetupOver(client, { ask, note }, params)
+      .then(async (r) => {
+        say(setupEnded(r));
+        if (r.outcome !== 'written') return;
+        await afterSetup({
+          confirm: async (question, fallback) => {
+            const v = await ask({ kind: 'confirm', question, default: fallback });
+            return typeof v === 'boolean' ? v : undefined;
+          },
+          note,
+        });
+      })
       .catch((err: Error) => say(`Setup failed: ${err.message}`))
       .finally(() => {
         running.current = false;

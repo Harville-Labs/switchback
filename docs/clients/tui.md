@@ -4,7 +4,7 @@
 
 ## First run
 
-With no config file anywhere, `switchback` starts setup (`switchback init`) before opening the UI, beginning with "Do you have any local model endpoints?" Answering no to that and to remote providers writes nothing and opens the UI anyway; run `switchback init` later to add models.
+With no config file anywhere, `switchback` opens with setup's first question in a panel above the prompt, as `/init` and `switchback init` do. Answering no throughout, or Esc, writes nothing and leaves the TUI open; run `/init` later to add models. After setup writes a config, the panel asks the questions about this machine: the command sandbox on Windows, and telemetry if you haven't chosen.
 
 ## Updates
 

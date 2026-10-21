@@ -1,7 +1,13 @@
-import { describe, expect, test } from 'bun:test';
-import type { SetupAnswerParams, SetupQuestion } from '@switchback/protocol';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { SwitchbackClient } from '@switchback/client';
+import type { EngineEvent, SetupAnswerParams, SetupQuestion } from '@switchback/protocol';
+import { Box } from 'ink';
 import { render } from 'ink-testing-library';
-import { SetupQuestionPanel, setupEnded } from './SetupPanel.tsx';
+import { useEffect } from 'react';
+import { SetupQuestionPanel, setupEnded, useSetup } from './SetupPanel.tsx';
 import { frameWith, tick } from './test-support.ts';
 
 const DOWN = '\x1b[B';
@@ -84,5 +90,49 @@ describe('setup in the TUI', () => {
     expect(setupEnded({ outcome: 'written', file: '/home/me/.switchback/config.json' })).toContain(
       "it's in use now",
     );
+  });
+});
+
+describe('after setup writes a config', () => {
+  // afterSetup reads and writes the user config; keep it away from the real one.
+  let home: string;
+  const was = process.env.SWITCHBACK_HOME;
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'switchback-setup-panel-'));
+    process.env.SWITCHBACK_HOME = home;
+  });
+  afterEach(() => {
+    if (was === undefined) delete process.env.SWITCHBACK_HOME;
+    else process.env.SWITCHBACK_HOME = was;
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  /** A client whose setup writes a config straight away. */
+  const writes = {
+    on: (l: (e: EngineEvent) => void) => {
+      setTimeout(() =>
+        l({ type: 'setup.finished', setupId: 's', outcome: 'written', file: '/c.json' }),
+      );
+      return () => {};
+    },
+    request: async () => ({ setupId: 's' }),
+  } as unknown as SwitchbackClient;
+
+  function Opened({ said }: { said: string[] }) {
+    const setup = useSetup(writes, (text) => said.push(text));
+    // biome-ignore lint/correctness/useExhaustiveDependencies: once, as the TUI opens on setup
+    useEffect(() => setup.start(), []);
+    return <Box>{setup.panel}</Box>;
+  }
+
+  test('the panel asks the telemetry question, and Esc leaves it unchosen', async () => {
+    const said: string[] = [];
+    const ui = render(<Opened said={said} />);
+    expect(await frameWith(ui, 'anonymous')).toContain('Set up ·');
+    ui.stdin.write(ESC);
+    await tick();
+    expect(ui.lastFrame()).not.toContain('Set up ·');
+    expect(said).toEqual([setupEnded({ outcome: 'written', file: '/c.json' })]);
+    ui.unmount();
   });
 });

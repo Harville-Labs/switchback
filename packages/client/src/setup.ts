@@ -1,10 +1,11 @@
-/** Setup for every client that runs it (`switchback init`, the TUI's `/setup`, VS Code). */
+/** Setup for every client that runs it (the TUI's `/init` and `switchback init`, VS Code). */
 import type {
   EngineEvent,
   SetupAnswerParams,
   SetupNote,
   SetupOutcome,
   SetupQuestion,
+  SetupStartParams,
 } from '@switchback/protocol';
 import type { SwitchbackClient } from './client.ts';
 import { formatRoles } from './format.ts';
@@ -33,7 +34,11 @@ export interface SetupUi {
  * Resolves with how it ended. The engine watches its config files, so a
  * `written` config is in use without a restart.
  */
-export function runSetupOver(client: SwitchbackClient, ui: SetupUi): Promise<SetupOutcome> {
+export function runSetupOver(
+  client: SwitchbackClient,
+  ui: SetupUi,
+  params: SetupStartParams = {},
+): Promise<SetupOutcome> {
   return new Promise((resolve, reject) => {
     let setupId: string | undefined;
     // Events can arrive before setup.start returns the ID; hold them until then.
@@ -58,7 +63,7 @@ export function runSetupOver(client: SwitchbackClient, ui: SetupUi): Promise<Set
       }
     };
     const off = client.on(handle);
-    client.request('setup.start', {}).then(
+    client.request('setup.start', params).then(
       (r) => {
         setupId = r.setupId;
         for (const e of early.splice(0)) handle(e);
