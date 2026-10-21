@@ -28,6 +28,7 @@ import {
   initialView,
   MODE_DESCRIPTIONS,
   modeLabel,
+  nextModel,
   parseEffort,
   parseMode,
   pickCopy,
@@ -60,12 +61,12 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
 Tabs: ctrl+t shows every session (open tabs, and ones working in other windows);
       ctrl+tab / ctrl+shift+tab, alt+←/→, alt+1…9, or a click switch tabs;
       ctrl+w on an empty prompt closes one (it keeps running); /tab new opens one.
-      Tab shows each subagent in turn, then the session again; /model there
+      alt+↓ shows each subagent in turn, alt+↑ the session again; /model there
       picks the subagent model.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt cancels; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
-      alt+↑ escalates (a stronger model takes over, like /up);
+      tab switches to the next model, going round them all;
       PgUp/PgDn or the mouse wheel scroll (hold shift or option to select text);
       prompts: ↑↓ and enter, or the option's number (y/a/p/n still work).
 Your own commands are Markdown files in .switchback/commands/ or
@@ -140,7 +141,25 @@ async function changeRoles(
   }
 }
 
-/** `/up` and alt+↑: a stronger model takes over (`session.escalate`). */
+/** Tab: the next model in config order becomes the current one, for this session. */
+export async function cycleModel(
+  ctx: SlashContext,
+  roles: SessionRoles | undefined,
+): Promise<void> {
+  const next = nextModel(ctx.init.models, roles);
+  if (!next) return say(ctx, 'No other model to switch to. `switchback init` sets more up.');
+  try {
+    const r = await ctx.client.request('session.setRoles', {
+      sessionId: ctx.session.id,
+      ...next.change,
+    });
+    ctx.setView((v) => addInfo({ ...v, roles: r }, `Switched to ${next.alias}.`));
+  } catch (err) {
+    say(ctx, `switch model: ${(err as Error).message}`);
+  }
+}
+
+/** `/up`: a stronger model takes over (`session.escalate`). */
 export async function escalateNow(ctx: SlashContext): Promise<void> {
   try {
     const { when } = await ctx.client.request('session.escalate', { sessionId: ctx.session.id });

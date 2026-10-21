@@ -106,8 +106,8 @@ export function Header({
         ))}
       </Box>
       <Text dimColor>
-        {'  '}/ commands · @ files · tab subagents · shift+tab mode · ctrl+o expand · PgUp/PgDn
-        scroll
+        {'  '}/ commands · @ files · tab model · alt+↓ subagents · shift+tab mode · ctrl+o expand ·
+        PgUp/PgDn scroll
       </Text>
     </Box>
   );
@@ -301,7 +301,7 @@ export function StatusBar({
       <Text wrap="truncate-end">
         {viewing ? (
           <Text color={t.accent} bold>
-            ↳ viewing {viewing} <Text dimColor>(tab)</Text>
+            ↳ viewing {viewing} <Text dimColor>(alt+↑ back)</Text>
             {' · '}
           </Text>
         ) : null}

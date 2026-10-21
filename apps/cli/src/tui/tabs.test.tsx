@@ -16,6 +16,9 @@ import { frameWith, session, tick } from './test-support.ts';
 const ENTER = '\r';
 const TAB = '\t';
 const CTRL_W = '\x17';
+// What a terminal sends for alt+↓ and alt+↑ (xterm's modifier form).
+const ALT_DOWN = '\x1b[1;3B';
+const ALT_UP = '\x1b[1;3A';
 // kitty's keyboard protocol: ctrl+tab and ctrl+shift+tab.
 const CTRL_TAB = '\x1b[9;5u';
 const CTRL_SHIFT_TAB = '\x1b[9;6u';
@@ -140,7 +143,7 @@ describe('the tab bar', () => {
 });
 
 describe('the subagent view', () => {
-  test('Tab shows a subagent in place of the session; /model there picks the subagent model', async () => {
+  test('alt+↓ shows a subagent in place of the session; /model there picks the subagent model', async () => {
     const { ui, calls, emit } = app();
     await tick();
     emit({ type: 'turn.started', sessionId: 's1', turnId: 't' });
@@ -159,7 +162,7 @@ describe('the subagent view', () => {
       text: 'looking in src/',
     });
     await tick();
-    ui.stdin.write(TAB);
+    ui.stdin.write(ALT_DOWN);
     expect(await frameWith(ui, '↳ viewing explore')).toContain('↳ explore · find the parser');
     expect(await frameWith(ui, 'looking in src/')).toContain('looking in src/');
     ui.stdin.write('/model');
@@ -172,9 +175,20 @@ describe('the subagent view', () => {
     expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
       subagents: 'opus',
     });
-    // After the last subagent, Tab comes back to the session.
-    ui.stdin.write(TAB);
+    // alt+↑ comes back to the session.
+    ui.stdin.write(ALT_UP);
     await tick();
     expect(await frameWith(ui, '◆ Switchback')).not.toContain('↳ viewing explore');
+  });
+
+  test('Tab switches to the next model and says so', async () => {
+    const { ui, calls } = app();
+    await tick();
+    ui.stdin.write(TAB);
+    await tick();
+    expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
+      current: [expect.any(String)],
+    });
+    expect(await frameWith(ui, 'Switched to')).toContain('Switched to');
   });
 });

@@ -41,7 +41,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   {
     name: 'up',
     group: 'Routing',
-    description: 'escalate: a stronger model takes over now, or from the next prompt (alt+↑)',
+    description: 'escalate: a stronger model takes over now, or from the next prompt',
   },
   { name: 'new', group: 'Session', description: 'start a new session' },
   {

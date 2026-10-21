@@ -47,7 +47,7 @@ import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
-import { escalateNow, pickModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { cycleModel, pickModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
 import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
 import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
@@ -357,7 +357,8 @@ export function App({
     prompting: Boolean(permission || escalation),
     openDashboard: slash.openDashboard,
     toggleExpanded: () => setExpanded((v) => !v),
-    escalate: () => void escalateNow(slash),
+    nextSubagent: next,
+    showSession: unfocus,
     nextMode: () =>
       client
         .request('session.setMode', { sessionId: session.id, mode: nextMode(mode, modes) })
@@ -459,7 +460,7 @@ export function App({
                   client.request('session.cancel', { sessionId: session.id }).catch(() => {});
               }}
               recall={recall}
-              onTab={next}
+              onTab={() => void cycleModel(slash, sessionRoles)}
               onCloseTab={() => setTabs((t) => closeTab(t, session.id))}
               busy={view.running}
               history={history.list()}

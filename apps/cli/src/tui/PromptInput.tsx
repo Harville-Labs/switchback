@@ -233,7 +233,7 @@ export function PromptInput({
         if (key.escape) return setMenuClosed(true);
       }
 
-      // Tab with no menu open moves through the session and its subagents; ctrl+tab is the app's.
+      // Tab with no menu open switches the model; ctrl+tab is the app's.
       if (key.tab && !key.ctrl && !key.shift) return onTab?.();
       if (key.escape) {
         if (busy && state.value.trim()) {
@@ -261,8 +261,9 @@ export function PromptInput({
         setDraft('');
         return;
       }
-      // alt+↑ escalates (the app handles it); it isn't a history step.
-      if (key.meta && key.upArrow) return;
+      // alt+↑/↓ move between the session and its subagents (the app handles them); they
+      // aren't history steps.
+      if (key.meta && (key.upArrow || key.downArrow)) return;
       if (key.upArrow && !state.value) {
         const back = recall();
         if (back !== undefined) return edit(at(back));

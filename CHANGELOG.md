@@ -6,7 +6,12 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ### Added
 - **Claude Code and Codex models can use Switchback's tools.** Each turn on one serves `task`, `merge_worktree`, `escalate`, `docs`, and `skill` to it over MCP on a loopback address, so asking it for a subagent starts a Switchback subagent in its own tab. Claude Code's own subagent tool is off while `task` is offered
+- **Tab switches to the next model.** In the TUI, with no menu open, it makes the model after the current one, in config order, the current model for the session and says `Switched to <model>.`; pressed again it goes round them all
 - **Every model is told how to work in Switchback.** The system prompt, and each Claude Code or Codex turn, explains subagents and their tabs, escalation, and reading the docs before changing settings
+
+### Changed
+- **Alt+↓ and Alt+↑ move between subagents and the session** in the TUI, in place of Tab. Alt+↓ shows the next subagent; Alt+↑ comes back to the session
+- **Alt+↑ no longer escalates.** `/up` still does, and **Escalate now** in VS Code
 
 ## [2.1.0] - 2026-10-21
 

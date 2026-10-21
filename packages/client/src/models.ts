@@ -49,6 +49,23 @@ export function currentChange(
   return { current: [alias, ...(roles?.current ?? []).filter((a) => a !== alias)] };
 }
 
+/**
+ * Tab in the TUI: the model after the current one, in config order and back
+ * to the first after the last, with the change that makes it current. It takes
+ * the current model's place, so going round doesn't pile every model into the
+ * backups. Undefined when there's no other model to switch to.
+ */
+export function nextModel(
+  models: ModelSummary[],
+  roles: SessionRoles | undefined,
+): { alias: string; change: Pick<SessionSetRolesParams, 'current'> } | undefined {
+  const at = models.findIndex((m) => m.alias === roles?.current[0]);
+  const next = models[(at + 1) % models.length];
+  if (!next || next.alias === roles?.current[0]) return undefined;
+  const backups = (roles?.current ?? []).slice(1).filter((a) => a !== next.alias);
+  return { alias: next.alias, change: { current: [next.alias, ...backups] } };
+}
+
 /** One choice on one line: `qwen3-coder · local · step 1`. */
 export function choiceLabel(c: ModelChoice): string {
   const model = c.model === c.alias ? c.alias : `${c.alias} (${c.model})`;

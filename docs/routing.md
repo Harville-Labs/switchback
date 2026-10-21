@@ -36,7 +36,7 @@ The reviewer of local edits (`review.model`, [review.md](review.md)) and the def
 | 1 | `escalation-declined` | An `ask` escalation was just declined (or the run is headless) | The step the session is on |
 | 2 | `agent-pin` | The agent names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model, or the first of that tier in role order |
 | 3 | `context-overflow` | The prompt exceeds `escalation.contextHeadroom` × the window of the model the session is on (see [Counting tokens](#counting-tokens)) | The first step up whose window fits, else the largest window above |
-| 4 | `user-escalation` | You asked to escalate (`/up`, alt+↑ in the TUI, **Escalate now** in VS Code) | One step up from where the session is |
+| 4 | `user-escalation` | You asked to escalate (`/up`, **Escalate now** in VS Code) | One step up from where the session is |
 | 5 | `model-escalation` | The model called the `escalate` tool ([The model escalating itself](#the-model-escalating-itself)) | One step up from where the session is |
 | 6 | `sticky` | The session escalated within the last `escalation.stickyTurns` calls | The step it reached; one step higher if the model there is struggling too |
 | 7 | `escalation` | A quality signal crossed its threshold (below) | One step up |
@@ -84,7 +84,7 @@ Then five guards run on the target. They only ever act on remote models; a local
 The **current model** is where your prompts run: the first model in `current` that's up and fits. It's the one people change most, so both clients put it a step away:
 
 - **VS Code**: the **Model** dropdown under the input lists every configured model, the current one first, each with its tier and the other roles it fills. Pick one and the next prompt runs on it.
-- **TUI**: `/current` with no argument opens the same list (↑/↓ and Enter, or a number); `/current <model> [backup...]` sets it directly. The welcome card and the status bar name it.
+- **TUI**: `/current` with no argument opens the same list (↑/↓ and Enter, or a number); `/current <model> [backup...]` sets it directly, and **Tab** switches to the next model in config order, going round them all. The welcome card and the status bar name it.
 
 Picking a model doesn't drop your fallback: the models that were current stay behind it as backups, in order, so a down server or an oversized prompt still has somewhere to go. Escalation climbs the ladder from wherever you are, as before. The change applies to the session; **Make this my default** in the dropdown, or `--save`, writes it to your user config.
 
@@ -94,7 +94,7 @@ A session can change its own roles without touching any file: `/current`, `/esca
 
 ## Escalating yourself
 
-Escalation is automatic when the model struggles (the quality signals below) or the prompt outgrows it, but you don't have to wait for either. `/up` (alt+↑ in the TUI, **Escalate now** in VS Code, `session.escalate` in the protocol) moves the session one step up the ladder:
+Escalation is automatic when the model struggles (the quality signals below) or the prompt outgrows it, but you don't have to wait for either. `/up` (**Escalate now** in VS Code, `session.escalate` in the protocol) moves the session one step up the ladder:
 
 - During a turn, the turn's next model call goes one step up; between turns, your next prompt starts there.
 - It's your request, so a remote step doesn't ask first, whatever `escalation.policy` says. Budgets and private content still apply: a private session stays local and says why.

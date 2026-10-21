@@ -12,7 +12,10 @@ export interface AppKeys {
   prompting: boolean;
   openDashboard: () => void;
   toggleExpanded: () => void;
-  escalate: () => void;
+  /** alt+↓: show the next subagent in place of the session. */
+  nextSubagent: () => void;
+  /** alt+↑: show the session again. */
+  showSession: () => void;
   nextMode: () => void;
 }
 
@@ -36,9 +39,10 @@ export function useAppKeys(k: AppKeys): void {
     }
     if (key.meta && (key.leftArrow || key.rightArrow))
       return k.setTabs((t) => cycleTab(t, key.leftArrow ? -1 : 1));
+    if (key.meta && key.downArrow) return k.nextSubagent();
+    if (key.meta && key.upArrow) return k.showSession();
     if (k.prompting) return;
     if (key.ctrl && ch === 'o') return k.toggleExpanded();
-    if (key.meta && key.upArrow) return k.escalate();
     if (key.tab && key.shift) k.nextMode();
   });
 }

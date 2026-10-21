@@ -1,4 +1,4 @@
-/** Tab moves the transcript from the session to each of its subagents and back. */
+/** Alt+↓ moves the transcript from the session to each of its subagents; alt+↑ comes back. */
 import { childView, nextFocus, subagentList, type ViewState } from '@switchback/client';
 import { useEffect, useState } from 'react';
 

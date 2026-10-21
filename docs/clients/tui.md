@@ -23,7 +23,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 │ mode          default                                │
 │ directory     ~/code/shop                            │
 ╰──────────────────────────────────────────────────────╯
-  / commands · @ files · tab subagents · shift+tab mode · ctrl+o expand · PgUp/PgDn scroll
+  / commands · @ files · tab model · alt+↓ subagents · shift+tab mode · ctrl+o expand · PgUp/PgDn scroll
 
 › where is the retry logic?
 
@@ -81,7 +81,7 @@ Tabs are the clients' own; the engine sends every session's events to every clie
 
 ### Subagents
 
-While subagents run, **Tab** (with no menu open) shows the next one in place of the session: its header names the agent and its task, the status bar says `↳ viewing explore (tab)`, and the transcript is the subagent's own. Tab after the last one comes back to the session. There, `/model` picks the model for subagents started from then on; in the session's own view, `/model` is `/current`. Prompts always go to the session, and sending one brings it back into view.
+While subagents run, **Alt+↓** shows the next one in place of the session: its header names the agent and its task, the status bar says `↳ viewing explore (alt+↑ back)`, and the transcript is the subagent's own. **Alt+↑** comes back to the session, as does Alt+↓ after the last one. There, `/model` picks the model for subagents started from then on; in the session's own view, `/model` is `/current`. Prompts always go to the session, and sending one brings it back into view.
 
 ### Scrolling and selecting
 
@@ -102,7 +102,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Input | Effect |
 |---|---|
 | `/local`, `/remote`, `/auto` | Route the following prompts |
-| `/up` (alt+↑) | Escalate: the turn's next step, or your next prompt, goes one step up the ladder ([routing.md](../routing.md#escalating-yourself)). On macOS Terminal, alt needs "Use Option as Meta key"; `/up` always works |
+| `/up` | Escalate: the turn's next step, or your next prompt, goes one step up the ladder ([routing.md](../routing.md#escalating-yourself)) |
 | `/agent <name>` | New session with that agent |
 | `/agents` | List agents and where they came from |
 | `/new` | New session with the default agent, in the tab in front |
@@ -144,7 +144,8 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `↑` on an empty prompt | Take back the last queued message to edit it |
 | Ctrl+T | The sessions dashboard ([Tabs](#tabs)) |
 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |
-| Tab | Show the next running subagent, then back to the session ([Subagents](#subagents)) |
+| Alt+↓ / Alt+↑ | Show the next running subagent / come back to the session ([Subagents](#subagents)). On macOS Terminal, alt needs "Use Option as Meta key" |
+| Tab (no menu open) | Switch to the next model: the one after the current model in config order, back to the first after the last. It says `Switched to <model>.` and applies to this session; the model you leave doesn't stay behind as a backup |
 | Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |

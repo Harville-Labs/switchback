@@ -11,7 +11,7 @@ export const REMOVED_KEYS: {
   {
     path: ['routing', 'classifier'],
     message:
-      'routing.classifier was removed: escalation is automatic when a model struggles, and /up (alt+↑) or Escalate now in VS Code moves a turn up the ladder on demand (docs/routing.md)',
+      'routing.classifier was removed: escalation is automatic when a model struggles, and /up or Escalate now in VS Code moves a turn up the ladder on demand (docs/routing.md)',
   },
   {
     path: ['routing', 'local'],
