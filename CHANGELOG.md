@@ -4,6 +4,21 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-21
+
+### Added
+- **Tab shows a running subagent in place of the session.** Tab moves through each subagent, then back to the session; the status bar says which one is in view, and `/model` there sets the subagent model
+- **More ways to move between tabs.** Ctrl+Tab and Ctrl+Shift+Tab cycle tabs, a click on a tab switches to it, and Ctrl+W on an empty prompt closes the tab in front (with text typed it still deletes a word). Most terminals keep Ctrl+Tab for their own tabs, so it reaches Switchback only once you unbind it there
+- **The model can ask to escalate.** A new `escalate` tool, which every session has, asks for the next step to run one model up the ladder, with a reason. The new `model-escalation` routing rule follows `escalation.policy`, privacy, and budgets like the other escalations, and the system prompt says when to use it
+- **Web search works without setup.** When `web.search` isn't set, `websearch` uses Exa's hosted search, which needs no key; an optional `apiKey` raises its rate limits. Each search still asks first unless you allow `websearch`
+- **VS Code sends the workspace's problems.** The problems chip counts errors and warnings across the whole workspace, with the active file's first, and attaches them as context
+- **The terminal UI uses kitty's keyboard protocol** where the terminal supports it, so keys the terminal would otherwise merge, such as Ctrl+Tab and Shift+Enter, arrive as themselves
+
+### Changed
+- **`switchback init` asks less.** It writes the config without showing it first, and allows the common test, build, and lint commands for every toolchain instead of asking which to allow. The `config` kind of `setup.note` is gone
+- **New Session in VS Code starts on a clear chat.** The previous session is saved and `/resume` brings it back
+- **An exact command name wins over longer ones**, so `/model` and Enter runs `/model`, not `/models`
+
 ## [2.0.0] - 2026-10-20
 
 ### Added
