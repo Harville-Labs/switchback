@@ -5,7 +5,8 @@
  * ordinary Switchback config the person sees before it's written.
  *
  * Format: opencode.ai/docs/config, /providers, /mcp-servers, /permissions
- * (checked 2026-10-20).
+ * (checked 2026-10-20), and the newer format with `providers`, `settings`,
+ * `modelID`, a `permissions` list, and `mcp.servers` (checked 2026-10-21).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -88,8 +89,51 @@ const num = (v: unknown): number | undefined =>
 /** `{env:NAME}` → `NAME`; anything else isn't an environment reference. */
 const envName = (v: unknown) => /^\{env:([A-Za-z0-9_]+)\}$/.exec(str(v) ?? '')?.[1];
 
-/** Translate a merged OpenCode config. */
-export function fromOpenCode(cfg: Obj, env: Env = process.env): Omit<Imported, 'files'> {
+/**
+ * OpenCode's newer format in the older one's terms, so one translation reads
+ * both: `providers` (`package`, `settings`) as `provider` (`npm`, `options`),
+ * `agents` as `agent`, the `permissions` list as a `permission` table, and
+ * `mcp.servers` as `mcp`. Where a file has both, the older key wins.
+ */
+function olderFormat(cfg: Obj): Obj {
+  const provider: Obj = {};
+  for (const [pid, raw] of Object.entries(obj(cfg.providers))) {
+    const p = obj(raw);
+    provider[pid] = {
+      ...p,
+      ...(str(p.package) ? { npm: p.package } : {}),
+      options: { ...obj(p.settings), ...obj(p.options) },
+    };
+  }
+  // A list read in order, so a later entry for the same pattern wins, as in OpenCode.
+  let permission = cfg.permission;
+  if (permission === undefined && Array.isArray(cfg.permissions)) {
+    const table: Record<string, Obj> = {};
+    for (const raw of cfg.permissions) {
+      const r = obj(raw);
+      const action = str(r.action);
+      if (!action || !isLevel(r.effect)) continue;
+      table[action] = { ...table[action], [str(r.resource) ?? '*']: r.effect };
+    }
+    permission = table;
+  }
+  const { servers, ...mcp } = obj(cfg.mcp);
+  for (const [name, raw] of Object.entries(obj(servers))) {
+    const { disabled, ...s } = obj(raw);
+    mcp[name] ??= { ...s, ...(disabled === true ? { enabled: false } : {}) };
+  }
+  return {
+    ...cfg,
+    provider: { ...provider, ...obj(cfg.provider) },
+    agent: { ...obj(cfg.agents), ...obj(cfg.agent) },
+    ...(permission !== undefined ? { permission } : {}),
+    mcp,
+  };
+}
+
+/** Translate a merged OpenCode config, in either format. */
+export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, 'files'> {
+  const cfg = olderFormat(raw);
   const skipped: string[] = [];
   const providers = obj(cfg.provider);
   const disabled = new Set(Array.isArray(cfg.disabled_providers) ? cfg.disabled_providers : []);
@@ -99,8 +143,10 @@ export function fromOpenCode(cfg: Obj, env: Env = process.env): Omit<Imported, '
   // Models in the order they matter: the main model, the small one, agents',
   // then every model a custom endpoint lists.
   const refs: string[] = [];
+  // `provider/model#variant`: a variant changes request settings, not the model.
+  const bare = (ref: unknown) => str(ref)?.replace(/#.*$/, '');
   const add = (ref: unknown) => {
-    const r = str(ref);
+    const r = bare(ref);
     if (r?.includes('/') && !refs.includes(r)) refs.push(r);
   };
   add(cfg.model);
@@ -132,9 +178,13 @@ export function fromOpenCode(cfg: Obj, env: Env = process.env): Omit<Imported, '
       skipped.push(`${ref}: ${answer}`);
       continue;
     }
+    if (Object.keys(obj(obj(obj(p.models)[mid]).body)).length)
+      skipped.push(
+        `${ref}'s request body (sampling settings): Switchback sends none, so the server's defaults apply`,
+      );
     if ('kind' in answer) remotes.push(answer);
     else locals.push(answer);
-    if (ref === cfg.model) current = answer;
+    if (ref === bare(cfg.model)) current = answer;
   }
 
   const mcpServers: Record<string, Obj> = {};
@@ -170,8 +220,12 @@ export function fromOpenCode(cfg: Obj, env: Env = process.env): Omit<Imported, '
   }
 
   const permissions = translatePermissions(cfg, skipped);
-  for (const k of ['agent', 'command', 'plugin', 'formatter', 'lsp'])
-    if (cfg[k] !== undefined && cfg[k] !== false)
+  for (const k of ['agent', 'command', 'plugin', 'plugins', 'formatter', 'lsp'])
+    if (
+      Object.keys(obj(cfg[k])).length ||
+      (Array.isArray(cfg[k]) && cfg[k].length) ||
+      cfg[k] === true
+    )
       skipped.push(`${k}: Switchback has its own format for these`);
 
   return {
@@ -184,8 +238,12 @@ export function fromOpenCode(cfg: Obj, env: Env = process.env): Omit<Imported, '
   };
 }
 
-/** Packages that speak the OpenAI API, which is how Switchback reaches a custom endpoint. */
-const OPENAI_SHAPED = new Set([undefined, '@ai-sdk/openai-compatible', '@ai-sdk/openai']);
+/**
+ * Packages that speak the OpenAI API, which is how Switchback reaches a custom
+ * endpoint: `@ai-sdk/openai-compatible`, `@ai-sdk/openai`, and the newer
+ * `@opencode/ai/providers/openai-compatible`.
+ */
+const openAiShaped = (npm: string | undefined) => !npm || /\/openai(?:-compatible)?$/.test(npm);
 
 /** One OpenCode model as a setup answer, or why it can't be one. */
 function translateModel(
@@ -196,6 +254,8 @@ function translateModel(
 ): LocalAnswer | RemoteAnswer | string {
   const opts = obj(p.options);
   const m = obj(obj(p.models)[mid]);
+  // The key names the model in OpenCode; `modelID` (or the older `id`) is what the server calls it.
+  const model = str(m.modelID) ?? str(m.id) ?? mid;
   const limit = obj(m.limit);
   const contextWindow = num(limit.context);
   const baseUrl = str(opts.baseURL)?.replace(/\/+$/, '');
@@ -203,14 +263,14 @@ function translateModel(
 
   if (baseUrl) {
     const npm = str(p.npm);
-    if (!OPENAI_SHAPED.has(npm))
+    if (!openAiShaped(npm))
       return `${npm} at a custom URL; Switchback reaches custom endpoints as OpenAI-compatible APIs`;
     if (!URL.canParse(baseUrl)) return `"${baseUrl}" isn't a URL`;
     if (isLocalHost(baseUrl))
       return {
         providerId: aliasFor(pid),
         baseUrl,
-        model: mid,
+        model,
         ...(contextWindow ? { contextWindow } : {}),
         ...(apiKeyEnv ? { apiKeyEnv } : {}),
       };
@@ -221,7 +281,7 @@ function translateModel(
         : undefined;
     return {
       kind: 'openai-compatible',
-      model: mid,
+      model,
       baseUrl,
       ...(apiKeyEnv ? { apiKeyEnv } : {}),
       ...(contextWindow ? { contextWindow } : {}),
@@ -234,30 +294,30 @@ function translateModel(
     case 'anthropic':
     case 'openai':
     case 'deepseek':
-      return { kind: pid, model: mid };
+      return { kind: pid, model };
     case 'google':
-      return { kind: 'gemini', model: mid };
+      return { kind: 'gemini', model };
     case 'openrouter':
       return {
         kind: 'openrouter',
-        model: mid,
+        model,
         baseUrl: OPENROUTER_BASE_URL,
         apiKeyEnv: apiKeyEnv ?? 'OPENROUTER_API_KEY',
         ...(contextWindow ? { contextWindow } : {}),
       };
     case 'opencode':
     case 'opencode-go':
-      if (!openCodeApi(mid))
+      if (!openCodeApi(model))
         return "OpenCode serves it on Google's API, which Switchback doesn't use through OpenCode";
       return {
         kind: 'opencode',
         plan: pid === 'opencode' ? 'zen' : 'go',
-        model: mid,
+        model,
         ...(contextWindow ? { contextWindow } : {}),
       };
     case 'amazon-bedrock': {
       // Switchback adds the `anthropic.` prefix itself; cross-region prefixes aren't catalog IDs.
-      const bare = mid.replace(/^(?:(?:us|eu|apac|jp|au|global)\.)?anthropic\./, '');
+      const bare = model.replace(/^(?:(?:us|eu|apac|jp|au|global)\.)?anthropic\./, '');
       if (!bare.startsWith('claude-')) return 'Switchback uses Bedrock for Claude models only';
       return {
         kind: 'bedrock',
@@ -273,7 +333,7 @@ function translateModel(
       return {
         kind: 'vertex',
         // Vertex pins versions with `@date`; Switchback's IDs have none.
-        model: mid.replace(/@.*$/, ''),
+        model: model.replace(/@.*$/, ''),
         projectId,
         region: str(opts.location) ?? env.VERTEX_LOCATION ?? 'global',
       };
@@ -282,7 +342,7 @@ function translateModel(
       const resource = str(opts.resourceName) ?? env.AZURE_RESOURCE_NAME;
       if (!resource) return 'no Azure resource name in the config or AZURE_RESOURCE_NAME';
       // OpenCode needs the deployment named after the model.
-      return { kind: 'azure-openai', model: mid, deployment: mid, resource };
+      return { kind: 'azure-openai', model, deployment: model, resource };
     }
     default:
       return `Switchback has no "${pid}" provider; add it in the next step if it serves an OpenAI-compatible API`;

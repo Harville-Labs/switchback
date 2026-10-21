@@ -49,13 +49,15 @@ When there's no Switchback config yet and an OpenCode config is found, the first
 
 | OpenCode | Becomes |
 |---|---|
-| `model`, `small_model`, agents' `model`, and every model of a provider with `options.baseURL` | Models. `model` is the current model |
+| `model`, `small_model`, agents' `model`, and every model of a provider with `options.baseURL` | Models. `model` is the current model. A model's `modelID` (or `id`) is the ID Switchback sends; a `#variant` is the same model |
 | `anthropic`, `openai`, `deepseek`, `google`, `openrouter`, `opencode` (Zen), `opencode-go`, `amazon-bedrock` (Claude), `google-vertex-anthropic`, `azure` | The matching provider, with its region, profile, project, or resource |
-| A custom provider (`@ai-sdk/openai-compatible` or `@ai-sdk/openai` with `baseURL`) | A local endpoint when its host is this machine or a private network, else an OpenAI-compatible provider, with `limit` and `cost` as `contextWindow`, `maxOutputTokens`, and `price` |
+| A custom provider (`@ai-sdk/openai-compatible`, `@ai-sdk/openai`, or `@opencode/ai/providers/openai-compatible` with `baseURL`) | A local endpoint when its host is this machine or a private network, else an OpenAI-compatible provider, with `limit` and `cost` as `contextWindow`, `maxOutputTokens`, and `price` |
 | `mcp` (`local`, `remote`) | `mcpServers` (`command`/`args`/`env`, `url`/`headers`) |
 | `permission` (`*`, `read`, `edit`, `shell`/`bash`, `webfetch`, `websearch`, `external_directory`) and the old `tools` switches | `permissions` levels and `allow`/`ask`/`deny` rules, added to the starting rules |
 
-Not brought over, each listed with a reason during setup: API keys written into the config or stored by `/connect` (put them in environment variables; `{env:NAME}` references carry over), OAuth for MCP servers, providers Switchback doesn't have, and OpenCode's agents, commands, plugins, formatters, and LSP settings. `AGENTS.md`, which both read, needs nothing. OpenCode allows edits and commands unless told otherwise, while Switchback asks first; an OpenCode config without `permission` leaves Switchback's defaults. OpenCode lets the last matching pattern win and Switchback lets deny beat ask beat allow, so a translated rule set is never looser than the original.
+OpenCode's newer format reads the same way: `providers` with `package` and `settings` as `provider` with `npm` and `options`, `agents` as `agent`, the `permissions` list of `{ action, resource, effect }` as `permission` (a later entry for the same resource wins), and `mcp.servers` as `mcp` (`disabled: true` comes over turned off). Both formats may be JSONC, with comments and trailing commas.
+
+Not brought over, each listed with a reason during setup: API keys written into the config or stored by `/connect` (put them in environment variables; `{env:NAME}` references carry over), OAuth for MCP servers, providers Switchback doesn't have, and OpenCode's agents, commands, plugins, formatters, and LSP settings, and a model's `body` (sampling settings such as `temperature`; the server's defaults apply). `AGENTS.md`, which both read, needs nothing. OpenCode allows edits and commands unless told otherwise, while Switchback asks first; an OpenCode config without `permission` leaves Switchback's defaults. OpenCode lets the last matching pattern win and Switchback lets deny beat ask beat allow, so a translated rule set is never looser than the original.
 
 Machine-specific settings (which local server and model) belong in the user config. Team-shared settings (permissions, agents, budgets) belong in the project config, and your own settings for one project in `.switchback/config.local.json`.
 
