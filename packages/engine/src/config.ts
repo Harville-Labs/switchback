@@ -250,7 +250,7 @@ export function loadConfig(
   };
 }
 
-const LEVELS = ['read', 'edit', 'bash', 'web', 'mcp'];
+const LEVELS = ['read', 'edit', 'bash', 'web', 'websearch', 'mcp'];
 
 /** A member's layer without the permission levels an organization keeps for itself. */
 function withoutLevels(

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { SwitchbackConfig } from '../config.ts';
 import { commandMatches, parseCommand, suggestBashRules } from './bash-match.ts';
 import { defaultPermissions, setupPermissions } from './defaults.ts';
+import { levelFor } from './gate.ts';
 import { RuleLayers } from './layers.ts';
 import { pathMatcher } from './path-match.ts';
 import { PermissionPolicy, type SourcedRule, suggestRules } from './policy.ts';
@@ -246,5 +248,35 @@ describe('layers', () => {
     expect(orgOnly.lists.allow).toEqual(['bash(ls)']);
     expect(orgOnly.lists.deny).toEqual(['bash(rm:*)', 'read(.env)']);
     expect(orgOnly.ignored.map((r) => r.rule)).toEqual(['bash(git:*)']);
+  });
+});
+
+describe('levels', () => {
+  const levels = (permissions: object = {}) =>
+    SwitchbackConfig.parse({
+      providers: { lp: { type: 'mock', tier: 'local' } },
+      models: { m: { provider: 'lp', model: 'm' } },
+      permissions,
+    }).permissions;
+
+  test('search runs without asking by default, and fetching a page asks', () => {
+    expect(levelFor({ name: 'websearch', permission: 'web' }, levels())).toEqual({
+      level: 'allow',
+      key: 'websearch',
+    });
+    expect(levelFor({ name: 'WebSearch', permission: 'web' }, levels()).level).toBe('allow');
+    expect(levelFor({ name: 'webfetch', permission: 'web' }, levels())).toEqual({
+      level: 'ask',
+      key: 'web',
+    });
+  });
+
+  test('permissions.websearch sets search apart from the rest of web', () => {
+    expect(
+      levelFor({ name: 'websearch', permission: 'web' }, levels({ websearch: 'ask' })).level,
+    ).toBe('ask');
+    expect(levelFor({ name: 'webfetch', permission: 'web' }, levels({ web: 'allow' })).level).toBe(
+      'allow',
+    );
   });
 });

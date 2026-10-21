@@ -103,8 +103,10 @@ export const SwitchbackConfig = z.object({
       read: PermissionLevel.default('allow'),
       edit: PermissionLevel.default('ask'),
       bash: PermissionLevel.default('ask'),
-      /** webfetch and websearch. */
+      /** webfetch, and websearch when set to deny. */
       web: PermissionLevel.default('ask'),
+      /** websearch: the query goes to the search backend, and nowhere else. */
+      websearch: PermissionLevel.default('allow'),
       /** Tools from MCP servers; each server can override it with `permission`. */
       mcp: PermissionLevel.default('ask'),
       /** The mode new sessions start in (docs/permissions.md). */

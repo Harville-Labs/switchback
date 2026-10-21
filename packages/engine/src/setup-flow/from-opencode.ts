@@ -36,7 +36,7 @@ type Level = 'allow' | 'ask' | 'deny';
 
 /** Permissions from another agent, in Switchback's terms. */
 export interface ImportedPermissions {
-  levels: Partial<Record<'read' | 'edit' | 'bash' | 'web' | 'mcp', Level>>;
+  levels: Partial<Record<'read' | 'edit' | 'bash' | 'web' | 'websearch' | 'mcp', Level>>;
   outsideWorkspace?: 'ask' | 'deny';
   allow: string[];
   ask: string[];
@@ -287,9 +287,6 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
 
 const LEVELS = new Set(['allow', 'ask', 'deny']);
 const isLevel = (v: unknown): v is Level => typeof v === 'string' && LEVELS.has(v);
-const STRICTNESS: Level[] = ['allow', 'ask', 'deny'];
-const stricter = (a: Level | undefined, b: Level) =>
-  a && STRICTNESS.indexOf(a) > STRICTNESS.indexOf(b) ? a : b;
 
 /** A path pattern as Switchback writes one: `~/` for home, `//` for the filesystem root. */
 function pathSpec(pattern: string): string {
@@ -316,15 +313,18 @@ function translatePermissions(cfg: Obj, skipped: string[]): ImportedPermissions 
     if (tool === 'bash') out.levels.bash = 'deny';
     else if (['edit', 'write', 'patch'].includes(tool)) out.levels.edit = 'deny';
     else if (tool === 'webfetch') out.levels.web = 'deny';
+    else if (tool === 'websearch') out.levels.websearch = 'deny';
   }
 
   const perm = cfg.permission;
   if (isLevel(perm))
-    for (const k of ['read', 'edit', 'bash', 'web', 'mcp'] as const) out.levels[k] = perm;
+    for (const k of ['read', 'edit', 'bash', 'web', 'websearch', 'mcp'] as const)
+      out.levels[k] = perm;
   const table = obj(perm);
   const all = table['*'];
   if (isLevel(all))
-    for (const k of ['read', 'edit', 'bash', 'web', 'mcp'] as const) out.levels[k] ??= all;
+    for (const k of ['read', 'edit', 'bash', 'web', 'websearch', 'mcp'] as const)
+      out.levels[k] ??= all;
 
   const ignored: string[] = [];
   for (const [tool, value] of Object.entries(table)) {
@@ -334,11 +334,13 @@ function translatePermissions(cfg: Obj, skipped: string[]): ImportedPermissions 
         ? 'bash'
         : tool === 'read' || tool === 'edit'
           ? tool
-          : tool === 'webfetch' || tool === 'websearch'
+          : tool === 'webfetch'
             ? 'web'
-            : tool === 'external_directory'
-              ? 'outside'
-              : undefined;
+            : tool === 'websearch'
+              ? 'websearch'
+              : tool === 'external_directory'
+                ? 'outside'
+                : undefined;
     if (!target) {
       ignored.push(tool);
       continue;
@@ -356,7 +358,7 @@ function translatePermissions(cfg: Obj, skipped: string[]): ImportedPermissions 
         continue;
       }
       if (pattern === '*') {
-        out.levels[target] = target === 'web' ? stricter(out.levels.web, level) : level;
+        out.levels[target] = level;
         continue;
       }
       if (target === 'bash') rule(level, `bash(${pattern})`);

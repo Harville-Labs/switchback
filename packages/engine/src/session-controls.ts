@@ -68,13 +68,13 @@ export class SessionControls {
 
   /** `permissions.list`: the rules in effect, with their sources, and the session's mode. */
   async permissions(sessionId?: string): Promise<PermissionsListResult> {
-    const { read, edit, bash, web, mcp } = this.host.config().permissions;
+    const { read, edit, bash, web, websearch, mcp } = this.host.config().permissions;
     const sandbox = await this.deps.commands().sandboxState();
     return {
       sandbox: sandbox.active ? { active: true } : { active: false, reason: sandbox.reason },
       ...(sessionId ? { mode: this.modeOf(this.deps.sessions.live(sessionId)) } : {}),
       modes: allowedModes(this.host.org()),
-      levels: { read, edit, bash, web, mcp },
+      levels: { read, edit, bash, web, websearch, mcp },
       rules: this.deps.gate().policy().list(),
     };
   }

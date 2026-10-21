@@ -51,6 +51,13 @@ const session = (engine: Engine, mode?: PermissionMode) =>
   engine.createSession(mode ? { permissionMode: mode } : {}).id;
 
 describe('permission modes', () => {
+  test('web set to deny turns search off too, though search is allowed on its own', async () => {
+    const search = { name: 'websearch', input: { query: 'bun test' } };
+    const { engine, lp } = setup([{ toolCalls: [search] }, { text: 'ok' }], { web: 'deny' });
+    await engine.runTurn(session(engine), 'look it up');
+    expect(results(lp)[0]?.content).toContain('permissions.web is deny');
+  });
+
   test('acceptEdits allows edits that would otherwise ask', async () => {
     const { engine, events } = setup([{ toolCalls: [edit] }, { text: 'done' }], { edit: 'ask' });
     await engine.runTurn(session(engine, 'acceptEdits'), 'write it');

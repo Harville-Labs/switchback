@@ -58,7 +58,7 @@ These rules govern the file tools. `bash` stays in its [sandbox](#sandbox), whos
 | `read` | read, glob, grep | `allow` |
 | `edit` | write, edit | `ask` |
 | `bash` | bash | `ask` |
-| `web` | webfetch, websearch | `ask` |
+| `web` | webfetch, websearch | `ask` for webfetch; websearch has its own level, `permissions.websearch`, which is `allow` ([ADR 0023](adr/0023-search-allowed-by-default.md)). `web: deny` turns both off |
 | `mcp` | tools from MCP servers (`mcp__<server>__<tool>`) | `ask`; a server's `permission` setting overrides it, except that a category-level `deny` always wins |
 | (none) | task, exit_plan_mode, bash_output, kill_shell, todo | always allowed: a subagent's own tools are checked individually, and a background shell's command was checked when it started |
 

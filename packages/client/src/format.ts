@@ -426,7 +426,7 @@ export function nextMode(current: PermissionMode, allowed: PermissionMode[]): Pe
 export function formatPermissions(p: PermissionsListResult): string {
   const lines = [
     ...(p.mode ? [`mode   ${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`] : []),
-    `levels read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · mcp ${p.levels.mcp}`,
+    `levels read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · websearch ${p.levels.websearch} · mcp ${p.levels.mcp}`,
     `sandbox ${p.sandbox.active ? 'on: bash commands run in the OS sandbox' : `off: ${p.sandbox.reason}`}`,
   ];
   if (!p.rules.length) lines.push('rules  none (see docs/permissions.md)');

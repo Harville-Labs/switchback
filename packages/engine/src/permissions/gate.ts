@@ -15,9 +15,10 @@
  *    ask asks, its allow skips a level's prompt), then allow rules, including
  *    what the user allowed this session.
  * 7. The mode: `acceptEdits` allows edits.
- * 8. The category's level: `allow`, or ask.
+ * 8. The category's level (`websearch` has its own): `allow`, or ask.
  */
 import type { PermissionDecision, PermissionMode } from '@switchback/protocol';
+import type { PermissionLevel, SwitchbackConfig } from '../config-schema.ts';
 import type { HookOutcome } from '../hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from '../live-session.ts';
 import { PendingPrompts } from '../prompts.ts';
@@ -125,12 +126,12 @@ export class PermissionGate {
   ): Promise<GateResult> {
     if (tool.permission === 'none') return { allowed: true };
     const levels = this.host.config().permissions;
-    const level = tool.permissionLevel ?? levels[tool.permission];
+    const { level, key } = levelFor(tool, levels);
     // An org can enforce a category's deny; no rule, mode, or grant overrides it.
     if (levels[tool.permission] === 'deny' || level === 'deny')
       return {
         allowed: false,
-        error: `${tool.name} is turned off (permissions.${tool.permission} is deny).`,
+        error: `${tool.name} is turned off (permissions.${levels[tool.permission] === 'deny' ? tool.permission : key} is deny).`,
       };
     const call: ToolCall = { name: tool.name, category: tool.permission, input };
     const reach = this.reach(call, ctx);
@@ -327,4 +328,23 @@ export class PermissionGate {
       this.host.notify('warn', `couldn't save the rule to ${file}: ${(err as Error).message}`);
     }
   }
+}
+
+/**
+ * The level that rules on a tool when no rule does, and the config key it
+ * comes from. Search has its own, allowed by default: only the query leaves
+ * the machine, and only to the configured backend, while a fetched URL can
+ * go anywhere and carry anything, so `webfetch` keeps `web`'s ask.
+ */
+export function levelFor(
+  tool: Pick<Tool, 'name' | 'permission' | 'permissionLevel'>,
+  levels: SwitchbackConfig['permissions'],
+): { level: PermissionLevel; key: string } {
+  if (tool.permissionLevel) return { level: tool.permissionLevel, key: tool.permission };
+  // Claude Code's own search tool is `WebSearch`.
+  if (tool.name.toLowerCase() === 'websearch') return { level: levels.websearch, key: 'websearch' };
+  return {
+    level: levels[tool.permission as keyof typeof levels] as PermissionLevel,
+    key: tool.permission,
+  };
 }

@@ -154,7 +154,14 @@ describe('translating an OpenCode config', () => {
       },
     });
     expect(got.permissions).toEqual({
-      levels: { read: 'ask', edit: 'allow', bash: 'ask', web: 'deny', mcp: 'ask' },
+      levels: {
+        read: 'ask',
+        edit: 'allow',
+        bash: 'ask',
+        web: 'ask',
+        websearch: 'deny',
+        mcp: 'ask',
+      },
       allow: [
         'bash(git *)',
         'webfetch(domain:docs.example.com)',
@@ -173,6 +180,7 @@ describe('translating an OpenCode config', () => {
       edit: 'allow',
       bash: 'allow',
       web: 'allow',
+      websearch: 'allow',
       mcp: 'allow',
     });
     expect(fromOpenCode({ tools: { write: false, bash: false } }).permissions?.levels).toEqual({

@@ -546,6 +546,11 @@
           "type": "string",
           "enum": ["allow", "ask", "deny"]
         },
+        "websearch": {
+          "default": "allow",
+          "type": "string",
+          "enum": ["allow", "ask", "deny"]
+        },
         "mcp": {
           "default": "ask",
           "type": "string",

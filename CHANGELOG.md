@@ -10,6 +10,10 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Starting from OpenCode brings its agents and compaction settings.** Agents keep their description, prompt, mode, step limit, and model; tools an agent denies are left out of its tool list. `compaction`'s `auto`, `keep.tokens`, and `buffer` become `enabled`, `keepRecent`, and `threshold`
 - **Models on your own endpoints show up without running setup again.** Each launch asks every OpenAI-compatible provider (vLLM, Ollama, LM Studio, a team's server) what it serves, as it already did for Claude Code and Codex sign-ins, and `/models refresh` asks right away and says what's new or gone. `listModels: false` turns this off for one provider
 
+### Changed
+- **Web search runs without asking.** `permissions.websearch` is a level of its own, default `allow`: only the query leaves the machine, to the search backend. Fetching a page still asks under `permissions.web`, and `web: deny` turns both off
+- **The docs tool tells the model that config changes apply live.** It used to say they needed a restart, so the model told people to restart when they didn't have to
+
 ## [2.2.0] - 2026-10-21
 
 ### Added

@@ -149,7 +149,8 @@ See [routing.md](routing.md#configuration-reference).
 | `read` | `allow` | `read`, `glob`, `grep` |
 | `edit` | `ask` | `write`, `edit` |
 | `bash` | `ask` | `bash` |
-| `web` | `ask` | `webfetch`, `websearch` |
+| `web` | `ask` | `webfetch`; `deny` turns off `websearch` too |
+| `websearch` | `allow` | `websearch`: only the query leaves the machine, to the `web.search` backend ([ADR 0023](adr/0023-search-allowed-by-default.md)) |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
 | `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `plan`, or `bypassPermissions` |
 | `outsideWorkspace` | `ask` | Files outside the workspace: with `ask`, reads follow `read` and edits ask (allow rules that name a folder open it ahead of time); `deny` keeps file tools in the workspace, reads included. See [permissions.md](permissions.md#outside-the-workspace) |
@@ -163,11 +164,11 @@ Personal settings for one project go in `.switchback/config.local.json`. It's re
 
 | Key | Default | Meaning |
 |---|---|---|
-| `search` | Exa | The `websearch` tool's backend: `{ "provider": "exa" }` (Exa's hosted search, which needs no key; an optional `apiKey` raises its rate limits), `{ "provider": "brave", "apiKey": "{env:BRAVE_API_KEY}" }`, `{ "provider": "tavily", "apiKey": "{env:TAVILY_API_KEY}" }`, or `{ "provider": "searxng", "baseUrl": "https://search.example.com" }` (a self-hosted SearXNG with the JSON format enabled). Searches go to that service, so each one asks first unless you allow `websearch`; deny it to keep searches off |
+| `search` | Exa | The `websearch` tool's backend: `{ "provider": "exa" }` (Exa's hosted search, which needs no key; an optional `apiKey` raises its rate limits), `{ "provider": "brave", "apiKey": "{env:BRAVE_API_KEY}" }`, `{ "provider": "tavily", "apiKey": "{env:TAVILY_API_KEY}" }`, or `{ "provider": "searxng", "baseUrl": "https://search.example.com" }` (a self-hosted SearXNG with the JSON format enabled). Searches go to that service without asking; set `permissions.websearch` to `ask` or `deny` to change that |
 | `maxChars` | `100000` | Most characters of a fetched page returned to the model |
 | `timeoutMs` | `30000` | How long a fetch or search may take |
 
-`webfetch` reads a page as Markdown (HTML is converted; other text is returned as is; binary content is refused). It follows redirects on the same host and reports one to another host instead of following it. Both tools are in the `web` permission category (`permissions.web`, default `ask`), and neither runs in a session holding private content, since a URL or query could carry it out.
+`webfetch` reads a page as Markdown (HTML is converted; other text is returned as is; binary content is refused). It follows redirects on the same host and reports one to another host instead of following it. `webfetch` follows `permissions.web` (default `ask`) and `websearch` follows `permissions.websearch` (default `allow`). Neither runs in a session holding private content, since a URL or query could carry it out.
 
 ### `bash`
 
