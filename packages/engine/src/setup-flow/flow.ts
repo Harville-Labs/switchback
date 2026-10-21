@@ -129,6 +129,16 @@ export async function runSetup(
     ...(budget ? { budget } : {}),
   });
   if (imported && Object.keys(imported.mcpServers).length) layer.mcpServers = imported.mcpServers;
+  if (imported?.agents) {
+    const answers = [...locals, ...remotes];
+    layer.agents = Object.fromEntries(
+      Object.entries(imported.agents).map(([name, a]) => {
+        const alias = a.model ? plan[answers.indexOf(a.model)]?.alias : undefined;
+        return [name, alias ? { ...a.config, model: alias } : a.config];
+      }),
+    );
+  }
+  if (imported?.compaction) layer.compaction = imported.compaction;
   const result = writeConfigLayer(file, layer);
   say(
     ui,

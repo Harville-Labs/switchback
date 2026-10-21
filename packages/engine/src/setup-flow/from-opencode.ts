@@ -16,6 +16,12 @@ import { McpServerName } from '../mcp/config.ts';
 import { ruleProblem } from '../permissions/rules.ts';
 import type { LocalAnswer, RemoteAnswer } from '../setup.ts';
 import {
+  type ImportedAgent,
+  OPENCODE_INTERNAL_AGENTS,
+  translateAgents,
+  translateCompaction,
+} from './opencode-agents.ts';
+import {
   envName,
   modelSettings,
   type Obj,
@@ -47,14 +53,15 @@ export interface Imported {
   current?: LocalAnswer | RemoteAnswer;
   mcpServers: Record<string, Obj>;
   permissions?: ImportedPermissions;
+  /** Agent entries, by name; models are setup answers until setup plans aliases. */
+  agents?: Record<string, ImportedAgent>;
+  /** A `compaction` config entry. */
+  compaction?: Obj;
   /** What didn't come over, and why. */
   skipped: string[];
 }
 
 const NAMES = ['opencode.json', 'opencode.jsonc', 'config.json'];
-
-/** Agents OpenCode runs for itself (session titles, summaries); Switchback does these its own way. */
-const OPENCODE_INTERNAL_AGENTS = new Set(['title', 'summary', 'compaction']);
 
 /**
  * OpenCode's config files in its precedence order: global, `OPENCODE_CONFIG`,
@@ -106,17 +113,12 @@ function olderFormat(cfg: Obj): Obj {
       options: { ...obj(p.settings), ...obj(p.options) },
     };
   }
-  // A list read in order, so a later entry for the same pattern wins, as in OpenCode.
-  let permission = cfg.permission;
-  if (permission === undefined && Array.isArray(cfg.permissions)) {
-    const table: Record<string, Obj> = {};
-    for (const raw of cfg.permissions) {
-      const r = obj(raw);
-      const action = str(r.action);
-      if (!action || !isLevel(r.effect)) continue;
-      table[action] = { ...table[action], [str(r.resource) ?? '*']: r.effect };
-    }
-    permission = table;
+  const permission = cfg.permission ?? permissionTable(cfg.permissions);
+  const agent: Obj = {};
+  for (const [name, raw] of Object.entries({ ...obj(cfg.agents), ...obj(cfg.agent) })) {
+    const a = obj(raw);
+    const table = a.permission ?? permissionTable(a.permissions);
+    agent[name] = table === undefined ? a : { ...a, permission: table };
   }
   const { servers, ...mcp } = obj(cfg.mcp);
   for (const [name, raw] of Object.entries(obj(servers))) {
@@ -126,10 +128,23 @@ function olderFormat(cfg: Obj): Obj {
   return {
     ...cfg,
     provider: { ...provider, ...obj(cfg.provider) },
-    agent: { ...obj(cfg.agents), ...obj(cfg.agent) },
+    agent,
     ...(permission !== undefined ? { permission } : {}),
     mcp,
   };
+}
+
+/** The newer `permissions` list as a `permission` table; read in order, so a later entry for the same pattern wins, as in OpenCode. */
+function permissionTable(list: unknown): Obj | undefined {
+  if (!Array.isArray(list)) return undefined;
+  const table: Record<string, Obj> = {};
+  for (const raw of list) {
+    const r = obj(raw);
+    const action = str(r.action);
+    if (!action || !isLevel(r.effect)) continue;
+    table[action] = { ...table[action], [str(r.resource) ?? '*']: r.effect };
+  }
+  return table;
 }
 
 /** Translate a merged OpenCode config, in either format. */
@@ -165,6 +180,7 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
   const locals: LocalAnswer[] = [];
   const remotes: RemoteAnswer[] = [];
   let current: LocalAnswer | RemoteAnswer | undefined;
+  const byRef = new Map<string, LocalAnswer | RemoteAnswer>();
   const keyNoted = new Set<string>();
   for (const ref of refs) {
     const slash = ref.indexOf('/');
@@ -188,7 +204,11 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     const variant = variantName === undefined ? undefined : variantOf(m, variantName);
     const settings = modelSettings(m, variant);
     // A variant that changes nothing, or isn't defined, is the model itself.
-    if (variantName !== undefined && (!variant || !Object.keys(obj(variant.body)).length)) continue;
+    if (variantName !== undefined && (!variant || !Object.keys(obj(variant.body)).length)) {
+      const same = byRef.get(`${pid}/${mid}`);
+      if (same) byRef.set(ref, same);
+      continue;
+    }
     const full = {
       ...answer,
       ...(settings ? { settings } : {}),
@@ -196,6 +216,7 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     };
     if ('kind' in full) remotes.push(full);
     else locals.push(full);
+    byRef.set(ref, full);
     // The model comes before its variants, so a variant named as `model` wins.
     if (ref === str(cfg.model) || ref === bare(cfg.model)) current = full;
   }
@@ -233,7 +254,18 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
   }
 
   const permissions = translatePermissions(cfg, skipped);
-  for (const k of ['agent', 'command', 'plugin', 'plugins', 'formatter', 'lsp'])
+  const agents = translateAgents(
+    obj(cfg.agent),
+    (ref) => byRef.get(ref) ?? byRef.get(bare(ref) ?? ''),
+    Object.keys(mcpServers),
+    skipped,
+  );
+  const compaction = translateCompaction(
+    cfg,
+    current && 'contextWindow' in current ? current.contextWindow : undefined,
+    skipped,
+  );
+  for (const k of ['command', 'plugin', 'plugins', 'formatter', 'lsp'])
     if (
       Object.keys(obj(cfg[k])).length ||
       (Array.isArray(cfg[k]) && cfg[k].length) ||
@@ -247,6 +279,8 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     ...(current ? { current } : {}),
     mcpServers,
     ...(permissions ? { permissions } : {}),
+    ...(Object.keys(agents).length ? { agents } : {}),
+    ...(compaction ? { compaction } : {}),
     skipped,
   };
 }

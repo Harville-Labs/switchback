@@ -62,7 +62,11 @@ describe('translating an OpenCode config', () => {
       },
     ]);
     expect(got.current).toBe(got.remotes[0]);
-    expect(got.skipped).toEqual([expect.stringContaining('agent: Switchback has its own format')]);
+    expect(got.agents?.review).toEqual({
+      config: { description: 'The "review" agent from OpenCode.' },
+      model: expect.objectContaining({ model: 'qwen/qwen3-coder' }),
+    });
+    expect(got.skipped).toEqual([]);
   });
 
   test("cloud providers keep their settings; what can't come over says why", () => {
@@ -96,7 +100,7 @@ describe('translating an OpenCode config', () => {
       expect.stringContaining('github-copilot/gpt-6-sol: Switchback has no "github-copilot"'),
       expect.stringContaining("lab's API key: OpenCode's config holds it"),
       expect.stringContaining('lab/claude-x: @ai-sdk/anthropic at a custom URL'),
-      expect.stringContaining('agent:'),
+      expect.stringContaining("agent a's model openai/gpt-6-sol: that model didn't come over"),
     ]);
   });
 
@@ -226,6 +230,8 @@ describe('setup', () => {
         routing: object;
         mcpServers: object;
         permissions: { allow: string[] };
+        agents?: object;
+        compaction?: object;
       };
     return { env, flags, read };
   }
@@ -240,6 +246,8 @@ describe('setup', () => {
     },
     mcp: { files: { type: 'local', command: ['files-mcp'] } },
     permission: { shell: { 'make *': 'allow' } },
+    agent: { quick: { description: 'Small fixes', model: 'ollama/tiny:1b' } },
+    compaction: { auto: false },
   };
 
   /** Answers questions in order; any other question fails the test. */
@@ -281,6 +289,9 @@ describe('setup', () => {
     });
     expect(cfg.routing).toMatchObject({ current: ['qwen3-coder-30b'], escalate: [['tiny-1b']] });
     expect(cfg.mcpServers).toEqual({ files: { command: 'files-mcp' } });
+    // An agent's model is written as the alias setup gave it.
+    expect(cfg.agents).toEqual({ quick: { description: 'Small fixes', model: 'tiny-1b' } });
+    expect(cfg.compaction).toEqual({ enabled: false });
     // Its rules are added to the ones every new config starts with.
     expect(cfg.permissions.allow).toContain('bash(make *)');
     expect(cfg.permissions.allow).toContain('bash(git status:*)');
