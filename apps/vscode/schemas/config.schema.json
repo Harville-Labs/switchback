@@ -1178,6 +1178,16 @@
         }
       }
     },
+    "updates": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "check": {
+          "default": true,
+          "type": "boolean"
+        }
+      }
+    },
     "privacy": {
       "default": {},
       "type": "object",

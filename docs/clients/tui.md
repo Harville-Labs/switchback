@@ -6,6 +6,10 @@
 
 With no config file anywhere, `switchback` starts setup (`switchback init`) before opening the UI, beginning with "Do you have any local model endpoints?" Answering no to that and to remote providers writes nothing and opens the UI anyway; run `switchback init` later to add models.
 
+## Updates
+
+When a newer release is out, the TUI says so in the chat at launch: `Switchback 2.2.0 is out (you have 2.1.0). Update with switchback update.` It asks GitHub at most once a day and never waits on a slow answer. `updates.check: false` in [config](../configuration.md#updates) turns it off.
+
 ## Resuming
 
 Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most recent session in this workspace, and `switchback --session <id>` opens a specific one. Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).

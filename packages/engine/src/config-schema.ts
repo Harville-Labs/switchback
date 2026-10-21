@@ -257,6 +257,13 @@ export const SwitchbackConfig = z.object({
       endpoint: z.url().default(DEFAULT_TELEMETRY_ENDPOINT),
     })
     .prefault({}),
+  /** The TUI's notice, at launch, that a newer release is out. */
+  updates: z
+    .object({
+      /** Ask GitHub, at most once a day, for the newest release. */
+      check: z.boolean().default(true),
+    })
+    .prefault({}),
   /** Content that must never reach a remote model (docs/privacy.md). */
   privacy: z
     .object({

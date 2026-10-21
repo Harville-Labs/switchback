@@ -237,3 +237,12 @@ export function needsSetup(cwd: string): boolean {
     return false; // a broken config is reported by the command that loads it
   }
 }
+
+/** Whether to look for a newer release at launch (`updates.check`). */
+export function checksForUpdates(cwd: string): boolean {
+  try {
+    return loadConfig(cwd, process.env).config.updates.check;
+  } catch {
+    return false; // a broken config is reported by the command that loads it
+  }
+}

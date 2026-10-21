@@ -17,6 +17,7 @@ import { basename, dirname, join } from 'node:path';
 import { compareVersions } from '@switchback/client';
 import { CLI_VERSION } from '../bootstrap.ts';
 import { bold, dim, green } from '../prompt.ts';
+import { latestRelease, RELEASES_API, runFromSource } from '../update-check.ts';
 
 const RELEASES = 'https://github.com/Harville-Labs/switchback/releases';
 
@@ -84,12 +85,10 @@ async function update(o: SelfUpdateOptions, log: (line: string) => void): Promis
   } catch {
     // Still running (an older shared engine); the next update removes it.
   }
-  // From source (`bun apps/cli/src/main.ts`), process.execPath is bun itself.
-  if (!o.exePath && /^bun(\.exe)?$/i.test(basename(exe)))
+  if (!o.exePath && runFromSource(exe))
     throw new UpdateError('this is a development build run with bun; update it with git pull.');
   const base = (env.SWITCHBACK_DOWNLOAD_URL ?? `${RELEASES}/download`).replace(/\/+$/, '');
-  const api =
-    env.SWITCHBACK_RELEASES_API ?? 'https://api.github.com/repos/Harville-Labs/switchback/releases';
+  const api = env.SWITCHBACK_RELEASES_API ?? RELEASES_API;
   const suffix = releasePlatform(o.platform ?? process.platform, o.arch ?? process.arch);
 
   const fetchOk = async (url: string, what: string) => {
@@ -108,15 +107,11 @@ async function update(o: SelfUpdateOptions, log: (line: string) => void): Promis
 
   let target = o.version?.replace(/^v/, '');
   if (!target) {
-    // The newest release, prereleases included: every 0.x release is one, and
-    // GitHub's "latest" skips them.
-    const res = await fetchOk(`${api}?per_page=1`, 'the latest release').catch(() => {
+    target = await latestRelease(get, api, current).catch(() => {
       throw new UpdateError(
         `couldn't look up the latest release (GitHub's API allows 60 lookups an hour per address). Choose one with --version; see ${RELEASES}.`,
       );
     });
-    const list = (await res.json()) as { tag_name?: string }[];
-    target = list[0]?.tag_name?.replace(/^v/, '');
     if (!target) throw new UpdateError(`found no Switchback releases at ${api}.`);
   }
   if (compareVersions(target, '0.0.0') === undefined)

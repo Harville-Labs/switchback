@@ -252,6 +252,12 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | `enabled` | `false` | Anonymous daily usage statistics. Set with `switchback telemetry on\|off`; a project config can turn it off but not on. See [telemetry.md](telemetry.md) |
 | `endpoint` | `https://app.switchback.sh/api/telemetry/v1` | Where reports are sent |
 
+### `updates`
+
+| Key | Default | |
+|---|---|---|
+| `check` | `true` | At launch, the TUI asks GitHub for the newest release, at most once a day, and says in the chat when one is out. The request sends nothing but Switchback's version, in its user agent. `false` turns it off |
+
 ### Other keys
 
 | Key | Default | |

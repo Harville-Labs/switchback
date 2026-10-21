@@ -1,4 +1,5 @@
 import { fromTranscript, type ViewState } from '@switchback/client';
+import { switchbackPaths } from '@switchback/engine';
 import type {
   EffortLevel,
   PermissionMode,
@@ -6,10 +7,14 @@ import type {
   SessionSummary,
 } from '@switchback/protocol';
 import { render } from 'ink';
-import { type CommonFlags, connectShared } from '../bootstrap.ts';
+import { CLI_VERSION, type CommonFlags, checksForUpdates, connectShared } from '../bootstrap.ts';
+import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
 import { mouseInput } from './mouse.ts';
 import { savedTheme } from './theme.ts';
+
+/** How long launch waits on a release lookup still running once the session is ready. */
+const UPDATE_WAIT_MS = 300;
 
 export async function tui(
   opts: CommonFlags & {
@@ -31,6 +36,10 @@ export async function tui(
     );
     return 2;
   }
+  const update =
+    opts.mock || runFromSource(process.execPath) || !checksForUpdates(opts.cwd)
+      ? undefined
+      : newerRelease({ dataDir: switchbackPaths().dataDir, current: CLI_VERSION, now: new Date() });
   const { client, init, warnings } = await connectShared(opts, 'switchback-tui');
   let session: SessionSummary | undefined;
   let history: ViewState | undefined;
@@ -60,6 +69,9 @@ export async function tui(
         effort: opts.effort,
       })),
     };
+  // The lookup runs while the engine starts; one still out by now never holds up the launch.
+  const latest = await Promise.race([update, Bun.sleep(UPDATE_WAIT_MS)]);
+  if (latest) warnings.push(updateNotice(latest, CLI_VERSION));
   const mouse = mouseInput();
   let open = session;
   const app = render(
