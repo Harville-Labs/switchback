@@ -95,7 +95,7 @@ A shared daemon sends every attached client every session's events, so a client 
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config); carries `org` and human-readable `notes` |
 | `setup.ask` | A setup question for the client that started it (`setupId`, `requestId`, `question`: text, number, confirm, select, multiSelect, or search, with options and a default). A text question with `secret: true` (an API key) should hide what's typed |
-| `setup.note` | Something setup tells the person between questions: text with a tone, the roles (`/roles`), or the config about to be written |
+| `setup.note` | Something setup tells the person between questions: text with a tone, or the roles (`/roles`) |
 | `setup.finished` | How setup ended: `written` (with `file`), `nothing`, `cancelled`, or `failed` (with `message`) |
 | `log` | Engine diagnostics |
 

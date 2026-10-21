@@ -271,8 +271,6 @@ describe('setup', () => {
       ['Coming from another coding agent?', 'opencode'],
       ['Add other models too?', false],
       ['Which model does what', 'done'],
-      ['Write it?', true],
-      ['test or build commands', []],
     ]);
     const result = await runSetup(m.flags, ui, { env: m.env });
     expect(result.outcome).toBe('written');

@@ -53,10 +53,6 @@ export function drawNote(note: SetupNote): string {
       .split('\n')
       .map((l) => `  ${l}`)
       .join('\n');
-  if (note.kind === 'config') {
-    const [head, ...json] = formatSetupNote(note).split('\n');
-    return `\n${bold(head ?? '')}\n${json.join('\n')}\n`;
-  }
   switch (note.tone) {
     case 'heading':
       return `\n${bold(note.text)}`;

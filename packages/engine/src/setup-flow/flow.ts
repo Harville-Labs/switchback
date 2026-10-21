@@ -8,7 +8,6 @@
  */
 import { existsSync } from 'node:fs';
 import type { detectLocalServers, listModels } from '@switchback/providers';
-import { redactConfig } from '../config.ts';
 import { projectPaths, switchbackPaths } from '../paths.ts';
 import { buildSetupConfig, planModels, type SetupAnswers, writeConfigLayer } from '../setup.ts';
 import { SetupError, type SetupFlags } from './flags.ts';
@@ -130,18 +129,13 @@ export async function runSetup(
     ...(budget ? { budget } : {}),
   });
   if (imported && Object.keys(imported.mcpServers).length) layer.mcpServers = imported.mcpServers;
-  if (p) {
-    // Pasted keys aren't shown back.
-    p.note({ kind: 'config', file, layer: redactConfig(layer) as Record<string, unknown> });
-    if (!(await p.confirm('Write it?'))) return { outcome: 'nothing', file };
-  }
   const result = writeConfigLayer(file, layer);
   say(
     ui,
     `Wrote ${result.file}${result.backup ? ` (previous version: ${result.backup})` : ''}`,
     'success',
   );
-  await setupUserPermissions(flags, ui, deps.env, imported?.permissions);
+  await setupUserPermissions(ui, deps.env, imported?.permissions);
   return {
     outcome: 'written',
     file: result.file,

@@ -81,8 +81,6 @@ test('a client runs the whole setup over the protocol, and the config is written
     ['Which model does what', index('Looks good')],
     ['Daily remote budget', () => ''],
     ['Monthly remote budget', () => 5],
-    ['Write it?', () => true],
-    ['Should any test or build commands', () => []],
   ]);
   expect(asked[0]).toBe('Do you have any local model endpoints?');
   expect(done).toMatchObject({ outcome: 'written', file: join(home, 'config.json') });
@@ -102,10 +100,9 @@ test('a client runs the whole setup over the protocol, and the config is written
   // Applied live, so every client of a shared engine sees the new models.
   expect(events.some((e) => e.type === 'config.updated')).toBe(true);
   expect((await c.request('session.create', {})).id).toBeTruthy();
-  // Clients draw these themselves: the roles and the config before it's written.
+  // Clients draw these themselves.
   const notes = events.flatMap((e) => (e.type === 'setup.note' ? [e.note.kind] : []));
   expect(notes).toContain('roles');
-  expect(notes).toContain('config');
 });
 
 test('answering null cancels setup, and nothing is written', async () => {

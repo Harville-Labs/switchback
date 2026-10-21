@@ -209,11 +209,3 @@ test('init gives a new user config the default permissions, once', () => {
     rmSync(ws, { recursive: true, force: true });
   }
 }, 30_000);
-
-test('setup names the commands a preset allows', async () => {
-  const { presetCommands } = await import('@switchback/engine');
-  expect(presetCommands(['bash(bun test:*)', 'bash(bun run test:*)', 'bash(bun run lint:*)'])).toBe(
-    'bun test, bun run test/lint',
-  );
-  expect(presetCommands(['bash(go test:*)', 'bash(go vet:*)'])).toBe('go test, go vet');
-});

@@ -104,7 +104,7 @@ Tool names are case-insensitive (`Bash` is `bash`); `glob` and `grep` are read r
 - **Allow:** read-only commands: `ls`, `pwd`, `cat`, `head`, `tail`, `wc`, `stat`, `du`, `diff`, `which`, `find`, `grep`, `rg`, and `git status`, `log`, `diff`, `show`, `blame`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, and plain `git branch`.
 - **Ask:** options that make those write or run other programs (`find -exec`, `-ok`, `-delete`, `-fprint`, `-fls`; `rg --pre`; `git ... --output`), which beat the allows, and commands that publish work or rewrite history, so they ask even with `permissions.bash: "allow"`: `git commit`, `git push`, `git rebase`, `git reset --hard`, `git clean`, `gh pr create`, `gh pr merge`, `gh release`, and `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`.
 
-Setup also offers presets for test, build, and lint commands (Bun, npm, pnpm, Cargo, Go, Python), checking the ones the workspace's files point to. Re-running setup adds presets to your rules and never removes one; the defaults are written only into a config that has no rules yet. When you sign in to an organization, its permissions replace these ([organizations.md](organizations.md#permissions)).
+Setup also allows the common test, build, and lint commands (Bun, npm, pnpm, Cargo, Go, Python), which run inside the sandbox. Re-running setup adds them to your rules and never removes one; the defaults are written only into a config that has no rules yet. When you sign in to an organization, its permissions replace these ([organizations.md](organizations.md#permissions)).
 
 ### Answering a prompt
 

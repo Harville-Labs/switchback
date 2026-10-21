@@ -37,9 +37,7 @@ export type SetupNote =
       kind: 'roles';
       roles: SessionRoles;
       models: { alias: string; ref: ModelRef; tier: Tier }[];
-    }
-  /** The config layer about to be written. */
-  | { kind: 'config'; file: string; layer: Record<string, unknown> };
+    };
 
 export const SetupStartParams = z.object({
   /** Where the models go; the user config unless `project`. */
