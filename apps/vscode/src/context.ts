@@ -4,12 +4,13 @@
  */
 import type { Attachment } from '@switchback/protocol';
 import * as vscode from 'vscode';
+import { type Problem, problemsText } from './problems.ts';
 
 export interface EditorContextState {
   /** Workspace-relative path of the active file, when it's in the workspace. */
   file?: string;
   selection?: { path: string; startLine: number; endLine: number };
-  /** Errors and warnings in the active file. */
+  /** Errors and warnings in the workspace's files. */
   problems: number;
 }
 
@@ -18,8 +19,6 @@ export interface AttachChoice {
   selection?: boolean;
   problems?: boolean;
 }
-
-const MAX_PROBLEMS = 50;
 
 export class EditorContext implements vscode.Disposable {
   private readonly subs: vscode.Disposable[] = [];
@@ -49,14 +48,30 @@ export class EditorContext implements vscode.Disposable {
     return rel === uri.fsPath || rel.startsWith('..') ? undefined : rel.replaceAll('\\', '/');
   }
 
+  /** Errors and warnings in workspace files, as the Problems panel has them. */
+  private problems(): Problem[] {
+    return vscode.languages.getDiagnostics().flatMap(([uri, diags]) => {
+      const path = this.relative(uri);
+      if (!path) return [];
+      return diags
+        .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning)
+        .map((d) => ({
+          path,
+          line: d.range.start.line + 1,
+          column: d.range.start.character + 1,
+          severity: d.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning',
+          message: d.message,
+          ...(d.source ? { source: d.source } : {}),
+        }));
+    });
+  }
+
   state(): EditorContextState {
+    const problems = this.problems().length;
     const e = this.editor();
-    if (!e) return { problems: 0 };
+    if (!e) return { problems };
     const path = this.relative(e.document.uri) as string;
     const sel = e.selection;
-    const problems = vscode.languages
-      .getDiagnostics(e.document.uri)
-      .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning).length;
     return {
       file: path,
       ...(sel.isEmpty
@@ -81,28 +96,14 @@ export class EditorContext implements vscode.Disposable {
     const out: Attachment[] = [];
     if (choice.selection && s.selection) out.push({ kind: 'file', ...s.selection });
     else if (choice.file && s.file) out.push({ kind: 'file', path: s.file });
-    if (choice.problems && s.file) {
-      const e = this.editor();
-      const diags = e
-        ? vscode.languages
-            .getDiagnostics(e.document.uri)
-            .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning)
-            .slice(0, MAX_PROBLEMS)
-        : [];
-      if (diags.length) {
-        const sev = (d: vscode.Diagnostic) =>
-          d.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning';
+    if (choice.problems) {
+      const problems = this.problems();
+      if (problems.length)
         out.push({
           kind: 'text',
-          label: `Problems in ${s.file}`,
-          text: diags
-            .map(
-              (d) =>
-                `${s.file}:${d.range.start.line + 1}:${d.range.start.character + 1} ${sev(d)}: ${d.message}${d.source ? ` (${d.source})` : ''}`,
-            )
-            .join('\n'),
+          label: 'Problems in the workspace (VS Code)',
+          text: problemsText(problems, s.file),
         });
-      }
     }
     return out;
   }

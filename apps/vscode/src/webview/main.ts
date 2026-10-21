@@ -531,7 +531,7 @@ function sendPrompt(text: string, delivery?: 'interrupt') {
       ? `${ctx.selection.path}:${ctx.selection.startLine}-${ctx.selection.endLine}`
       : '',
     choice.file ? ctx.file : '',
-    choice.problems ? `problems in ${ctx.file}` : '',
+    choice.problems ? `${ctx.problems} problems in the workspace` : '',
   ].filter(Boolean);
   if (sent.length) view = addInfo(view, sent.map((x) => `📎 ${x}`).join('\n'));
   vscode.postMessage({
@@ -594,9 +594,8 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       setTabs(
         m.tab === 'new'
           ? openTab(t, m.session, addInfo(initialView(m.session.id), note))
-          : replaceActive(t, m.session, (v) =>
-              addInfo({ ...initialView(m.session.id), items: v.items }, note),
-            ),
+          : // A new session starts on a clear chat; the last one stays in /resume.
+            replaceActive(t, m.session, () => addInfo(initialView(m.session.id), note)),
       );
       break;
     }

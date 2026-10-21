@@ -371,3 +371,14 @@ test('tabs: a new tab, a background turn, the dashboard, and closing', async () 
   window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   expect($('#dash').hidden).toBe(true);
 });
+
+test('a new session clears the chat; the last one stays in the history', async () => {
+  await send({ type: 'info', text: 'from the last session' });
+  expect($('#log').textContent).toContain('from the last session');
+  await send({ type: 'session', session: { ...session, id: 's9' } });
+  expect($('#log').textContent).not.toContain('from the last session');
+  expect($('#log').textContent).toContain('new session · agent build');
+  type('/resume');
+  key('Enter');
+  expect(posted.at(-1)).toEqual({ type: 'command', name: 'resume', args: [] });
+});
