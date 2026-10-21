@@ -163,7 +163,10 @@ describe('the subagent view', () => {
     });
     await tick();
     ui.stdin.write(ALT_DOWN);
-    expect(await frameWith(ui, '↳ viewing explore')).toContain('↳ explore · find the parser');
+    // The status bar can show the subagent a frame before the transcript does.
+    const frame = await frameWith(ui, '↳ explore · find the parser');
+    expect(frame).toContain('↳ explore · find the parser');
+    expect(frame).toContain('↳ viewing explore');
     expect(await frameWith(ui, 'looking in src/')).toContain('looking in src/');
     ui.stdin.write('/model');
     await tick();
