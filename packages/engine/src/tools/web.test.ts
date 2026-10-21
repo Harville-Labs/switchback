@@ -116,10 +116,46 @@ describe('websearch', () => {
     expect(seen).toHaveLength(2);
   });
 
-  test('says how to set it up when no backend is configured', async () => {
-    await expect(webSearchTool.run({ query: 'anything' }, ctx({}))).rejects.toThrow(
-      'configure web.search',
+  test('with no backend configured, searches through Exa without a key', async () => {
+    const calls: { url: string; method?: string; params?: unknown }[] = [];
+    // Exa's MCP server, as far as the SDK's client needs it: initialize, then tools/call.
+    const exa: Fetch = async (input, init) => {
+      const url = String(input);
+      if (init?.method !== 'POST') return new Response(null, { status: 405 });
+      const msg = JSON.parse(String(init.body)) as {
+        id?: number;
+        method: string;
+        params?: { protocolVersion?: string };
+      };
+      calls.push({ url, method: msg.method, params: msg.params });
+      if (msg.id === undefined) return new Response(null, { status: 202 });
+      const result =
+        msg.method === 'initialize'
+          ? {
+              protocolVersion: msg.params?.protocolVersion,
+              capabilities: { tools: {} },
+              serverInfo: { name: 'exa', version: '1' },
+            }
+          : {
+              content: [
+                {
+                  type: 'text',
+                  text: 'Title: Bun\nURL: https://bun.sh\nText: A fast\n  runtime.\n\n---\n\nTitle: N/A\nURL: https://bun.sh/docs\nText: Docs',
+                },
+              ],
+            };
+      return Response.json({ jsonrpc: '2.0', id: msg.id, result });
+    };
+    const out = await webSearchTool.run({ query: 'bun runtime' }, ctx({ fetch: exa }));
+    expect(out).toBe(
+      '1. Bun\n   https://bun.sh\n   A fast runtime.\n\n2. https://bun.sh/docs\n   https://bun.sh/docs\n   Docs',
     );
+    const call = calls.find((c) => c.method === 'tools/call');
+    expect(call?.url).toBe('https://mcp.exa.ai/mcp');
+    expect(call?.params).toEqual({
+      name: 'web_search_exa',
+      arguments: { query: 'bun runtime', numResults: 8 },
+    });
   });
 });
 

@@ -15,7 +15,7 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `bash_output` | none | Read new output from a background shell |
 | `kill_shell` | none | Stop a background shell |
 | `webfetch` | web | Read a web page as Markdown |
-| `websearch` | web | Search the web through the configured backend ([configuration.md](configuration.md#web)) |
+| `websearch` | web | Search the web through the configured backend, or Exa when none is set ([configuration.md](configuration.md#web)) |
 | `todo` | none | Keep a checklist for multi-step work; each call replaces the list |
 | `skill` | none | Load a [skill](commands-and-skills.md#skills): its instructions, or one of its files |
 | `merge_worktree` | edit (always asks) | Merge a branch an [isolated subagent](subagents.md#worktree-isolation) left into your checked-out branch, after you see the diff |

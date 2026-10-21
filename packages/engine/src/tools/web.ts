@@ -1,12 +1,12 @@
 /**
  * The web tools. `webfetch` reads a page as Markdown; `websearch` asks the
- * configured search backend. Both are in the `web` permission category, and
+ * configured search backend, or Exa when none is. Both are in the `web` permission category, and
  * neither runs in a session holding private content: a URL or a query could
  * carry it out.
  */
 import TurndownService from 'turndown';
 import { z } from 'zod';
-import { type Fetch, type SearchConfig, search } from './search.ts';
+import { DEFAULT_SEARCH, type Fetch, type SearchConfig, search } from './search.ts';
 import { defineTool, type ToolContext, ToolError, truncate } from './tool.ts';
 
 export interface WebSettings {
@@ -94,13 +94,9 @@ export const webSearchTool = defineTool({
   summarize: (i) => `search "${i.query}"`,
   async run(input, ctx) {
     const settings = web(ctx);
-    if (!settings.search)
-      throw new ToolError(
-        'web search is not set up; configure web.search (Brave, Tavily, or SearXNG) in the Switchback config',
-      );
     const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(settings.timeoutMs)]);
     const results = await search(
-      settings.search,
+      settings.search ?? DEFAULT_SEARCH,
       input.query,
       input.count ?? 8,
       signal,

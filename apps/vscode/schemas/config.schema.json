@@ -570,6 +570,20 @@
               "properties": {
                 "provider": {
                   "type": "string",
+                  "const": "exa"
+                },
+                "apiKey": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["provider"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
                   "const": "brave"
                 },
                 "apiKey": {

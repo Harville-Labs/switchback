@@ -153,7 +153,7 @@ Personal settings for one project go in `.switchback/config.local.json`. It's re
 
 | Key | Default | Meaning |
 |---|---|---|
-| `search` | unset | The `websearch` tool's backend: `{ "provider": "brave", "apiKey": "{env:BRAVE_API_KEY}" }`, `{ "provider": "tavily", "apiKey": "{env:TAVILY_API_KEY}" }`, or `{ "provider": "searxng", "baseUrl": "https://search.example.com" }` (a self-hosted SearXNG with the JSON format enabled). Without one, `websearch` tells the model it isn't set up |
+| `search` | Exa | The `websearch` tool's backend: `{ "provider": "exa" }` (Exa's hosted search, which needs no key; an optional `apiKey` raises its rate limits), `{ "provider": "brave", "apiKey": "{env:BRAVE_API_KEY}" }`, `{ "provider": "tavily", "apiKey": "{env:TAVILY_API_KEY}" }`, or `{ "provider": "searxng", "baseUrl": "https://search.example.com" }` (a self-hosted SearXNG with the JSON format enabled). Searches go to that service, so each one asks first unless you allow `websearch`; deny it to keep searches off |
 | `maxChars` | `100000` | Most characters of a fetched page returned to the model |
 | `timeoutMs` | `30000` | How long a fetch or search may take |
 
