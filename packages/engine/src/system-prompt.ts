@@ -7,11 +7,27 @@ export const INSTRUCTION_HEADINGS = {
 } as const;
 
 /**
- * Every session gets this, whatever the ladder: roles can change mid-session,
- * and the prompt is frozen at creation (invariant 7).
+ * How to use what Switchback adds to the model's own tools: subagents and
+ * their tabs, escalation, the docs and config. Every session gets it,
+ * whatever the ladder, since roles can change mid-session and the prompt is
+ * frozen at creation (invariant 7). Coding agent CLIs (Claude Code, Codex)
+ * get it with each turn, beside the same tools served over MCP.
  */
-const ESCALATION = `# Escalating to a stronger model
-You are one of several models the user has set up; some are stronger, and may cost money. When the task is beyond you (you keep failing at it, it needs deeper reasoning than you can give, or you are unsure of a change that matters), call the escalate tool with a short reason. Your next step then runs on the next model up, if there is one and the user's settings allow it; the user may be asked first. Don't escalate for routine work or before trying.`;
+export function switchbackGuide(delegates: boolean): string {
+  const lines = [
+    '# Working in Switchback',
+    "You are running inside Switchback, a coding agent that routes each step between the user's local and remote models. The user follows your work in its terminal UI or in VS Code. Besides your usual tools, Switchback gives you these:",
+  ];
+  if (delegates)
+    lines.push(
+      '- **Subagents (task).** Delegate a self-contained piece of work, such as a broad search, an independent change, or a review, to one of Switchback\'s agents. Each runs on its own model with a fresh context and shows up as its own tab, which the user can open to watch it. Give a complete brief: it can\'t see this conversation. Start several in one response to run them in parallel; with background: true, its report arrives later as a message while you keep working. For parallel edits, use isolation: "worktree" and bring the branch back with merge_worktree. When the user asks for a subagent, use this tool rather than any subagent feature of your own.',
+    );
+  lines.push(
+    "- **Escalation (escalate).** You are one of several models the user has set up; some are stronger, and may cost money. When the task is beyond you (you keep failing at it, it needs deeper reasoning than you can give, or you are unsure of a change that matters), call escalate with a short reason. The work then moves to the next model up, if there is one and the user's settings allow it; the user may be asked first. Don't escalate for routine work or before trying.",
+    "- **Switchback itself (docs).** Before you answer a question about Switchback or change its settings (models, routing, budgets, permissions, providers and keys, MCP servers, hooks, agents, skills), read the relevant page with the docs tool. It names the config files; edit them as documented and Switchback picks up the change without a restart. Don't guess at keys or commands.",
+  );
+  return lines.join('\n');
+}
 
 export interface SystemPromptParts {
   agent: AgentDefinition;
@@ -53,7 +69,7 @@ export function systemPrompt({
   const sections = [
     agent.prompt,
     `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${shell}\nFile paths in tool calls are relative to the workspace root.`,
-    ESCALATION,
+    switchbackGuide(!agent.tools || agent.tools.includes('task')),
   ];
   if (user) sections.push(`# ${INSTRUCTION_HEADINGS.user}\n${user.trim()}`);
   if (project) sections.push(`# ${INSTRUCTION_HEADINGS.project}\n${project.trim()}`);

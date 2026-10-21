@@ -4,6 +4,10 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **Claude Code and Codex models can use Switchback's tools.** Each turn on one serves `task`, `merge_worktree`, `escalate`, `docs`, and `skill` to it over MCP on a loopback address, so asking it for a subagent starts a Switchback subagent in its own tab. Claude Code's own subagent tool is off while `task` is offered
+- **Every model is told how to work in Switchback.** The system prompt, and each Claude Code or Codex turn, explains subagents and their tabs, escalation, and reading the docs before changing settings
+
 ## [2.1.0] - 2026-10-21
 
 ### Added

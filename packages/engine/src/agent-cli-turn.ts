@@ -3,17 +3,25 @@
  * signed in): the CLI works the turn with its own tools and its own session,
  * and its answer joins the transcript like any model's.
  *
+ * It gets Switchback's instructions and the tools only Switchback has
+ * (subagents, escalate, docs, skills), served over MCP, so it can work the
+ * way any model in the session does.
+ *
  * The CLI keeps its own context between its turns (its session is resumed),
  * so it's told only what it hasn't seen: what happened since its last turn,
  * as a digest, then the request.
  */
-import type { Message } from '@switchback/protocol';
+import type { Message, ToolResultPart } from '@switchback/protocol';
 import { AgentCliProvider } from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
 import { renderForSummary } from './compaction.ts';
 import type { ExternalRuntimes } from './external-runtime.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { AgentCliConfig } from './runtimes/index.ts';
+import { switchbackGuide } from './system-prompt.ts';
+import type { ToolCall } from './tool-runner.ts';
+import { serveTools } from './tool-server.ts';
+import { type Tool, type ToolContext, toolSpec } from './tools/index.ts';
 
 /** At most this much of the digest is sent (the most recent part). */
 const MAX_DIGEST_CHARS = 30_000;
@@ -48,18 +56,61 @@ export function handoffPrompt(messages: Message[], seen: number): string {
     .join('\n\n');
 }
 
+/**
+ * Switchback's tools a CLI gets beside its own: the ones it has no
+ * equivalent of. Its own file, shell, web, todo, and plan tools stay its own.
+ */
+const SHARED_TOOLS = ['task', 'merge_worktree', 'escalate', 'docs', 'skill'];
+
+/** The session's tools, as the agent loop has them for this turn. */
+export interface SessionTools {
+  tools: Tool[];
+  catalog: ToolContext['agentCatalog'];
+  /** Runs a call the way a model's calls are run: validated, gated, reported. */
+  run(call: ToolCall): Promise<ToolResultPart>;
+}
+
+/**
+ * What the CLI is told beside its own instructions: how to use Switchback,
+ * and the skills it can load.
+ */
+export function cliInstructions(names: string[], skills: string | undefined): string {
+  return [switchbackGuide(names.includes('task')), skills].filter(Boolean).join('\n\n');
+}
+
 /** Run the turn on the CLI and record its answer. */
 export async function runAgentCliTurn(
   host: EngineHost,
   external: ExternalRuntimes,
   s: LiveSession,
   model: ModelInfo,
+  session: SessionTools,
+  skills: string | undefined,
   turnId: string,
   signal: AbortSignal,
 ): Promise<'end_turn' | 'error' | 'cancelled'> {
   const cfg = host.config().providers[model.ref.provider] as AgentCliConfig;
   const prompt = handoffPrompt(s.messages, s.agentSeen?.[model.alias] ?? 0);
-  const r = await external.runAsModel(s, model, cfg, prompt, turnId, signal);
+  const shared = session.tools.filter((t) => SHARED_TOOLS.includes(t.name));
+  const names = shared.map((t) => t.name);
+  const server = serveTools(
+    shared.map((t) => toolSpec(t, { agentCatalog: session.catalog })),
+    (name, input) => session.run({ id: `call_${crypto.randomUUID().slice(0, 8)}`, name, input }),
+  );
+  const r = await external
+    .runAsModel(
+      s,
+      model,
+      cfg,
+      {
+        prompt,
+        instructions: cliInstructions(names, skills),
+        tools: { url: server.url, headers: server.headers, names },
+      },
+      turnId,
+      signal,
+    )
+    .finally(() => server.close());
   if (signal.aborted) return 'cancelled';
   if (!r.ok) {
     s.lastError = r.text;

@@ -27,6 +27,7 @@ import { SessionControls } from './session-controls.ts';
 import { newSessionId, SessionFactory } from './session-factory.ts';
 import { SessionPolicy } from './session-policy.ts';
 import { SessionRegistry } from './session-registry.ts';
+import { skillsSection } from './skills.ts';
 import { MemorySessionStore } from './store.ts';
 import { Subagents } from './subagents.ts';
 import { ToolRunner } from './tool-runner.ts';
@@ -211,6 +212,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     agent: (name) => agents.get(name),
     subagentsOf: (agent) => agents.subagentsOf(agent),
     mcp: () => io.mcp(),
+    skills: () => skillsSection(library.skills().values()),
     interaction: () => options.interaction ?? 'prompt',
     beforeStep: (s, turnId) => {
       subagents.drainInbox(s);

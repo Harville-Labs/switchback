@@ -16,6 +16,10 @@ export interface RuntimeTask {
   /** Working directory (the workspace, or the subagent's worktree). */
   cwd: string;
   signal: AbortSignal;
+  /** Switchback's instructions, beside the runtime's own (a CLI model's turn). */
+  instructions?: string;
+  /** Switchback's own tools, served over MCP for this run (a CLI model's turn). */
+  tools?: RuntimeTools;
   /** Remote spend allowed for this run, when the agent has a budget. */
   budgetUsd?: number;
   /** Asked before every tool call; the engine applies its permission policy. */
@@ -25,6 +29,16 @@ export interface RuntimeTask {
   ): Promise<{ allowed: boolean; message?: string }>;
   onEvent(event: RuntimeEvent): void;
 }
+
+export interface RuntimeTools {
+  url: string;
+  headers: Record<string, string>;
+  /** Their names on the server, which is named `switchback`. */
+  names: string[];
+}
+
+/** How long one call to Switchback's tools may take: a subagent can run a long time. */
+export const TOOL_CALL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 export interface RuntimeResult {
   ok: boolean;

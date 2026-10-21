@@ -11,9 +11,13 @@ import type { AgentDefinition } from './agents.ts';
 import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
 import { privateToolUse } from './privacy.ts';
 import { type AgentCliConfig, createRuntime, runtimeForModel } from './runtimes/index.ts';
-import type { AgentRuntime, RuntimeResult } from './runtimes/runtime.ts';
+import type { AgentRuntime, RuntimeResult, RuntimeTools } from './runtimes/runtime.ts';
 import type { InvocationBudget } from './subagents.ts';
+import { TOOL_SERVER_NAME } from './tool-server.ts';
 import type { Tool, ToolContext } from './tools/index.ts';
+
+/** Calls to Switchback's own tools, which the tool runner gates and reports itself. */
+const OWN_TOOL = `mcp__${TOOL_SERVER_NAME}__`;
 
 export interface ExternalRuntimeDeps {
   /** Runtimes supplied by the embedder (tests), overriding config. */
@@ -113,14 +117,15 @@ export class ExternalRuntimes {
   /**
    * A turn routed to a coding agent CLI the user is signed in to (a
    * `claude-code` or `codex` model): the CLI works it with its own tools,
-   * resuming its session from the session's last turn there. The result is
-   * the session's answer; the agent loop records it.
+   * resuming its session from the session's last turn there, with
+   * Switchback's instructions and its own tools beside the CLI's. The result
+   * is the session's answer; the agent loop records it.
    */
   async runAsModel(
     s: LiveSession,
     model: ModelInfo,
     cfg: AgentCliConfig,
-    prompt: string,
+    task: { prompt: string; instructions: string; tools: RuntimeTools },
     turnId: string,
     signal: AbortSignal,
   ): Promise<{ ok: boolean; text: string }> {
@@ -134,7 +139,7 @@ export class ExternalRuntimes {
       };
     const resume = s.agentSessions?.[model.alias];
     const r = await this.drive(s, runtime, turnId, signal, {
-      prompt,
+      ...task,
       ...(resume ? { resume } : {}),
       record: {
         rule: 'agent-cli',
@@ -155,6 +160,8 @@ export class ExternalRuntimes {
     signal: AbortSignal,
     task: {
       prompt: string;
+      instructions?: string;
+      tools?: RuntimeTools;
       resume?: string;
       budgetUsd?: number;
       /** How its usage is recorded; `free` for calls a subscription covers. */
@@ -171,10 +178,13 @@ export class ExternalRuntimes {
       prompt: task.prompt,
       cwd: ctx.workspaceRoot,
       signal,
+      ...(task.instructions ? { instructions: task.instructions } : {}),
+      ...(task.tools ? { tools: task.tools } : {}),
       ...(task.resume ? { resume: task.resume } : {}),
       ...(task.budgetUsd !== undefined ? { budgetUsd: task.budgetUsd } : {}),
       canUseTool: (tool, input) => this.canUseTool(s, ctx, tool, input, signal),
       onEvent: (ev) => {
+        if (ev.type !== 'text' && ev.name.startsWith(OWN_TOOL)) return;
         if (ev.type === 'text')
           this.host.emit({ type: 'text.delta', ...scope(s), turnId, text: ev.text });
         else if (ev.type === 'tool.started')
@@ -215,6 +225,7 @@ export class ExternalRuntimes {
     input: unknown,
     signal: AbortSignal,
   ): Promise<{ allowed: boolean; message?: string }> {
+    if (tool.startsWith(OWN_TOOL)) return { allowed: true };
     // The runtime's model is remote: it may not read private files.
     const i = (input ?? {}) as Record<string, unknown>;
     const matches = this.host.privatePaths();

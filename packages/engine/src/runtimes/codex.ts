@@ -10,7 +10,12 @@
  */
 import type { Codex, CodexOptions, ThreadEvent, ThreadOptions } from '@openai/codex-sdk';
 import { costUsd, priceFor } from '@switchback/providers';
-import type { AgentRuntime, RuntimeResult, RuntimeTask } from './runtime.ts';
+import {
+  type AgentRuntime,
+  type RuntimeResult,
+  type RuntimeTask,
+  TOOL_CALL_TIMEOUT_MS,
+} from './runtime.ts';
 
 export interface CodexRuntimeOptions {
   /** Runtime name from config, used as the ledger's provider. */
@@ -25,18 +30,32 @@ export interface CodexRuntimeOptions {
   codex?: Pick<Codex, 'startThread' | 'resumeThread'>;
 }
 
+/** Switchback's tools as an MCP server in Codex's config. */
+function switchbackTools(tools: NonNullable<RuntimeTask['tools']>): CodexOptions['config'] {
+  return {
+    mcp_servers: {
+      switchback: {
+        url: tools.url,
+        http_headers: tools.headers,
+        tool_timeout_sec: TOOL_CALL_TIMEOUT_MS / 1000,
+      },
+    },
+  };
+}
+
 export class CodexRuntime implements AgentRuntime {
   readonly label = 'OpenAI Codex';
   readonly unaskedReads = true;
 
   constructor(private readonly options: CodexRuntimeOptions) {}
 
-  private async codex(): Promise<Pick<Codex, 'startThread' | 'resumeThread'>> {
+  private async codex(task: RuntimeTask): Promise<Pick<Codex, 'startThread' | 'resumeThread'>> {
     if (this.options.codex) return this.options.codex;
     // Loaded on first use: most sessions never start an external runtime.
     const { Codex } = await import('@openai/codex-sdk');
     const path = this.options.executable ?? Bun.which('codex') ?? undefined;
     const opts: CodexOptions = {
+      ...(task.tools ? { config: switchbackTools(task.tools) } : {}),
       ...(path ? { codexPathOverride: path } : {}),
       ...(this.options.apiKey ? { apiKey: this.options.apiKey } : {}),
     };
@@ -60,7 +79,7 @@ export class CodexRuntime implements AgentRuntime {
         calls: [],
       };
     try {
-      const codex = await this.codex();
+      const codex = await this.codex(task);
       const options: ThreadOptions = {
         workingDirectory: task.cwd,
         sandboxMode: sandbox,
@@ -74,7 +93,10 @@ export class CodexRuntime implements AgentRuntime {
       const thread = task.resume
         ? codex.resumeThread(task.resume, options)
         : codex.startThread(options);
-      const { events } = await thread.runStreamed(task.prompt, { signal: task.signal });
+      // Codex takes no extra system prompt, so a new thread hears the instructions first.
+      const prompt =
+        task.instructions && !task.resume ? `${task.instructions}\n\n${task.prompt}` : task.prompt;
+      const { events } = await thread.runStreamed(prompt, { signal: task.signal });
       let last = '';
       let sessionId: string | undefined;
       for await (const event of events) {

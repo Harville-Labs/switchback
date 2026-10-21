@@ -7,7 +7,12 @@
  * Switchback: the `claude` on PATH is used unless `executable` says otherwise.
  */
 import type { Options, Query, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentRuntime, RuntimeResult, RuntimeTask } from './runtime.ts';
+import {
+  type AgentRuntime,
+  type RuntimeResult,
+  type RuntimeTask,
+  TOOL_CALL_TIMEOUT_MS,
+} from './runtime.ts';
 
 export interface ClaudeAgentSdkOptions {
   /** Runtime name from config, used as the ledger's provider. */
@@ -25,6 +30,25 @@ function blockText(content: unknown): string {
   return content
     .map((b: { type?: string; text?: string }) => (b.type === 'text' ? (b.text ?? '') : ''))
     .join('');
+}
+
+/**
+ * Switchback's tools as an MCP server. When they include `task`, Claude
+ * Code's own subagents are turned off, so subagents run as Switchback's,
+ * in their own tabs, on the models the user routed them to.
+ */
+function switchbackTools(tools: NonNullable<RuntimeTask['tools']>): Partial<Options> {
+  return {
+    mcpServers: {
+      switchback: {
+        type: 'http',
+        url: tools.url,
+        headers: tools.headers,
+        timeout: TOOL_CALL_TIMEOUT_MS,
+      },
+    },
+    ...(tools.names.includes('task') ? { disallowedTools: ['Task', 'Agent'] } : {}),
+  };
 }
 
 export class ClaudeAgentSdkRuntime implements AgentRuntime {
@@ -66,6 +90,10 @@ export class ClaudeAgentSdkRuntime implements AgentRuntime {
           },
           // Reproducible runs: don't pick up the machine's Claude Code settings.
           settingSources: [],
+          ...(task.instructions
+            ? { systemPrompt: { type: 'preset', preset: 'claude_code', append: task.instructions } }
+            : {}),
+          ...(task.tools ? switchbackTools(task.tools) : {}),
           ...(this.options.model ? { model: this.options.model } : {}),
           ...(this.options.maxTurns ? { maxTurns: this.options.maxTurns } : {}),
           ...(task.resume ? { resume: task.resume } : {}),

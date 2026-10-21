@@ -241,3 +241,27 @@ describe('external runtime as a subagent', () => {
     expect(report?.type === 'tool_result' && report.content).toContain('never leaves this machine');
   });
 });
+
+test("a CLI model's run gets Switchback's tools in place of Claude Code's subagents, and its instructions", async () => {
+  const calls: { prompt: string; options?: Options }[] = [];
+  const runtime = new ClaudeAgentSdkRuntime({
+    name: 'claude',
+    model: 'claude-sonnet-5',
+    query: fakeQuery(calls),
+  });
+  const tools = { url: 'http://127.0.0.1:1/mcp', headers: { Authorization: 'Bearer t' } };
+  await runtime.run({
+    prompt: 'go',
+    cwd: root,
+    signal: new AbortController().signal,
+    instructions: '# Working in Switchback',
+    tools: { ...tools, names: ['task', 'docs'] },
+    canUseTool: async () => ({ allowed: true }),
+    onEvent: () => {},
+  });
+  expect(calls[0]?.options).toMatchObject({
+    mcpServers: { switchback: { type: 'http', ...tools } },
+    disallowedTools: ['Task', 'Agent'],
+    systemPrompt: { type: 'preset', preset: 'claude_code', append: '# Working in Switchback' },
+  });
+});

@@ -27,7 +27,7 @@ import type { ModelDirectory } from './model-directory.ts';
 import { redactOutbound } from './privacy.ts';
 import { PendingPrompts } from './prompts.ts';
 import type { Subagents } from './subagents.ts';
-import type { Interaction, ToolRunner } from './tool-runner.ts';
+import type { Interaction, ToolCall, ToolRunner } from './tool-runner.ts';
 import { toolSpec, toolsFor } from './tools/index.ts';
 
 export interface AgentLoopDeps {
@@ -43,6 +43,8 @@ export interface AgentLoopDeps {
   /** The agents this one may delegate to. */
   subagentsOf(agent: AgentDefinition): AgentDefinition[];
   mcp(): McpHub | undefined;
+  /** The skills section of a system prompt, for a CLI model's turn. */
+  skills(): string | undefined;
   interaction(): Interaction;
   /** Waiting reports and queued prompts join the conversation here, between steps. */
   beforeStep(s: LiveSession, turnId: string): Promise<void>;
@@ -165,7 +167,34 @@ export class AgentLoop {
       // A coding agent CLI works the whole turn itself.
       if (isAgentCli(provider)) {
         s.signals.recordTurn(decision.step, escalated);
-        return runAgentCliTurn(this.host, this.deps.external, s, model, turnId, signal);
+        const session = {
+          tools,
+          catalog,
+          run: async (call: ToolCall) => {
+            const [result] = await this.deps.tools.run(
+              s,
+              tools,
+              catalog,
+              [call],
+              turnId,
+              signal,
+              model.alias,
+            );
+            return (
+              result ?? { type: 'tool_result' as const, callId: call.id, content: 'no result' }
+            );
+          },
+        };
+        return runAgentCliTurn(
+          this.host,
+          this.deps.external,
+          s,
+          model,
+          session,
+          this.deps.skills(),
+          turnId,
+          signal,
+        );
       }
       let done: Done;
       let decodeMs: number | undefined;

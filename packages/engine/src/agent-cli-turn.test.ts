@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { EngineEvent } from '@switchback/protocol';
 import { ScriptedProvider } from '@switchback/providers';
 import { handoffPrompt } from './agent-cli-turn.ts';
@@ -105,4 +107,86 @@ test('taking over mid-conversation, the CLI gets a digest of what it missed', ()
   expect(prompt).toContain('The request:\nfix the quoting bug');
   expect(prompt).toContain('Work done on it so far, before you took over:');
   expect(prompt).toContain('1 fail');
+});
+
+/** Stands in for a CLI that uses Switchback's tools over MCP, the way Claude Code or Codex would. */
+function toolUsingCli(seen: {
+  names: string[];
+  outputs: string[];
+  task?: RuntimeTask;
+}): AgentRuntime {
+  return {
+    label: 'Claude Code',
+    async run(task) {
+      // The subagent runs on this CLI too; it just answers.
+      if (seen.task) return { ok: true, text: 'in parse.ts', calls: [] };
+      seen.task = task;
+      const tools = task.tools;
+      if (!tools) throw new Error('no Switchback tools');
+      const client = new Client({ name: 'cli', version: '1' });
+      await client.connect(
+        new StreamableHTTPClientTransport(new URL(tools.url), {
+          requestInit: { headers: tools.headers },
+        }),
+      );
+      seen.names = (await client.listTools()).tools.map((t) => t.name);
+      for (const [name, args] of [
+        ['docs', {}],
+        ['task', { agent: 'explore', description: 'find parse', prompt: 'Where is parse?' }],
+      ] as const) {
+        const r = (await client.callTool({ name, arguments: args })) as {
+          content: { text: string }[];
+        };
+        seen.outputs.push(r.content[0]?.text ?? '');
+      }
+      await client.close();
+      return { ok: true, text: 'delegated', calls: [] };
+    },
+  };
+}
+
+test("a CLI model gets Switchback's instructions and tools, and its subagents are Switchback's", async () => {
+  const config = SwitchbackConfig.parse({
+    providers: { lp: { type: 'mock', tier: 'local' }, claude: { type: 'claude-code' } },
+    models: {
+      local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
+      cc: { provider: 'claude', model: 'sonnet', contextWindow: 200_000 },
+    },
+    routing: { current: ['cc'], escalate: [['cc']] },
+  });
+  const seen: { names: string[]; outputs: string[]; task?: RuntimeTask } = {
+    names: [],
+    outputs: [],
+  };
+  const engine = new Engine({
+    workspaceRoot: '/tmp',
+    config,
+    providers: new Map([['lp', new ScriptedProvider('lp', 'local', [])]]),
+    runtimes: new Map([['cc', toolUsingCli(seen)]]),
+  });
+  const events: EngineEvent[] = [];
+  engine.subscribe((e) => events.push(e));
+  const s = engine.createSession({});
+  await engine.runTurn(s.id, 'use a subagent to find parse');
+
+  expect(seen.task?.instructions).toContain('# Working in Switchback');
+  expect(seen.names.sort()).toEqual(['docs', 'escalate', 'merge_worktree', 'skill', 'task']);
+  expect(seen.outputs[0]).toContain('configuration');
+  expect(seen.outputs[1]).toBe('in parse.ts');
+  // The subagent ran as Switchback's own, so the clients show it in its tab.
+  expect(events.some((e) => e.type === 'subagent.started')).toBe(true);
+  expect(events.find((e) => e.type === 'tool.started' && e.name === 'task')).toMatchObject({
+    sessionId: s.id,
+  });
+});
+
+test("the tool server turns away requests without the turn's token", async () => {
+  const { serveTools } = await import('./tool-server.ts');
+  const server = serveTools([], async () => ({ content: '' }));
+  try {
+    const r = await fetch(server.url, { method: 'POST', body: '{}' });
+    expect(r.status).toBe(401);
+  } finally {
+    server.close();
+  }
 });
