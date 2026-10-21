@@ -37,6 +37,8 @@ export function useEngineFeeds(
   const [roles, setRoles] = useState<SessionRoles | undefined>();
   /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
   const [custom, setCustom] = useState<SlashCommand[]>([]);
+  /** Configured models; a config reload or `/models refresh` can change them. */
+  const [models, setModels] = useState(init.models);
   /** MCP resources, as `server:uri`, for @ completion. */
   const [resources, setResources] = useState<string[]>([]);
   useEffect(() => {
@@ -86,6 +88,7 @@ export function useEngineFeeds(
     return client.on((event) => {
       // Every session's events: each tab's view stays live, in front or not.
       setTabs((t) => reduceTabs(t, event));
+      if (event.type === 'config.updated' && event.models) setModels(event.models);
       const a = attention.observe(event);
       if (a) stdout.write(terminalNotification(a.message, init.notifications?.mode ?? 'system'));
       if (event.type === 'turn.completed' && event.sessionId === sessionId) refreshUsage();
@@ -107,5 +110,5 @@ export function useEngineFeeds(
     stdout,
   ]);
 
-  return { usage, setUsage, modes, roles, custom, resources, refreshSessions };
+  return { usage, setUsage, modes, roles, custom, resources, models, refreshSessions };
 }

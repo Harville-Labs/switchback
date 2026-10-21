@@ -124,7 +124,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
 | `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
-| `/models` | Every configured model, its tier, and the roles it fills |
+| `/models [refresh]` | Every configured model, its tier, and the roles it fills. `refresh` asks each endpoint and subscription what it serves now and adds the new models, without running setup again |
 | `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
 | `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
 | `/model [model]` | The model for what's in front: `/current` in the session's view, the subagent model in a subagent's ([Subagents](#subagents)) |

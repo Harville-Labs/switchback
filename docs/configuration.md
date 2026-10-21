@@ -110,7 +110,7 @@ A list inside a role is a chain of alternatives (the first that's up and fits); 
 
 | `type` | Fields |
 |---|---|
-| `openai-compatible` | `baseUrl` (required), `apiKey`, `tier` (`local`\|`remote`, default `local`), `headers` |
+| `openai-compatible` | `baseUrl` (required), `apiKey`, `tier` (`local`\|`remote`, default `local`), `headers`, `listModels` (default `true`; `false` stops adding the models the endpoint lists, see [providers.md](providers.md#local-openai-compatible-servers)) |
 | `openai` | `apiKey` (default `$OPENAI_API_KEY`), `baseUrl` (default `https://api.openai.com/v1`), `organization`, `api` (`chat` \| `responses`, default `chat`) |
 | `deepseek` | `apiKey` (default `$DEEPSEEK_API_KEY`), `baseUrl` (default `https://api.deepseek.com`) |
 | `anthropic` | `apiKey`, `baseUrl`, `refusalFallback` (`server` \| `off`, default `server`; see [routing.md](routing.md#refusals)) |

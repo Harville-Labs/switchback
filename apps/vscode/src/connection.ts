@@ -197,6 +197,8 @@ export class EngineConnection implements vscode.Disposable {
         void this.review.show(this.root, event.requestId, event.proposed);
       }
       if (event.type === 'permission.resolved') void this.review.close(event.requestId);
+      if (event.type === 'config.updated' && event.models && this.init)
+        this.init = { ...this.init, models: event.models };
       if (event.type === 'config.updated' && event.org) {
         void vscode.window.showInformationMessage(
           `${event.org.name} updated its Switchback policy${event.notes.length ? `: ${event.notes.join('; ')}` : '.'}`,

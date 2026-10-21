@@ -10,8 +10,8 @@ import {
   readAuth,
   readTelemetryState,
   recordEngineEvent,
+  refreshDiscoveredModels,
   refreshPolicy,
-  refreshSubscriptionModels,
   roleAliases,
   type SwitchbackConfig,
   sendTelemetry,
@@ -86,14 +86,21 @@ export function createEngine(
       rules: loaded.rules,
       // Setup run by a client writes a config; the engine applies it without a restart.
       reloadConfig: () => load(flags),
+      ...(flags.mock
+        ? {}
+        : {
+            refreshModels: async () =>
+              (await refreshDiscoveredModels(load(flags).config, process.env)).sources,
+          }),
       ...(interaction ? { interaction } : {}),
       ...(loaded.org ? { org: loaded.org } : {}),
     });
     if (options.telemetry && !flags.mock) startTelemetry(engine, loaded);
-    // New models on a Claude or ChatGPT plan show up without re-running setup.
+    // New models on a Claude or ChatGPT plan, or on a model server, show up
+    // without re-running setup. An endpoint that's off today keeps its last list.
     if (options.refreshModels && !flags.mock)
-      void refreshSubscriptionModels(loaded.config, process.env)
-        .then((changed) => changed && engine.applyConfig(load(flags)))
+      void refreshDiscoveredModels(loaded.config, process.env)
+        .then(({ changed }) => changed && engine.applyConfig(load(flags)))
         .catch((err: Error) =>
           engine.notify('warn', `couldn't refresh plan models: ${err.message}`),
         );

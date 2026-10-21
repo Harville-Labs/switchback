@@ -61,6 +61,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `mcp.list` | none | `{ servers }`: each MCP server's `state` (`connected`, `failed`, `disabled`, `untrusted`), tool count, `resources` (`uri`, `name`, …) and `prompts` (`name`, `arguments`, …), and error |
 | `usage.get` | `period?`: `today` \| `week` \| `month` (default); or `range?`: `{ from, to }` as UTC `YYYY-MM-DD` days, both included; or `sessionId?` for one session and its subagents over their whole life (the receipt) | Spend, savings, the `referenceModel` savings are measured against, budget, remote cache hit rate, breakdowns `byRule`, `byAgent`, `byModel`, and `byDay` (days with calls, oldest first) |
 | `shutdown` | none | `{ ok }`; the engine then exits (stdio) |
+| `models.refresh` | `{}` | Asks each OpenAI-compatible endpoint and subscription what it serves now and reloads config. `sources` (per provider: `added`, `removed`, `error?`) and the `models` now configured |
 | `session.roles` | `{ sessionId }` | `SessionRoles`: `current`, `escalate`, `review` (`mode`, `models`), `subagents`, and which of them the session changed (`overridden`) |
 | `session.setRoles` | `{ sessionId, current?, escalate?, review?, subagents?, save?, reset? }` | `SessionRoles` plus `savedTo` when `save` wrote the user config. Changes apply to the session and its subagents; `reset` drops them first; keys an organization enforces are refused. Emits `roles.updated` |
 | `daemon.retire` | `{ token }` | `{ retired, reason? }`. Asks a shared daemon to exit so a newer Switchback can take over. Accepted before `initialize`, so it works across protocol versions. Refused while other clients are attached or a turn is running. |
@@ -93,7 +94,7 @@ A shared daemon sends every attached client every session's events, so a client 
 | `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
-| `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config); carries `org` and human-readable `notes` |
+| `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config, `models.refresh`); carries `org`, human-readable `notes`, and `models` when the configuration itself was reloaded |
 | `setup.ask` | A setup question for the client that started it (`setupId`, `requestId`, `question`: text, number, confirm, select, multiSelect, or search, with options and a default). A text question with `secret: true` (an API key) should hide what's typed |
 | `setup.note` | Something setup tells the person between questions: text with a tone, or the roles (`/roles`) |
 | `setup.finished` | How setup ended: `written` (with `file`), `nothing`, `cancelled`, or `failed` (with `message`) |

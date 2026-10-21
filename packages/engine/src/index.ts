@@ -1,6 +1,7 @@
 export * from './agents.ts';
 export * from './compaction.ts';
 export * from './config.ts';
+export { refreshDiscoveredModels } from './endpoint-models.ts';
 export * from './engine.ts';
 export * from './estimate.ts';
 export { hookTrustKey, type SourcedHook } from './hooks/layers.ts';

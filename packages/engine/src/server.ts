@@ -158,6 +158,8 @@ export function serve(
       case 'setup.cancel':
         engine.cancelSetup(parse(SetupCancelParams, req.params).setupId);
         return { ok: true };
+      case 'models.refresh':
+        return engine.refreshModels();
       case 'worktrees.list':
         return engine.listWorktrees();
       case 'worktrees.diff':

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { InitializeResult, SessionRoles } from '@switchback/protocol';
-import { choiceLabel, currentChange, modelChoices, nextModel } from './models.ts';
+import { choiceLabel, currentChange, formatRefresh, modelChoices, nextModel } from './models.ts';
 
 const models: InitializeResult['models'] = [
   { alias: 'fast', ref: { provider: 'ollama', model: 'qwen3' }, tier: 'local' },
@@ -56,4 +56,25 @@ test("the next model takes the current one's place, in config order, wrapping ar
 
 test('there is no next model when only one is set up', () => {
   expect(nextModel(models.slice(0, 1), { ...roles, current: ['fast'] })).toBeUndefined();
+});
+
+test("a refresh says what each source lists now, and one it couldn't ask keeps its list", () => {
+  expect(
+    formatRefresh({
+      models,
+      sources: [
+        { provider: 'gpu', added: ['qwen3-480b'], removed: ['qwen2'] },
+        { provider: 'ollama', added: [], removed: [], error: 'connection refused' },
+        { provider: 'codex', added: [], removed: [] },
+      ],
+    }),
+  ).toBe(
+    [
+      '3 models available.',
+      '  gpu: new qwen3-480b; gone qwen2',
+      "  ollama: couldn't ask (connection refused); its last list stays",
+      '  codex: no change',
+    ].join('\n'),
+  );
+  expect(formatRefresh({ models, sources: [] })).toStartWith('Nothing to refresh');
 });

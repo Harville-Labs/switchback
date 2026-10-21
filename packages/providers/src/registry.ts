@@ -19,6 +19,8 @@ export const ProviderConfig = z.discriminatedUnion('type', [
     apiKey: Secret.optional(),
     tier: z.enum(['local', 'remote']).default('local'),
     headers: z.record(z.string(), z.string()).optional(),
+    /** Add the models `GET /models` lists that config doesn't name; `false` for a gateway that lists too many. */
+    listModels: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('openai'),

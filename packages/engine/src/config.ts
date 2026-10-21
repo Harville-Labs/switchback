@@ -18,6 +18,7 @@ import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'j
 import { z } from 'zod';
 import { removedKeyProblem, withRenamedKeys } from './config-removed.ts';
 import { SwitchbackConfig } from './config-schema.ts';
+import { readEndpointModels, withEndpointModels } from './endpoint-models.ts';
 import { HookLayers, type SourcedHook } from './hooks/layers.ts';
 import {
   applyRestrictions,
@@ -202,7 +203,10 @@ export function loadConfig(
   // The environment's opt-out beats every config file, including an org's.
   if (telemetryOptedOut(env))
     config = { ...config, telemetry: { ...config.telemetry, enabled: false } };
-  config = withSubscriptionModels(config, readDiscovered(env));
+  config = withEndpointModels(
+    withSubscriptionModels(config, readDiscovered(env)),
+    readEndpointModels(env),
+  );
   let skipped: string[] = [];
   if (org) ({ config, notes: skipped } = dropMissingPolicyAliases(config, org));
   const problem = referenceProblem(config);

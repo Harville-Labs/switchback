@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { EngineEvent } from '@switchback/protocol';
 import { loadConfig } from './config.ts';
 import { ConfigWatcher } from './config-watch.ts';
+import { refreshDiscoveredModels } from './endpoint-models.ts';
 import { Engine } from './engine.ts';
 import { legacyDirs } from './paths.ts';
 
@@ -53,6 +54,43 @@ test('an engine applies config written outside it, as `switchback init` in a ter
   writeFileSync(file, '{ "models": ');
   expect(await until(() => events.some((e) => e.type === 'log' && e.level === 'error'))).toBe(true);
   expect(current()).toEqual(['new']);
+  await engine.shutdown();
+});
+
+test('models.refresh asks the endpoints and every client gets the new list', async () => {
+  const home = join(dir, 'home');
+  mkdirSync(home);
+  const env = { SWITCHBACK_HOME: home };
+  const file = join(home, 'config.json');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      providers: { box: { type: 'openai-compatible', baseUrl: 'http://10.0.0.5:8000/v1' } },
+      models: { big: { provider: 'box', model: 'big' } },
+      routing: { current: ['big'] },
+    }),
+  );
+  const listing = (async () =>
+    Response.json({ data: [{ id: 'big' }, { id: 'tiny' }] })) as unknown as typeof fetch;
+  const engine = new Engine({
+    workspaceRoot: dir,
+    config: loadConfig(dir, env).config,
+    userConfigFile: file,
+    reloadConfig: () => loadConfig(dir, env),
+    refreshModels: async () =>
+      (await refreshDiscoveredModels(loadConfig(dir, env).config, env, { fetch: listing })).sources,
+  });
+  const events: EngineEvent[] = [];
+  engine.subscribe((e) => events.push(e));
+
+  const got = await engine.refreshModels();
+  expect(got.sources).toEqual([{ provider: 'box', added: ['big', 'tiny'], removed: [] }]);
+  expect(got.models.map((m) => m.alias)).toEqual(['big', 'tiny']);
+  const updated = events.find((e) => e.type === 'config.updated');
+  expect(updated?.type === 'config.updated' && updated.models?.map((m) => m.alias)).toEqual([
+    'big',
+    'tiny',
+  ]);
   await engine.shutdown();
 });
 

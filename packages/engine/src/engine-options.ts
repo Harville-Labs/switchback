@@ -1,4 +1,5 @@
 /** How an engine is built: its workspace, configuration, and what tests or embedders replace. */
+import type { ModelsRefreshSource } from '@switchback/protocol';
 import type { Price, Provider } from '@switchback/providers';
 import type { AgentDefinition } from './agents.ts';
 import type { CheckpointStore } from './checkpoints.ts';
@@ -57,6 +58,12 @@ export interface EngineOptions {
    * live, so every client of a shared engine sees the new models.
    */
   reloadConfig?: () => Parameters<Engine['applyConfig']>[0];
+  /**
+   * Ask plan CLIs and model endpoints what they serve now and cache it
+   * (`models.refresh`); the engine then reloads the config. Unset, models come
+   * only from config.
+   */
+  refreshModels?: () => Promise<ModelsRefreshSource[]>;
   /** Network lookups and Switchback's home for setup over the protocol; tests set them. */
   setup?: SetupDeps;
   dataDir?: string;

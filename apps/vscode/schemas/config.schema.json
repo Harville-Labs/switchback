@@ -40,6 +40,9 @@
                 "additionalProperties": {
                   "type": "string"
                 }
+              },
+              "listModels": {
+                "type": "boolean"
               }
             },
             "required": ["type", "baseUrl"]

@@ -106,8 +106,9 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'models',
+    args: '[refresh]',
     group: 'Models',
-    description: 'configured models, their tier, and their roles',
+    description: 'configured models, their tier, and their roles; refresh asks endpoints again',
   },
   {
     name: 'roles',

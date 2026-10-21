@@ -603,6 +603,7 @@ window.addEventListener('message', (e: MessageEvent<HostToWebview>) => {
       const t = syncTabs();
       if (t) setTabs(reduceTabs(t, m.event));
       if (m.event.type === 'roles.updated') rolesBy.set(m.event.sessionId, m.event.roles);
+      if (m.event.type === 'config.updated' && m.event.models) models = m.event.models;
       break;
     }
     case 'roles':

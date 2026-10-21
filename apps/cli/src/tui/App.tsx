@@ -74,7 +74,7 @@ const EXIT_WINDOW_MS = 2_000;
 
 export function App({
   client,
-  init,
+  init: launched,
   initialSession,
   initialView: resumed,
   initialRoute,
@@ -122,14 +122,10 @@ export function App({
   const [route, setRoute] = useState<RoutePreference>(initialRoute);
   /** Review of local edits; undefined follows `review.mode` in config. */
   const [review, setReview] = useState<boolean | undefined>(undefined);
-  const [history] = useState(() => new PromptHistory(init.workspaceRoot));
-  const { usage, setUsage, modes, roles, custom, resources, refreshSessions } = useEngineFeeds(
-    client,
-    init,
-    session.id,
-    tabs,
-    setTabs,
-  );
+  const [history] = useState(() => new PromptHistory(launched.workspaceRoot));
+  const { usage, setUsage, modes, roles, custom, resources, models, refreshSessions } =
+    useEngineFeeds(client, launched, session.id, tabs, setTabs);
+  const init = useMemo(() => ({ ...launched, models }), [launched, models]);
   const mode = view.mode ?? session.permissionMode ?? 'default';
   const sessionRoles = view.roles ?? roles;
   /** Saved sessions while the picker is open. */

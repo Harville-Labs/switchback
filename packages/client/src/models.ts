@@ -2,7 +2,12 @@
  * Choosing a model for a role: the TUI's `/current` and `/model` pickers and
  * VS Code's model dropdown all list the same choices and make the same change.
  */
-import type { InitializeResult, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
+import type {
+  InitializeResult,
+  ModelsRefreshResult,
+  SessionRoles,
+  SessionSetRolesParams,
+} from '@switchback/protocol';
 import { rolesOfModel } from './format.ts';
 
 type ModelSummary = InitializeResult['models'][number];
@@ -70,4 +75,19 @@ export function nextModel(
 export function choiceLabel(c: ModelChoice): string {
   const model = c.model === c.alias ? c.alias : `${c.alias} (${c.model})`;
   return [model, c.tier, ...c.roles].join(' · ');
+}
+
+/** `/models refresh`: what each endpoint and plan lists now that it didn't, or why it couldn't say. */
+export function formatRefresh(result: ModelsRefreshResult): string {
+  if (!result.sources.length)
+    return 'Nothing to refresh: no OpenAI-compatible endpoint or subscription is set up to list its models.';
+  const lines = result.sources.map((s) => {
+    if (s.error) return `  ${s.provider}: couldn't ask (${s.error}); its last list stays`;
+    const changes = [
+      ...(s.added.length ? [`new ${s.added.join(', ')}`] : []),
+      ...(s.removed.length ? [`gone ${s.removed.join(', ')}`] : []),
+    ];
+    return `  ${s.provider}: ${changes.length ? changes.join('; ') : 'no change'}`;
+  });
+  return [`${result.models.length} models available.`, ...lines].join('\n');
 }

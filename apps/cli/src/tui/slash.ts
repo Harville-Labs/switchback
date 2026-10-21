@@ -18,6 +18,7 @@ import {
   formatModels,
   formatPermissions,
   formatReceipt,
+  formatRefresh,
   formatRoles,
   formatShells,
   formatSubagents,
@@ -332,7 +333,11 @@ const HANDLERS: Record<string, Handler> = {
   local: routeTo('local'),
   remote: routeTo('remote'),
   auto: routeTo('auto'),
-  models: async (ctx) => {
+  models: async (ctx, args) => {
+    if (args[0] === 'refresh') {
+      say(ctx, 'Asking endpoints and subscriptions for their models...');
+      return say(ctx, formatRefresh(await ctx.client.request('models.refresh', {})));
+    }
     const roles = await ctx.client.request('session.roles', { sessionId: ctx.session.id });
     ctx.setView((v) => addInfo({ ...v, roles }, formatModels(ctx.init.models, roles)));
   },

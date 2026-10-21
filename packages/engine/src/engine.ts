@@ -21,6 +21,7 @@ import {
   ErrorCode,
   type InitializeResult,
   type McpListResult,
+  type ModelsRefreshResult,
   type PermissionDecision,
   type PermissionMode,
   type PermissionsListResult,
@@ -323,6 +324,7 @@ export class Engine {
       type: 'config.updated',
       ...(org ? { org: { id: org.id, name: org.name, version: org.version } } : {}),
       notes: org?.notes ?? [],
+      models: this.p.models.summaries(),
     });
   }
 
@@ -374,6 +376,15 @@ export class Engine {
   /** `setup.start`: setup's questions arrive as `setup.ask` events (setup-flow/). */
   startSetup(params: SetupStartParams): { setupId: string } {
     return this.setupRuns.start(params);
+  }
+
+  /** `models.refresh`: ask providers what they serve now, then apply the config that follows. */
+  async refreshModels(): Promise<ModelsRefreshResult> {
+    if (!this.options.refreshModels)
+      throw new Error('this engine takes its models only from config; add them there');
+    const sources = await this.options.refreshModels();
+    this.reloadConfig();
+    return { sources, models: this.p.models.summaries() };
   }
 
   /** `setup.answer`. */

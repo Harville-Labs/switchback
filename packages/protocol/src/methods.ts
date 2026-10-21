@@ -4,14 +4,9 @@
  * this surface. Adding a capability means adding it here first.
  */
 import { z } from 'zod';
+import type { ModelSummary, ModelsRefreshResult } from './models.ts';
 import type { SetupAnswerParams, SetupCancelParams, SetupStartParams } from './setup.ts';
-import {
-  MAX_IMAGE_BYTES,
-  type Message,
-  type ModelRef,
-  type Tier,
-  type Usage,
-} from './transcript.ts';
+import { MAX_IMAGE_BYTES, type Message, type Tier, type Usage } from './transcript.ts';
 import type { WorktreeDiff, WorktreeInfo, WorktreesDiffParams } from './worktrees.ts';
 
 export const PROTOCOL_VERSION = 2;
@@ -95,7 +90,7 @@ export interface InitializeResult {
   protocolVersion: number;
   engineVersion: string;
   workspaceRoot: string;
-  models: { alias: string; ref: ModelRef; tier: Tier }[];
+  models: ModelSummary[];
   agents: AgentSummary[];
   /** Set when the user is signed in to an organization whose policy applies. */
   org?: OrgInfo;
@@ -486,6 +481,8 @@ export interface Methods {
   'worktrees.list': { params: Record<string, never>; result: WorktreeInfo[] };
   /** One branch's changes since it left the checked-out branch. */
   'worktrees.diff': { params: WorktreesDiffParams; result: WorktreeDiff };
+  /** Ask plan CLIs and OpenAI-compatible endpoints what they serve now, and apply it. */
+  'models.refresh': { params: Record<string, never>; result: ModelsRefreshResult };
 }
 
 export type MethodName = keyof Methods;

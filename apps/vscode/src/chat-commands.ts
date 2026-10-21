@@ -11,6 +11,7 @@ import {
   formatModels,
   formatPermissions,
   formatReceipt,
+  formatRefresh,
   formatShells,
   formatUsage,
   formatWorktreeDiff,
@@ -48,6 +49,7 @@ export async function runChatCommand(
     case 'compact':
       return engine.compact();
     case 'models':
+      if (args[0] === 'refresh') return info(formatRefresh(await c.request('models.refresh', {})));
       return info(formatModels(engine.init?.models ?? [], await engine.currentRoles()));
     case 'roles':
       return args[0] === 'reset' ? chooseRole(engine, 'reset') : chooseModels(engine);
