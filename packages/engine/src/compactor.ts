@@ -14,7 +14,7 @@ import {
   summaryRequest,
 } from './compaction.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
-import type { ModelDirectory } from './model-directory.ts';
+import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactSecrets } from './privacy.ts';
 import { countTokens, promptTokens } from './tokens.ts';
 
@@ -178,6 +178,7 @@ export class Compactor {
       messages: [{ role: 'user', parts: [{ type: 'text', text }] }],
       tools: [],
       maxTokens: 4_000,
+      ...withSampling(this.models.sampling(model.alias)),
       signal,
     })) {
       if (ev.type === 'done') done = ev;

@@ -19,6 +19,7 @@ import {
   type HealthStatus,
   type Provider,
   ProviderError,
+  type Sampling,
 } from './types.ts';
 
 export interface OpenAIResponsesOptions {
@@ -213,6 +214,7 @@ export class OpenAIResponsesProvider implements Provider {
           // Nothing is stored server-side; reasoning comes back encrypted instead.
           store: false,
           include: ['reasoning.encrypted_content'],
+          ...responsesSampling(request.sampling),
           ...(request.effort
             ? {
                 reasoning: {
@@ -273,4 +275,15 @@ export class OpenAIResponsesProvider implements Provider {
       throw new ProviderError(`${this.id} ended the stream without a response`, this.id, true);
     yield { type: 'done', ...fromResponse(final, origin) };
   }
+}
+
+/** The Responses API has no `top_k`. */
+export function responsesSampling(sampling: Sampling | undefined) {
+  if (!sampling) return {};
+  const { temperature, topP, body } = sampling;
+  return {
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(topP !== undefined ? { top_p: topP } : {}),
+    ...body,
+  };
 }

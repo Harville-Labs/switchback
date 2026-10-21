@@ -39,6 +39,15 @@ export const ModelConfig = z.object({
    * taken to be text-only unless this says so.
    */
   vision: z.boolean().optional(),
+  /** Sampling settings. Left out, the provider's defaults apply. */
+  temperature: z.number().min(0).max(2).optional(),
+  topP: z.number().gt(0).max(1).optional(),
+  topK: z.number().int().positive().optional(),
+  /**
+   * Extra request-body fields sent as given, for server-specific settings such
+   * as vLLM's `min_p` or `chat_template_kwargs`. Not every provider takes them.
+   */
+  body: z.record(z.string(), z.unknown()).optional(),
   price: z
     .object({
       input: z.number(),

@@ -8,7 +8,7 @@ import { type RoutePreference, type StopReason, textOf } from '@switchback/proto
 import type { ChatEvent } from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
-import type { ModelDirectory } from './model-directory.ts';
+import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactSecrets } from './privacy.ts';
 import {
   feedbackText,
@@ -246,6 +246,7 @@ export class ReviewRunner {
         tools: [],
         maxTokens: 4_000,
         ...(effort ? { effort } : {}),
+        ...withSampling(this.models.sampling(model.alias)),
         signal,
       })) {
         if (ev.type === 'done') done = ev;

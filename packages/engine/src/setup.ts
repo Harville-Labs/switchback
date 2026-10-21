@@ -64,7 +64,25 @@ export function catalogFor(kind: RemoteKind): HostedProviderKind | undefined {
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
-export interface LocalAnswer {
+/** Model settings carried over from another agent's config, written as they are. */
+export interface ModelSettings {
+  vision?: boolean;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  body?: Record<string, unknown>;
+}
+
+/**
+ * Carried by any answer. `variant`: the same model with other settings, which
+ * gets its own alias (`lil-direct`).
+ */
+interface AnswerExtras {
+  settings?: ModelSettings;
+  variant?: string;
+}
+
+export interface LocalAnswer extends AnswerExtras {
   providerId: string;
   baseUrl: string;
   model: string;
@@ -74,7 +92,7 @@ export interface LocalAnswer {
 }
 
 /** What setup asked about one hosted model. `apiKey`: a key pasted during setup. */
-export type RemoteAnswer = RemoteChoice & { apiKey?: string };
+export type RemoteAnswer = RemoteChoice & AnswerExtras & { apiKey?: string };
 
 type RemoteChoice =
   | {
@@ -187,8 +205,10 @@ export const REMOTE_PROVIDERS: Record<RemoteKind, { name: string; detail?: strin
 export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): PlannedModel[] {
   const taken = new Set<string>();
   const plan: PlannedModel[] = [];
+  const named = (x: AnswerExtras & { model: string }) =>
+    aliasFor(x.variant ? `${x.model}-${x.variant}` : x.model);
   for (const l of a.locals) {
-    const alias = unique(aliasFor(l.model), taken);
+    const alias = unique(named(l), taken);
     taken.add(alias);
     plan.push({
       alias,
@@ -199,7 +219,7 @@ export function planModels(a: Pick<SetupAnswers, 'locals' | 'remotes'>): Planned
     });
   }
   for (const r of a.remotes) {
-    const alias = unique(aliasFor(r.model), taken);
+    const alias = unique(named(r), taken);
     taken.add(alias);
     const catalog = catalogFor(r.kind);
     const entry = catalog ? CATALOG[catalog].models.find((m) => m.id === r.model) : undefined;
@@ -395,6 +415,12 @@ export function buildSetupConfig(a: SetupAnswers): Record<string, unknown> {
       for (const [sizeAlias, m] of Object.entries(aliasModels(catalog)))
         if (!(sizeAlias in models)) models[sizeAlias] = entry(m);
     }
+  }
+
+  for (const [i, answer] of [...a.locals, ...a.remotes].entries()) {
+    const alias = plan[i]?.alias;
+    if (alias && answer.settings)
+      models[alias] = { ...(models[alias] as object), ...answer.settings };
   }
 
   // Roles must name chosen models.

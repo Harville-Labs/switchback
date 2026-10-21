@@ -3,7 +3,13 @@
  * up, and how much each model's context holds.
  */
 import type { EngineEvent, Message, Tier } from '@switchback/protocol';
-import { catalogModel, createProvider, type Provider, tierOf } from '@switchback/providers';
+import {
+  catalogModel,
+  createProvider,
+  type Provider,
+  type Sampling,
+  tierOf,
+} from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import { nearThreshold, PER_MESSAGE_OVERHEAD, promptText, promptTokens } from './tokens.ts';
@@ -15,6 +21,11 @@ const UNKNOWN_LOCAL_CONTEXT = 8_192;
 const UNKNOWN_REMOTE_CONTEXT = 200_000;
 /** Output never clamped below this; a prompt that leaves less is compaction's problem. */
 const MIN_OUTPUT_TOKENS = 1_024;
+
+/** Spreads into a ChatRequest, leaving the key out when the model sets no sampling. */
+export function withSampling(sampling: Sampling | undefined): { sampling?: Sampling } {
+  return sampling ? { sampling } : {};
+}
 
 export class ModelDirectory {
   private providers = new Map<string, Provider>();
@@ -148,6 +159,20 @@ export class ModelDirectory {
     if (!window) return configured;
     const room = window - Math.ceil(inputTokens * 1.05) - 64;
     return Math.max(MIN_OUTPUT_TOKENS, Math.min(configured, room));
+  }
+
+  /** The model's sampling settings, or undefined when it sets none. */
+  sampling(alias: string): Sampling | undefined {
+    const m = this.config.models[alias];
+    if (!m) return undefined;
+    const { temperature, topP, topK, body } = m;
+    const sampling: Sampling = {
+      ...(temperature !== undefined ? { temperature } : {}),
+      ...(topP !== undefined ? { topP } : {}),
+      ...(topK !== undefined ? { topK } : {}),
+      ...(body ? { body } : {}),
+    };
+    return Object.keys(sampling).length ? sampling : undefined;
   }
 
   async refreshHealth(signal: AbortSignal): Promise<void> {

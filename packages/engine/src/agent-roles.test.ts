@@ -184,3 +184,19 @@ describe('per-task model and effort', () => {
     expect(rp.requests).toHaveLength(0);
   });
 });
+
+describe('model sampling', () => {
+  test("a model's sampling settings go with every request to it, and only to it", async () => {
+    const { engine, lp, rp } = setup([{ text: 'a' }], [{ text: 'b' }], {
+      models: {
+        local: { provider: 'lp', model: 'small', temperature: 0.6, topK: 20, body: { min_p: 0 } },
+        remote: { provider: 'rp', model: 'big' },
+      },
+    });
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'one');
+    await engine.runTurn(s.id, 'two', 'remote');
+    expect(lp.requests[0]?.sampling).toEqual({ temperature: 0.6, topK: 20, body: { min_p: 0 } });
+    expect(rp.requests[0]).not.toHaveProperty('sampling');
+  });
+});

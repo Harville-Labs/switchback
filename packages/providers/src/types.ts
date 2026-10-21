@@ -12,6 +12,18 @@ export interface ToolSpec {
 /** `none` asks the model not to think at all (quick classification, simple edits). */
 export type Effort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
+/**
+ * Sampling settings from a model's config. Each adapter sends the ones its
+ * API has (docs/configuration.md#models); left out, the provider's defaults apply.
+ */
+export interface Sampling {
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  /** Fields merged into the request body as given, for server-specific settings (vLLM's `min_p`). */
+  body?: Record<string, unknown>;
+}
+
 export interface ChatRequest {
   model: string;
   system: string;
@@ -19,6 +31,7 @@ export interface ChatRequest {
   tools: ToolSpec[];
   maxTokens: number;
   effort?: Effort;
+  sampling?: Sampling;
   signal?: AbortSignal;
 }
 

@@ -23,7 +23,7 @@ import { hasImages, withoutImages } from './images.ts';
 import type { UsageLedger } from './ledger.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import { allowsMcpTool, type McpHub } from './mcp/hub.ts';
-import type { ModelDirectory } from './model-directory.ts';
+import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactOutbound } from './privacy.ts';
 import { PendingPrompts } from './prompts.ts';
 import type { Subagents } from './subagents.ts';
@@ -380,6 +380,7 @@ export class AgentLoop {
       tools: specs,
       maxTokens: this.deps.models.outputBudget(model.alias, inputTokens),
       ...(effort ? { effort } : {}),
+      ...withSampling(this.deps.models.sampling(model.alias)),
       signal,
     })) {
       if (ev.type !== 'done' && firstToken === undefined) {

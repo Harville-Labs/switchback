@@ -30,6 +30,7 @@ import {
   type HealthStatus,
   type Provider,
   ProviderError,
+  type Sampling,
 } from './types.ts';
 
 export type ChatFlavor = 'generic' | 'openai' | 'deepseek' | 'openrouter';
@@ -72,6 +73,18 @@ const DEEPSEEK_EFFORT = {
  * both `reasoning_effort: "none"` (Ollama) and the chat-template switch that
  * vLLM, llama.cpp, and SGLang pass to thinking models such as Qwen3.
  */
+/** `top_k` is an extension that OpenAI and DeepSeek reject; local servers and OpenRouter take it. */
+export function samplingParams(flavor: ChatFlavor, sampling: Sampling | undefined) {
+  if (!sampling) return {};
+  const { temperature, topP, topK, body } = sampling;
+  return {
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(topP !== undefined ? { top_p: topP } : {}),
+    ...(topK !== undefined && flavor !== 'openai' && flavor !== 'deepseek' ? { top_k: topK } : {}),
+    ...body,
+  };
+}
+
 export function effortParams(
   flavor: ChatFlavor,
   effort: Effort | undefined,
@@ -327,6 +340,7 @@ export class OpenAICompatibleProvider implements Provider {
         ? { max_completion_tokens: request.maxTokens }
         : { max_tokens: request.maxTokens }),
       ...effortParams(flavor, effort),
+      ...samplingParams(flavor, request.sampling),
       messages: toWireMessages(request.system, request.messages, origin, flavor === 'deepseek'),
       ...(request.tools.length
         ? {

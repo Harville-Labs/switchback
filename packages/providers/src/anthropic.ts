@@ -23,6 +23,7 @@ import {
   type HealthStatus,
   type Provider,
   ProviderError,
+  type Sampling,
 } from './types.ts';
 
 export type AnthropicPlatform =
@@ -250,6 +251,7 @@ export class AnthropicProvider implements Provider {
       ...(request.effort && request.effort !== 'none'
         ? { output_config: { effort: request.effort } }
         : {}),
+      ...anthropicSampling(request.sampling, thinking),
     };
 
     // Server-side fallbacks exist on the Claude API and Claude Platform on AWS only.
@@ -369,4 +371,19 @@ function toProviderError(providerId: string, err: unknown): ProviderError {
   return new ProviderError((err as Error)?.message ?? String(err), providerId, false, {
     cause: err,
   });
+}
+
+/**
+ * With thinking on, the API fixes temperature at 1 and rejects top_k, so the
+ * typed settings apply only to turns without it. `body` passes through as given.
+ */
+export function anthropicSampling(sampling: Sampling | undefined, thinking: boolean) {
+  if (!sampling) return {};
+  const { temperature, topP, topK, body } = sampling;
+  return {
+    ...(!thinking && temperature !== undefined ? { temperature } : {}),
+    ...(!thinking && topP !== undefined ? { top_p: topP } : {}),
+    ...(!thinking && topK !== undefined ? { top_k: topK } : {}),
+    ...body,
+  };
 }

@@ -22,6 +22,7 @@ import {
   type HealthStatus,
   type Provider,
   ProviderError,
+  type Sampling,
 } from './types.ts';
 
 export interface GeminiOptions {
@@ -178,6 +179,7 @@ export class GeminiProvider implements Provider {
           systemInstruction: request.system,
           maxOutputTokens: request.maxTokens,
           thinkingConfig: thinkingConfig(request.model, request.effort),
+          ...geminiSampling(request.sampling),
           ...(request.tools.length
             ? {
                 tools: [
@@ -259,4 +261,15 @@ export class GeminiProvider implements Provider {
     };
     yield { type: 'done', parts, usage, stopReason };
   }
+}
+
+/** The SDK's config is typed, so `body` has nowhere to go; docs/configuration.md says so. */
+export function geminiSampling(sampling: Sampling | undefined) {
+  if (!sampling) return {};
+  const { temperature, topP, topK } = sampling;
+  return {
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(topP !== undefined ? { topP } : {}),
+    ...(topK !== undefined ? { topK } : {}),
+  };
 }

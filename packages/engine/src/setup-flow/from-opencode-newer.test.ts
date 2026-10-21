@@ -21,7 +21,8 @@ const CONFIG = `{
         "big": {
           "modelID": "acme/Big-1.5-FP8",
           // the model card's coding settings
-          "body": { "temperature": 0.6, "top_p": 0.95 },
+          "body": { "temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0 },
+          "capabilities": { "tools": true, "input": ["text", "image"] },
           "compatibility": { "reasoningField": "reasoning_content" },
           "limit": { "context": 262144, "output": 32768 },
         },
@@ -40,7 +41,8 @@ const CONFIG = `{
   },
   "agents": {
     "build": { "model": "vllm-direct/big", "steps": 60 },
-    "explore": { "model": "vllm/lil", "steps": 15 },
+    "explore": { "model": "vllm/lil#direct", "steps": 15 },
+    "plan": { "model": "vllm/lil#none" },
     "title": { "model": "vllm/lil#direct" }
   },
   "permissions": [
@@ -86,12 +88,23 @@ test("OpenCode's newer format: providers, models, agents' models, permissions, a
       contextWindow: 65_536,
       maxOutputTokens: 16_384,
     },
+    // A variant that sets something is a model of its own; an undefined one is the model.
+    {
+      kind: 'openai-compatible',
+      model: 'lil',
+      baseUrl: 'https://vllm.example.com/v1',
+      contextWindow: 65_536,
+      maxOutputTokens: 16_384,
+      settings: { body: { chat_template_kwargs: { enable_thinking: false } } },
+      variant: 'direct',
+    },
     {
       kind: 'openai-compatible',
       model: 'acme/Big-1.5-FP8',
       baseUrl: 'https://vllm.example.com/v1',
       contextWindow: 262_144,
       maxOutputTokens: 32_768,
+      settings: { vision: true, temperature: 0.6, topP: 0.95, topK: 20, body: { min_p: 0 } },
     },
   ]);
   expect(got.current).toBe(got.locals[0]);
@@ -112,7 +125,6 @@ test("OpenCode's newer format: providers, models, agents' models, permissions, a
     playwright: { command: 'npx', args: ['-y', '@playwright/mcp@latest'], enabled: false },
   });
   expect(got.skipped).toEqual([
-    expect.stringContaining("vllm/big's request body"),
     expect.stringContaining('agent: Switchback has its own format'),
     expect.stringContaining('plugins: Switchback has its own format'),
     expect.stringContaining('formatter: Switchback has its own format'),
