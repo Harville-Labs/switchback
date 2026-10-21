@@ -66,6 +66,8 @@ export interface ToolContext {
    * the schema. Edit and write check it before asking and before writing.
    */
   validate?: (file: string, content: string) => string | undefined;
+  /** Ask the router to move the session's next call up the ladder (the escalate tool). */
+  requestEscalation?: (reason: string) => void;
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';

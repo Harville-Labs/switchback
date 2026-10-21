@@ -299,9 +299,10 @@ describe('Engine', () => {
     expect(lp.requests.filter((q) => q.system.includes('read-only search agent'))).toHaveLength(2);
     // Explore is read-only: its tool list must not include write or task.
     const exploreReq = lp.requests.find((q) => q.system.includes('read-only search agent'));
-    // The checklist, skills, and docs come with every agent; they aren't capabilities.
+    // The checklist, skills, docs, and escalate come with every agent; they aren't capabilities.
     expect(exploreReq?.tools.map((t) => t.name).sort()).toEqual([
       'docs',
+      'escalate',
       'glob',
       'grep',
       'read',

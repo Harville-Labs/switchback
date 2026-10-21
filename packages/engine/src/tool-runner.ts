@@ -77,6 +77,7 @@ export class ToolRunner {
       skills: () => this.deps.skills(),
       configFiles: this.deps.configFiles,
       validate: this.deps.validate,
+      requestEscalation: (reason) => s.signals.recordEscalationRequest(reason),
       ...(s.depth === 0
         ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
         : {}),

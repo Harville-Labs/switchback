@@ -151,11 +151,11 @@ export class Router {
       if (input.agent.route === tier && this.ladder.ofTier(ctx, tier))
         return byTier(tier, 'agent-pin', `agent "${input.agent.name}" runs ${tier}`);
 
-    // 3-6. Context overflow, the user's escalation, stickiness, and quality signals.
+    // 3-7. Context overflow, the user's and the model's escalations, stickiness, and quality signals.
     const escalated = this.escalate(ctx, start, at);
     if (escalated) return escalated;
 
-    // 7. Default: the current chain, or the first step if there is none.
+    // 8. Default: the current chain, or the first step if there is none.
     if (start.model) return this.route(start, 'default', 'the current model');
     const first = this.ladder.climb(ctx, 0);
     if (first)
@@ -245,9 +245,17 @@ export class Router {
     }
 
     const s = input.signals;
+
+    // 5. The model asked for a stronger one. Unlike the user's request, it
+    // follows `escalation.policy`: `ask` asks before a remote step, `off` ignores it.
+    if (s.modelRequest) {
+      const up = next(at, 'model-escalation', `the model asked to escalate: ${s.modelRequest}`);
+      if (up) return up;
+    }
+
     const why = this.qualityProblem(s);
 
-    // 5. Stickiness: stay on the step the last escalation reached, unless the
+    // 6. Stickiness: stay on the step the last escalation reached, unless the
     // model there is struggling too and there's a step above it.
     if (at > 0) {
       if (why && policy !== 'off') {
@@ -265,7 +273,7 @@ export class Router {
         );
     }
 
-    // 6. Quality signals from the model that ran the last call.
+    // 7. Quality signals from the model that ran the last call.
     if (why) return next(0, 'escalation', why);
     return undefined;
   }

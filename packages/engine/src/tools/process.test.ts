@@ -82,8 +82,15 @@ describe('bash', () => {
       'todo',
       'skill',
       'docs',
+      'escalate',
     ]);
-    expect(toolsFor(['read'], false).map((t) => t.name)).toEqual(['read', 'todo', 'skill', 'docs']);
+    expect(toolsFor(['read'], false).map((t) => t.name)).toEqual([
+      'read',
+      'todo',
+      'skill',
+      'docs',
+      'escalate',
+    ]);
   });
 
   test("a background shell's output is private when its command names a private file", () => {

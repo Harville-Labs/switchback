@@ -6,6 +6,13 @@ export const INSTRUCTION_HEADINGS = {
   project: 'Project instructions',
 } as const;
 
+/**
+ * Every session gets this, whatever the ladder: roles can change mid-session,
+ * and the prompt is frozen at creation (invariant 7).
+ */
+const ESCALATION = `# Escalating to a stronger model
+You are one of several models the user has set up; some are stronger, and may cost money. When the task is beyond you (you keep failing at it, it needs deeper reasoning than you can give, or you are unsure of a change that matters), call the escalate tool with a short reason. Your next step then runs on the next model up, if there is one and the user's settings allow it; the user may be asked first. Don't escalate for routine work or before trying.`;
+
 export interface SystemPromptParts {
   agent: AgentDefinition;
   workspaceRoot: string;
@@ -46,6 +53,7 @@ export function systemPrompt({
   const sections = [
     agent.prompt,
     `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${shell}\nFile paths in tool calls are relative to the workspace root.`,
+    ESCALATION,
   ];
   if (user) sections.push(`# ${INSTRUCTION_HEADINGS.user}\n${user.trim()}`);
   if (project) sections.push(`# ${INSTRUCTION_HEADINGS.project}\n${project.trim()}`);

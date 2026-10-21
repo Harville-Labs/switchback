@@ -37,11 +37,12 @@ The reviewer of local edits (`review.model`, [review.md](review.md)) and the def
 | 2 | `agent-pin` | The agent names a model alias (`model: haiku`) or a tier (`model: local`, `route: remote`) | That model, or the first of that tier in role order |
 | 3 | `context-overflow` | The prompt exceeds `escalation.contextHeadroom` × the window of the model the session is on (see [Counting tokens](#counting-tokens)) | The first step up whose window fits, else the largest window above |
 | 4 | `user-escalation` | You asked to escalate (`/up`, alt+↑ in the TUI, **Escalate now** in VS Code) | One step up from where the session is |
-| 5 | `sticky` | The session escalated within the last `escalation.stickyTurns` calls | The step it reached; one step higher if the model there is struggling too |
-| 6 | `escalation` | A quality signal crossed its threshold (below) | One step up |
-| 7 | `default` | Nothing else matched | The `current` chain (the first step if `current` is empty) |
+| 5 | `model-escalation` | The model called the `escalate` tool ([The model escalating itself](#the-model-escalating-itself)) | One step up from where the session is |
+| 6 | `sticky` | The session escalated within the last `escalation.stickyTurns` calls | The step it reached; one step higher if the model there is struggling too |
+| 7 | `escalation` | A quality signal crossed its threshold (below) | One step up |
+| 8 | `default` | Nothing else matched | The `current` chain (the first step if `current` is empty) |
 
-Rule 6 follows `escalation.policy`; rule 4 doesn't, since you asked. Rules 3 to 6 count as escalations. A step that's down, too small for the prompt, or remote when remote isn't allowed is skipped on the way up.
+Rules 5 and 7 follow `escalation.policy`; rule 4 doesn't, since you asked. Rules 3 to 7 count as escalations. A step that's down, too small for the prompt, or remote when remote isn't allowed is skipped on the way up.
 
 A tier pin in an agent definition (`route: local`) is a preference: if no model of that tier is in a role, the router skips the pin. A user override (`--route local`) with no model of that tier is blocked with a pointer to `switchback init`.
 
@@ -98,6 +99,14 @@ Escalation is automatic when the model struggles (the quality signals below) or 
 - During a turn, the turn's next model call goes one step up; between turns, your next prompt starts there.
 - It's your request, so a remote step doesn't ask first, whatever `escalation.policy` says. Budgets and private content still apply: a private session stays local and says why.
 - Like any escalation, the session stays on the new step for `escalation.stickyTurns` calls, then comes back down. `/up` again climbs another step.
+
+## The model escalating itself
+
+Every session's system prompt says it is one of several models, and every session has the `escalate` tool ([tools.md](tools.md)). When the model decides the task is beyond it, it calls `escalate` with a one-line reason, and its next call goes one step up under the rule `model-escalation` (`the model asked to escalate: the race needs deeper reasoning`).
+
+- Unlike `/up`, it follows `escalation.policy`: `ask` asks you before a remote step, and `off` ignores the request. Budgets and private content apply as always.
+- The request covers only the next call. At the top of the ladder, or when nothing above is allowed, the session stays where it is.
+- Like any escalation, the session stays on the new step for `escalation.stickyTurns` calls.
 
 ## Quality signals
 

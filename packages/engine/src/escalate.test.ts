@@ -35,3 +35,34 @@ test('escalating now sends the next prompt one step up, then stays there a while
   expect(routes[1]).toMatchObject({ rule: 'sticky', model: { model: 'big' } });
   expect(lp.requests).toHaveLength(0);
 });
+
+test('the model escalates itself with the escalate tool, under escalation.policy', async () => {
+  const config = SwitchbackConfig.parse({
+    providers: { lp: { type: 'mock', tier: 'local' }, rp: { type: 'mock', tier: 'remote' } },
+    models: {
+      local: { provider: 'lp', model: 'small', contextWindow: 32_000 },
+      remote: { provider: 'rp', model: 'big', contextWindow: 200_000 },
+    },
+    routing: { current: ['local'], escalate: [['remote']], escalation: { policy: 'auto' } },
+  });
+  const lp = new ScriptedProvider('lp', 'local', [
+    { toolCalls: [{ name: 'escalate', input: { reason: 'the race needs deeper reasoning' } }] },
+  ]);
+  const rp = new ScriptedProvider('rp', 'remote', [{ text: 'fixed' }]);
+  const engine = new Engine({
+    workspaceRoot: '/tmp',
+    config,
+    providers: new Map([
+      ['lp', lp],
+      ['rp', rp],
+    ]),
+  });
+  const routes: EngineEvent[] = [];
+  engine.subscribe((e) => e.type === 'route.decided' && routes.push(e));
+  const s = engine.createSession({});
+  await engine.runTurn(s.id, 'fix the race');
+  expect(routes[0]).toMatchObject({ rule: 'default', model: { model: 'small' } });
+  expect(routes[1]).toMatchObject({ rule: 'model-escalation', model: { model: 'big' } });
+  expect((routes[1] as { reason: string }).reason).toContain('the race needs deeper reasoning');
+  expect(rp.requests).toHaveLength(1);
+});

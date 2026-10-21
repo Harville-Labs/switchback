@@ -18,6 +18,8 @@ export interface SignalSnapshot {
   escalationStep: number;
   /** The last call ended in refusal, max_tokens, or a provider error. */
   turnFailed: boolean;
+  /** Why the model asked to hand its work to a stronger model (the escalate tool), if it did. */
+  modelRequest?: string;
 }
 
 export class SignalTracker {
@@ -28,6 +30,7 @@ export class SignalTracker {
   private stickyTurns = 0;
   private escalationStep = 0;
   private turnFailed = false;
+  private modelRequest: string | undefined;
 
   constructor(private readonly config: EscalationConfig) {}
 
@@ -47,12 +50,19 @@ export class SignalTracker {
     if (repeats >= this.config.loopThreshold) this.loopDetected = true;
   }
 
+  /** The model asked to escalate; the next call decides, and the request lasts only for it. */
+  recordEscalationRequest(reason: string): void {
+    this.modelRequest = reason;
+  }
+
   recordFailure(): void {
     this.turnFailed = true;
   }
 
   /** Call once per completed model turn, with the escalation step its model was on. */
   recordTurn(step: number, escalated: boolean): void {
+    // Requests are made after a call, so the one this call answered is spent.
+    this.modelRequest = undefined;
     if (escalated) {
       this.escalationStep = step;
       this.stickyTurns = this.config.stickyTurns;
@@ -78,6 +88,7 @@ export class SignalTracker {
       stickyTurns: this.stickyTurns,
       escalationStep: this.stickyTurns > 0 ? this.escalationStep : 0,
       turnFailed: this.turnFailed,
+      ...(this.modelRequest ? { modelRequest: this.modelRequest } : {}),
     };
   }
 
