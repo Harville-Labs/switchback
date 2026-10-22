@@ -495,6 +495,11 @@ export class AgentLoop {
 
 /** Below this many output tokens, a rate mostly measures latency; it isn't reported. */
 const MIN_TOKENS_FOR_SPEED = 16;
+/**
+ * Below this much decoding time, a rate measures timer noise: an answer that arrives in one
+ * chunk (a mock, a cached reply) decodes in a millisecond or two and reads as 500k tok/s.
+ */
+const MIN_MS_FOR_SPEED = 50;
 
 /** A call's output and speed, from when it started, first streamed, and ended (ms). */
 export function callSpeed(
@@ -507,7 +512,7 @@ export function callSpeed(
   const ms = ended - (firstToken ?? started);
   return {
     outputTokens,
-    ...(outputTokens >= MIN_TOKENS_FOR_SPEED && ms > 0
+    ...(outputTokens >= MIN_TOKENS_FOR_SPEED && ms >= MIN_MS_FOR_SPEED
       ? {
           tokensPerSecond: Math.round((outputTokens / ms) * 10_000) / 10,
           decodeMs: Math.round(ms),

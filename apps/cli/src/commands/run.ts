@@ -32,7 +32,7 @@ export interface RunFlags extends CommonFlags {
   resume?: string;
 }
 
-export const EXIT = { done: 0, failed: 1, usage: 2, denied: 3 } as const;
+const EXIT = { done: 0, failed: 1, usage: 2, denied: 3 } as const;
 
 export async function run(flags: RunFlags): Promise<number> {
   const { client } = await connectInProcess(

@@ -45,7 +45,7 @@ export function readDiscovered(env: Env): DiscoveredModels {
 }
 
 /** What a model looks like configured on a subscription provider. */
-export function subscriptionModel(
+function subscriptionModel(
   provider: string,
   m: Pick<CatalogModel, 'id'> & Partial<CatalogModel>,
   billing: 'subscription' | 'api',

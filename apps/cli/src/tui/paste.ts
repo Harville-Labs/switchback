@@ -14,8 +14,8 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
 /** Larger pastes become a chip. */
-export const CHIP_MIN_LINES = 12;
-export const CHIP_MIN_CHARS = 1_500;
+const CHIP_MIN_LINES = 12;
+const CHIP_MIN_CHARS = 1_500;
 
 const CHIP = /\[Pasted text #(\d+) · [^\]]*\]/g;
 

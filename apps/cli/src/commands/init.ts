@@ -42,7 +42,7 @@ export async function init(flags: SetupFlags): Promise<number> {
 }
 
 /** Setup's notes, drawn for a terminal: the shared text, with color. */
-export function drawNote(note: SetupNote): string {
+function drawNote(note: SetupNote): string {
   if (note.kind === 'roles')
     return formatSetupNote(note)
       .split('\n')
