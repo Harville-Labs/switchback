@@ -201,8 +201,8 @@ describe('orchestrating subagents', () => {
     const { engine, of, lp, peak } = orchestrate(many, { childMs: 1 });
     const s = engine.createSession({});
     await engine.runTurn(s.id, 'use 150 subagents');
-    expect(peak()).toBe(4);
-    expect(of('subagent.queued')).toHaveLength(146);
+    expect(peak()).toBe(16);
+    expect(of('subagent.queued')).toHaveLength(134);
     expect(of('subagent.completed').filter((e) => e.ok)).toHaveLength(150);
     // Each child is told its share: 60,000 characters across 150.
     const briefs = lp.requests.filter(isChild).map(briefOf);

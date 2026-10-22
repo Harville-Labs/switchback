@@ -202,7 +202,7 @@ To try it without a model, the mock provider fans out a prompt of the form `use 
 
 | Config | Default | Effect |
 |---|---|---|
-| `subagents.maxConcurrent` | 4 | Concurrent subagents per depth level. Extra calls wait for a free slot. |
+| `subagents.maxConcurrent` | 16 | Concurrent subagents per depth level. Extra calls wait for a free slot. A local server that runs fewer at once queues the rest itself, so lower this only to keep a fan-out from crowding out your own work, or to stay under a remote provider's rate limit. |
 | `subagents.maxDepth` | 2 | Agents at this depth don't get the `task` tool. |
 | `subagents.model` | none | Model for subagents whose agent doesn't pin a model or tier, for example a cheap local one for every delegated search. Any alias, local or remote. |
 | `subagents.effort` | none | Reasoning effort for subagents whose agent sets none. |

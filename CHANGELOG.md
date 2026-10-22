@@ -15,6 +15,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Sessions are retitled at compaction.** The summary that compaction already makes suggests a title, so it costs no extra model call; a title you set is never replaced
 
 ### Changed
+- **16 subagents run at once by default,** up from 4 (`subagents.maxConcurrent`), so a large fan-out finishes sooner. Local servers queue what they can't run at once
 - **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
 
 ### Fixed
