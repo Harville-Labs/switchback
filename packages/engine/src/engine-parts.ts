@@ -45,7 +45,7 @@ export interface EngineIo {
   mcp(): McpHub | undefined;
 }
 
-export const newTurnId = () => `turn_${crypto.randomUUID().slice(0, 8)}`;
+const newTurnId = () => `turn_${crypto.randomUUID().slice(0, 8)}`;
 
 export function assembleEngine(options: EngineOptions, io: EngineIo) {
   const { config } = options;

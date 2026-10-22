@@ -7,7 +7,7 @@ import type { LiveSession } from '../live-session.ts';
 import type { HookRunner } from './runner.ts';
 
 /** How many times Stop hooks may send the model back to work in one turn. */
-export const MAX_STOP_CONTINUATIONS = 3;
+const MAX_STOP_CONTINUATIONS = 3;
 
 export class TurnHooks {
   constructor(

@@ -130,10 +130,6 @@ export function visibleLines(lines: string[], height: number, scroll: number): s
   return lines.slice(Math.max(0, end - height), end);
 }
 
-export function maxScroll(lines: string[], height: number): number {
-  return Math.max(0, lines.length - height);
-}
-
 export function Viewport({
   lines,
   height,

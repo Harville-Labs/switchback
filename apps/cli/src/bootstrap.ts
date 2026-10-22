@@ -37,7 +37,7 @@ export interface CommonFlags {
  * add mock local/remote models where none are configured, for demos and UI work with no
  * model running.
  */
-export function mockify(config: SwitchbackConfig): SwitchbackConfig {
+function mockify(config: SwitchbackConfig): SwitchbackConfig {
   const providers: SwitchbackConfig['providers'] = {};
   for (const [id, pc] of Object.entries(config.providers))
     providers[id] = { type: 'mock', tier: tierOf(pc) };
@@ -183,7 +183,7 @@ export async function connectInProcess(
 }
 
 /** How to start this same switchback as a daemon: the binary, or bun + this script in dev. */
-export function selfCommand(): { command: string; args: string[] } {
+function selfCommand(): { command: string; args: string[] } {
   const compiled = !Bun.main.endsWith('.ts') && !Bun.main.endsWith('.tsx');
   return compiled
     ? { command: process.execPath, args: [] }

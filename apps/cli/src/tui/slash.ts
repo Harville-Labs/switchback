@@ -53,7 +53,7 @@ import { copyText } from './clipboard.ts';
 import { ago } from './SessionPicker.tsx';
 import { THEME_NAMES, type ThemeName } from './theme.ts';
 
-export const helpText = (custom: readonly SlashCommand[]) => `Commands
+const helpText = (custom: readonly SlashCommand[]) => `Commands
 ${formatCommands('tui', custom)}
 Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
@@ -168,7 +168,7 @@ export async function cycleModel(
 }
 
 /** `/up`: a stronger model takes over (`session.escalate`). */
-export async function escalateNow(ctx: SlashContext): Promise<void> {
+async function escalateNow(ctx: SlashContext): Promise<void> {
   try {
     const { when } = await ctx.client.request('session.escalate', { sessionId: ctx.session.id });
     say(ctx, escalateNotice(when));
@@ -177,7 +177,7 @@ export async function escalateNow(ctx: SlashContext): Promise<void> {
   }
 }
 
-export async function newSession(ctx: SlashContext, agent?: string): Promise<void> {
+async function newSession(ctx: SlashContext, agent?: string): Promise<void> {
   try {
     const s = await ctx.client.request('session.create', agent ? { agent } : {});
     ctx.setSession(s);

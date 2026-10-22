@@ -5,7 +5,7 @@ import { SetupError, type SetupFlags } from './flags.ts';
 import { asking, type SetupPrompter } from './prompter.ts';
 
 /** A role reference (`alias` or model ID) to the alias setup gives that model. */
-export function resolveAlias(plan: PlannedModel[], ref: string, flag: string): string {
+function resolveAlias(plan: PlannedModel[], ref: string, flag: string): string {
   const hit = plan.find((m) => m.alias === ref) ?? plan.find((m) => m.model === ref);
   if (!hit)
     throw new SetupError(
@@ -150,7 +150,7 @@ export async function chooseRoles(
 }
 
 /** One model from the plan, leaving out `taken`; undefined for the "none" choice. */
-export async function pickModel(
+async function pickModel(
   p: SetupPrompter,
   plan: PlannedModel[],
   question: string,

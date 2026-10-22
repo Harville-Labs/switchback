@@ -22,7 +22,7 @@ import { asking, type SetupPrompter, say } from './prompter.ts';
 
 type List = typeof listModels;
 
-export const remoteLabel = (kind: RemoteKind) => {
+const remoteLabel = (kind: RemoteKind) => {
   const { name, detail } = REMOTE_PROVIDERS[kind];
   return detail ? `${name} (${detail})` : name;
 };
