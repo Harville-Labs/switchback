@@ -2,6 +2,15 @@
 
 # Switchback
 
+<p>
+  <a href="https://github.com/Harville-Labs/switchback/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Harville-Labs/switchback?style=flat-square&color=2dd4bf"></a>
+  <a href="https://github.com/Harville-Labs/switchback/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Harville-Labs/switchback/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=isaiah-harville.switchback"><img alt="VS Code Marketplace" src="https://img.shields.io/badge/VS%20Code-Marketplace-007acc?style=flat-square"></a>
+  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/github/license/Harville-Labs/switchback?style=flat-square"></a>
+  <img alt="macOS, Linux, Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-555?style=flat-square">
+  <a href="https://switchback.sh/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-switchback.sh-2dd4bf?style=flat-square"></a>
+</p>
+
 A local-first coding agent from Harville Labs. (Formerly Harness.) Most of the work runs on a model on your own machine; Switchback escalates the hard parts to the hosted model of your choice (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) and shows you exactly when and why it did.
 
 - **Local by default, remote when it matters.** A transparent router sends each model call to your local model (Ollama, llama.cpp, LM Studio, vLLM, SGLang, KoboldCpp, Jan, TGI) and escalates to your remote provider (OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, OpenCode, or any OpenAI-compatible API) when the local model is struggling, the context won't fit, or you ask. No vendor is a default, and every provider gets the same features. Budgets cap remote spend. With several local servers, escalation can climb through a bigger local model first (fast local → large local → remote), so only the last step costs money.
