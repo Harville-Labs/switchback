@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-10-22
+
 ### Added
 - **The model can read and change Switchback's settings.** `models` lists each model with its tier, context, price, and role in the session, so the model can pick one for a subagent. `config` reads the configuration in effect with secrets hidden. `set_config` changes one setting in a config file and keeps its comments. `set_roles` changes the session's models and escalation ladder. Changes always ask, even in `acceptEdits` or auto-approve, and apply at once ([ADR 0028](docs/adr/0028-agents-change-their-settings.md))
 - **`/autocompact [on|off] [--save]`** turns automatic compaction on or off for a session (`session.setAutoCompact` in the protocol)
