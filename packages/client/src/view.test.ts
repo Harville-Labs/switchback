@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { EngineEvent, Message, SessionSummary, UsageReport } from '@switchback/protocol';
+import type { EngineEvent, Message, SessionSummary } from '@switchback/protocol';
 import {
-  estimateLabel,
   formatLadder,
   formatModels,
   formatRoles,
@@ -9,7 +8,6 @@ import {
   reviewLines,
   speedLabel,
 } from './format.ts';
-import { formatReceipt, formatUsage } from './usage.ts';
 import {
   childView,
   fromTranscript,
@@ -78,48 +76,7 @@ test('fromTranscript rebuilds prompts, routes, text, and tool outcomes', () => {
   expect(next.running).toBe(true);
 });
 
-describe('usage and estimate formatting', () => {
-  const report: UsageReport = {
-    period: { from: '2026-09-21', to: '2026-09-27' },
-    byTier: {
-      local: { usage: { inputTokens: 5000, outputTokens: 700 }, costUsd: 0 },
-      remote: {
-        usage: { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 3000 },
-        costUsd: 0.42,
-      },
-    },
-    estimatedSavingsUsd: 1.5,
-    budget: { spentTodayUsd: 0.1, spentMonthUsd: 0.42, dailyUsd: 2 },
-    byRule: [
-      {
-        key: 'escalation',
-        calls: 3,
-        usage: { inputTokens: 1000, outputTokens: 100, cacheReadTokens: 3000 },
-        costUsd: 0.42,
-        savingsUsd: 0,
-      },
-    ],
-    remoteCacheHitRate: 0.75,
-  };
-
-  test('summary shows cache hits and an optional breakdown', () => {
-    const text = formatUsage(report, 'rule');
-    expect(text).toContain('cache hits 75%');
-    expect(text).toContain('today $0.10 of $2.00');
-    expect(text).toMatch(/By rule\n {2}escalation\s+3 calls\s+4,000 in\s+\$0\.42/);
-    expect(formatUsage(report)).not.toContain('By ');
-    expect(formatUsage({ ...report, byAgent: [] }, 'agent')).toContain('no model calls');
-  });
-
-  test('the receipt compares cost with all-remote on the reference model', () => {
-    const text = formatReceipt({ ...report, referenceModel: 'claude-opus-5' });
-    expect(text).toContain('remote     $0.42   4k tokens in, 100 out');
-    expect(text).toContain('all-remote on claude-opus-5 would have cost ~$1.92');
-    expect(text).toContain('saved    ~$1.50 (78%)');
-    expect(formatReceipt({ ...report, estimatedSavingsUsd: 0 })).not.toContain('saved ');
-    expect(formatReceipt(report)).toContain('configure a remote model');
-  });
-
+describe('view rows for notices, reviews, and escalations', () => {
   test('privacy and redaction notices', () => {
     let v = reduce(initialView('s'), {
       type: 'tool.completed',
@@ -169,13 +126,6 @@ describe('usage and estimate formatting', () => {
         issues: [],
       }),
     ).toEqual(['Review skipped: routing mode is local-only']);
-  });
-
-  test('estimate labels', () => {
-    expect(estimateLabel(undefined)).toBe('');
-    expect(estimateLabel(0.004)).toBe('≈ <$0.01');
-    expect(estimateLabel(0.0412)).toBe('≈ $0.04');
-    expect(estimateLabel(1.5)).toBe('≈ $1.50');
   });
 
   test('escalation requests keep their estimate in the view', () => {
@@ -397,7 +347,7 @@ describe('roles and the ladder', () => {
         'subagents  normal routing',
       ].join('\n'),
     );
-    expect(formatModels(models, roles)).toContain('opus  claude-opus-5 (remote)  · step 2');
+    expect(formatModels(models, roles)).toContain('opus   claude-opus-5 (remote)  · step 2');
   });
 });
 

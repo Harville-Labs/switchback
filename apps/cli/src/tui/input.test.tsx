@@ -3,6 +3,7 @@ import { customCommands, type SwitchbackClient } from '@switchback/client';
 import type { InitializeResult } from '@switchback/protocol';
 import { render } from 'ink-testing-library';
 import { App } from './App.tsx';
+import { ModelPicker } from './ModelPicker.tsx';
 import { PromptInput } from './PromptInput.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { filterSessions, SessionPicker } from './SessionPicker.tsx';
@@ -73,6 +74,38 @@ describe('custom commands', () => {
     ui.stdin.write(ENTER);
     await tick();
     expect(got).toEqual(['/fix-issue 12']);
+  });
+});
+
+describe('command menu', () => {
+  const menu = () =>
+    render(
+      <PromptInput
+        focus
+        busy={false}
+        placeholder="Ask"
+        history={[]}
+        root="/tmp"
+        custom={[]}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSubmitNow={() => {}}
+        onCancel={() => {}}
+        recall={() => undefined}
+      />,
+    );
+
+  test('shows a short usage whole, and the selected long one in full below', async () => {
+    const tab = menu();
+    tab.stdin.write('/tab');
+    await tick();
+    expect(tab.lastFrame()).toContain('/tab [n|new [agent]|close]');
+    const effort = menu();
+    effort.stdin.write('/eff');
+    await tick();
+    const lines = effort.lastFrame()?.split('\n') ?? [];
+    expect(lines.some((l) => l.includes('/effort [none|low|') && l.includes('…'))).toBe(true);
+    expect(lines).toContain('  /effort [none|low|medium|high|xhigh|max|default]');
   });
 });
 
@@ -353,4 +386,24 @@ describe('rewind picker', () => {
     await tick();
     expect(chosen).toEqual(['t1:files']);
   });
+});
+
+test('the model picker lines up models whose aliases differ in length', () => {
+  const choice = (alias: string, tier: 'local' | 'remote') => ({
+    alias,
+    model: `${alias}-model`,
+    tier,
+    roles: [],
+    current: false,
+  });
+  const ui = render(
+    <ModelPicker
+      choices={[choice('local', 'local'), choice('remote', 'remote')]}
+      onPick={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const frame = ui.lastFrame() ?? '';
+  expect(frame).toContain('1. local   local-model · local');
+  expect(frame).toContain('2. remote  remote-model · remote');
 });

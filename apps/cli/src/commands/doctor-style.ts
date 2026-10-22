@@ -4,8 +4,6 @@
  * formatters' plain text (format.ts, also drawn by the TUI) can be marked up
  * here without teaching them about terminals.
  */
-import { sep } from 'node:path';
-
 export interface Style {
   bold(s: string): string;
   dim(s: string): string;
@@ -39,12 +37,6 @@ export function marked(style: Style, line: string): string {
     default:
       return style.dim(line);
   }
-}
-
-/** A path under the home directory as `~/...`, the way the docs write it; others as they are. */
-export function tildify(path: string, home: string): string {
-  if (path === home) return '~';
-  return path.startsWith(`${home}${sep}`) ? `~${sep}${path.slice(home.length + 1)}` : path;
 }
 
 /** The last line: all good, or how many problems. */

@@ -8,7 +8,7 @@
  * Ctrl+V attaches the clipboard's image as an `[Image #n]` chip.
  */
 import { statSync } from 'node:fs';
-import { commandQuery, matchCommands, type SlashCommand } from '@switchback/client';
+import { commandQuery, matchCommands, type SlashCommand, USAGE_COLUMN } from '@switchback/client';
 import { Box, Text, useInput, usePaste } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readClipboardImage } from './clipboard.ts';
@@ -352,7 +352,6 @@ export function PromptInput({
 
 /** Rows shown at once; the window scrolls to keep the selection in view. */
 const MENU_ROWS = 8;
-const NAME_COLUMN = 22;
 
 function CommandMenu({ commands, selected }: { commands: SlashCommand[]; selected: number }) {
   const start = Math.min(
@@ -361,16 +360,15 @@ function CommandMenu({ commands, selected }: { commands: SlashCommand[]; selecte
   );
   const shown = commands.slice(start, start + MENU_ROWS);
   // Capped so one long argument hint doesn't push every description off screen.
-  const width = Math.min(
-    NAME_COLUMN,
-    Math.max(...commands.map((c) => c.name.length + (c.args ? c.args.length + 1 : 0))),
-  );
+  const usage = (c: SlashCommand) => `/${c.name}${c.args ? ` ${c.args}` : ''}`;
+  const width = Math.min(USAGE_COLUMN, Math.max(...commands.map((c) => usage(c).length)));
+  const current = commands[selected];
   return (
     <Box flexDirection="column" marginTop={1}>
       {shown.map((c, i) => {
         const on = start + i === selected;
-        // The argument hint, cut to the column; /help has it in full.
-        const room = Math.max(0, width - c.name.length);
+        // The argument hint, cut to the column; the selected command's shows in full below.
+        const room = Math.max(0, width - c.name.length - 1);
         const args = c.args ? ` ${c.args}` : '';
         const hint = args.length > room ? `${args.slice(0, room - 1)}…` : args.padEnd(room);
         return (
@@ -384,6 +382,9 @@ function CommandMenu({ commands, selected }: { commands: SlashCommand[]; selecte
           </Text>
         );
       })}
+      {current && usage(current).length > width ? (
+        <Text dimColor wrap="truncate-end">{`  ${usage(current)}`}</Text>
+      ) : null}
       <Text dimColor>
         {commands.length > MENU_ROWS ? `${selected + 1}/${commands.length} · ` : ''}↑↓ choose ·
         enter run · tab complete · esc close

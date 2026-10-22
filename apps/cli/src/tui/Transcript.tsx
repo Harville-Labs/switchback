@@ -130,10 +130,6 @@ export function visibleLines(lines: string[], height: number, scroll: number): s
   return lines.slice(Math.max(0, end - height), end);
 }
 
-export function maxScroll(lines: string[], height: number): number {
-  return Math.max(0, lines.length - height);
-}
-
 export function Viewport({
   lines,
   height,
@@ -146,17 +142,13 @@ export function Viewport({
   /** Lines added below while scrolled up. */
   unseen: number;
 }) {
-  const shown = visibleLines(lines, height, scroll);
+  // Scrolled up, the bar takes the bottom row rather than covering a transcript line.
+  const shown = visibleLines(lines, scroll > 0 ? height - 1 : height, scroll);
   return (
     <Box flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
       <Text>{shown.join('\n')}</Text>
       {scroll > 0 ? (
-        <Box
-          position="absolute"
-          marginTop={Math.max(0, height - 1)}
-          width="100%"
-          justifyContent="center"
-        >
+        <Box width="100%" justifyContent="center">
           <Text inverse>
             {' '}
             {unseen > 0 ? `↓ ${unseen} new lines · ` : ''}

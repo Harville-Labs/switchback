@@ -19,6 +19,7 @@ export function ModelPicker({
 }) {
   const t = useTheme();
   const [selected, setSelected] = useState(0);
+  const width = Math.max(0, ...choices.map((c) => c.alias.length));
 
   useInput((input, key) => {
     if (key.escape || (key.ctrl && input === 'c')) return onCancel();
@@ -42,7 +43,7 @@ export function ModelPicker({
               <Text color={t.accent}>{on ? '› ' : '  '}</Text>
               <Text dimColor>{i < 9 ? `${i + 1}. ` : '   '}</Text>
               <Text bold={on} color={c.tier === 'local' ? t.local : t.remote}>
-                {c.alias}
+                {c.alias.padEnd(width)}
               </Text>
               <Text dimColor>
                 {c.model === c.alias ? '' : `  ${c.model}`} · {c.tier}

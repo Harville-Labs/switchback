@@ -43,7 +43,7 @@ import { copyText } from './clipboard.ts';
 import { saveMouse } from './mouse.ts';
 import { THEME_NAMES, type ThemeName } from './theme.ts';
 
-export const helpText = (custom: readonly SlashCommand[]) => `Commands
+const helpText = (custom: readonly SlashCommand[]) => `Commands
 ${formatCommands('tui', custom)}
 Role commands take --save to make the change your default.
 Input: @ mentions a file (its contents are attached); paste freely: big pastes
@@ -113,7 +113,7 @@ export async function cycleModel(
 }
 
 /** `/up`: a stronger model takes over (`session.escalate`). */
-export async function escalateNow(ctx: SlashContext): Promise<void> {
+async function escalateNow(ctx: SlashContext): Promise<void> {
   try {
     const { when } = await ctx.client.request('session.escalate', { sessionId: ctx.session.id });
     say(ctx, escalateNotice(when));
