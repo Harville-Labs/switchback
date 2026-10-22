@@ -135,11 +135,16 @@ describe('after setup writes a config', () => {
   test('the panel asks the telemetry question, and Esc leaves it unchosen', async () => {
     const said: string[] = [];
     const ui = render(<Opened said={said} />);
+    // Windows first offers the command sandbox; Esc skips it.
+    if (process.platform === 'win32') {
+      await frameWith(ui, 'command sandbox');
+      ui.stdin.write(ESC);
+    }
     expect(await frameWith(ui, 'anonymous')).toContain('Set up ·');
     ui.stdin.write(ESC);
     expect(await frameWithout(ui, 'Set up ·')).not.toContain('Set up ·');
     await until(() => said.length > 0);
     expect(said).toEqual([setupEnded({ outcome: 'written', file: '/c.json' })]);
     ui.unmount();
-  });
+  }, 20_000);
 });

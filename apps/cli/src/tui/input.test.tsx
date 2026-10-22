@@ -326,14 +326,10 @@ describe('the current model and tabs in the app', () => {
     const { ui, calls } = app();
     await tick();
     ui.stdin.write('\x14');
-    await tick();
-    expect(ui.lastFrame()).toContain('Sessions');
-    expect(ui.lastFrame()).toContain('fix the parser');
+    expect(await frameWith(ui, 'fix the parser')).toContain('Sessions');
     ui.stdin.write('n');
-    await tick();
+    expect(await frameWith(ui, '2 new session')).toContain('1 fix the parser');
     expect(calls.some((c) => c.method === 'session.create')).toBe(true);
-    expect(ui.lastFrame()).toContain('1 fix the parser');
-    expect(ui.lastFrame()).toContain('2 new session');
     // alt+1 goes back to the first tab.
     ui.stdin.write('\x1b1');
     await tick();
