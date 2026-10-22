@@ -57,7 +57,7 @@ test('instructions over a tenth of the smallest window get a warning that says w
   ];
   const big = instructionsUsage(files, [200_000, 8_000]);
   expect(big.files.map((f) => f.scope)).toEqual(['user', 'project']);
-  expect(big.total).toBe(big.files[0]!.tokens + big.files[1]!.tokens);
+  expect(big.total).toBe(big.files.reduce((sum, f) => sum + f.tokens, 0));
   expect(big.window).toBe(8_000);
   expect(big.warning).toContain('of the smallest context window (8,000 tokens)');
   expect(big.warning).toContain('skills');

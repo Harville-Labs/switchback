@@ -19,6 +19,11 @@ test('speed is measured from the first token, and not for tiny answers', () => {
   expect(callSpeed(3, 0, 10, 20)).toEqual({ outputTokens: 3, firstTokenMs: 10 });
 });
 
+test('an answer that arrives all at once gets no speed', () => {
+  // 500 tokens in one chunk, decoded in a millisecond, is not 500k tok/s.
+  expect(callSpeed(500, 0, 10, 11)).toEqual({ outputTokens: 500, firstTokenMs: 10 });
+});
+
 test('a per-model rate averages over timed calls only', () => {
   const entry = (out: number, decodeMs?: number): LedgerEntry => ({
     ts: '',

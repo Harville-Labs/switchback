@@ -18,7 +18,7 @@ export type InstructionHashes = Partial<Record<Scope, string>>;
 
 const SCOPES: Scope[] = ['user', 'project'];
 
-export function hashOf(text: string): string {
+function hashOf(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 16);
 }
 

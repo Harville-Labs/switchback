@@ -7,6 +7,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 ### Added
 - **`switchback resume [id]` reopens a session from the shell.** With no id it opens the TUI on the session picker; with one, that session, or a clear error when the workspace has no session with that id. `-r` / `--resume` is the same command. Leaving the TUI prints `Resume this session with: switchback resume <id>` for a session with messages ([#154](https://github.com/Harville-Labs/switchback/issues/154))
 
+### Changed
+- **Config edits take effect on `/reload`.** Running engines no longer watch config files. Edit them however you like, then type `/reload` in the TUI or VS Code (`config.reload` in the protocol) to apply them to the running engine; it says which settings changed, or which file didn't parse while the config in effect stays. Organization-enforced settings still win, and setup run from a client still applies what it writes right away
+
 ### Fixed
 - **The resume command printed on exit works.** It said `switchback --resume <id>`, which the CLI rejected as an unknown command
 

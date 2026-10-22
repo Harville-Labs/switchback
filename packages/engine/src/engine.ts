@@ -15,6 +15,7 @@ import {
   type AgentSummary,
   type Attachment,
   type CheckpointInfo,
+  type ConfigReloadResult,
   type CustomCommandInfo,
   type EffortLevel,
   type EngineEvent,
@@ -50,7 +51,6 @@ import {
 import type { Price } from '@switchback/providers';
 import { type AgentSpec, draftWithSummarizer } from './authoring.ts';
 import { referenceModel, type SwitchbackConfig } from './config.ts';
-import { ConfigWatcher } from './config-watch.ts';
 import type { EngineOptions } from './engine-options.ts';
 import { assembleEngine, type EngineParts } from './engine-parts.ts';
 import { changeNote } from './instructions-live.ts';
@@ -69,12 +69,21 @@ import { listWorktrees, worktreeDiff } from './worktree-info.ts';
 
 export type { EngineOptions } from './engine-options.ts';
 
+/** Top-level config keys whose values differ, in the order `next` lists them. */
+function changedKeys(prev: SwitchbackConfig, next: SwitchbackConfig): string[] {
+  const keys = new Set([...Object.keys(next), ...Object.keys(prev)]);
+  return [...keys].filter(
+    (k) =>
+      JSON.stringify((prev as Record<string, unknown>)[k]) !==
+      JSON.stringify((next as Record<string, unknown>)[k]),
+  );
+}
+
 export const ENGINE_VERSION = '2.4.0';
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
   private mcp: McpHub | undefined;
-  private configWatch: ConfigWatcher | undefined;
   private readonly setupRuns: SetupRuns;
   /** The collaborators (engine-parts.ts). */
   private readonly p: EngineParts;
@@ -95,25 +104,43 @@ export class Engine {
     this.p.instructions.watch?.((scopes) =>
       this.emit({ type: 'config.updated', notes: scopes.map(changeNote) }),
     );
-    if (options.reloadConfig)
-      this.configWatch = new ConfigWatcher(Object.values(this.p.configFiles), () =>
-        this.reloadConfig(),
-      );
   }
 
-  /** Load the config from disk again and apply it, unless nothing in it changed. */
+  /** After setup or a model refresh writes the config: apply it, reporting a file that won't load. */
   private reloadConfig(): void {
     if (!this.options.reloadConfig) return;
     try {
-      const next = this.options.reloadConfig();
-      // Setup's write is seen twice (its own reload, then the watcher); apply it once.
-      const same =
-        JSON.stringify(next.config) === JSON.stringify(this.options.config) &&
-        JSON.stringify(next.rules) === JSON.stringify(this.options.rules);
-      if (!same) this.applyConfig(next);
+      this.reload();
     } catch (err) {
-      this.notify('error', `the new configuration wasn't applied: ${(err as Error).message}`);
+      this.notify('error', (err as Error).message);
     }
+  }
+
+  /**
+   * `config.reload`: read the user, project, and organization config again
+   * and apply it. Config files aren't watched, so edits wait for this or the
+   * next engine. A file that won't load throws, and the config in effect stays.
+   */
+  reload(): ConfigReloadResult {
+    if (!this.options.reloadConfig)
+      throw new Error('this engine takes its config only from its host; restart it instead');
+    let next: ReturnType<NonNullable<EngineOptions['reloadConfig']>>;
+    try {
+      next = this.options.reloadConfig();
+    } catch (err) {
+      const file = (err as { file?: string }).file;
+      throw new Error(
+        `${file ? `${file}: ` : ''}${(err as Error).message.replace(/\.$/, '')}. The config in effect stays; fix the file and /reload again.`,
+      );
+    }
+    const changed = changedKeys(this.options.config, next.config);
+    if (
+      JSON.stringify(next.rules) !== JSON.stringify(this.options.rules) &&
+      !changed.includes('permissions')
+    )
+      changed.push('permissions');
+    if (changed.length) this.applyConfig(next);
+    return { changed, models: this.p.models.summaries() };
   }
 
   private startMcp(config: SwitchbackConfig): McpHub | undefined {
@@ -449,7 +476,6 @@ export class Engine {
 
   async shutdown(): Promise<void> {
     this.p.instructions.close();
-    this.configWatch?.close();
     await this.p.commands.close();
     for (const s of this.p.sessions.inMemory()) {
       s.controller?.abort();

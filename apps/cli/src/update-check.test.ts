@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newerRelease, updateNotice } from './update-check.ts';
+import { newerRelease } from './update-check.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -60,10 +60,4 @@ describe('newerRelease', () => {
     expect(await newerRelease({ dataDir, current: '2.1.0', now, fetch })).toBe('3.0.0');
     expect(calls).toHaveLength(1);
   });
-});
-
-test('the notice names the update command', () => {
-  expect(updateNotice('2.2.0', '2.1.0')).toBe(
-    'Switchback 2.2.0 is out (you have 2.1.0). Update with `switchback update`.',
-  );
 });

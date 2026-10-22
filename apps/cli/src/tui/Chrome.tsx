@@ -1,5 +1,4 @@
 /** Everything around the transcript: the welcome card, the working line, and the status bar. */
-import { homedir } from 'node:os';
 import {
   cacheLabel,
   formatLadder,
@@ -14,6 +13,7 @@ import {
   type ViewItem,
   type ViewState,
 } from '@switchback/client';
+import { tildify } from '@switchback/engine';
 import type {
   InitializeResult,
   PermissionMode,
@@ -28,11 +28,6 @@ import { useEffect, useState } from 'react';
 import { type Theme, useTheme } from './theme.ts';
 
 type SubagentRow = Extract<ViewItem, { kind: 'subagent' }>;
-
-export function tildify(path: string): string {
-  const home = homedir();
-  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
-}
 
 /** Key hints: the key highlighted, then what it does. */
 export function Keys({ keys }: { keys: [string, string][] }) {
@@ -179,7 +174,7 @@ function compact(n: number): string {
 }
 
 /** About how many tokens the model has written since the prompt: the text it streamed, at ~4 characters a token. */
-export function streamedTokens(view: ViewState): number {
+function streamedTokens(view: ViewState): number {
   const from = view.items.findLastIndex((i) => i.kind === 'user');
   let chars = 0;
   for (const item of view.items.slice(from + 1))

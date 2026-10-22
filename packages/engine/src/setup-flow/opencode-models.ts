@@ -17,7 +17,7 @@ export type Obj = Record<string, unknown>;
 export const obj = (v: unknown): Obj =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {};
 export const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
-export const num = (v: unknown): number | undefined =>
+const num = (v: unknown): number | undefined =>
   typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : undefined;
 
 /** `{env:NAME}` → `NAME`; anything else isn't an environment reference. */
@@ -135,7 +135,7 @@ export function translateModel(
 }
 
 /** Loopback, private networks, `.local`, and bare hostnames: a server on this machine or LAN. */
-export function isLocalHost(url: string): boolean {
+function isLocalHost(url: string): boolean {
   const h = new URL(url).hostname.replace(/^\[|\]$/g, '');
   return (
     h === 'localhost' ||

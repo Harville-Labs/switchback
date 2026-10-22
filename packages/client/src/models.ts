@@ -3,11 +3,13 @@
  * VS Code's model dropdown all list the same choices and make the same change.
  */
 import type {
+  ConfigReloadResult,
   InitializeResult,
   ModelsRefreshResult,
   SessionRoles,
   SessionSetRolesParams,
 } from '@switchback/protocol';
+import type { SwitchbackClient } from './client.ts';
 import { rolesOfModel } from './format.ts';
 
 type ModelSummary = InitializeResult['models'][number];
@@ -90,4 +92,15 @@ export function formatRefresh(result: ModelsRefreshResult): string {
     return `  ${s.provider}: ${changes.length ? changes.join('; ') : 'no change'}`;
   });
   return [`${result.models.length} models available.`, ...lines].join('\n');
+}
+
+/** `/reload` in either client: ask the engine to read its config again, and say what came of it. */
+export function runReload(client: Pick<SwitchbackClient, 'request'>): Promise<string> {
+  return client.request('config.reload', {}).then(formatReload, (err: Error) => err.message);
+}
+
+/** Which parts of the config changed, if any. */
+export function formatReload(result: ConfigReloadResult): string {
+  if (!result.changed.length) return 'Config reloaded; nothing in it changed.';
+  return `Config reloaded. Changed: ${result.changed.join(', ')}. ${result.models.length} models available.`;
 }

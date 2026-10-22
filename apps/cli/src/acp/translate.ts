@@ -21,7 +21,7 @@ import type {
 export type AcpUpdate = acp.SessionNotification['update'];
 
 /** Switchback's permission modes, as ACP session modes. */
-export const MODES: acp.SessionMode[] = [
+const MODES: acp.SessionMode[] = [
   { id: 'default', name: 'Default', description: 'Ask before edits and commands' },
   { id: 'acceptEdits', name: 'Accept edits', description: 'Edit files without asking' },
   { id: 'plan', name: 'Plan', description: 'Read and plan; change nothing until you approve' },

@@ -297,10 +297,11 @@ export function formatLadder(ladder: ViewState['ladder']): string {
 
 /** Everything configured, with its tier and the roles it fills. */
 export function formatModels(models: ModelSummary[], roles?: SessionRoles): string {
+  const width = Math.max(0, ...models.map((m) => m.alias.length));
   return models
     .map((m) => {
       const filled = roles ? rolesOfModel(m.alias, roles) : [];
-      return `${m.alias}  ${m.ref.model} (${m.tier})${filled.length ? `  · ${filled.join(', ')}` : ''}`;
+      return `${m.alias.padEnd(width)}  ${m.ref.model} (${m.tier})${filled.length ? `  · ${filled.join(', ')}` : ''}`;
     })
     .join('\n');
 }
@@ -371,12 +372,19 @@ export function nextMode(current: PermissionMode, allowed: PermissionMode[]): Pe
 
 /** `/permissions`: the mode, the levels, and every rule with where it came from. */
 export function formatPermissions(p: PermissionsListResult): string {
+  const row = (label: string, text: string) => `${label.padEnd(8)}${text}`;
   const lines = [
-    ...(p.mode ? [`mode   ${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`] : []),
-    `levels read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · websearch ${p.levels.websearch} · mcp ${p.levels.mcp}`,
-    `sandbox ${p.sandbox.active ? 'on: bash commands run in the OS sandbox' : `off: ${p.sandbox.reason}`}`,
+    ...(p.mode ? [row('mode', `${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`)] : []),
+    row(
+      'levels',
+      `read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · websearch ${p.levels.websearch} · mcp ${p.levels.mcp}`,
+    ),
+    row(
+      'sandbox',
+      p.sandbox.active ? 'on: bash commands run in the OS sandbox' : `off: ${p.sandbox.reason}`,
+    ),
   ];
-  if (!p.rules.length) lines.push('rules  none (see docs/permissions.md)');
+  if (!p.rules.length) lines.push(row('rules', 'none (see docs/permissions.md)'));
   else {
     lines.push('rules');
     // Grouped by where they came from, then by behavior: a config holds dozens.

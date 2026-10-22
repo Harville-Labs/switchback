@@ -4,7 +4,7 @@
  * (no Switchback config yet), so it never gets in the way of re-running setup.
  * `--from <agent>` picks one unattended. See ADR 0022.
  */
-import { homedir } from 'node:os';
+import { tildify } from '../paths.ts';
 import { REMOTE_PROVIDERS } from '../setup.ts';
 import { SetupError, type SetupFlags } from './flags.ts';
 import { findOpenCodeConfigs, type Imported, readOpenCode } from './from-opencode.ts';
@@ -40,7 +40,7 @@ export async function offerStartFrom(
       ...found.map(({ id, h, files }) => ({
         label: `Start from my ${h.name} setup`,
         value: id as Harness | '',
-        hint: files.map(tildify).join(', '),
+        hint: files.map((f) => tildify(f)).join(', '),
       })),
       { label: 'No, start fresh', value: '' as const },
     ],
@@ -80,9 +80,4 @@ function report(name: string, got: Imported, ui: SetupPrompter | undefined, env:
   for (const h of hints) say(ui, h, 'warning');
   for (const s of got.skipped) say(ui, `Not brought over: ${s}`, 'warning');
   return got;
-}
-
-function tildify(path: string): string {
-  const home = homedir();
-  return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineTool } from './tool.ts';
 
-export const TodoItem = z.object({
+const TodoItem = z.object({
   text: z.string().min(1).max(300),
   status: z.enum(['pending', 'in_progress', 'done']),
 });

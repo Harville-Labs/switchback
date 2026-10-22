@@ -186,6 +186,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: 'Tools',
     description: 'copy the last reply, its nth code block, the last tool output, or everything',
   },
+  {
+    name: 'reload',
+    group: 'Tools',
+    description: 'read the config files again and apply them',
+  },
   { name: 'help', group: 'Tools', description: 'list commands' },
   {
     name: 'theme',
@@ -277,11 +282,23 @@ export function commandQuery(input: string): string | undefined {
 }
 
 /** The command list as aligned text, for /help. */
+/** Usages longer than this go on a line of their own in `/help`, and are cut in a command menu. */
+export const USAGE_COLUMN = 26;
+
 export function formatCommands(client: ClientName, custom: readonly SlashCommand[] = []): string {
   const rows = commandsFor(client, custom).map((c) => [
     `/${c.name}${c.args ? ` ${c.args}` : ''}`,
     c.description,
   ]);
-  const width = Math.max(...rows.map(([usage]) => usage?.length ?? 0)) + 2;
-  return rows.map(([usage, text]) => `  ${usage?.padEnd(width)}${text}`).join('\n');
+  // A few usages list every argument; sized to those, the column pushes most descriptions
+  // past a terminal's width. Those few get a line of their own instead.
+  const longest = Math.max(...rows.map(([usage]) => usage?.length ?? 0));
+  const width = Math.min(longest, USAGE_COLUMN) + 2;
+  return rows
+    .map(([usage = '', text]) =>
+      usage.length < width
+        ? `  ${usage.padEnd(width)}${text}`
+        : `  ${usage}\n  ${' '.repeat(width)}${text}`,
+    )
+    .join('\n');
 }
