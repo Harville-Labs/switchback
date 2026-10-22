@@ -345,7 +345,7 @@ describe('the current model and tabs in the app', () => {
     await tick();
     ui.stdin.write(ENTER);
     await tick();
-    expect(await frameWith(ui, /1\* · fix the parser/)).toMatch(/1\* · fix the parser/);
+    expect(await frameWith(ui, /› +1 · fix the parser .*here/)).toMatch(/› +1 · fix the parser/);
   });
 });
 

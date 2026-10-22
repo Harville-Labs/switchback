@@ -13,6 +13,7 @@ import type {
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
+import type { ChoiceList } from './ChoicePicker.tsx';
 import type { MouseInput } from './mouse.ts';
 import type { ThemeName } from './theme.ts';
 
@@ -40,6 +41,8 @@ export interface SlashContext {
   openRewind(): Promise<void>;
   /** Show the current-model picker. */
   openModelPicker(role: ChosenRole): void;
+  /** Show a list to pick a command's argument from. */
+  openChoices(list: ChoiceList): void;
   /** Run setup (`/init`), as `switchback init` does. */
   openSetup(): void;
   /** The agent of the subagent shown in place of the session (Tab), if any. */
