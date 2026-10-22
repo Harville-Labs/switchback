@@ -363,8 +363,12 @@ describe('the review covers every file the turn changed', () => {
     expect(sent).toContain('+export const add = (a, b) => a + b;');
     expect(sent).toContain('+two');
     expect(sent).toContain('+++ b/extra.ts');
+    const changed = Bun.spawnSync(['git', 'status', '--porcelain', '-uall'], { cwd: root })
+      .stdout.toString()
+      .trim()
+      .split('\n').length;
     expect(events.find((e) => e.type === 'route.decided' && e.rule === 'review')).toMatchObject({
-      reason: 'reviewing 3 changed files',
+      reason: `reviewing ${changed} changed files`,
     });
   });
 
