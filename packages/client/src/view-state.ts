@@ -3,6 +3,7 @@
  * queries both clients make of it. The reducer that builds it is in view.ts.
  */
 import type {
+  GoalInfo,
   ModelRef,
   PermissionMode,
   QueuedPrompt,
@@ -74,7 +75,7 @@ export type ViewItem =
       round: number;
     }
   | { kind: 'error'; id: string; message: string }
-  /** Client-local notices (slash command output); never produced by the engine. */
+  /** Notices the client words: slash command output, a goal starting or ending. */
   | { kind: 'info'; id: string; text: string };
 
 export interface TodoItem {
@@ -164,6 +165,11 @@ export interface ViewState {
   shells?: Record<string, ShellInfo>;
   /** Prompts sent during the running turn, waiting for its next step. */
   queue?: QueuedPrompt[];
+  /**
+   * The session's goal (`/goal`), once an update arrives while this view
+   * watches. Before that, the session summary has it (`sessionGoal`).
+   */
+  goal?: GoalInfo;
   /** The model's latest checklist (its `todo` tool), if it keeps one. */
   todos?: TodoItem[];
   /** Each subagent's own view, keyed by child session ID (nested for deeper subagents). */

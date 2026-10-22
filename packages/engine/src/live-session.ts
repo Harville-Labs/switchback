@@ -20,6 +20,7 @@ import type {
 import type { Effort } from '@switchback/providers';
 import type { SignalTracker } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
+import type { GoalState } from './goals.ts';
 import type { InstructionHashes } from './instructions-live.ts';
 import type { OrgStatus } from './org/policy.ts';
 import type { PrivatePathMatcher } from './privacy.ts';
@@ -82,6 +83,8 @@ export interface LiveSession {
   turn?: { id: string; done: Promise<unknown> };
   /** Prompts sent during the running turn, delivered at its next step. */
   queue?: (QueuedPrompt & { attachments: Attachment[] })[];
+  /** Top-level sessions: the goal it works toward (`/goal`), kept after it ends for display. */
+  goal?: GoalState;
   /** SessionStart hooks have run for this session in this engine. */
   hooksStarted?: boolean;
 }

@@ -20,9 +20,10 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `skill` | none | Load a [skill](commands-and-skills.md#skills): its instructions, or one of its files |
 | `merge_worktree` | edit (always asks) | Merge a branch an [isolated subagent](subagents.md#worktree-isolation) left into your checked-out branch, after you see the diff |
 | `escalate` | none | Ask for the next step to run one model up the escalation ladder, with a reason; the router decides under `escalation.policy` ([routing.md](routing.md#the-model-escalating-itself)) |
+| `goal` | none | End the goal the user set with `/goal`: `done` when it's met, `blocked` when the model needs the user, with a summary the user sees (top-level sessions only; [ADR 0024](adr/0024-goals.md)) |
 | `docs` | none | Read Switchback's own documentation, as built into this version: the topics below "Using Switchback" in the docs index, a whole page or one section. The configuration page starts with where this machine's config files are |
 
-An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `merge_worktree` with `task`, `exit_plan_mode` comes with every top-level session, and `todo`, `skill`, `docs`, and `escalate` with every session.
+An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `merge_worktree` with `task`, `exit_plan_mode` and `goal` come with every top-level session, and `todo`, `skill`, `docs`, and `escalate` with every session.
 
 ## How much of a result the model gets
 

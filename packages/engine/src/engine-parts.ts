@@ -11,6 +11,7 @@ import { Compactor } from './compactor.ts';
 import { configTextProblem, referenceModel } from './config.ts';
 import type { EngineOptions } from './engine-options.ts';
 import { ExternalRuntimes } from './external-runtime.ts';
+import { Goals } from './goals.ts';
 import { HookRunner } from './hooks/runner.ts';
 import { TurnHooks } from './hooks/turn-hooks.ts';
 import { fixedInstructions } from './instructions-live.ts';
@@ -122,6 +123,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     privatePaths: () => policy.privatePaths(),
   };
   const compactor: Compactor = new Compactor(host, models);
+  const goals: Goals = new Goals(host, () => now().getTime());
   const controls: SessionControls = new SessionControls(host, {
     sessions: sessions,
     checkpoints: new Checkpoints(options.checkpoints ?? new MemoryCheckpointStore()),
@@ -185,6 +187,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     configFiles,
     validate: (file, content) =>
       canonicalConfigFiles.has(file) ? configTextProblem(content) : undefined,
+    goals,
   });
   const external: ExternalRuntimes = new ExternalRuntimes(host, {
     injected: options.runtimes,
@@ -232,6 +235,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     instructions,
     mcp: () => io.mcp(),
     contextWindow: () => compactor.window(),
+    goals,
   });
 
   /** What every hook hears about the session. */
@@ -256,6 +260,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     factory,
     host,
     compactor,
+    goals,
     controls,
     hooks,
     commands,

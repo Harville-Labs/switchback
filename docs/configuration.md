@@ -284,6 +284,8 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | `subagents.effort` | none | Reasoning effort for subagents whose agent sets none, over the model's `effort` |
 | `agents.<name>` | none | Add, change, or turn off (`disable: true`) agents, with the same fields as an agent file plus `prompt`. An entry for an existing agent changes only the fields it sets. See [subagents.md](subagents.md#agents-in-config) |
 | `maxStepsPerTurn` | 50 | Model calls per user prompt before stopping |
+| `goal.maxTurns` | 25 | Turns a [`/goal`](clients/tui.md#goals) may run, counting the first, before it stops |
+| `goal.maxMinutes` | 120 | Minutes a `/goal` may run before it stops; checked when each turn ends |
 | `retry.attempts` | 5 | Retries of a model call that failed with a retryable error (connection, 429, 5xx) before any output streamed. After the last one, the provider is marked down and the router falls back. 0 falls back at once |
 | `retry.initialDelayMs` | 1000 | Delay before the first retry; each later retry doubles it, with jitter |
 | `retry.maxDelayMs` | 30000 | Longest delay between retries |

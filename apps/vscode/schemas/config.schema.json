@@ -1127,6 +1127,24 @@
         }
       }
     },
+    "goal": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "maxTurns": {
+          "default": 25,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 1000
+        },
+        "maxMinutes": {
+          "default": 120,
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10080
+        }
+      }
+    },
     "maxStepsPerTurn": {
       "default": 50,
       "type": "integer",

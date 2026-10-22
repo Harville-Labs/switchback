@@ -230,6 +230,13 @@ export const SwitchbackConfig = z.object({
       effort: EffortLevel.optional(),
     })
     .prefault({}),
+  /** Limits on `/goal`: it stops after this many turns or minutes, whichever comes first. */
+  goal: z
+    .object({
+      maxTurns: z.number().int().positive().max(1000).default(25),
+      maxMinutes: z.number().positive().max(10_080).default(120),
+    })
+    .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */
   maxStepsPerTurn: z.number().int().positive().default(50),
   /**

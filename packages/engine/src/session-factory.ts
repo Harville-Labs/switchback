@@ -135,6 +135,7 @@ export class SessionFactory {
         : {
             permissionMode: live?.mode ?? this.deps.config().permissions.defaultMode,
             ...(live?.effort ? { effort: live.effort } : {}),
+            ...(live?.goal ? { goal: live.goal.info } : {}),
           }),
     };
   }

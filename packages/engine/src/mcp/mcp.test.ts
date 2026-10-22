@@ -244,7 +244,7 @@ describe('stdio server', () => {
       },
     );
     await e.runTurn(e.createSession({ agent: 'notes' }).id, 'x');
-    // exit_plan_mode, todo, skill, docs, and escalate aren't agent capabilities; sessions always have them.
+    // exit_plan_mode, todo, skill, docs, escalate, and goal aren't agent capabilities; sessions always have them.
     expect(lp.requests[0]?.tools.map((t) => t.name)).toEqual([
       'read',
       'exit_plan_mode',
@@ -252,6 +252,7 @@ describe('stdio server', () => {
       'skill',
       'docs',
       'escalate',
+      'goal',
       'mcp__test__add',
     ]);
     await e.shutdown();

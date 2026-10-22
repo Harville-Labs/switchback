@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./view": "./src/view.ts",
     "./format": "./src/format.ts",
+    "./goal": "./src/goal.ts",
     "./models": "./src/models.ts",
     "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts",

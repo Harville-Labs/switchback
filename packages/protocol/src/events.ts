@@ -2,6 +2,8 @@
  * Engine -> client events: JSON-RPC notifications with method "event". Every
  * client folds them into its view through `reduce()` in @switchback/client.
  */
+
+import type { GoalInfo } from './goals.ts';
 import type {
   EffortLevel,
   OrgInfo,
@@ -52,6 +54,8 @@ export type EngineEvent =
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
   /** The session's reasoning effort; none means the agent's or model's own. */
   | ({ type: 'effort.changed'; effort?: EffortLevel } & SessionScoped)
+  /** The session's goal was set, made progress (a turn ended), or ended. */
+  | ({ type: 'goal.updated'; goal: GoalInfo } & SessionScoped)
   /** The session's queued prompts changed. */
   | ({ type: 'queue.updated'; queued: QueuedPrompt[] } & SessionScoped)
   /** A queued prompt reached the model; clients show it as the user's message now. */

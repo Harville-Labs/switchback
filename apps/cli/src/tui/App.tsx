@@ -21,6 +21,7 @@ import {
   resolveEscalation,
   resolvePermission,
   type SwitchbackClient,
+  sessionGoal,
   switchTab,
   type TabsState,
   updateActiveView,
@@ -36,13 +37,14 @@ import type {
 } from '@switchback/protocol';
 import { Box, Text, useApp, useBoxMetrics, useStdout, useWindowSize } from 'ink';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Header, Queue, StatusBar, SubagentHeader, Todos, Working } from './Chrome.tsx';
+import { Header, StatusBar, SubagentHeader, Working } from './Chrome.tsx';
 import { useEngineFeeds } from './feeds.ts';
 import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
 import { useAppKeys } from './keys.ts';
 import { ModelPicker } from './ModelPicker.tsx';
 import type { MouseInput } from './mouse.ts';
+import { Pinned } from './Pinned.tsx';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
@@ -377,8 +379,7 @@ export function App({
           <Viewport lines={lines} height={height} scroll={scroll.scroll} unseen={scroll.unseen} />
         </Box>
         <Box flexDirection="column" flexShrink={0}>
-          {view.todos?.some((t) => t.status !== 'done') ? <Todos todos={view.todos} /> : null}
-          {view.queue?.length ? <Queue queue={view.queue} /> : null}
+          <Pinned view={view} goal={sessionGoal(view, session)} />
           {permission ? (
             <PermissionPrompt
               key={permission.requestId}

@@ -13,6 +13,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **The prompt-cache hit rate is in the status bar.** The TUI's status bar and VS Code's composer show how much of the session's input came from the provider's cache (`cache 91%`), with the latest turn's when it differs. `call.stats` events carry each call's usage. `--mock` simulates a prefix cache, so the rate shows there too
 - **`/rename` names a session.** Up to 60 characters, in the TUI and VS Code (`session.rename` in the protocol). The title shows in `/sessions`, `--resume`, the VS Code view, the terminal's title (restored on exit), and ACP editors. `/rename` alone shows the current title
 - **Sessions are retitled at compaction.** The summary that compaction already makes suggests a title, so it costs no extra model call; a title you set is never replaced
+- **`/goal <objective>` keeps working until it's done.** The agent starts turn after turn until the model reports the goal done or blocked with the new `goal` tool, a `goal.maxTurns` or `goal.maxMinutes` limit is reached, three turns in a row fail, or you stop it with Esc or `/goal stop`. Each new turn is an appended reminder, so routing, budgets, and permission prompts apply as usual. Both clients show the goal above the prompt ([ADR 0024](docs/adr/0024-goals.md))
 
 ### Changed
 - **16 subagents run at once by default,** up from 4 (`subagents.maxConcurrent`), so a large fan-out finishes sooner. Local servers queue what they can't run at once

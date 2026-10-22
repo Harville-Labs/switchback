@@ -44,6 +44,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.escalate` | `sessionId` | `{ when }`: the next model call climbs one step up the ladder (`next-step` during a turn, `next-prompt` otherwise); rule `user-escalation` |
 | `session.rename` | `{ sessionId, title }` | `SessionSummary`. Sets the title (trimmed, 1 to 60 characters, `SESSION_TITLE_MAX`); the engine won't retitle it after that. Emits `session.renamed` |
+| `session.setGoal` | `{ sessionId, objective }` (1–4000 characters, or `null` to stop) | `{ goal?, turnId? }`. Sets the session's goal and starts a turn with the objective as its prompt; the engine keeps starting turns until the model calls `goal`, a `goal.*` limit is hit, three turns in a row fail, or the user cancels. `null` stops it after the running turn. Top-level sessions only ([ADR 0024](adr/0024-goals.md)). The session summary carries `goal` too |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`), `feedback?` | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config. With `deny`, `feedback` is what the user wants instead, and the model gets it with the refusal |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
@@ -82,6 +83,7 @@ A shared daemon sends every attached client every session's events, so a client 
 | `queue.delivered` | A queued prompt reached the model at a step boundary; clients show it as the user's message then |
 | `shell.updated` | A background shell started, exited, or was stopped (`shell`: id, command, status, exit code) |
 | `effort.changed` | A session's reasoning effort changed (`session.setEffort`); no `effort` means back to the default |
+| `goal.updated` | A session's goal started, moved to its next turn, or ended (`goal`: objective, `status` `active`\|`done`\|`blocked`\|`stopped`, `turns`, `maxTurns`, `startedAt`, and `note`: the model's summary or why it stopped) |
 | `mode.changed` | A session's permission mode changed (`session.setMode`, or a plan was approved) |
 | `text.delta` / `reasoning.delta` | Streaming output |
 | `tool.started` / `tool.completed` | Tool calls, with output and `isError`. `private` on `completed` says the result carried private content, so the session now stays local; `denied` that the call never ran; `diff`, on an edit or write, what it changed (for display; the model never sees it) |

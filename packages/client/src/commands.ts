@@ -87,6 +87,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   { name: 'subagents', group: 'Session', description: "list this session's subagents as a tree" },
   {
+    name: 'goal',
+    args: '[objective|stop]',
+    group: 'Session',
+    description: 'keep working, turn after turn, until the objective is met; no argument shows it',
+  },
+  {
     name: 'subagent',
     args: '<n>',
     group: 'Session',

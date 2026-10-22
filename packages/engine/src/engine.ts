@@ -35,6 +35,7 @@ import {
   type SessionRewindParams,
   type SessionRewindResult,
   type SessionRoles,
+  type SessionSetGoalResult,
   type SessionSetRolesParams,
   type SessionSummary,
   type SetupAnswerParams,
@@ -253,10 +254,28 @@ export class Engine {
     return this.p.turns.run(session, text, route, turnId, parentSignal, extra, options);
   }
 
-  /** Cancel the running turn and every background subagent the session started. */
+  /** Cancel the running turn and every background subagent the session started, and stop its goal. */
   cancel(sessionId: string): boolean {
     const s = this.p.sessions.get(sessionId);
-    return s ? this.p.turns.cancel(s) : false;
+    if (!s) return false;
+    if (s.depth === 0) this.p.goals.stop(s, 'interrupted');
+    return this.p.turns.cancel(s);
+  }
+
+  /**
+   * `session.setGoal`: start working toward an objective, the objective
+   * being the first prompt (queued while a turn runs), or stop the goal.
+   */
+  setGoal(sessionId: string, objective: string | null): SessionSetGoalResult {
+    const s = this.p.sessions.live(sessionId);
+    if (s.depth > 0)
+      throw new RpcError(ErrorCode.InvalidParams, 'only a top-level session can have a goal');
+    if (objective === null) {
+      const goal = this.p.goals.stop(s, 'stopped by the user');
+      return goal ? { goal } : {};
+    }
+    const goal = this.p.goals.set(s, objective);
+    return { goal, turnId: this.p.turns.start(s, { text: objective }).turnId };
   }
 
   respondPermission(

@@ -5,6 +5,7 @@ export * from './commands.ts';
 export * from './copy.ts';
 export * from './daemon.ts';
 export * from './format.ts';
+export * from './goal.ts';
 export * from './models.ts';
 export * from './session-scope.ts';
 export * from './setup.ts';

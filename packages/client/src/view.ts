@@ -13,6 +13,7 @@ import {
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
 import { renamedLabel } from './titles.ts';
+import { goalNotice } from './goal.ts';
 import {
   agentOf,
   foldCache,
@@ -292,6 +293,14 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       return { ...state, effort: event.effort ?? null };
     case 'queue.updated':
       return { ...state, queue: event.queued };
+    case 'goal.updated': {
+      // Turn counts update the pinned line; starting and ending also get a line here.
+      const prev = state.goal;
+      const changed = prev?.startedAt !== event.goal.startedAt || prev.status !== event.goal.status;
+      if (changed)
+        items.push({ kind: 'info', id: `g${items.length}`, text: goalNotice(event.goal) });
+      return { ...state, items, goal: event.goal };
+    }
     case 'queue.delivered':
       // The prompt joins the conversation now, not when it was typed.
       items.push({ kind: 'user', id: `q${event.prompt.id}`, text: event.prompt.text });

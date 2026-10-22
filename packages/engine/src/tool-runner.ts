@@ -4,6 +4,7 @@
  */
 import type { ImagePart, ToolResultPart } from '@switchback/protocol';
 import { fitResult, resultChars } from './context-budget.ts';
+import type { Goals } from './goals.ts';
 import type { HookOutcome, HookRunner } from './hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
@@ -38,6 +39,7 @@ export interface ToolRunnerDeps {
   skills(): Map<string, Skill>;
   configFiles: NonNullable<ToolContext['configFiles']>;
   validate: NonNullable<ToolContext['validate']>;
+  goals: Goals;
 }
 
 export interface ToolCall {
@@ -87,7 +89,10 @@ export class ToolRunner {
       validate: this.deps.validate,
       requestEscalation: (reason) => s.signals.recordEscalationRequest(reason),
       ...(s.depth === 0
-        ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
+        ? {
+            approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal),
+            reportGoal: (status, summary) => !!this.deps.goals.report(s, status, summary),
+          }
         : {}),
     };
     const runOne = (call: ToolCall) =>

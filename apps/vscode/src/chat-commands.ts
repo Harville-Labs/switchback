@@ -18,6 +18,7 @@ import {
   formatWorktrees,
   parseEffort,
   parseMode,
+  runGoalCommand,
 } from '@switchback/client';
 import { SESSION_TITLE_MAX } from '@switchback/protocol';
 import * as vscode from 'vscode';
@@ -110,6 +111,14 @@ export async function runChatCommand(
       if (set.effort) session.effort = set.effort;
       else delete session.effort;
       return info(effortNotice(set.effort));
+    }
+    case 'goal': {
+      // The host keeps no view, so a fresh summary has the goal's progress.
+      const current = args.length
+        ? session
+        : (await c.request('session.get', { sessionId: session.id })).session;
+      const text = await runGoalCommand(c, current, {}, args);
+      return text ? info(text) : undefined;
     }
     case 'permissions':
       return info(

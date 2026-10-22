@@ -1,4 +1,5 @@
 export * from './events.ts';
+export * from './goals.ts';
 export * from './jsonrpc.ts';
 export * from './methods.ts';
 export * from './models.ts';

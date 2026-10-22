@@ -31,6 +31,7 @@ import {
   SessionRewindParams,
   SessionRolesParams,
   SessionSetEffortParams,
+  SessionSetGoalParams,
   SessionSetModeParams,
   SessionSetRolesParams,
   SetupAnswerParams,
@@ -150,6 +151,10 @@ export function serve(
       case 'session.setEffort': {
         const p = parse(SessionSetEffortParams, req.params);
         return engine.setEffort(p.sessionId, p.effort);
+      }
+      case 'session.setGoal': {
+        const p = parse(SessionSetGoalParams, req.params);
+        return engine.setGoal(p.sessionId, p.objective);
       }
       case 'shells.list':
         return engine.shells(parse(ShellsListParams, req.params).sessionId);

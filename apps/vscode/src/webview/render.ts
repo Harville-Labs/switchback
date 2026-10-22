@@ -14,6 +14,7 @@ import {
   tailLines,
 } from '@switchback/client/format';
 import { subagentDetail, subagentIcon } from '@switchback/client/subagent-format';
+import { goalLine } from '@switchback/client/goal';
 import {
   type DisplayRow,
   displayRows,
@@ -244,6 +245,13 @@ export function renderQueue(queue: readonly { id: string; text: string }[]): str
         `<div class="queued"><span class="text" title="${esc(q.text)}">⧗ ${esc(q.text)}</span><button class="link" data-dequeue="${esc(q.id)}">Withdraw</button></div>`,
     )
     .join('');
+}
+
+/** The goal while turns keep starting for it (`/goal`). */
+export function renderGoal(goal: ViewState['goal']): string {
+  return goal?.status === 'active'
+    ? `<div class="goal" title="${esc(goal.objective)}">${esc(goalLine(goal))}</div>`
+    : '';
 }
 
 /** The model's checklist while there's work left on it. */

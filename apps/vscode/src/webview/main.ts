@@ -42,6 +42,7 @@ import { PendingImages } from './images.ts';
 import {
   esc,
   permissionAnswer,
+  renderGoal,
   renderPrompt,
   renderQueue,
   renderRows,
@@ -158,7 +159,7 @@ function render() {
   prompts.innerHTML = renderPrompt(view);
 
   // One button: send while idle, stop while a turn runs.
-  todosEl.innerHTML = renderTodos(view.todos);
+  todosEl.innerHTML = renderGoal(view.goal) + renderTodos(view.todos);
   queueEl.innerHTML = renderQueue(view.queue ?? []);
   syncSend();
   renderControls();

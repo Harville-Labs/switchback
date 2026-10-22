@@ -127,6 +127,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
 | `/worktrees` · `/worktrees <branch>` | Branches isolated subagents made (running, ready to merge, merged, or kept), or one branch's diff ([subagents.md](../subagents.md#seeing-what-they-did)) |
 | `/rewind` | Go back to before a prompt: pick it, then `b` (files and conversation), `f` (files only), or `c` (conversation only). Files changed since then by edit or write go back and files created since are removed; changes made by shell commands aren't tracked. The conversation continues in a new session, and this one is kept |
+| `/goal <objective>` · `/goal` · `/goal stop` | Keep working toward an objective across turns until the model says it's done or blocked ([Goals](#goals)). Bare `/goal` shows progress; `/goal stop` ends it after the running turn, and Esc ends it now |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
@@ -170,6 +171,17 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 When a prompt is waiting for you, or a turn that ran 30 seconds or more finishes, the TUI asks the terminal for a desktop notification, or rings the bell where it can't (`notifications` in [configuration.md](../configuration.md#notifications)).
 
 Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission mode when it isn't `default`.
+
+## Goals
+
+`/goal <objective>` hands the agent a job that takes more than one turn: "make `bun test` pass", "move every caller off the old config API". The objective is your first prompt. When a turn ends, Switchback starts another with a short reminder of the goal, until one of these happens:
+
+- the model calls the `goal` tool to say it's **done** or **blocked** (it needs you), with a summary
+- the goal reaches `goal.maxTurns` turns (25) or `goal.maxMinutes` minutes (120; [configuration.md](../configuration.md))
+- three turns in a row fail
+- you press Esc, which stops the turn and the goal, or type `/goal stop`, which lets the running turn finish
+
+The active goal and its turn count stay above the prompt (`◎ goal · turn 3/25 · …`), and the conversation notes when it starts and ends. Nothing is approved for a goal. Each turn routes as usual, so budgets and `remote` blocks still apply, and a permission prompt waits for you. A prompt you type while a goal runs is handled first, and then the goal goes on. Goals aren't saved: resuming the session later doesn't restart one ([ADR 0024](../adr/0024-goals.md)).
 
 ## Implementation notes
 

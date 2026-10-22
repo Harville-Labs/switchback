@@ -31,6 +31,7 @@ import {
   parseEffort,
   parseMode,
   pickCopy,
+  runGoalCommand,
   type SlashCommand,
   sessionEffort,
   subagentList,
@@ -342,6 +343,10 @@ const HANDLERS: Record<string, Handler> = {
       effort,
     });
     say(ctx, effortNotice(set.effort));
+  },
+  goal: async (ctx, args) => {
+    const text = await runGoalCommand(ctx.client, ctx.session, ctx.view, args);
+    if (text) say(ctx, text);
   },
   permissions: async (ctx) => {
     const p = await ctx.client.request('permissions.list', { sessionId: ctx.session.id });

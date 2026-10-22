@@ -70,6 +70,8 @@ export interface ToolContext {
   validate?: (file: string, content: string) => string | undefined;
   /** Ask the router to move the session's next call up the ladder (the escalate tool). */
   requestEscalation?: (reason: string) => void;
+  /** End the session's goal; false when none is active. Only top-level sessions have it (the goal tool). */
+  reportGoal?: (status: 'done' | 'blocked', summary: string) => boolean;
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';

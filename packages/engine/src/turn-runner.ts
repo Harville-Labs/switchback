@@ -18,6 +18,7 @@ import {
   textOf,
 } from '@switchback/protocol';
 import type { AgentLoop } from './agent-loop.ts';
+import type { Goals } from './goals.ts';
 import type { TurnHooks } from './hooks/turn-hooks.ts';
 import {
   hashesOf,
@@ -56,6 +57,8 @@ export interface TurnRunnerDeps {
   instructions: InstructionsSource;
   /** The window compaction keeps the session inside, which a prompt's attachments share. */
   contextWindow(): number | undefined;
+  /** The session's goal: told to the model with the first prompt, continued after each turn. */
+  goals: Goals;
 }
 
 export class TurnRunner {
@@ -255,8 +258,20 @@ export class TurnRunner {
     this.host.emit({ type: 'turn.completed', ...scope(session), turnId, stopReason });
     session.turn = undefined;
     finished();
-    // Prompts queued after the model's last step start the next turn.
-    if (session.queue?.length && stopReason !== 'cancelled') this.begin(session, { text: '' });
+    // Prompts queued after the model's last step start the next turn; a goal
+    // continues after that one.
+    const queued = !!session.queue?.length && stopReason !== 'cancelled';
+    const goal =
+      session.depth === 0 && !queued ? this.deps.goals.afterTurn(session, stopReason) : undefined;
+    if (queued) this.begin(session, { text: '' });
+    else if (goal) {
+      // Routed like any turn, so budgets and escalation prompts still apply (invariant 10).
+      this.host.append(session, {
+        role: 'user',
+        parts: [{ type: 'text', text: goal, reminder: true }],
+      });
+      this.begin(session, { text: '' });
+    }
     const last = session.messages.findLast((m) => m.role === 'assistant');
     return { stopReason, text: last ? textOf(last) : '' };
   }
@@ -295,7 +310,8 @@ export class TurnRunner {
     const mode = this.deps.mode(s);
     const reminder = s.depth === 0 ? modeReminder(s.toldMode, mode) : undefined;
     s.toldMode = mode;
-    const notes = [...hooked.context, ...(reminder ? [reminder] : [])];
+    const goal = s.depth === 0 ? this.deps.goals.note(s) : undefined;
+    const notes = [...hooked.context, ...(reminder ? [reminder] : []), ...(goal ? [goal] : [])];
     this.host.append(s, {
       role: 'user',
       parts: [
