@@ -17,7 +17,7 @@ Subagents are both a quality feature and a cost feature:
 | `build` | primary | all | auto | Default primary agent for coding work |
 | `explore` | subagent | read, glob, grep | **local**, effort `low` | Find files, symbols, and usages; returns a summary |
 | `plan` | all | read, glob, grep | auto | Produce an implementation plan without editing |
-| `review` | subagent | read, glob, grep, bash | auto | Read-only review of a change; lists bugs and missed cases with file:line |
+| `review` | subagent | read, glob, grep, bash | auto | Read-only review of the whole change (uncommitted work and commits made for it), not only files it was pointed to; lists bugs and missed cases with file:line |
 | `general` | subagent | all | auto | Delegated multi-step tasks |
 
 Change any of them, or turn them off, with the config `agents` key ([below](#agents-in-config)).

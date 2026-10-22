@@ -45,6 +45,15 @@ describe('turnDiff', () => {
     const big = turnDiff([{ path: 'b', before: '', after: 'l\n'.repeat(50) }], 10);
     expect(big).toContain('more diff lines not shown');
   });
+
+  test('binary files are named; files past the cap are counted', () => {
+    const d = turnDiff(
+      [{ path: 'logo.png', before: undefined, after: undefined, binary: true }],
+      10,
+      3,
+    );
+    expect(d).toBe('Binary file logo.png changed\n… 3 more changed files not shown');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -322,5 +331,70 @@ describe('review ladder', () => {
     });
     await a.engine.runTurn(a.engine.createSession({}).id, 'fix add');
     expect(reviews(a.events)[0]?.summary).toContain('no reviewer is configured');
+  });
+});
+
+describe('the review covers every file the turn changed', () => {
+  const sh = (command: string): ScriptedTurn => ({
+    toolCalls: [{ name: 'bash', input: { command } }],
+  });
+  const commit = (message: string, files = '-A') =>
+    `git add ${files} && git -c user.email=t@example.com -c user.name=t commit -qm "${message}"`;
+  const withShell = { permissions: { edit: 'allow', bash: 'allow' } };
+  const gitRepo = () => Bun.spawnSync(['sh', '-c', commit('start')], { cwd: root });
+  beforeEach(() => {
+    writeFileSync(join(root, 'notes.md'), 'one\n');
+    Bun.spawnSync(['git', 'init', '-q'], { cwd: root });
+  });
+
+  test('files changed by shell commands, not only edit and write', async () => {
+    gitRepo();
+    const { rp, engine, events } = setup(
+      [
+        edit('a - b', 'a + b'),
+        sh("printf 'two\\n' > notes.md && printf 'new\\n' > extra.ts"),
+        { text: 'Done.' },
+      ],
+      [{ text: APPROVE }],
+      withShell,
+    );
+    await engine.runTurn(engine.createSession({}).id, 'fix add and update notes');
+    const sent = JSON.stringify(rp.requests[0]?.messages);
+    expect(sent).toContain('+export const add = (a, b) => a + b;');
+    expect(sent).toContain('+two');
+    expect(sent).toContain('+++ b/extra.ts');
+    expect(events.find((e) => e.type === 'route.decided' && e.rule === 'review')).toMatchObject({
+      reason: 'reviewing 3 changed files',
+    });
+  });
+
+  test("committed changes are reviewed; the user's earlier uncommitted work is not", async () => {
+    gitRepo();
+    writeFileSync(join(root, 'mine.ts'), 'the user was here\n');
+    const { rp, engine } = setup(
+      [
+        edit('a - b', 'a + b'),
+        sh(`printf 'two\\n' > notes.md && ${commit('fix', 'math.ts notes.md')}`),
+        { text: 'Committed.' },
+      ],
+      [{ text: APPROVE }],
+      withShell,
+    );
+    await engine.runTurn(engine.createSession({}).id, 'fix add and commit');
+    const sent = JSON.stringify(rp.requests[0]?.messages);
+    expect(sent).toContain('+export const add = (a, b) => a + b;');
+    expect(sent).toContain('+two');
+    expect(sent).not.toContain('mine.ts');
+  });
+
+  test('outside a git repository, edit and write are still reviewed', async () => {
+    rmSync(join(root, '.git'), { recursive: true, force: true });
+    const { rp, engine } = setup(
+      [edit('a - b', 'a + b'), { text: 'Done.' }],
+      [{ text: APPROVE }],
+      withShell,
+    );
+    await engine.runTurn(engine.createSession({}).id, 'fix add');
+    expect(JSON.stringify(rp.requests[0]?.messages)).toContain('+export const add');
   });
 });

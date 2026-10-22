@@ -40,12 +40,21 @@ export interface FileChange {
   path: string;
   before: string | undefined;
   after: string | undefined;
+  /** A binary file: named in the diff, its content left out. */
+  binary?: boolean;
 }
 
-/** Unified diff of the turn's changes, capped so a huge change can't blow up the review's cost. */
-export function turnDiff(changes: FileChange[], maxLines = 2_000): string {
+/**
+ * Unified diff of the turn's changes, capped so a huge change can't blow up
+ * the review's cost. `more` counts changed files that weren't read.
+ */
+export function turnDiff(changes: FileChange[], maxLines = 2_000, more = 0): string {
   const lines: string[] = [];
   for (const c of changes) {
+    if (c.binary) {
+      lines.push(`Binary file ${c.path} changed`);
+      continue;
+    }
     if (c.before === c.after) continue;
     const patch = createTwoFilesPatch(
       c.before === undefined ? '/dev/null' : `a/${c.path}`,
@@ -59,8 +68,12 @@ export function turnDiff(changes: FileChange[], maxLines = 2_000): string {
     lines.push(...patch.split('\n').filter((l) => !l.startsWith('Index:') && !/^=+$/.test(l)));
   }
   while (lines.at(-1) === '') lines.pop();
-  if (lines.length <= maxLines) return lines.join('\n');
-  return `${lines.slice(0, maxLines).join('\n')}\n… ${lines.length - maxLines} more diff lines not shown`;
+  const shown =
+    lines.length <= maxLines
+      ? lines
+      : [...lines.slice(0, maxLines), `… ${lines.length - maxLines} more diff lines not shown`];
+  if (more) shown.push(`… ${more} more changed file${more === 1 ? '' : 's'} not shown`);
+  return shown.join('\n');
 }
 
 export function reviewRequest(request: string, summary: string, diff: string): string {

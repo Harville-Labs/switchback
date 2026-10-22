@@ -15,6 +15,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Config edits take effect on `/reload`.** Running engines no longer watch config files. Edit them however you like, then type `/reload` in the TUI or VS Code (`config.reload` in the protocol) to apply them to the running engine; it says which settings changed, or which file didn't parse while the config in effect stays. Organization-enforced settings still win, and setup run from a client still applies what it writes right away
 
 ### Fixed
+- **Turn review inspects every changed file.** It includes shell commands, formatters, commits, and merged subagent work, while leaving pre-existing workspace changes out of the review.
 - **The resume command printed on exit works.** It said `switchback --resume <id>`, which the CLI rejected as an unknown command
 
 ## [2.4.0] - 2026-10-22

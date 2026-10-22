@@ -49,11 +49,18 @@ export interface LiveSession {
   lastRemote?: { key: string; at: number };
   cacheWarned?: boolean;
   /**
-   * Files edited during the current top-level turn (by this session or its
-   * subagents in the same checkout), keyed by absolute path: content before
-   * the first edit, and which models (aliases) edited it. For review.
+   * What the current top-level turn changed, for review (this session or its
+   * subagents in the same checkout). `base`: the workspace as a git tree when
+   * the turn started, when review is on in a git repository. `edits`: files
+   * changed through edit and write, keyed by absolute path, with their content
+   * before the first edit and which models (aliases) edited them. `writers`:
+   * models that ran other tools able to change files (bash, merges, MCP).
    */
-  turnEdits?: Map<string, { path: string; before: string | undefined; writers: Set<string> }>;
+  turnChanges?: {
+    base?: string;
+    edits: Map<string, { path: string; before: string | undefined; writers: Set<string> }>;
+    writers: Set<string>;
+  };
   /** Each coding agent CLI model's own session (by alias), to resume on the session's next turn there. */
   agentSessions?: Record<string, string>;
   /** How much of the transcript each CLI model has seen (a message count), so it's told only what's new. */
