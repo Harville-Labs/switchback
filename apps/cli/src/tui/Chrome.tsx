@@ -140,7 +140,7 @@ export function Queue({ queue }: { queue: QueuedPrompt[] }) {
         </Text>
       ))}
       <Text dimColor>
-        {'  '}↑ to edit the last one · esc on an empty prompt cancels the turn and the queue
+        {'  '}↑ to edit the last one · esc sends it now · ctrl+c cancels the turn and the queue
       </Text>
     </Box>
   );

@@ -232,6 +232,12 @@ export class Engine {
     return { removed: this.p.turns.dequeue(this.p.sessions.live(sessionId), id) };
   }
 
+  /** `session.sendQueued`. */
+  sendQueued(sessionId: string): { turnId?: string } {
+    const turnId = this.p.turns.sendQueued(this.p.sessions.live(sessionId));
+    return turnId ? { turnId } : {};
+  }
+
   /** Run a full user turn to completion. Used directly by headless mode and subagents. */
   runTurn(
     s: LiveSession | string,

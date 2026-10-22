@@ -51,6 +51,8 @@ export type WebviewToHost =
     }
   /** Withdraw a queued prompt. */
   | { type: 'dequeue'; id: string }
+  /** Stop the turn and send what's queued now. */
+  | { type: 'sendQueued' }
   | { type: 'cancel' }
   | {
       type: 'permission';

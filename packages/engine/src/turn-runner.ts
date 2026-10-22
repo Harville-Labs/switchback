@@ -95,7 +95,30 @@ export class TurnRunner {
     return true;
   }
 
-  /** Drop every queued prompt (cancel). */
+  /**
+   * `session.sendQueued`: the queued prompts become one prompt that interrupts
+   * the running turn, as if it had been sent with `delivery: "interrupt"`.
+   */
+  sendQueued(s: LiveSession): string | undefined {
+    const queued = s.queue ?? [];
+    if (!s.turn || !queued.length) return undefined;
+    s.queue = [];
+    this.emitQueue(s);
+    const turnId = this.start(s, {
+      text: queued.map((q) => q.text).join('\n\n'),
+      attachments: queued.flatMap((q) => q.attachments),
+      delivery: 'interrupt',
+    }).turnId;
+    for (const q of queued)
+      this.host.emit({
+        type: 'queue.delivered',
+        ...scope(s),
+        turnId,
+        prompt: { id: q.id, text: q.text },
+      });
+    return turnId;
+  }
+
   /** Cancel the running turn and every background subagent the session started. */
   cancel(s: LiveSession): boolean {
     const hadWork = !!s.controller || s.background.size > 0;

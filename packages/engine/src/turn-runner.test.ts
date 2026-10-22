@@ -121,4 +121,29 @@ describe('interrupt', () => {
     expect(completed[1]).toMatchObject({ turnId: r.turnId });
     expect(lastUserText(lp, 1)).toBe('stop, do this instead');
   });
+
+  test('send-queued interrupts with what was queued, instead of dropping it', async () => {
+    const { engine, lp, events, next } = setup([askFirst, { text: 'on it' }]);
+    const s = engine.createSession({});
+    engine.prompt({ sessionId: s.id, text: 'run it' });
+    await next('permission.requested');
+    engine.prompt({ sessionId: s.id, text: 'actually' });
+    engine.prompt({ sessionId: s.id, text: 'do this instead' });
+    const r = engine.sendQueued(s.id);
+    expect(r.turnId).toBeDefined();
+    await next('turn.completed', 2);
+    const completed = events.filter((e) => e.type === 'turn.completed');
+    expect(completed.map((e) => e.type === 'turn.completed' && e.stopReason)).toEqual([
+      'cancelled',
+      'end_turn',
+    ]);
+    expect(lastUserText(lp, 1)).toBe('actually\n\ndo this instead');
+    expect(events.filter((e) => e.type === 'queue.delivered')).toHaveLength(2);
+  });
+
+  test('send-queued with nothing queued changes nothing', () => {
+    const { engine } = setup([{ text: 'ok' }]);
+    const s = engine.createSession({});
+    expect(engine.sendQueued(s.id)).toEqual({});
+  });
 });

@@ -240,6 +240,9 @@ export interface SessionRewindResult {
 export const SessionDequeueParams = z.object({ sessionId: z.string(), id: z.string() });
 export type SessionDequeueParams = z.infer<typeof SessionDequeueParams>;
 
+export const SessionSendQueuedParams = z.object({ sessionId: z.string() });
+export type SessionSendQueuedParams = z.infer<typeof SessionSendQueuedParams>;
+
 export const SessionCancelParams = z.object({ sessionId: z.string() });
 export type SessionCancelParams = z.infer<typeof SessionCancelParams>;
 
@@ -444,6 +447,12 @@ export interface Methods {
   'session.rewind': { params: SessionRewindParams; result: SessionRewindResult };
   /** Withdraw a queued prompt before it's delivered; `removed: false` if it already was. */
   'session.dequeue': { params: SessionDequeueParams; result: { removed: boolean } };
+  /**
+   * Stop the running turn (not its background subagents) and start one with
+   * the queued prompts at once. `turnId` is unset when nothing was queued or
+   * no turn was running.
+   */
+  'session.sendQueued': { params: SessionSendQueuedParams; result: { turnId?: string } };
   /** Move the session one step up the escalation ladder: now, or for the next prompt. */
   'session.escalate': { params: SessionEscalateParams; result: SessionEscalateResult };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */

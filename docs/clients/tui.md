@@ -145,7 +145,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Paste | Arrives whole (bracketed paste), so newlines in it never send the prompt. Terminal colors and control characters are removed. A paste of 12 lines or 1,500 characters or more shows as a chip, `[Pasted text #1 · 240 lines]`, that Backspace deletes in one go and that expands to the full text when you send. A file dragged into the terminal becomes an `@` mention when it's in the workspace |
 | Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word (on an empty prompt, Ctrl+W closes the tab) |
 | Enter during a turn | Queue the message: the model reads it at its next step (between tool calls), or as the next turn if it's already finishing. Queued messages show under the transcript |
-| `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt: cancel the turn and drop the queue. Otherwise it closes a menu |
+| `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt and messages queued: stop the turn and send them now. With an empty prompt and nothing queued: cancel the turn. Ctrl+C cancels the turn and drops the queue. Otherwise it closes a menu |
 | `↑` on an empty prompt | Take back the last queued message to edit it |
 | Ctrl+T | The sessions dashboard ([Tabs](#tabs)) |
 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |

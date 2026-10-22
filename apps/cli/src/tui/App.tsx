@@ -456,8 +456,10 @@ export function App({
                 )
               }
               onCancel={() => {
-                if (view.running)
-                  client.request('session.cancel', { sessionId: session.id }).catch(() => {});
+                if (!view.running) return;
+                // Esc with a prompt queued means "send it now", not "stop everything" (Ctrl+C is that).
+                const method = view.queue?.length ? 'session.sendQueued' : 'session.cancel';
+                client.request(method, { sessionId: session.id }).catch(() => {});
               }}
               recall={recall}
               onTab={() => void cycleModel(slash, sessionRoles)}
