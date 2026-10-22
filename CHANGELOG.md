@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-22
+
 ### Added
 - **Auto-approve mode** asks a local judge model before allowing tool calls that normally need permission. Explicit ask rules and access outside the workspace still ask.
 - **Read-only shell commands** can explore workspace files without a prompt when no rule requires one.
