@@ -102,7 +102,7 @@ test("a refresh says what each source lists now, and one it couldn't ask keeps i
   expect(formatRefresh({ models, sources: [] })).toStartWith('Nothing to refresh');
 });
 
-test('the model list marks models an endpoint listed and says how to refresh or edit them', () => {
+test('the model list lines up its columns, marks models an endpoint listed, and says how to refresh', () => {
   const all = [
     ...models,
     {
@@ -114,5 +114,6 @@ test('the model list marks models an endpoint listed and says how to refresh or 
   ];
   const text = formatModels(all, roles);
   expect(text).toContain('mistral  mistral (local)  · listed by its endpoint');
+  expect(text).toContain('fast     qwen3 (local)');
   expect(text.split('\n').at(-1)).toBe(MODELS_HINT);
 });

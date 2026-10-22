@@ -82,14 +82,32 @@ export function nextMode(current: PermissionMode, allowed: PermissionMode[]): Pe
   return allowed[(i + 1) % allowed.length] ?? 'default';
 }
 
+/** `/mode` with no argument: each mode this session allows, the current one marked. */
+export function formatModes(modes: PermissionMode[], current: PermissionMode | undefined): string {
+  const width = Math.max(...modes.map((m) => modeLabel(m).length));
+  return [
+    ...modes.map(
+      (m) => `${m === current ? '●' : ' '} ${modeLabel(m).padEnd(width)}  ${MODE_DESCRIPTIONS[m]}`,
+    ),
+    '/mode <name> to switch; Shift+Tab cycles',
+  ].join('\n');
+}
+
 /** `/permissions`: the mode, the levels, and every rule with where it came from. */
 export function formatPermissions(p: PermissionsListResult): string {
+  const row = (label: string, text: string) => `${label.padEnd(8)}${text}`;
   const lines = [
-    ...(p.mode ? [`mode   ${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`] : []),
-    `levels read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · websearch ${p.levels.websearch} · mcp ${p.levels.mcp}`,
-    `sandbox ${p.sandbox.active ? 'on: bash commands run in the OS sandbox' : `off: ${p.sandbox.reason}`}`,
+    ...(p.mode ? [row('mode', `${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`)] : []),
+    row(
+      'levels',
+      `read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · websearch ${p.levels.websearch} · mcp ${p.levels.mcp}`,
+    ),
+    row(
+      'sandbox',
+      p.sandbox.active ? 'on: bash commands run in the OS sandbox' : `off: ${p.sandbox.reason}`,
+    ),
   ];
-  if (!p.rules.length) lines.push('rules  none (see docs/permissions.md)');
+  if (!p.rules.length) lines.push(row('rules', 'none (see docs/permissions.md)'));
   else {
     lines.push('rules');
     // Grouped by where they came from, then by behavior: a config holds dozens.

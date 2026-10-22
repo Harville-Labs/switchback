@@ -386,10 +386,11 @@ export function formatLadder(ladder: ViewState['ladder']): string {
 
 /** Everything configured, with its tier and the roles it fills. */
 export function formatModels(models: ModelSummary[], roles?: SessionRoles): string {
+  const width = Math.max(0, ...models.map((m) => m.alias.length));
   const rows = models.map((m) => {
     const filled = roles ? rolesOfModel(m.alias, roles) : [];
     const notes = [...filled, ...(m.listed && !filled.length ? ['listed by its endpoint'] : [])];
-    return `${m.alias}  ${m.ref.model} (${m.tier})${notes.length ? `  · ${notes.join(', ')}` : ''}`;
+    return `${m.alias.padEnd(width)}  ${m.ref.model} (${m.tier})${notes.length ? `  · ${notes.join(', ')}` : ''}`;
   });
   return [...rows, MODELS_HINT].join('\n');
 }

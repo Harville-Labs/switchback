@@ -16,6 +16,7 @@ import {
   formatDashboard,
   formatMcpServers,
   formatModels,
+  formatModes,
   formatPermissions,
   formatReceipt,
   formatRefresh,
@@ -425,18 +426,9 @@ const HANDLERS: Record<string, Handler> = {
     const { modes, mode } = await ctx.client.request('permissions.list', {
       sessionId: ctx.session.id,
     });
-    if (!args[0])
-      return say(
-        ctx,
-        [
-          ...modes.map(
-            (m) => `${m === mode ? '●' : ' '} ${modeLabel(m).padEnd(18)} ${MODE_DESCRIPTIONS[m]}`,
-          ),
-          '/mode <name> to switch; Shift+Tab cycles',
-        ].join('\n'),
-      );
+    if (!args[0]) return say(ctx, formatModes(modes, mode));
     const next = parseMode(args[0]);
-    if (!next) return say(ctx, 'usage: /mode default|accept-edits|plan|bypass');
+    if (!next) return say(ctx, 'usage: /mode default|accept-edits|auto-approve|plan|bypass');
     try {
       await ctx.client.request('session.setMode', { sessionId: ctx.session.id, mode: next });
       say(ctx, `mode: ${modeLabel(next)}. ${MODE_DESCRIPTIONS[next]}`);

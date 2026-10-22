@@ -347,7 +347,7 @@ describe('roles and the ladder', () => {
         'subagents use     normal routing',
       ].join('\n'),
     );
-    expect(formatModels(models, roles)).toContain('opus  claude-opus-5 (remote)  · step 2');
+    expect(formatModels(models, roles)).toContain('opus   claude-opus-5 (remote)  · step 2');
   });
 });
 
