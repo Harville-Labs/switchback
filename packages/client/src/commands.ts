@@ -90,7 +90,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'mode',
-    args: '[default|accept-edits|plan|bypass]',
+    args: '[default|accept-edits|auto-approve|plan|bypass]',
     group: 'Permissions',
     description: 'how tool calls are approved in this session (Shift+Tab cycles)',
   },
