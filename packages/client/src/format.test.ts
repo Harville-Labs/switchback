@@ -2,12 +2,12 @@ import { expect, test } from 'bun:test';
 import {
   effortNotice,
   formatAgents,
-  formatPermissions,
   parseEffort,
   permissionWhy,
   sessionEffort,
   subagentDetail,
 } from './format.ts';
+import { formatPermissions } from './modes.ts';
 
 test('/permissions groups rules by source and wraps long lists', () => {
   const allow = Array.from({ length: 12 }, (_, i) => `bash(tool${i}:*)`);

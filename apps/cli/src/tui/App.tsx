@@ -417,10 +417,8 @@ export function App({
               role={choosingModel}
               choices={modelChoices(init.models, sessionRoles, choosingModel)}
               onCancel={() => setChoosingModel(undefined)}
-              onPick={(alias) => {
-                setChoosingModel(undefined);
-                void pickModel(slash, sessionRoles, choosingModel, alias);
-              }}
+              onCommand={(text) => void runSlashCommand(slash, text)}
+              onPick={(alias) => void pickModel(slash, sessionRoles, choosingModel, alias)}
             />
           ) : null}
           {setup.panel}

@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { InitializeResult, SessionRoles } from '@switchback/protocol';
+import { formatModels, MODELS_HINT } from './format.ts';
 import { choiceLabel, currentChange, formatRefresh, modelChoices, nextModel } from './models.ts';
 
 const models: InitializeResult['models'] = [
@@ -99,4 +100,19 @@ test("a refresh says what each source lists now, and one it couldn't ask keeps i
     ].join('\n'),
   );
   expect(formatRefresh({ models, sources: [] })).toStartWith('Nothing to refresh');
+});
+
+test('the model list marks models an endpoint listed and says how to refresh or edit them', () => {
+  const all = [
+    ...models,
+    {
+      alias: 'mistral',
+      ref: { provider: 'lan', model: 'mistral' },
+      tier: 'local' as const,
+      listed: true as const,
+    },
+  ];
+  const text = formatModels(all, roles);
+  expect(text).toContain('mistral  mistral (local)  · listed by its endpoint');
+  expect(text.split('\n').at(-1)).toBe(MODELS_HINT);
 });

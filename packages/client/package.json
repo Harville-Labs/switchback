@@ -9,6 +9,7 @@
     "./view": "./src/view.ts",
     "./format": "./src/format.ts",
     "./models": "./src/models.ts",
+    "./modes": "./src/modes.ts",
     "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts",
     "./tabs": "./src/tabs.ts",

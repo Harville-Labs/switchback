@@ -124,10 +124,10 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
 | `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
-| `/models [refresh]` | Every configured model, its tier, and the roles it fills. `refresh` asks each endpoint and subscription what it serves now and adds the new models, without running setup again |
+| `/models [refresh]` | Every model, its tier, and the roles it fills; models an endpoint lists that you haven't given a role are marked. `refresh` asks each endpoint and subscription what it serves now and adds the new models, without running setup again |
 | `/init` | Run setup inside the TUI: the same questions as `switchback init` (local servers and their models, remote providers, which model does what), asked in a panel above the prompt. ↑/↓ and Enter answer, space ticks in a checklist, typing filters a long list, Esc cancels without writing anything. The new config is in use as soon as it's saved |
 | `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
-| `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
+| `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. In the picker, **r** asks your endpoints for their models again and **e** opens setup to add or edit models. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
 | `/model [model]` | The model for what's in front: `/current` in the session's view, the subagent model in a subagent's ([Subagents](#subagents)) |
 | `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
 | `/subagent-model <model>\|none` | Default model for subagents |

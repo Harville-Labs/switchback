@@ -1,11 +1,7 @@
 /** The controls row under the composer, as HTML (pure, so it can be tested). */
-import {
-  formatReviewers,
-  formatSteps,
-  MODE_DESCRIPTIONS,
-  modeLabel,
-} from '@switchback/client/format';
+import { formatReviewers, formatSteps } from '@switchback/client/format';
 import { choiceLabel, modelChoices } from '@switchback/client/models';
+import { MODE_DESCRIPTIONS, modeLabel } from '@switchback/client/modes';
 import type {
   InitializeResult,
   PermissionMode,

@@ -27,7 +27,7 @@ The extension (`apps/vscode`) is a thin client. On activation it spawns `switchb
 - **Config validation**: `.switchback/config.json` and `~/.switchback/config.json` are validated and autocompleted against the bundled schema.
 - **Privacy and savings**: tool rows that brought in private content show `🔒 stays local`, and the status line shows `🔒 local only` once a session is pinned ([privacy.md](../privacy.md)); it also shows what the session has saved so far.
 - **Telemetry**: Switchback telemetry is off unless you opt in with `switchback telemetry on`, and VS Code's own `telemetry.telemetryLevel: off` keeps it off regardless ([telemetry.md](../telemetry.md)).
-- **Choose Models for This Session…** (command palette) does the same for every role, including the subagent model and going back to your config. The status bar shows where the session is on the ladder (`step 1/2 qwen3-coder-480b`).
+- **Choose Models for This Session…** (command palette) does the same for every role, including the subagent model and going back to your config. It also refreshes the model list from your endpoints and opens setup to add or edit models. The status bar shows where the session is on the ladder (`step 1/2 qwen3-coder-480b`).
 - **Get started**: a walkthrough (**Switchback: Get Started**, also offered when no local model is configured) covers opening the chat, choosing models, a first prompt, routing, edit review, and the terminal UI.
 - Commands: Get Started, Set Up Models, Install Terminal Command, New Session, New Tab, Show Sessions, Cancel, Choose Models for This Session, Show Usage and Savings, Show Session Receipt, Set Review of Local Edits, Compact Conversation, Restart Engine, Show Engine Logs.
 
