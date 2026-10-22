@@ -4,6 +4,7 @@
  */
 import type {
   AgentSummary,
+  AutoCompactStatus,
   InitializeResult,
   McpServerInfo,
   ModelRef,
@@ -17,6 +18,22 @@ import type { TodoItem, ViewItem, ViewState } from './view.ts';
 export function compactedLabel(messages: number, before: number, after: number): string {
   const k = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n));
   return `Compacted ${messages} earlier messages into a summary (~${k(before)} → ~${k(after)} tokens). The full history is kept.`;
+}
+
+/** The working line while compacting: `Compacting (2/5)`. */
+export function compactingLabel(c: { done: number; total: number }): string {
+  return c.total > 1 ? `Compacting (${c.done}/${c.total})` : 'Compacting';
+}
+
+/** What `/autocompact` reports. */
+export function autoCompactLabel(s: AutoCompactStatus): string {
+  const at = s.window
+    ? ` at ~${Math.round((s.threshold * s.window) / 1000)}k tokens (${Math.round(s.threshold * 100)}% of the window)`
+    : ` at ${Math.round(s.threshold * 100)}% of the window`;
+  const state = s.enabled
+    ? `Auto-compact is on: older messages are summarized${at}.`
+    : 'Auto-compact is off: /compact summarizes on demand.';
+  return s.savedTo ? `${state} Saved to ${s.savedTo}.` : state;
 }
 
 /** `Redacted 2 secrets (GITHUB_TOKEN ×2) before sending to claude-opus-5`. */
@@ -190,6 +207,15 @@ export function parseEffort(input: string): EffortLevel | null | undefined {
   if (key === 'default' || key === 'auto' || key === 'reset') return null;
   const level = EffortLevel.safeParse(key);
   return level.success ? level.data : undefined;
+}
+
+/** `/autocompact`'s arguments: `on`, `off`, or nothing to report, with `--save`. */
+export function parseAutoCompact(args: string[]): { enabled?: boolean; save: boolean } | undefined {
+  const save = args.includes('--save');
+  const words = args.filter((a) => a && a !== '--save').map((a) => a.toLowerCase());
+  if (!words.length) return { save };
+  if (words.length > 1 || (words[0] !== 'on' && words[0] !== 'off')) return undefined;
+  return { enabled: words[0] === 'on', save };
 }
 
 /** The effort a session set, from the latest event or else its summary. */

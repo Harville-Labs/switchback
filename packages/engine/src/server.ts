@@ -31,6 +31,7 @@ import {
   SessionRewindParams,
   SessionRolesParams,
   SessionSendQueuedParams,
+  SessionSetAutoCompactParams,
   SessionSetEffortParams,
   SessionSetGoalParams,
   SessionSetModeParams,
@@ -128,6 +129,8 @@ export function serve(
         return engine.setRoles(parse(SessionSetRolesParams, req.params));
       case 'session.compact':
         return engine.compactSession(parse(SessionCompactParams, req.params).sessionId);
+      case 'session.setAutoCompact':
+        return engine.setAutoCompact(parse(SessionSetAutoCompactParams, req.params));
       case 'session.checkpoints':
         return engine.listCheckpoints(parse(SessionCheckpointsParams, req.params).sessionId);
       case 'session.rewind':

@@ -82,6 +82,8 @@ export interface LiveSession {
   mode?: PermissionMode;
   /** Top-level sessions: reasoning effort for every call, over the agent's and model's own. */
   effort?: Effort;
+  /** Top-level sessions: `/autocompact`, over `compaction.enabled`. */
+  autoCompact?: boolean;
   /** The mode the model was last told about (plan mode reminders). */
   toldMode?: PermissionMode;
   /** The AGENTS.md hashes the model was last told about; worked out from the transcript when unset. */

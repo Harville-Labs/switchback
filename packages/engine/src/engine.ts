@@ -14,6 +14,7 @@
 import {
   type AgentSummary,
   type Attachment,
+  type AutoCompactStatus,
   type CheckpointInfo,
   type ConfigReloadResult,
   type CustomCommandInfo,
@@ -36,6 +37,7 @@ import {
   type SessionRewindParams,
   type SessionRewindResult,
   type SessionRoles,
+  type SessionSetAutoCompactParams,
   type SessionSetGoalResult,
   type SessionSetRolesParams,
   type SessionSummary,
@@ -117,9 +119,8 @@ export class Engine {
   }
 
   /**
-   * `config.reload`: read the user, project, and organization config again
-   * and apply it. Config files aren't watched, so edits wait for this or the
-   * next engine. A file that won't load throws, and the config in effect stays.
+   * `config.reload`: read and apply the user, project, and organization config again
+   * (files aren't watched). A file that won't load throws; the config in effect stays.
    */
   reload(): ConfigReloadResult {
     if (!this.options.reloadConfig)
@@ -228,11 +229,7 @@ export class Engine {
     return this.p.policy.rolesOf(this.p.sessions.live(sessionId));
   }
 
-  /**
-   * Change a session's roles (ADR 0015). With `save`, write them to the user
-   * config as the default for new sessions. Keys an organization enforces
-   * can't be changed.
-   */
+  /** Change a session's roles (ADR 0015); `save` makes them the default. Org keys stay. */
   setRoles(params: SessionSetRolesParams): SessionRoles & { savedTo?: string } {
     const s = this.p.sessions.top(this.p.sessions.live(params.sessionId));
     const file = this.options.userConfigFile ?? switchbackPaths().configFile;
@@ -295,10 +292,7 @@ export class Engine {
     return this.p.turns.cancel(s);
   }
 
-  /**
-   * `session.setGoal`: start working toward an objective, the objective
-   * being the first prompt (queued while a turn runs), or stop the goal.
-   */
+  /** `session.setGoal`: work toward an objective (queued while a turn runs), or stop. */
   setGoal(sessionId: string, objective: string | null): SessionSetGoalResult {
     const s = this.p.sessions.live(sessionId);
     if (s.depth > 0)
@@ -409,6 +403,12 @@ export class Engine {
       () => this.p.agentLoop.toolSetup(s).specsJson,
     );
     return { compacted };
+  }
+
+  /** `session.setAutoCompact`; `save` writes the choice to the user config. */
+  setAutoCompact(params: SessionSetAutoCompactParams): AutoCompactStatus {
+    const file = this.options.userConfigFile ?? switchbackPaths().configFile;
+    return this.p.compactor.setAuto(this.p.sessions.live(params.sessionId), params, file);
   }
 
   /**

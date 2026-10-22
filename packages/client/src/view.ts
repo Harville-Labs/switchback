@@ -454,6 +454,11 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       if (!event.approved) return state;
       items.push({ kind: 'info', id: `j${items.length}`, text: judgedLabel(event) });
       return { ...state, items };
+    case 'context.compacting': {
+      const { compacting: _, ...rest } = state;
+      const { phase, done, total } = event;
+      return phase === 'end' ? rest : { ...state, compacting: { phase, done, total } };
+    }
     case 'context.compacted':
       items.push({
         kind: 'info',

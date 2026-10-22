@@ -4,6 +4,7 @@
  */
 import {
   addInfo,
+  autoCompactLabel,
   type ChosenRole,
   childView,
   currentChange,
@@ -26,9 +27,11 @@ import {
   formatUsage,
   formatWorktreeDiff,
   formatWorktrees,
+  type Ladder,
   MODE_DESCRIPTIONS,
   modeLabel,
   nextModel,
+  parseAutoCompact,
   parseEffort,
   parseMode,
   pickCopy,
@@ -172,6 +175,21 @@ function current(ctx: SlashContext, args: string[]): Promise<void> | void {
   return changeRoles(ctx, { current: models, save: saving(args) }, `Current model: ${models[0]}.`);
 }
 
+/** `/ladder`: edit the escalation ladder, or set it from steps (`a,b` are alternatives). */
+function ladder(ctx: SlashContext, args: string[]): Promise<void> | void {
+  const steps = rest(args);
+  if (!steps.length) return ctx.openModelPicker('escalate');
+  const escalate = steps[0] === 'none' ? [] : steps.map((step) => step.split(','));
+  return setLadder(ctx, escalate, saving(args));
+}
+
+export function setLadder(ctx: SlashContext, escalate: Ladder, save: boolean): Promise<void> {
+  const text = escalate.length
+    ? 'New escalation ladder.'
+    : 'No escalation ladder: hard turns stay on the model they started on.';
+  return changeRoles(ctx, { escalate, save }, text);
+}
+
 /** `/subagent-model`: the model subagents start on. */
 function subagentModel(ctx: SlashContext, args: string[]): Promise<void> | void {
   const [model] = rest(args);
@@ -252,11 +270,15 @@ const HANDLERS: Record<string, Handler> = {
   current,
   // The command's name before the role was called current.
   start: current,
-  escalate: (ctx, args) => {
-    const steps = rest(args);
-    if (!steps.length) return say(ctx, 'usage: /escalate <model|a,b> ... | none [--save]');
-    const escalate = steps[0] === 'none' ? [] : steps.map((step) => step.split(','));
-    return changeRoles(ctx, { escalate, save: saving(args) }, 'New escalation ladder.');
+  ladder,
+  // The command's name before it was /ladder.
+  escalate: ladder,
+  autocompact: async (ctx, args) => {
+    const change = parseAutoCompact(args);
+    if (!change) return say(ctx, 'usage: /autocompact [on|off] [--save]');
+    const sessionId = ctx.session.id;
+    const status = await ctx.client.request('session.setAutoCompact', { sessionId, ...change });
+    say(ctx, autoCompactLabel(status));
   },
   'subagent-model': subagentModel,
   model,

@@ -1,6 +1,7 @@
 /** Everything around the transcript: the welcome card, the working line, and the status bar. */
 import {
   cacheLabel,
+  compactingLabel,
   formatLadder,
   formatTodos,
   modeIcon,
@@ -222,8 +223,9 @@ export function Working({ view }: { view: ViewState }) {
   }, []);
   const seconds = Math.floor((Date.now() - started) / 1000);
   const last = view.items.findLast((i) => i.kind !== 'info' && i.kind !== 'user');
-  const doing =
-    last?.kind === 'tool' && last.status === 'running'
+  const doing = view.compacting
+    ? compactingLabel(view.compacting)
+    : last?.kind === 'tool' && last.status === 'running'
       ? 'Running'
       : last?.kind === 'assistant' && last.reasoning && !last.text
         ? 'Thinking'

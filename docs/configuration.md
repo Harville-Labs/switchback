@@ -290,7 +290,7 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | `retry.attempts` | 5 | Retries of a model call that failed with a retryable error (connection, 429, 5xx) before any output streamed. After the last one, the provider is marked down and the router falls back. 0 falls back at once |
 | `retry.initialDelayMs` | 1000 | Delay before the first retry; each later retry doubles it, with jitter |
 | `retry.maxDelayMs` | 30000 | Longest delay between retries |
-| `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |
+| `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md), [ADR 0027](adr/0027-map-reduce-compaction.md)). `/autocompact` overrides it for one session |
 | `compaction.threshold` | 0.7 | Fraction of the largest local context window (the remote window when there's no local model) that triggers it |
 | `compaction.keepRecent` | 0.25 | Fraction of that window kept verbatim at the end of the conversation |
 

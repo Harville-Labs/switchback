@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { EngineEvent } from '@switchback/protocol';
+import { compactingLabel } from './format.ts';
 import { initialView, reduce } from './view.ts';
 
 test('effort changes are kept, and clearing one is remembered as null', () => {
@@ -37,4 +38,20 @@ test('an auto-approved call shows who approved it and why; a refused one adds no
     text: 'auto-approved bun test (local): runs the tests',
   });
   expect(reduce(initialView('s'), { ...judged, approved: false }).items).toEqual([]);
+});
+
+test('compaction shows its progress until it ends, then a summary row', () => {
+  const at = (phase: 'summarize' | 'merge' | 'end', done: number, total: number): EngineEvent => ({
+    type: 'context.compacting',
+    sessionId: 's',
+    phase,
+    done,
+    total,
+  });
+  const merging = reduce(reduce(initialView('s'), at('summarize', 0, 4)), at('merge', 3, 4));
+  expect(merging.compacting).toEqual({ phase: 'merge', done: 3, total: 4 });
+  expect(compactingLabel(merging.compacting as { done: number; total: number })).toBe(
+    'Compacting (3/4)',
+  );
+  expect(reduce(merging, at('end', 0, 0)).compacting).toBeUndefined();
 });

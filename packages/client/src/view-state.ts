@@ -138,6 +138,8 @@ export interface ViewState {
   lastTier?: Tier;
   /** How full the last call's context was, when the engine knew the window. */
   context?: { tokens: number; window: number };
+  /** While older history is being summarized: how many summarizer calls are done. */
+  compacting?: { phase: 'summarize' | 'merge'; done: number; total: number };
   /**
    * Prompt-cache reads against total input tokens, for this session's calls
    * and for the latest turn's. Counts remote calls and any call that reported

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type EngineEvent, type Message, textOf } from '@switchback/protocol';
@@ -128,7 +128,7 @@ describe('engine compaction', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  function engine(localWindow: number, extra: object = {}) {
+  function engine(localWindow: number, extra: object = {}, options: object = {}) {
     const summaries: string[] = [];
     const health = { up: true };
     const clock = { t: Date.parse('2026-09-27T12:00:00Z') };
@@ -161,6 +161,7 @@ describe('engine compaction', () => {
       ]),
       store,
       now: () => new Date(clock.t),
+      ...options,
     });
     const events: EngineEvent[] = [];
     e.subscribe((ev) => events.push(ev));
@@ -223,5 +224,55 @@ describe('engine compaction', () => {
     const s = e.createSession({});
     for (let i = 0; i < 30; i++) await e.runTurn(s.id, `step ${i}: ${'w'.repeat(300)}`);
     expect(events.some((ev) => ev.type === 'context.compacted')).toBe(false);
+  });
+
+  test('history too big for one call is summarized in parts, then merged, with progress', async () => {
+    const { e, summaries, events } = engine(6_000, { compaction: { enabled: false } });
+    const s = e.createSession({});
+    for (let i = 0; i < 24; i++) await e.runTurn(s.id, `step ${i}: ${'w'.repeat(300)}`);
+    expect(await e.compactSession(s.id)).toEqual({ compacted: true });
+
+    expect(summaries.filter((t) => t.startsWith('This is part 1 of')).length).toBe(1);
+    const merges = summaries.filter((t) => t.includes('Merge them into one summary'));
+    expect(merges.length).toBeGreaterThan(0);
+    const progress = events.flatMap((ev) => (ev.type === 'context.compacting' ? [ev] : []));
+    expect(progress[0]).toMatchObject({ phase: 'summarize', done: 0 });
+    const lastStep = progress.at(-2);
+    expect(lastStep).toMatchObject({ phase: 'merge', done: summaries.length });
+    expect(lastStep?.total).toBe(summaries.length);
+    expect(progress.at(-1)?.phase).toBe('end');
+    // The merge's summary leads; the record from the transcript follows it.
+    const marker = latestMarker(e.getSession(s.id).messages as Message[]);
+    expect(marker?.part.summary).toStartWith(`summary #${summaries.length}`);
+    expect(marker?.part.summary).toContain('## Record');
+    // The last dozen requests, kept as typed (clipped), not as a model retold them.
+    expect(marker?.part.summary).toContain('- step 14: www');
+    expect(marker?.part.summary).not.toContain('- step 2: www');
+  }, 30_000);
+
+  test('/autocompact off stops automatic compaction for the session; on starts it again', async () => {
+    const { e, events } = engine(16_000);
+    const s = e.createSession({});
+    expect(e.setAutoCompact({ sessionId: s.id })).toEqual({
+      enabled: true,
+      threshold: 0.7,
+      window: 16_000,
+    });
+    expect(e.setAutoCompact({ sessionId: s.id, enabled: false }).enabled).toBe(false);
+    for (let i = 0; i < 30; i++) await e.runTurn(s.id, `step ${i}: ${'w'.repeat(300)}`);
+    expect(events.some((ev) => ev.type === 'context.compacted')).toBe(false);
+
+    e.setAutoCompact({ sessionId: s.id, enabled: true });
+    await e.runTurn(s.id, 'one more');
+    expect(events.some((ev) => ev.type === 'context.compacted')).toBe(true);
+  }, 30_000);
+
+  test('/autocompact --save writes the choice to the user config', () => {
+    const file = join(root, 'user-config.json');
+    const { e } = engine(16_000, {}, { userConfigFile: file });
+    const s = e.createSession({});
+    const status = e.setAutoCompact({ sessionId: s.id, enabled: false, save: true });
+    expect(status).toMatchObject({ enabled: false, savedTo: file });
+    expect(JSON.parse(readFileSync(file, 'utf8')).compaction).toEqual({ enabled: false });
   });
 });

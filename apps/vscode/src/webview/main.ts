@@ -4,7 +4,7 @@
  */
 import { commandsFor } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
-import { speedLabel } from '@switchback/client/format';
+import { compactingLabel, speedLabel } from '@switchback/client/format';
 import { formatSubagents } from '@switchback/client/subagent-format';
 import {
   activeTab,
@@ -165,7 +165,7 @@ function render() {
   renderControls();
   const cacheText = cacheLabel(view.cache);
   statusEl.textContent = connected
-    ? `${view.private ? '🔒 local only · ' : ''}${view.speed ? `${speedLabel(view.speed.tokensPerSecond)} · ` : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}${cacheText ? ` · ${cacheText}` : ''}`
+    ? `${view.compacting ? `${compactingLabel(view.compacting)}… · ` : ''}${view.private ? '🔒 local only · ' : ''}${view.speed ? `${speedLabel(view.speed.tokensPerSecond)} · ` : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}${cacheText ? ` · ${cacheText}` : ''}`
     : 'disconnected';
 }
 

@@ -2,7 +2,14 @@
  * Append-only compaction (ADR 0008): when a prompt grows past the threshold,
  * summarize older history into a marker appended to the transcript.
  */
-import { clipTitle, ErrorCode, type Message, RpcError } from '@switchback/protocol';
+import {
+  type AutoCompactStatus,
+  clipTitle,
+  ErrorCode,
+  type Message,
+  RpcError,
+  type SessionSetAutoCompactParams,
+} from '@switchback/protocol';
 import type { ChatEvent, Provider } from '@switchback/providers';
 import { type ModelInfo, roleAliases } from '@switchback/router';
 import {
@@ -14,10 +21,26 @@ import {
   splitTitle,
   summaryRequest,
 } from './compaction.ts';
+import {
+  chunkBlocks,
+  groupsOf,
+  historyRecord,
+  mergeCalls,
+  mergeRequest,
+  partRequest,
+  staleCalls,
+  withoutRecord,
+} from './compaction-digest.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactSecrets } from './privacy.ts';
-import { countTokens, promptTokens } from './tokens.ts';
+import { writeConfigLayer } from './setup.ts';
+import { promptTokens } from './tokens.ts';
+
+/** Summarizer calls in flight at once while parts are summarized. */
+const PARALLEL_PARTS = 2;
+/** The most a part's summary can be (the summarizer's `maxTokens`). */
+const SUMMARY_TOKENS = 4_000;
 
 export class Compactor {
   constructor(
@@ -36,6 +59,30 @@ export class Compactor {
     } finally {
       s.controller = undefined;
     }
+  }
+
+  /** Whether turns in this session compact on their own: `/autocompact`, else config. */
+  autoEnabled(s: LiveSession): boolean {
+    return this.host.top(s).autoCompact ?? this.host.config().compaction.enabled;
+  }
+
+  /** `session.setAutoCompact`. With `save`, `userConfigFile` gets it as the default. */
+  setAuto(
+    s: LiveSession,
+    params: SessionSetAutoCompactParams,
+    userConfigFile: string,
+  ): AutoCompactStatus {
+    const top = this.host.top(s);
+    if (params.enabled !== undefined) top.autoCompact = params.enabled;
+    const enabled = this.autoEnabled(top);
+    if (params.save) writeConfigLayer(userConfigFile, { compaction: { enabled } });
+    const window = this.window();
+    return {
+      enabled,
+      threshold: this.host.config().compaction.threshold,
+      ...(window ? { window } : {}),
+      ...(params.save ? { savedTo: userConfigFile } : {}),
+    };
   }
 
   /**
@@ -80,15 +127,24 @@ export class Compactor {
         reason: 'no local model is reachable to summarize earlier context',
       });
 
-    const { summary, title } = await this.summarizeRange(
-      s,
-      provider,
-      summarizer,
-      start,
-      keepFrom,
-      signal,
-    );
+    let summary: string | undefined;
+    let title: string | undefined;
+    try {
+      ({ summary, title } = await this.summarizeRange(
+        s,
+        provider,
+        summarizer,
+        start,
+        keepFrom,
+        signal,
+      ));
+    } finally {
+      this.host.emit({ type: 'context.compacting', ...scope(s), phase: 'end', done: 0, total: 0 });
+    }
     if (!summary || signal.aborted) return false;
+    // The record covers all compacted history, so it's rebuilt rather than summarized again.
+    const record = historyRecord(s.messages.slice(0, keepFrom));
+    if (record) summary = `${summary}\n\n${record}`;
 
     const marker: Message = {
       role: 'user',
@@ -140,7 +196,13 @@ export class Compactor {
     return first?.contextWindow;
   }
 
-  /** Fold chunks that fit the summarizer's window into a running summary, and title the last one. */
+  /**
+   * Map, then reduce: each part of the history that fits the summarizer is
+   * summarized on its own (a few at a time), then the summaries, after the
+   * previous marker's, are merged in groups until one is left. Unlike folding
+   * parts into a running summary, early parts aren't rewritten once per later
+   * part, so they lose less. One part is a single call, as before.
+   */
   private async summarizeRange(
     s: LiveSession,
     provider: Provider,
@@ -150,44 +212,61 @@ export class Compactor {
     signal: AbortSignal,
   ): Promise<{ summary?: string; title?: string }> {
     const budget = Math.floor(summarizer.contextWindow * 0.5);
-    let summary = latestMarker(s.messages)?.part.summary;
-    let title: string | undefined;
-    let chunk: string[] = [];
-    let chunkTokens = 0;
-    const flush = async () => {
-      if (!chunk.length) return;
-      const text = await this.summarize(
-        s,
-        provider,
-        summarizer,
-        summary,
-        chunk.join('\n\n'),
-        signal,
-      );
-      ({ summary, title } = splitTitle(text));
-      chunk = [];
-      chunkTokens = 0;
-    };
-    for (const block of renderForSummary(s.messages.slice(start, keepFrom))) {
-      const n = countTokens(block);
-      const text = n > budget ? `${block.slice(0, budget * 3)}\n... (truncated)` : block;
-      if (chunkTokens + Math.min(n, budget) > budget) await flush();
-      chunk.push(text);
-      chunkTokens += Math.min(n, budget);
+    const previous = latestMarker(s.messages)?.part.summary;
+    const prior = previous === undefined ? undefined : withoutRecord(previous);
+    const stale = staleCalls(s.messages.slice(0, keepFrom));
+    const chunks = chunkBlocks(renderForSummary(s.messages.slice(start, keepFrom), stale), budget);
+    if (!chunks.length) return { summary: prior };
+    const call = (request: string) => this.summarize(s, provider, summarizer, request, signal);
+    const progress = (phase: 'summarize' | 'merge', done: number, total: number) =>
+      this.host.emit({ type: 'context.compacting', ...scope(s), phase, done, total });
+
+    if (chunks.length === 1) {
+      progress('summarize', 0, 1);
+      return splitTitle(await call(summaryRequest(prior, chunks[0] as string)));
     }
-    await flush();
-    return { summary, title };
+    const size = Math.max(2, Math.floor(budget / SUMMARY_TOKENS));
+    const total = chunks.length + mergeCalls(chunks.length + (prior ? 1 : 0), size);
+    let done = 0;
+    progress('summarize', done, total);
+    const parts: string[] = [];
+    for (const [g, group] of groupsOf(chunks, PARALLEL_PARTS).entries()) {
+      const out = await Promise.all(
+        group.map(async (chunk, i) => {
+          const at = g * PARALLEL_PARTS + i;
+          const text = await call(partRequest(at + 1, chunks.length, chunk));
+          progress('summarize', ++done, total);
+          return splitTitle(text).summary;
+        }),
+      );
+      parts.push(...out);
+      if (signal.aborted) return {};
+    }
+    let level = prior ? [prior, ...parts] : parts;
+    let last: { summary: string; title?: string } = { summary: level[0] as string };
+    while (level.length > 1) {
+      const next: string[] = [];
+      for (const group of groupsOf(level, size)) {
+        if (group.length === 1) {
+          next.push(group[0] as string);
+          continue;
+        }
+        last = splitTitle(await call(mergeRequest(group)));
+        progress('merge', ++done, total);
+        next.push(last.summary);
+      }
+      level = next;
+    }
+    return last;
   }
 
   private async summarize(
     s: LiveSession,
     provider: Provider,
     model: ModelInfo,
-    previous: string | undefined,
-    chunk: string,
+    request: string,
     signal: AbortSignal,
   ): Promise<string> {
-    const request = summaryRequest(previous, chunk);
     const text =
       model.tier === 'remote' && this.host.config().privacy.secrets !== 'off'
         ? (await redactSecrets(request)).text
@@ -198,7 +277,7 @@ export class Compactor {
       system: SUMMARIZER_PROMPT,
       messages: [{ role: 'user', parts: [{ type: 'text', text }] }],
       tools: [],
-      maxTokens: 4_000,
+      maxTokens: SUMMARY_TOKENS,
       ...withSampling(this.models.sampling(model.alias)),
       signal,
     })) {

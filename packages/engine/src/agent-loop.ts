@@ -84,7 +84,7 @@ export class AgentLoop {
       if (signal.aborted) return 'cancelled';
       await models.refreshHealth(signal);
       await this.deps.beforeStep(s, turnId);
-      if (config().compaction.enabled) {
+      if (this.deps.compactor.autoEnabled(s)) {
         // A failed summary costs context, not the turn: routing still has
         // overflow escalation to fall back on.
         await this.deps.compactor.compact(s, specsJson, signal, false, turnId).catch((err) => {
