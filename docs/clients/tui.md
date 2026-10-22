@@ -12,7 +12,11 @@ When a newer release is out, the TUI says so in the chat at launch: `Switchback 
 
 ## Resuming
 
-Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most recent session in this workspace, and `switchback --session <id>` opens a specific one. Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).
+Sessions are saved as you go. `switchback resume` opens the TUI on a picker of this workspace's sessions, and `switchback resume <id>` opens one directly; an id that isn't a session in this workspace exits with an error instead of starting a new session. `-r` / `--resume` is the same command (`switchback -r <id>`). `switchback --continue` (`-c`) reopens the most recent session, and `switchback --session <id>` still works. `switchback sessions` prints the ids.
+
+When you leave the TUI (Ctrl+C twice, or `/exit`), Switchback prints the command that reopens the session, after the full-screen view is gone so it stays in your scrollback: `Resume this session with: switchback resume <id>`. A session you left without sending anything has nothing to resume, so it prints nothing.
+
+Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).
 
 The terminal's window or tab title shows the session's title (`Fix the login bug · Switchback`) and follows the tab in front. On exit Switchback restores the title you had before, in terminals that keep a title stack (xterm, iTerm2, kitty, WezTerm, VS Code's terminal); others keep the last title.
 
@@ -119,7 +123,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/tabs` (ctrl+t) | The sessions dashboard: open tabs, then sessions working in other windows ([Tabs](#tabs)) |
 | `/tab [n\|new [agent]\|close]` | Switch to tab `n`, open a new tab, or close the one in front (its session keeps running) |
 | `/sessions` | Saved sessions in this workspace, newest first |
-| `/resume [n\|id]` | Switch to a saved session. With no argument, a picker: type to filter by title, agent, or ID, ↑/↓ to choose, Enter to open. `switchback --resume` opens it at startup, `-c` resumes the latest, `--session <id>` a specific one, and `switchback sessions [--json]` lists them for scripts |
+| `/resume [n\|id]` | Switch to a saved session. With no argument, a picker: type to filter by title, agent, or ID, ↑/↓ to choose, Enter to open. `switchback resume` opens it at startup, `switchback resume <id>` a specific session, `-c` the latest, and `switchback sessions [--json]` lists them for scripts |
 | `/rename [title]` | Name this session (at most 60 characters). With no argument, shows the current title. A session is titled from its first prompt until you rename it, and a summary at compaction can retitle it, but never over a name you gave |
 | `/subagents` | This session's subagents as a numbered tree |
 | `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |

@@ -105,6 +105,16 @@ export function tailLines(text: string, width: number, rows: number): string[] {
   return out.slice(-rows);
 }
 
+/** The shell command that reopens a saved session. */
+export function resumeCommand(sessionId: string): string {
+  return `switchback resume ${sessionId}`;
+}
+
+/** Printed after leaving the TUI, once the full-screen view is gone, so it stays in the scrollback. */
+export function resumeHint(sessionId: string): string {
+  return `Resume this session with: ${resumeCommand(sessionId)}`;
+}
+
 /** What `session.escalate` means for the user, by when it takes effect. */
 export function escalateNotice(when: 'next-step' | 'next-prompt'): string {
   return when === 'next-step'

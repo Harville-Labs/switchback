@@ -66,6 +66,20 @@ test('upgrade and update dispatch to self-update', () => {
   }
 });
 
+test('resume takes at most one session id, from the command or -r', () => {
+  for (const args of [
+    ['resume', 'a', 'b'],
+    ['-r', 'a', 'b'],
+  ]) {
+    const proc = Bun.spawnSync([process.execPath, main, ...args], {
+      env: { ...process.env, SWITCHBACK_HOME: home },
+      stderr: 'pipe',
+    });
+    expect(proc.exitCode).toBe(2);
+    expect(proc.stderr.toString()).toContain('resume takes at most one session id');
+  }
+});
+
 test('agents new writes a valid file that a running engine picks up without a restart', async () => {
   const ws = mkdtempSync(join(tmpdir(), 'switchback-agents-'));
   const transport = spawnEngine({
