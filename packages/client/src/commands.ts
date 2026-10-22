@@ -253,8 +253,8 @@ export function commandQuery(input: string): string | undefined {
 }
 
 /** The command list as aligned text, for /help. */
-/** Usages longer than this go on a line of their own in `/help`. */
-const USAGE_COLUMN = 26;
+/** Usages longer than this go on a line of their own in `/help`, and are cut in a command menu. */
+export const USAGE_COLUMN = 26;
 
 export function formatCommands(client: ClientName, custom: readonly SlashCommand[] = []): string {
   const rows = commandsFor(client, custom).map((c) => [
