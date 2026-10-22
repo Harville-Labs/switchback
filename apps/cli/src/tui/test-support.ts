@@ -14,10 +14,16 @@ export async function until(check: () => boolean, ms = 5_000) {
 const has = (frame: string, text: string | RegExp) =>
   typeof text === 'string' ? frame.includes(text) : text.test(frame);
 
-/** The transcript lays out a frame or two after it changes; wait for it. */
+/**
+ * The transcript lays out a frame or two after it changes; wait for it. Ink writes
+ * the frame as React commits, but `useInput` subscribes in an effect that runs
+ * after, so wait one more tick before a test presses a key on what it shows.
+ */
 export async function frameWith(ui: { lastFrame(): string | undefined }, text: string | RegExp) {
   await until(() => has(ui.lastFrame() ?? '', text));
-  return ui.lastFrame() ?? '';
+  const frame = ui.lastFrame() ?? '';
+  await tick();
+  return frame;
 }
 
 /** Waits for `text` to leave the frame, for a picker closing or a tab going away. */

@@ -177,7 +177,8 @@ describe('the subagent view', () => {
       turnId: 'c',
       text: 'looking in src/',
     });
-    await tick();
+    // alt+↓ acts on the view as last rendered, so wait for the subagent to be in it.
+    await frameWith(ui, 'looking in src/');
     ui.stdin.write(ALT_DOWN);
     // The status bar can show the subagent a frame before the transcript does.
     const frame = await frameWith(ui, '↳ explore · find the parser');
