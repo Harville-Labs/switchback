@@ -30,13 +30,14 @@ import type {
   CheckpointInfo,
   InitializeResult,
   RoutePreference,
-  SessionRewindParams,
   SessionSummary,
 } from '@switchback/protocol';
 import { Box, Text, useApp, useBoxMetrics, useStdout, useWindowSize } from 'ink';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { type ChoiceList, ChoicePicker } from './ChoicePicker.tsx';
 import { Header, StatusBar, SubagentHeader, Working } from './Chrome.tsx';
 import { MouseContext } from './Clickable.tsx';
+import { completionSources } from './complete.ts';
 import { useEngineFeeds } from './feeds.ts';
 import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
@@ -50,7 +51,7 @@ import { RewindPicker } from './RewindPicker.tsx';
 import { RolePicker } from './RolePicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
 import { type Opening, useSetup } from './SetupPanel.tsx';
-import { cycleModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { cycleModel, resume, rewind, runSlashCommand, type SlashContext } from './slash.ts';
 import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
 import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
@@ -133,8 +134,8 @@ export function App({
   const [picking, setPicking] = useState<SessionSummary[] | undefined>();
   /** Checkpoints while the rewind picker is open. */
   const [rewinding, setRewinding] = useState<CheckpointInfo[] | undefined>();
-  /** The role whose model is being picked (`/current`, `/model`). */
-  const [choosingModel, setChoosingModel] = useState<ChosenRole | undefined>();
+  /** The role whose model is being picked (`/current`, `/model`), or a command's argument. */
+  const [choosing, setChoosing] = useState<ChosenRole | ChoiceList | undefined>();
   /** The sessions dashboard (ctrl+t, `/tabs`) is open. */
   const [dashboard, setDashboard] = useState(false);
   /** When Ctrl+C was pressed on an empty, idle prompt; a second press soon after quits. */
@@ -143,7 +144,7 @@ export function App({
   const [expanded, setExpanded] = useState(false);
   const [themeName, setThemeName] = useState<ThemeName>(initialTheme);
   const setup = useSetup(client, (text) => setView((v) => addInfo(v, text)));
-  const modal = Boolean(picking || rewinding || choosingModel || dashboard || setup.active);
+  const modal = Boolean(picking || rewinding || choosing || dashboard || setup.active);
   const theme = THEMES[themeName];
   useEffect(() => {
     if (exitArmedAt === undefined) return;
@@ -243,7 +244,8 @@ export function App({
       setThemeName(name);
       saveTheme(name);
     },
-    openModelPicker: setChoosingModel,
+    openModelPicker: setChoosing,
+    openChoices: setChoosing,
     openSetup: setup.start,
     focusedSubagent: focusedRow?.agent,
     tabs,
@@ -254,18 +256,6 @@ export function App({
     newTab,
     showSession,
     closeTab: (sessionId) => setTabs((t) => closeTab(t, sessionId)),
-  };
-
-  const rewind = async (turnId: string, restore: SessionRewindParams['restore']) => {
-    setRewinding(undefined);
-    try {
-      const r = await client.request('session.rewind', { sessionId: session.id, turnId, restore });
-      const files = r.files.length ? `Put back ${r.files.join(', ')}.` : 'No files to put back.';
-      setView((v) => addInfo(v, restore === 'conversation' ? 'Rewound the conversation.' : files));
-      if (r.session) await resume(slash, r.session.id);
-    } catch (err) {
-      setView((v) => addInfo(v, `rewind: ${(err as Error).message}`));
-    }
   };
 
   /** Ctrl+C with nothing typed: cancel the turn, or quit on a second press. */
@@ -409,16 +399,25 @@ export function App({
             <RewindPicker
               checkpoints={rewinding}
               onCancel={() => setRewinding(undefined)}
-              onRewind={(turnId, restore) => void rewind(turnId, restore)}
+              onRewind={(turnId, restore) => {
+                setRewinding(undefined);
+                void rewind(slash, turnId, restore);
+              }}
             />
           ) : null}
-          {choosingModel ? (
+          {typeof choosing === 'string' ? (
             <RolePicker
-              role={choosingModel}
+              role={choosing}
               models={init.models}
               roles={sessionRoles}
               slash={slash}
-              onClose={() => setChoosingModel(undefined)}
+              onClose={() => setChoosing(undefined)}
+            />
+          ) : choosing ? (
+            <ChoicePicker
+              list={choosing}
+              onCancel={() => setChoosing(undefined)}
+              onPick={(text) => void runSlashCommand(slash, text)}
             />
           ) : null}
           {setup.panel}
@@ -462,6 +461,7 @@ export function App({
                 client.request(method, { sessionId: session.id }).catch(() => {});
               }}
               recall={recall}
+              completions={completionSources(init)}
               onTab={() => void cycleModel(slash, sessionRoles)}
               onCloseTab={() => setTabs((t) => closeTab(t, session.id))}
               busy={view.running}

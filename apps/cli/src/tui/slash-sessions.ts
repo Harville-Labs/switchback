@@ -1,6 +1,6 @@
 /** The TUI's session commands: /new, /resume, /sessions, /rename. */
 import { addInfo, fromTranscript, initialView } from '@switchback/client';
-import { SESSION_TITLE_MAX } from '@switchback/protocol';
+import { SESSION_TITLE_MAX, type SessionRewindParams } from '@switchback/protocol';
 import { ago } from './SessionPicker.tsx';
 import { type SlashContext, say } from './slash-context.ts';
 
@@ -44,6 +44,23 @@ export async function resume(ctx: SlashContext, which: string | undefined): Prom
     }));
   } catch (err) {
     say(ctx, (err as Error).message);
+  }
+}
+
+/** Rewind to before a turn; a rewind that forks the conversation opens the new session. */
+export async function rewind(
+  ctx: SlashContext,
+  turnId: string,
+  restore: SessionRewindParams['restore'],
+): Promise<void> {
+  try {
+    const sessionId = ctx.session.id;
+    const r = await ctx.client.request('session.rewind', { sessionId, turnId, restore });
+    const files = r.files.length ? `Put back ${r.files.join(', ')}.` : 'No files to put back.';
+    say(ctx, restore === 'conversation' ? 'Rewound the conversation.' : files);
+    if (r.session) await resume(ctx, r.session.id);
+  } catch (err) {
+    say(ctx, `rewind: ${(err as Error).message}`);
   }
 }
 

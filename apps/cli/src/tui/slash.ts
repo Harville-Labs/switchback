@@ -38,13 +38,19 @@ import {
   runGoalCommand,
   runReload,
   type SlashCommand,
-  sessionEffort,
   subagentList,
   tabAt,
 } from '@switchback/client';
 import type { RoutePreference, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
 import { copyText } from './clipboard.ts';
 import { saveMouse } from './mouse.ts';
+import {
+  agentChoices,
+  effortChoices,
+  REVIEW_CHOICES,
+  subagentChoices,
+  themeChoices,
+} from './slash-choices.ts';
 import { THEME_NAMES, type ThemeName } from './theme.ts';
 
 const helpText = (custom: readonly SlashCommand[]) => `Commands
@@ -62,7 +68,9 @@ Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt sends what's queued now, or cancels when nothing is;
       ctrl+c cancels the turn and the queue; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
-      tab switches to the next model you chose, going round them;
+      tab switches to the next model you chose, going round them (in a slash
+      command, tab completes the command and its argument instead);
+      a command run without the argument it needs lists what it takes to pick from;
       PgUp/PgDn or the mouse wheel scroll (hold shift or option to select text);
       prompts: ↑↓ and enter, or the option's number (y/a/p/n still work).
 Your own commands are Markdown files in .switchback/commands/ or
@@ -72,7 +80,7 @@ import { type Handler, type SlashContext, say } from './slash-context.ts';
 import { listSessions, newSession, rename, resume } from './slash-sessions.ts';
 
 export type { SlashContext } from './slash-context.ts';
-export { newSession, resume } from './slash-sessions.ts';
+export { newSession, resume, rewind } from './slash-sessions.ts';
 
 /** Role command arguments without the --save flag. */
 const rest = (args: string[]) => args.filter((a) => a && a !== '--save');
@@ -143,8 +151,9 @@ function review(ctx: SlashContext, args: string[]): Promise<void> | void {
       'Review is on with the new reviewers.',
     );
   }
+  if (!args[0]) return ctx.openChoices(REVIEW_CHOICES);
   const next = args[0] === 'on' ? true : args[0] === 'off' ? false : undefined;
-  if (args[0] && args[0] !== 'default' && next === undefined)
+  if (args[0] !== 'default' && next === undefined)
     return say(ctx, 'usage: /review on|off|default|ladder|with <model...>');
   ctx.setReview(next);
   say(
@@ -193,7 +202,7 @@ export function setLadder(ctx: SlashContext, escalate: Ladder, save: boolean): P
 /** `/subagent-model`: the model subagents start on. */
 function subagentModel(ctx: SlashContext, args: string[]): Promise<void> | void {
   const [model] = rest(args);
-  if (!model) return say(ctx, 'usage: /subagent-model <model>|none [--save]');
+  if (!model) return ctx.openModelPicker('subagents');
   return changeRoles(
     ctx,
     { subagents: model === 'none' ? null : model, save: saving(args) },
@@ -230,6 +239,7 @@ export function pickModel(
 /** `/tab`: switch to tab n, open a new one, or close the one in front. */
 function tab(ctx: SlashContext, args: string[]): Promise<void> | void {
   const [what = '', agent] = args;
+  if (!what) return ctx.openDashboard();
   if (what === 'new') return ctx.newTab(agent);
   if (what === 'close') {
     if (ctx.tabs.tabs.length === 1) return say(ctx, 'this is the only tab; /new starts over in it');
@@ -283,7 +293,8 @@ const HANDLERS: Record<string, Handler> = {
   'subagent-model': subagentModel,
   model,
   review,
-  agent: (ctx, args) => newSession(ctx, args[0]),
+  agent: async (ctx, args) =>
+    args[0] ? newSession(ctx, args[0]) : ctx.openChoices(await agentChoices(ctx)),
   agents: async (ctx) => {
     // Asked each time, so agents created meanwhile (switchback agents new) show up.
     const agents = await ctx.client.request('agents.list', {}).catch(() => ctx.init.agents);
@@ -304,6 +315,10 @@ const HANDLERS: Record<string, Handler> = {
   },
   subagents: (ctx) => say(ctx, formatSubagents(ctx.view, '/subagent <number> for details')),
   subagent: (ctx, args) => {
+    if (!args[0]) {
+      const list = subagentChoices(ctx);
+      return list && ctx.openChoices(list);
+    }
     const all = subagentList(ctx.view);
     const pick =
       args[0] && /^\d+$/.test(args[0])
@@ -355,7 +370,7 @@ const HANDLERS: Record<string, Handler> = {
     }
   },
   effort: async (ctx, args) => {
-    if (!args[0]) return say(ctx, effortNotice(sessionEffort(ctx.view, ctx.session)));
+    if (!args[0]) return ctx.openChoices(effortChoices(ctx));
     const effort = parseEffort(args[0]);
     if (effort === undefined)
       return say(ctx, 'usage: /effort none|low|medium|high|xhigh|max|default');
@@ -389,11 +404,7 @@ const HANDLERS: Record<string, Handler> = {
   help: (ctx) => say(ctx, helpText(ctx.custom)),
   theme: (ctx, args) => {
     const name = args[0]?.toLowerCase();
-    if (!name)
-      return say(
-        ctx,
-        `${THEME_NAMES.map((n) => `${n === ctx.theme ? '●' : ' '} ${n}`).join('\n')}\n/theme <name> to switch`,
-      );
+    if (!name) return ctx.openChoices(themeChoices(ctx));
     if (!THEME_NAMES.includes(name as ThemeName))
       return say(ctx, `usage: /theme ${THEME_NAMES.join('|')}`);
     ctx.setTheme(name as ThemeName);

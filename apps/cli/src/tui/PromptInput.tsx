@@ -12,6 +12,7 @@ import { commandQuery, matchCommands, type SlashCommand, USAGE_COLUMN } from '@s
 import { Box, Text, useInput, usePaste } from 'ink';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readClipboardImage } from './clipboard.ts';
+import { type Completion, type CompletionSources, completeArgument } from './complete.ts';
 import {
   at,
   backspace,
@@ -53,6 +54,7 @@ const isFile = (p: string) => {
 };
 
 const NO_RESOURCES: readonly string[] = [];
+const NO_SOURCES: CompletionSources = { models: [], agents: [] };
 
 interface Props {
   focus: boolean;
@@ -78,7 +80,9 @@ interface Props {
   recall: () => string | undefined;
   /** Ctrl+V found no image on the clipboard. */
   onNoImage?: () => void;
-  /** Tab with no menu open. */
+  /** What Tab completes a command's arguments from. */
+  completions?: CompletionSources;
+  /** Tab with no menu open, outside a slash command. */
   onTab?: () => void;
   /** Ctrl+W on an empty input (with text in it, Ctrl+W deletes a word). */
   onCloseTab?: () => void;
@@ -105,6 +109,7 @@ export function PromptInput({
   onCancel,
   recall,
   onNoImage,
+  completions = NO_SOURCES,
   onTab,
   onCloseTab,
   clipboardImage = readClipboardImage,
@@ -117,6 +122,8 @@ export function PromptInput({
   const [selected, setSelected] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);
   const [pastes, setPastes] = useState<Pastes>(noPastes);
+  // The last argument Tab completed, so the next press goes on to the next match.
+  const [completion, setCompletion] = useState<Completion | undefined>();
   // Ctrl+V reads the clipboard asynchronously; the chip needs the store as it is then.
   const pastesRef = useRef(pastes);
   pastesRef.current = pastes;
@@ -233,8 +240,18 @@ export function PromptInput({
         if (key.escape) return setMenuClosed(true);
       }
 
-      // Tab with no menu open switches the model; ctrl+tab is the app's.
-      if (key.tab && !key.ctrl && !key.shift) return onTab?.();
+      // Tab with no menu open switches the model, except in a slash command, where it
+      // only ever completes: a half-typed command must not change the model under it.
+      // ctrl+tab is the app's.
+      if (key.tab && !key.ctrl && !key.shift) {
+        if (!state.value.startsWith('/')) return onTab?.();
+        const next = completeArgument(state.value, completions, completion);
+        if (next) {
+          setState(at(next.value));
+          setCompletion(next);
+        }
+        return;
+      }
       if (key.escape) {
         if (busy && state.value.trim()) {
           onSubmitNow(expandPastes(state.value, pastes), attachedImages(state.value, pastes));
@@ -336,6 +353,20 @@ export function PromptInput({
         })
       )}
       {commandsOpen ? <CommandMenu commands={commands} selected={selected} /> : null}
+      {completion?.value === state.value && completion.matches.length > 1 ? (
+        <Text wrap="truncate-end">
+          {completion.matches.map((m, i) => (
+            <Text
+              key={m}
+              color={i === completion.index ? 'cyan' : undefined}
+              dimColor={i !== completion.index}
+            >
+              {`${m}  `}
+            </Text>
+          ))}
+          <Text dimColor>tab for the next</Text>
+        </Text>
+      ) : null}
       {menuOpen ? (
         <Box flexDirection="column" marginTop={1}>
           {suggestions.map((path, i) => (
