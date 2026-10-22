@@ -10,6 +10,7 @@ import { render } from 'ink';
 import { CLI_VERSION, type CommonFlags, checksForUpdates, connectShared } from '../bootstrap.ts';
 import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
+import { MouseContext } from './Clickable.tsx';
 import { mouseInput } from './mouse.ts';
 import type { Opening } from './SetupPanel.tsx';
 import { savedTheme } from './theme.ts';
@@ -76,20 +77,21 @@ export async function tui(
   const mouse = mouseInput();
   let open = session;
   const app = render(
-    <App
-      client={client}
-      init={init}
-      initialSession={session}
-      {...(history ? { initialView: history } : {})}
-      initialRoute={opts.route}
-      {...(opts.opening ? { opening: opts.opening } : {})}
-      warnings={warnings}
-      initialTheme={savedTheme()}
-      mouse={mouse}
-      onSession={(s) => {
-        open = s;
-      }}
-    />,
+    <MouseContext.Provider value={mouse}>
+      <App
+        client={client}
+        init={init}
+        initialSession={session}
+        {...(history ? { initialView: history } : {})}
+        initialRoute={opts.route}
+        {...(opts.opening ? { opening: opts.opening } : {})}
+        warnings={warnings}
+        initialTheme={savedTheme()}
+        onSession={(s) => {
+          open = s;
+        }}
+      />
+    </MouseContext.Provider>,
     {
       // Ctrl+C clears the prompt or cancels a turn; quitting takes a second press (App.tsx).
       exitOnCtrlC: false,

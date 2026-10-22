@@ -2,7 +2,7 @@
  * Questions the engine asks: permission, plan approval, and escalation. Each
  * is a short list: arrows and Enter, or the option's number. The old letter
  * keys (y, a, p, n) still work. "No, and tell it what to do instead" opens a
- * line for a note, which the model gets with the refusal.
+ * line for a note, which the model gets with the refusal. A click picks an option too.
  */
 import {
   estimateLabel,
@@ -14,6 +14,7 @@ import {
 import type { PermissionDecision } from '@switchback/protocol';
 import { Box, Text, useInput } from 'ink';
 import { useRef, useState } from 'react';
+import { Clickable } from './Clickable.tsx';
 import { DiffView } from './Diff.tsx';
 import { renderMarkdown } from './markdown.ts';
 import { useTheme } from './theme.ts';
@@ -62,20 +63,31 @@ function useChoice<T>(
   return selected;
 }
 
-function ChoiceList<T>({ choices, selected }: { choices: Choice<T>[]; selected: number }) {
+function ChoiceList<T>({
+  choices,
+  selected,
+  onPick,
+}: {
+  choices: Choice<T>[];
+  selected: number;
+  /** A click on a choice picks it. */
+  onPick: (value: T) => void;
+}) {
   const t = useTheme();
   return (
     <Box flexDirection="column">
       {choices.map((c, i) => {
         const on = i === selected;
         return (
-          <Text key={c.label} wrap="truncate-end">
-            <Text color={t.accent}>{on ? '❯ ' : '  '}</Text>
-            <Text color={on ? t.accent : undefined} bold={on}>
-              {i + 1}. {c.label}
+          <Clickable key={c.label} onClick={() => onPick(c.value)}>
+            <Text wrap="truncate-end">
+              <Text color={t.accent}>{on ? '❯ ' : '  '}</Text>
+              <Text color={on ? t.accent : undefined} bold={on}>
+                {i + 1}. {c.label}
+              </Text>
+              {c.hint ? <Text dimColor> {c.hint}</Text> : null}
             </Text>
-            {c.hint ? <Text dimColor> {c.hint}</Text> : null}
-          </Text>
+          </Clickable>
         );
       })}
     </Box>
@@ -225,7 +237,7 @@ function ToolPermission({
         </Box>
       ) : null}
       <Text>Do you want to go ahead?</Text>
-      <ChoiceList choices={choices} selected={selected} />
+      <ChoiceList choices={choices} selected={selected} onPick={pick} />
       {note !== undefined ? (
         <Box marginTop={1} flexDirection="column">
           <Text>
@@ -261,14 +273,11 @@ function PlanPrompt({
     { label: 'Approve and accept edits', key: 'a', value: 'accept' },
     { label: 'Keep planning', key: 'n', value: 'keep' },
   ];
-  const selected = useChoice(
-    choices,
-    (c) =>
-      onAnswer({
-        decision: c === 'approve' ? 'allow_once' : c === 'accept' ? 'allow_always' : 'deny',
-      }),
-    { active: true, cancel: 'keep' },
-  );
+  const pick = (c: PlanChoice) =>
+    onAnswer({
+      decision: c === 'approve' ? 'allow_once' : c === 'accept' ? 'allow_always' : 'deny',
+    });
+  const selected = useChoice(choices, pick, { active: true, cancel: 'keep' });
   const lines = renderMarkdown(plan, width - 4).split('\n');
   const shown = lines.slice(0, maxLines);
   return (
@@ -279,7 +288,7 @@ function PlanPrompt({
           <Text dimColor>… {lines.length - shown.length} more lines</Text>
         ) : null}
       </Box>
-      <ChoiceList choices={choices} selected={selected} />
+      <ChoiceList choices={choices} selected={selected} onPick={pick} />
     </Panel>
   );
 }
@@ -309,7 +318,7 @@ export function EscalationPrompt({
       <Box marginY={1} marginLeft={2}>
         <Text>{escalation.reason}</Text>
       </Box>
-      <ChoiceList choices={choices} selected={selected} />
+      <ChoiceList choices={choices} selected={selected} onPick={onAnswer} />
     </Panel>
   );
 }

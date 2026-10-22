@@ -91,7 +91,9 @@ While subagents run, **Alt+↓** shows the next one in place of the session: its
 
 Page Up and Page Down scroll the transcript, and so does the mouse wheel. Scrolled up, a bar says how far, and new output collects below without moving what you're reading; Page Down to the end follows the conversation again, and sending a prompt jumps there.
 
-The TUI turns on the terminal's mouse reporting for the wheel, which also captures clicks, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2. `/copy` copies replies, code blocks, and tool output without selecting anything.
+Clicks work where there's something to pick: an answer to a permission, plan, or escalation question; a row in the model, session, rewind, and tab pickers; and a key hint with an action, such as `esc close` or `r refresh list`.
+
+The TUI turns on the terminal's mouse reporting for the wheel and clicks, which also captures plain drags, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2. `/copy` copies replies, code blocks, and tool output without selecting anything.
 
 ### Themes
 
@@ -155,6 +157,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |
 | Page Up / Page Down, mouse wheel | Scroll the transcript |
+| Click | Pick an answer, a picker row, or a key hint |
 | `ctrl+v` | Attach the image on the clipboard as an `[Image #n]` chip (deleting the chip drops it). On macOS it reads the clipboard with `osascript`, on Linux with `wl-paste` or `xclip`, and on Windows with PowerShell; over SSH, drag the file in or mention it with `@` instead. Dragged-in image files and `@image.png` mentions attach the image too |
 | `ctrl+o` | Expand or collapse the details: the model's thinking (one line, or its paragraphs), commands' full output, whole diffs, and every call in an Explored block. It applies to the whole transcript |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
@@ -166,7 +169,7 @@ Role commands change the current session; add `--save` to make the change your d
 ## Implementation notes
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
-- Ink reads keys from a stand-in for stdin that takes the wheel's mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text.
+- Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
 - Colors come from roles in `tui/theme.ts` (brand, local, remote, added, removed, ...), never from color names in components.
 - All display state comes from `reduce()` in `@switchback/client/view`, and what a tool call says about itself from `@switchback/client/tool-display`. If something looks wrong in both clients, fix it there.

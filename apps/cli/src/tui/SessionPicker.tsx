@@ -2,6 +2,7 @@
 import type { SessionSummary } from '@switchback/protocol';
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
+import { Clickable } from './Clickable.tsx';
 
 const ROWS = 10;
 
@@ -71,17 +72,19 @@ export function SessionPicker({
         shown.slice(start, start + ROWS).map((s, i) => {
           const on = start + i === selected;
           return (
-            <Text key={s.id} wrap="truncate-end">
-              <Text color="cyan">{on ? '› ' : '  '}</Text>
-              <Text bold={on} color={on ? 'cyan' : undefined}>
-                {s.title || '(untitled)'}
+            <Clickable key={s.id} onClick={() => onPick(s.id)}>
+              <Text wrap="truncate-end">
+                <Text color="cyan">{on ? '› ' : '  '}</Text>
+                <Text bold={on} color={on ? 'cyan' : undefined}>
+                  {s.title || '(untitled)'}
+                </Text>
+                <Text dimColor>
+                  {'  '}
+                  {s.agent} · {ago(s.updatedAt)} · ${s.costUsd.toFixed(3)}
+                  {s.id === current ? ' · current' : ''}
+                </Text>
               </Text>
-              <Text dimColor>
-                {'  '}
-                {s.agent} · {ago(s.updatedAt)} · ${s.costUsd.toFixed(3)}
-                {s.id === current ? ' · current' : ''}
-              </Text>
-            </Text>
+            </Clickable>
           );
         })
       )}

@@ -35,14 +35,14 @@ import type {
   SessionSummary,
 } from '@switchback/protocol';
 import { Box, Text, useApp, useBoxMetrics, useStdout, useWindowSize } from 'ink';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Header, Queue, StatusBar, SubagentHeader, Todos, Working } from './Chrome.tsx';
+import { MouseContext } from './Clickable.tsx';
 import { useEngineFeeds } from './feeds.ts';
 import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
 import { useAppKeys } from './keys.ts';
 import { ModelPicker } from './ModelPicker.tsx';
-import type { MouseInput } from './mouse.ts';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
@@ -64,8 +64,6 @@ interface Props {
   /** What to open over the prompt first. */
   opening?: Opening;
   initialTheme?: ThemeName;
-  /** Wheel events, when the terminal reports them. */
-  mouse?: MouseInput;
   /** Told which session was open when the app quits, for the resume hint. */
   onSession?: (session: SessionSummary) => void;
 }
@@ -82,9 +80,9 @@ export function App({
   warnings,
   opening,
   initialTheme = 'dark',
-  mouse,
   onSession,
 }: Props) {
+  const mouse = useContext(MouseContext);
   const { exit } = useApp();
   const { stdout } = useStdout();
   const size = useWindowSize();
