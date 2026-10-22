@@ -78,11 +78,12 @@ test('a client runs the whole setup over the protocol, and the config is written
       (ask) => ('secret' in ask.question && ask.question.secret ? 'sk-test' : null),
     ],
     ['Any additional remote providers?', () => false],
-    ['Which model does what', index('Looks good')],
     ['Daily remote budget', () => ''],
     ['Monthly remote budget', () => 5],
   ]);
   expect(asked[0]).toBe('Do you have any local model endpoints?');
+  // One model does everything, so there's no ladder or reviewer to ask about.
+  expect(asked).not.toContain('Which model does what');
   expect(done).toMatchObject({ outcome: 'written', file: join(home, 'config.json') });
   const config = parseJsonc(readFileSync(join(home, 'config.json'), 'utf8')) as {
     providers: Record<string, { type: string; apiKey?: string }>;

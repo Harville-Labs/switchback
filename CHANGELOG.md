@@ -10,6 +10,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 ### Changed
 - **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
 
+### Fixed
+- **Setup with one model doesn't ask which model does what.** It used to offer an escalation ladder, reviewers, and a subagent model that a single model can't have
+
 ## [2.3.0] - 2026-10-21
 
 ### Added

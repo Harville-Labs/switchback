@@ -59,6 +59,8 @@ export async function chooseRoles(
   for (;;) {
     p.note({ kind: 'text', text: 'Which model does what', tone: 'heading' });
     p.note({ kind: 'roles', roles: asSession(), models });
+    // One model does everything: there's no ladder, reviewer, or subagent model to choose.
+    if (plan.length < 2) return roles;
     const action = await p.select('Which model does what', [
       { label: 'Looks good', value: 'done' as const },
       { label: 'Change the current model', value: 'current' as const },
