@@ -33,6 +33,30 @@ const PROGRAMS = new Set([
   'egrep',
   'fgrep',
   'rg',
+  'tree',
+  'sort',
+  'uniq',
+  'nl',
+  'tac',
+  'rev',
+  'fold',
+  'paste',
+  'column',
+  'comm',
+  'tr',
+  'readlink',
+  'od',
+  'hexdump',
+  'cksum',
+  'md5',
+  'md5sum',
+  'sha1sum',
+  'sha256sum',
+  'sha512sum',
+  'shasum',
+  'test',
+  'true',
+  'false',
 ]);
 
 /** Programs that read the files under a directory they're given. */
@@ -55,6 +79,9 @@ const WRITE_FLAGS: Record<string, RegExp> = {
   find: /^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)$/,
   rg: /^--pre(-glob)?(=|$)/,
   git: /^--(output|ext-diff)(=|$)/,
+  // `-o` (alone or in a cluster such as `-uo`) names a file to write.
+  sort: /^(-[a-zA-Z]*o|--output|--compress-program)/,
+  tree: /^(-[a-zA-Z]*o|--output)/,
 };
 
 /** Read-only git subcommands, and the arguments allowed after the ones that can also write. */
@@ -96,9 +123,11 @@ export function exploration(line: string, root: string): Exploration | undefined
         ? gitArgs(rest)
         : program === 'sed'
           ? sedFiles(rest)
-          : PROGRAMS.has(program)
-            ? rest
-            : undefined;
+          : program === 'uniq'
+            ? uniqFiles(rest)
+            : PROGRAMS.has(program)
+              ? rest
+              : undefined;
     if (!args) return undefined;
     const flags = WRITE_FLAGS[program];
     if (flags && rest.some((w) => flags.test(w))) return undefined;
@@ -140,6 +169,11 @@ function gitArgs(rest: string[]): string[] | undefined {
   const rule = GIT[sub];
   if (!rule || (rule !== true && !rule(args))) return undefined;
   return args;
+}
+
+/** `uniq`'s arguments, or undefined when it names a second file, which it writes. */
+function uniqFiles(rest: string[]): string[] | undefined {
+  return rest.filter((w) => !w.startsWith('-')).length > 1 ? undefined : rest;
 }
 
 /** Flags that only change how sed reads and prints; `-i` writes and `-f` reads a script that might. */

@@ -13,7 +13,7 @@ function commands(ctx: ToolContext) {
 export const bashTool = defineTool({
   name: 'bash',
   description:
-    'Run a shell command in the workspace root and return stdout, stderr, and the exit code. Use for builds, tests, and git. For something that keeps running (a dev server, a watcher), set background: true and read its output later with bash_output. The environment section of the system prompt names the shell.',
+    'Run a shell command in the workspace root and return stdout, stderr, and the exit code. Use for builds, tests, and git. To read files, list folders, or search, prefer read, glob, and grep. Read-only commands inside the workspace (ls, cat, grep, find, sort, sed -n, git status/diff/log, and the like) run without asking; anything that writes, uses $ substitution, or reaches outside the workspace may ask the user. For something that keeps running (a dev server, a watcher), set background: true and read its output later with bash_output. The environment section of the system prompt names the shell.',
   schema: z.object({
     command: z.string().min(1),
     timeoutMs: z
