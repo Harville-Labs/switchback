@@ -19,6 +19,7 @@ import {
   parseEffort,
   parseMode,
   runGoalCommand,
+  runReload,
 } from '@switchback/client';
 import { SESSION_TITLE_MAX } from '@switchback/protocol';
 import * as vscode from 'vscode';
@@ -131,6 +132,8 @@ export async function runChatCommand(
       }
       return info(formatShells(await c.request('shells.list', {})));
     }
+    case 'reload':
+      return info(await runReload(c));
     case 'up': {
       const { when } = await c.request('session.escalate', { sessionId: session.id });
       return info(escalateNotice(when));

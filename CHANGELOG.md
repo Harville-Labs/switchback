@@ -4,6 +4,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Changed
+- **Config edits take effect on `/reload`.** Running engines no longer watch config files. Edit them however you like, then type `/reload` in the TUI or VS Code (`config.reload` in the protocol) to apply them to the running engine; it says which settings changed, or which file didn't parse while the config in effect stays. Organization-enforced settings still win, and setup run from a client still applies what it writes right away
+
 ## [2.4.0] - 2026-10-22
 
 ### Added

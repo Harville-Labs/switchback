@@ -1,6 +1,13 @@
 import { expect, test } from 'bun:test';
 import type { InitializeResult, SessionRoles } from '@switchback/protocol';
-import { choiceLabel, currentChange, formatRefresh, modelChoices, nextModel } from './models.ts';
+import {
+  choiceLabel,
+  currentChange,
+  formatRefresh,
+  formatReload,
+  modelChoices,
+  nextModel,
+} from './models.ts';
 
 const models: InitializeResult['models'] = [
   { alias: 'fast', ref: { provider: 'ollama', model: 'qwen3' }, tier: 'local' },
@@ -77,4 +84,12 @@ test("a refresh says what each source lists now, and one it couldn't ask keeps i
     ].join('\n'),
   );
   expect(formatRefresh({ models, sources: [] })).toStartWith('Nothing to refresh');
+});
+
+test('a reload names what changed, or says nothing did', () => {
+  const models = [{ alias: 'a', ref: { provider: 'p', model: 'a' }, tier: 'local' as const }];
+  expect(formatReload({ changed: [], models })).toBe('Config reloaded; nothing in it changed.');
+  expect(formatReload({ changed: ['routing', 'models'], models })).toBe(
+    'Config reloaded. Changed: routing, models. 1 models available.',
+  );
 });
