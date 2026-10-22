@@ -106,7 +106,8 @@ const GIT: Record<string, ((args: string[]) => boolean) | true> = {
 /**
  * What an exploring command line reads, or undefined when it
  * isn't one: an unknown program, a wrapper (`sudo`, `xargs`), a variable,
- * substitution or redirection, a writing flag, or a path outside `root`.
+ * substitution or output redirection, a writing flag, or a path outside `root`
+ * (including one read through `<`).
  * Commands start in `root` and `cd` moves later ones, as the bash tool runs them.
  */
 export function exploration(line: string, root: string): Exploration | undefined {
@@ -125,14 +126,16 @@ export function exploration(line: string, root: string): Exploration | undefined
           ? sedFiles(rest)
           : program === 'uniq'
             ? uniqFiles(rest)
-            : PROGRAMS.has(program)
-              ? rest
-              : undefined;
+            : program === 'tr'
+              ? [] // its operands are character sets, and it reads only its input
+              : PROGRAMS.has(program)
+                ? rest
+                : undefined;
     if (!args) return undefined;
     const flags = WRITE_FLAGS[program];
     if (flags && rest.some((w) => flags.test(w))) return undefined;
     const reads: string[] = [];
-    for (const word of args) {
+    for (const word of [...args, ...(parsed.inputs[i] ?? [])]) {
       const value = word.startsWith('-') ? optionValue(word) : word;
       if (!value) continue;
       const file = resolveFile(cwd, value);

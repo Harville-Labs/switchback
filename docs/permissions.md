@@ -110,7 +110,7 @@ Looking around the workspace with the shell doesn't ask, as long as `permissions
 
 A command line asks as before, under `permissions.bash`, when any part of it:
 
-- names a path outside the folder Switchback was started in, including through `cd ..`, `~`, or an option value (`grep -f/etc/passwd`);
+- names a path outside the folder Switchback was started in, including through `cd ..`, `~`, an option value (`grep -f/etc/passwd`), or an input redirection (`cat < /etc/hosts`);
 - writes or runs something: an output redirection, `$` variables or substitution, a wrapper (`sudo`, `xargs`, `env`), `find -exec` or `-delete`, `rg --pre`, `git --output`, `sort -o`, `tree -o`, `uniq` with a second file, `sed -i`, or a sed script with `w`, `r`, or `e`;
 - runs any other program or git subcommand, or passes git a global option other than `--no-pager`.
 

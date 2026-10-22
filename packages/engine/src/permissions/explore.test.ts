@@ -39,6 +39,8 @@ describe('exploration', () => {
       'cut -d: -f1 src/a.ts | sort -n | uniq',
       'nl src/a.ts',
       "tr -d '\\r' < src/a.ts",
+      "cat src/a.ts | tr 'a-z' 'A-Z'",
+      'wc -l < src/a.ts',
       'test -f src/a.ts && echo yes',
       'readlink src/a.ts',
       'shasum -a 256 src/a.ts',
@@ -59,6 +61,9 @@ describe('exploration', () => {
       'cat $HOME/.ssh/config',
       'git -C /tmp status',
       'find / -name x',
+      'cat < /etc/hosts',
+      'tr a b < /etc/hosts',
+      'ls && wc -l < ../x',
     ])
       expect({ line, explores: explores(line) }).toEqual({ line, explores: false });
   });
