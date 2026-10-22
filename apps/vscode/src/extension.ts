@@ -13,7 +13,7 @@ import { EngineConnection } from './connection.ts';
 import { type AttachChoice, EditorContext } from './context.ts';
 import { installerShell } from './engine-binary.ts';
 import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
-import { NoEngineError, resolveEngine } from './resolve-engine.ts';
+import { NoEngineError } from './resolve-engine.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 import { runSetup } from './setup-wizard.ts';
 import { WORKTREE_SCHEME, worktreeDiffs } from './worktree-diff.ts';
