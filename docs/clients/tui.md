@@ -85,7 +85,7 @@ Several sessions can be open at once, each in its own tab, and they all keep wor
 
   To give Ctrl+Tab and Ctrl+Shift+Tab to Switchback, copy the lines for your terminal: [kitty](../../examples/terminals/kitty.conf), [Ghostty](../../examples/terminals/ghostty.conf), [WezTerm](../../examples/terminals/wezterm.lua), or [iTerm2](../../examples/terminals/iterm2.md) (a few clicks in its settings). Terminal.app can't unbind it.
 - **Ctrl+W** on an empty prompt closes the tab in front; with text typed, it deletes a word.
-- `/tab new [agent]` opens a tab, `/tab <n>` switches, `/tab close` closes the one in front, and `/tab` alone prints the dashboard.
+- `/tab new [agent]` opens a tab, `/tab <n>` switches, `/tab close` closes the one in front, and `/tab` alone opens the dashboard.
 - Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new` and `/resume` change the session in the tab in front, and `/agent` switches its agent, as before; `/resume` of a session that's open in another tab switches to it.
 
 Tabs are the clients' own; the engine sends every session's events to every client, and both clients fold them with the same functions (`@switchback/client/tabs`), so the TUI and VS Code show the same states with the same words ([protocol.md](../protocol.md#several-sessions-at-once)).
@@ -100,7 +100,9 @@ Page Up and Page Down scroll the transcript, and so does the mouse wheel. Scroll
 
 Clicks work where there's something to pick: an answer to a permission, plan, or escalation question; a row in the model, session, rewind, and tab pickers; and a key hint with an action, such as `esc close` or `r refresh list`.
 
-On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and clicks, which also captures plain drags, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2.
+On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and clicks. Reporting also takes drags from the terminal, so the TUI selects for itself: drag to select, and the text is copied when you let go (the same way as `/copy`). A click, the wheel, or a change to the selected text clears the highlight. Holding Shift (Option in macOS Terminal and iTerm2) still gets the terminal's own selection.
+
+With reporting off, many terminals (WezTerm, kitty, iTerm2) send the wheel as ↑↓ keys in a full-screen program, and those walk prompt history rather than the transcript. Nothing the TUI can send stops that, so on macOS and Linux leave `/mouse` on.
 
 On Windows mouse reporting starts off, so dragging selects text as in any other console program and Ctrl+C or Enter copies it (Windows Terminal, conhost, and VS Code's terminal). The wheel doesn't scroll the transcript then; Page Up and Page Down do. `/mouse on` turns reporting on (Shift+drag then selects in Windows Terminal and VS Code), `/mouse off` turns it off on any platform, and the choice is remembered.
 
@@ -108,13 +110,15 @@ On Windows mouse reporting starts off, so dragging selects text as in any other 
 
 ### Themes
 
-`/theme dark`, `/theme light`, or `/theme plain` (no color at all) switches the colors and remembers the choice for next time.
+`/theme dark`, `/theme light`, or `/theme plain` (no color at all) switches the colors and remembers the choice for next time. `/theme` alone lists them.
 
 ### Prompts
 
 Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, or the option's number; the letters from before (`y`, `a`, `p`, `n`) still work, and Esc declines. A permission prompt shows the command, or the edit as a diff, and offers **No, and tell it what to do instead**: type a note and press Enter, and the model gets it with the refusal.
 
 ## Commands and keys
+
+A command whose argument comes from a known list (models, agents, themes, effort levels, subagents) opens that list when you run it with no argument: ↑/↓ and Enter, the row's number, or a click. While you type a command's arguments, Tab completes them.
 
 | Input | Effect |
 |---|---|
@@ -129,7 +133,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/resume [n\|id]` | Switch to a saved session. With no argument, a picker: type to filter by title, agent, or ID, ↑/↓ to choose, Enter to open. `switchback resume` opens it at startup, `switchback resume <id>` a specific session, `-c` the latest, and `switchback sessions [--json]` lists them for scripts |
 | `/rename [title]` | Name this session (at most 60 characters). With no argument, shows the current title. A session is titled from its first prompt until you rename it, and a summary at compaction can retitle it, but never over a name you gave |
 | `/subagents` | This session's subagents as a numbered tree |
-| `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
+| `/subagent [n]` | Drill into one subagent: routes, tool calls, nested subagents, and its report. With no argument, a list of this session's subagents |
 | `/shells` · `/shells kill <id>` | Background shells the model started (dev servers, watchers), and stopping one. The status bar counts the running ones |
 | `/reload` | Read the config files again and apply them, saying which settings changed. Config files aren't watched, so edits made outside Switchback wait for this or the next engine ([configuration.md](../configuration.md)) |
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
@@ -139,7 +143,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept. While it runs, the working line shows `Compacting (2/5)` |
 | `/autocompact [on\|off] [--save]` | Show or switch automatic compaction for this session; `--save` makes it the default (`compaction.enabled`) |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
-| `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
+| `/review [on\|off\|default]` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode`. With no argument, a list of these and `ladder` |
 | `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
 | `/models [refresh]` | Every model, its tier, and the roles it fills; models an endpoint lists that you haven't given a role are marked. `refresh` asks each endpoint and subscription what it serves now and adds the new models, without running setup again |
 | `/init` | Run setup inside the TUI: the same questions as `switchback init` (local servers and their models, remote providers, which model does what), asked in a panel above the prompt. ↑/↓ and Enter answer, space ticks in a checklist, typing filters a long list, Esc cancels without writing anything. The new config is in use as soon as it's saved |
@@ -147,14 +151,14 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. In the picker, **r** asks your endpoints for their models again and **e** opens setup to add or edit models. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
 | `/model [model]` | The model for what's in front: `/current` in the session's view, the subagent model in a subagent's ([Subagents](#subagents)) |
 | `/ladder` · `/ladder <step...>` · `/ladder none` | The escalation ladder; a step is a model, or `a,b` alternatives. With no argument, an editor: ↑/↓ choose, space adds or removes, `,` makes an alternative to the step before, `[` `]` move, Enter applies, `s` applies and saves. `/escalate` still works |
-| `/subagent-model <model>\|none` | Default model for subagents |
-| `/effort [none\|low\|medium\|high\|xhigh\|max\|default]` | Show or set reasoning effort for this session's own model calls (`switchback --effort` at startup). Subagents keep theirs; `default` goes back to the agent's or model's ([subagents.md](../subagents.md#reasoning-effort)) |
+| `/subagent-model [model\|none]` | Default model for subagents; with no argument, a picker |
+| `/effort [none\|low\|medium\|high\|xhigh\|max\|default]` | Set reasoning effort for this session's own model calls; with no argument, a list that marks the one in use (`switchback --effort` at startup). Subagents keep theirs; `default` goes back to the agent's or model's ([subagents.md](../subagents.md#reasoning-effort)) |
 | `/permissions [ask\|auto\|bypass]` | With no argument, the permission level, the category levels, and every rule with where it came from. With a level, switch to it ([permissions.md](../permissions.md#permission-levels)) |
 
 | `/copy [n\|tool\|all]` | Copy to the clipboard as raw text (no wrapping, indentation, or colors from the terminal rendering): the last reply, its `n`th code block, the last tool's output, or the whole conversation as Markdown. Works over SSH in terminals that support OSC 52 (iTerm2, kitty, WezTerm, Ghostty, Windows Terminal, and tmux with `set-clipboard on`) |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
-| `/theme [dark\|light\|plain]` | Show or switch the colors; the choice is remembered |
-| `/mouse [on\|off]` | Mouse reporting: on, the wheel scrolls and clicks pick tabs; off, a plain drag selects text. Off by default on Windows, on elsewhere; with no argument it switches, and the choice is remembered ([Scrolling and selecting](#scrolling-and-selecting)) |
+| `/theme [dark\|light\|plain]` | Switch the colors, or pick from a list with no argument; the choice is remembered |
+| `/mouse [on\|off]` | Mouse reporting: on, the wheel scrolls, clicks pick tabs, and a drag selects and copies; off, the terminal selects and the wheel may walk prompt history. Off by default on Windows, on elsewhere; with no argument it switches, and the choice is remembered ([Scrolling and selecting](#scrolling-and-selecting)) |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
@@ -167,7 +171,8 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Ctrl+T | The sessions dashboard ([Tabs](#tabs)) |
 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |
 | Alt+↓ / Alt+↑ | Show the next running subagent / come back to the session ([Subagents](#subagents)). On macOS Terminal, alt needs "Use Option as Meta key" |
-| Tab (no menu open) | Switch to the next model: the one after the current model in config order, back to the first after the last. It says `Switched to <model>.` and applies to this session; the model you leave doesn't stay behind as a backup |
+| Tab in a command's arguments | Complete a model, agent, theme, or other known value. With several matches it completes what they share and lists them; Tab again goes round them. It never switches the model there |
+| Tab (no menu open, outside a command) | Switch to the next model: the one after the current model in config order, back to the first after the last. It says `Switched to <model>.` and applies to this session; the model you leave doesn't stay behind as a backup |
 | Shift+Tab | Switch to the next agent: build → plan → your own agents by name, then back to build |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and auto-approve, keep planning) |
@@ -195,7 +200,7 @@ The active goal and its turn count stay above the prompt (`◎ goal · turn 3/25
 ## Implementation notes
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
-- Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout.
+- Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout. Selection (`tui/selection.ts`) keeps a copy of the screen in an `@xterm/headless` terminal fed everything Ink writes, and paints the selected cells inverted after each frame.
 - Marks in the status bar and transcript (`⌂`, `▲`, and the permission levels' `√` and `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
 - Child processes the user doesn't look at (commands, hooks, git, ripgrep, clipboard helpers) start with `windowsHide` (`hideWindow` in the engine), so on Windows a detached engine doesn't open a console window for each one.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.

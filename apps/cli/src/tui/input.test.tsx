@@ -107,6 +107,38 @@ describe('command menu', () => {
     expect(lines.some((l) => l.includes('/effort [none|low|') && l.includes('…'))).toBe(true);
     expect(lines).toContain('  /effort [none|low|medium|high|xhigh|max|default]');
   });
+
+  test('a command recalled from history does not open it, so ↑ keeps going back', async () => {
+    const UP = '\x1b[A';
+    const ui = render(
+      <PromptInput
+        focus
+        busy={false}
+        placeholder="Ask"
+        history={['explain this', '/model']}
+        root="/tmp"
+        custom={[]}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSubmitNow={() => {}}
+        onCancel={() => {}}
+        recall={() => undefined}
+      />,
+    );
+    ui.stdin.write(UP);
+    await tick();
+    expect(ui.lastFrame()).toContain('/model');
+    expect(ui.lastFrame()).not.toContain('↑↓ choose');
+    ui.stdin.write(UP);
+    await tick();
+    expect(ui.lastFrame()).toContain('explain this');
+    // Typing opens it again.
+    ui.stdin.write(CTRL_C);
+    await tick();
+    ui.stdin.write('/mod');
+    await tick();
+    expect(ui.lastFrame()).toContain('↑↓ choose');
+  });
 });
 
 describe('during a turn', () => {
@@ -313,7 +345,7 @@ describe('the current model and tabs in the app', () => {
     await tick();
     ui.stdin.write(ENTER);
     await tick();
-    expect(await frameWith(ui, /1\* · fix the parser/)).toMatch(/1\* · fix the parser/);
+    expect(await frameWith(ui, /› +1 · fix the parser .*here/)).toMatch(/› +1 · fix the parser/);
   });
 });
 

@@ -17,6 +17,7 @@ import { frameWith, session, tick } from './test-support.ts';
 const ENTER = '\r';
 const TAB = '\t';
 const CTRL_W = '\x17';
+const ESC = '\x1b';
 // What a terminal sends for alt+↓ and alt+↑ (xterm's modifier form).
 const ALT_DOWN = '\x1b[1;3B';
 const ALT_UP = '\x1b[1;3A';
@@ -126,19 +127,26 @@ describe('the tab bar', () => {
     ui.stdin.write('/tab');
     await tick();
     ui.stdin.write(ENTER);
-    expect(await frameWith(ui, /1\* · fix the parser/)).toMatch(/1\* · fix the parser/);
+    // With no argument, /tab opens the sessions list on the tab in front.
+    expect(await frameWith(ui, /› +1 · fix the parser .*here/)).toMatch(/› +1 · fix the parser/);
+    ui.stdin.write(ESC);
+    await tick();
     ui.stdin.write(CTRL_SHIFT_TAB);
     await tick();
     ui.stdin.write('/tab');
     await tick();
     ui.stdin.write(ENTER);
-    expect(await frameWith(ui, /2\* · tab 2/)).toMatch(/2\* · tab 2/);
+    expect(await frameWith(ui, /› +2 · tab 2 .*here/)).toMatch(/› +2 · tab 2/);
+    ui.stdin.write(ESC);
+    await tick();
     click(4, 1);
     await tick();
     ui.stdin.write('/tab');
     await tick();
     ui.stdin.write(ENTER);
-    expect(await frameWith(ui, /1\* · fix the parser\n(?!.*1\*)/s)).toMatch(/1\* · fix the parser/);
+    expect(await frameWith(ui, /› +1 · fix the parser .*here/)).toMatch(/› +1 · fix the parser/);
+    ui.stdin.write(ESC);
+    await tick();
     // With text typed, ctrl+w deletes a word; on an empty prompt it closes the tab.
     ui.stdin.write('draft');
     await tick();

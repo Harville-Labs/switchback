@@ -95,7 +95,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'subagent',
-    args: '<n>',
+    args: '[n]',
     group: 'Session',
     description: 'show what a subagent did: routes, tools, report',
     clients: ['tui'],
@@ -154,7 +154,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'subagent-model',
-    args: '<model>|none',
+    args: '[model|none]',
     group: 'Models',
     description: 'default model for subagents',
   },

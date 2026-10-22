@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { formatAgentChoices, nextAgent, parseLevel, switchableAgents } from './levels.ts';
+import { nextAgent, parseLevel, switchableAgents } from './levels.ts';
 
 const agents = [
   { name: 'review', mode: 'subagent', description: 'reviews' },
@@ -25,16 +25,6 @@ test('cycling wraps from the last agent to build, and goes nowhere with one agen
   // An agent that can't lead (a resumed subagent-only name) starts the cycle over.
   expect(nextAgent([...agents], 'explore')).toBe('build');
   expect(nextAgent([{ name: 'build', mode: 'primary' }], 'build')).toBeUndefined();
-});
-
-test('/agent marks the current agent and lines up descriptions', () => {
-  const lines = formatAgentChoices([...agents], 'plan').split('\n');
-  expect(lines.slice(0, 4)).toEqual([
-    '  build    builds',
-    '● plan     plans',
-    '  careful  custom c',
-    '  zed      custom z',
-  ]);
 });
 
 test('levels parse from their names and from the old permission mode names', () => {

@@ -105,21 +105,6 @@ export function nextAgent(
   return next === current ? undefined : next;
 }
 
-/** `/agent` with no argument: the agents this session can switch to, the current one marked. */
-export function formatAgentChoices(
-  agents: Pick<AgentSummary, 'name' | 'mode' | 'description'>[],
-  current: string | undefined,
-): string {
-  const list = switchableAgents(agents);
-  const width = Math.max(...list.map((a) => a.name.length));
-  return [
-    ...list.map(
-      (a) => `${a.name === current ? '●' : ' '} ${a.name.padEnd(width)}  ${a.description}`,
-    ),
-    '/agent <name> to switch; Shift+Tab cycles',
-  ].join('\n');
-}
-
 /** `/permissions`: the permission level, the category levels, and every rule with where it came from. */
 export function formatPermissions(p: PermissionsListResult): string {
   const row = (label: string, text: string) => `${label.padEnd(8)}${text}`;
