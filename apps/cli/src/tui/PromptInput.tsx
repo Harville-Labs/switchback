@@ -150,6 +150,9 @@ export function PromptInput({
 
   const browse = (delta: -1 | 1): boolean => {
     if (history.length === 0) return false;
+    // A recalled command would open the menu, which then takes ↑↓ and strands the
+    // walk through history; typing opens it again.
+    setMenuClosed(true);
     if (histIndex === null) {
       if (delta === 1) return false;
       setDraft(state.value);

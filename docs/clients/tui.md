@@ -99,7 +99,9 @@ Page Up and Page Down scroll the transcript, and so does the mouse wheel. Scroll
 
 Clicks work where there's something to pick: an answer to a permission, plan, or escalation question; a row in the model, session, rewind, and tab pickers; and a key hint with an action, such as `esc close` or `r refresh list`.
 
-On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and clicks, which also captures plain drags, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2.
+On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and clicks. Reporting also takes drags from the terminal, so the TUI selects for itself: drag to select, and the text is copied when you let go (the same way as `/copy`). A click, the wheel, or a change to the selected text clears the highlight. Holding Shift (Option in macOS Terminal and iTerm2) still gets the terminal's own selection.
+
+With reporting off, many terminals (WezTerm, kitty, iTerm2) send the wheel as ↑↓ keys in a full-screen program, and those walk prompt history rather than the transcript. Nothing the TUI can send stops that, so on macOS and Linux leave `/mouse` on.
 
 On Windows mouse reporting starts off, so dragging selects text as in any other console program and Ctrl+C or Enter copies it (Windows Terminal, conhost, and VS Code's terminal). The wheel doesn't scroll the transcript then; Page Up and Page Down do. `/mouse on` turns reporting on (Shift+drag then selects in Windows Terminal and VS Code), `/mouse off` turns it off on any platform, and the choice is remembered.
 
@@ -156,7 +158,7 @@ A command whose argument comes from a known list (models, agents, themes, effort
 | `/copy [n\|tool\|all]` | Copy to the clipboard as raw text (no wrapping, indentation, or colors from the terminal rendering): the last reply, its `n`th code block, the last tool's output, or the whole conversation as Markdown. Works over SSH in terminals that support OSC 52 (iTerm2, kitty, WezTerm, Ghostty, Windows Terminal, and tmux with `set-clipboard on`) |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/theme [dark\|light\|plain]` | Switch the colors, or pick from a list with no argument; the choice is remembered |
-| `/mouse [on\|off]` | Mouse reporting: on, the wheel scrolls and clicks pick tabs; off, a plain drag selects text. Off by default on Windows, on elsewhere; with no argument it switches, and the choice is remembered ([Scrolling and selecting](#scrolling-and-selecting)) |
+| `/mouse [on\|off]` | Mouse reporting: on, the wheel scrolls, clicks pick tabs, and a drag selects and copies; off, the terminal selects and the wheel may walk prompt history. Off by default on Windows, on elsewhere; with no argument it switches, and the choice is remembered ([Scrolling and selecting](#scrolling-and-selecting)) |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
@@ -198,7 +200,7 @@ The active goal and its turn count stay above the prompt (`◎ goal · turn 3/25
 ## Implementation notes
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
-- Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout.
+- Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout. Selection (`tui/selection.ts`) keeps a copy of the screen in an `@xterm/headless` terminal fed everything Ink writes, and paints the selected cells inverted after each frame.
 - Marks in the status bar and transcript (`⌂`, `▲`, the mode's `»`, `√`, `║`, `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
 - Child processes the user doesn't look at (commands, hooks, git, ripgrep, clipboard helpers) start with `windowsHide` (`hideWindow` in the engine), so on Windows a detached engine doesn't open a console window for each one.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
