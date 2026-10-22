@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import stringWidth from 'string-width';
 import {
   effortNotice,
+  estimateLabel,
   formatAgents,
   formatPermissions,
   modeIcon,
@@ -97,4 +98,11 @@ test('status marks take one cell in every terminal, so the space after them show
     expect(mark).not.toMatch(/\p{Emoji}/u);
   }
   expect(modeIcon('default')).toBe('');
+});
+
+test('cost estimates round to cents, with a floor for tiny ones', () => {
+  expect(estimateLabel(undefined)).toBe('');
+  expect(estimateLabel(0.004)).toBe('≈ <$0.01');
+  expect(estimateLabel(0.0412)).toBe('≈ $0.04');
+  expect(estimateLabel(1.5)).toBe('≈ $1.50');
 });
