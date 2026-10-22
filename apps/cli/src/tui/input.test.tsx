@@ -3,6 +3,7 @@ import { customCommands, type SwitchbackClient } from '@switchback/client';
 import type { InitializeResult } from '@switchback/protocol';
 import { render } from 'ink-testing-library';
 import { App } from './App.tsx';
+import { ModelPicker } from './ModelPicker.tsx';
 import { PromptInput } from './PromptInput.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { filterSessions, SessionPicker } from './SessionPicker.tsx';
@@ -353,4 +354,24 @@ describe('rewind picker', () => {
     await tick();
     expect(chosen).toEqual(['t1:files']);
   });
+});
+
+test('the model picker lines up models whose aliases differ in length', () => {
+  const choice = (alias: string, tier: 'local' | 'remote') => ({
+    alias,
+    model: `${alias}-model`,
+    tier,
+    roles: [],
+    current: false,
+  });
+  const ui = render(
+    <ModelPicker
+      choices={[choice('local', 'local'), choice('remote', 'remote')]}
+      onPick={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  const frame = ui.lastFrame() ?? '';
+  expect(frame).toContain('1. local   local-model · local');
+  expect(frame).toContain('2. remote  remote-model · remote');
 });
