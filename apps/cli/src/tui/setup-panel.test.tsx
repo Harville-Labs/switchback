@@ -8,7 +8,7 @@ import { Box } from 'ink';
 import { render } from 'ink-testing-library';
 import { useEffect } from 'react';
 import { SetupQuestionPanel, setupEnded, useSetup } from './SetupPanel.tsx';
-import { frameWith, tick } from './test-support.ts';
+import { frameWith, frameWithout, tick, until } from './test-support.ts';
 
 const DOWN = '\x1b[B';
 const ESC = '\x1b';
@@ -137,8 +137,8 @@ describe('after setup writes a config', () => {
     const ui = render(<Opened said={said} />);
     expect(await frameWith(ui, 'anonymous')).toContain('Set up ·');
     ui.stdin.write(ESC);
-    await tick();
-    expect(ui.lastFrame()).not.toContain('Set up ·');
+    expect(await frameWithout(ui, 'Set up ·')).not.toContain('Set up ·');
+    await until(() => said.length > 0);
     expect(said).toEqual([setupEnded({ outcome: 'written', file: '/c.json' })]);
     ui.unmount();
   });
