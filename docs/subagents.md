@@ -109,7 +109,8 @@ Files that fail to parse are skipped and reported by `switchback doctor` and at 
 The parent can also choose, for one task, `model` (any configured model alias, over the agent's own) and `effort`. Switchback refuses a `model` that isn't configured, a remote model for an agent pinned to `local`, and any `model` for an agent on an external runtime, and the parent gets the reason as the task result. The subagent row shows the model and effort it ran with.
 
 - The subagent starts with an empty transcript. `prompt` has to be self-contained, because the subagent can't see the parent conversation.
-- Only the subagent's final text returns to the parent, cut to 30,000 characters so several reports fit in its context. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model. Every subagent's system prompt ends with a "Reporting back" section asking for a short report: what it found or changed, with file paths and line numbers, what it couldn't do, and what the caller should check.
+- Only the subagent's final text returns to the parent. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model. A subagent's system prompt has a short "Reporting back" section in place of the Switchback guide the top-level session gets: report what you found or changed, with file paths and line numbers, what you couldn't do, and what the caller should check.
+- Reports are cut to 30,000 characters. The subagents started in one step share 60,000 between them, so a fan-out of 150 adds about as much to the parent's context as two do: each is told its share in its brief (`Keep your final report under 400 characters`), and anything past it is cut.
 - A subagent's model calls go through the router like the parent's, under its own agent's routing, budget, and `routing.allowRemote`. Its row shows the model each step ran on.
 - A subagent that fails or is cancelled returns an error result, which the parent can handle.
 - Cancelling the parent turn cancels its subagents.
@@ -185,15 +186,15 @@ With `"background": true` the call returns at once with the task's ID and the pa
 
 ### Splitting work across subagents
 
-Ask for it in plain words: "use 4 subagents to find every caller of `parseConfig`", "split this migration across subagents", "have a reviewer check it". The system prompt tells the model how:
+Ask for it in plain words: "use 4 subagents to find every caller of `parseConfig`", "split this migration across subagents", "have a reviewer check it". There's no limit on how many; 150 works. The `task` tool's description tells the model how:
 
-- Start exactly as many subagents as you ask for. With no number, as few as the work needs.
+- Start as many subagents as you ask for. With no number, as few as the work needs. If the number looks wrong for the work, too many to be worth the cost or too few to split it, the model says so and you agree on one first.
 - Split the work into independent pieces and start them all in one response, so they run in parallel.
 - Give each a complete brief: the goal, the files it owns, and what to report.
 - Never let two subagents edit the same file. Each gets its own files, or `isolation: "worktree"` and a `merge_worktree` afterwards.
 - Combine the reports into one answer.
 
-Calls beyond `subagents.maxConcurrent` show as waiting (`◷ … waiting for a free slot`) and start as earlier ones finish (`subagent.queued`, then `subagent.started`, in the [protocol](protocol.md)). Cancelling the parent cancels the running ones and the waiting ones.
+Each subagent is a full model run, so many of them cost what that many runs cost, under the usual routing and budgets. Calls beyond `subagents.maxConcurrent` show as waiting (`◷ … waiting for a free slot`) and start as earlier ones finish (`subagent.queued`, then `subagent.started`, in the [protocol](protocol.md)). Cancelling the parent cancels the running ones and the waiting ones.
 
 To try it without a model, the mock provider fans out a prompt of the form `use 3 subagents to <goal>`: `bun run dev -- --mock`.
 

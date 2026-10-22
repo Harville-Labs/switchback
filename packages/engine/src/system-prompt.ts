@@ -8,8 +8,8 @@ export const INSTRUCTION_HEADINGS = {
 
 /**
  * How to use what Switchback adds to the model's own tools: subagents and
- * their tabs, escalation, the docs and config. Every session gets it,
- * whatever the ladder, since roles can change mid-session and the prompt is
+ * their tabs, escalation, the docs and config. Every top-level session gets
+ * it, whatever the ladder, since roles can change mid-session and the prompt is
  * frozen at creation (invariant 7). Coding agent CLIs (Claude Code, Codex)
  * get it with each turn, beside the same tools served over MCP.
  */
@@ -20,7 +20,7 @@ export function switchbackGuide(delegates: boolean): string {
   ];
   if (delegates)
     lines.push(
-      '- **Subagents (task).** Delegate self-contained work, such as a broad search, an independent change, or a review, to one of Switchback\'s agents. Each gets a fresh context, its own model, and a tab the user can open to watch it. When the user asks for subagents, use this tool rather than any subagent feature of your own, and start exactly as many as they ask for; otherwise use as few as the work needs. Split the work into independent pieces and start them all in one response so they run in parallel. Give each a complete brief, since it can\'t see this conversation, and never let two edit the same file: give each its own files, or use isolation: "worktree" and bring the branch back with merge_worktree. Combine their reports into one answer. With background: true, a report arrives later as a message while you keep working.',
+      "- **Subagents (task).** Delegate self-contained work, such as a broad search, an independent change, or a review, to one of Switchback's agents. Each gets a fresh context, its own model, and a tab the user can open to watch it. When the user asks for subagents, use this tool rather than any subagent feature of your own.",
     );
   lines.push(
     "- **Escalation (escalate).** You are one of several models the user has set up; some are stronger, and may cost money. When the task is beyond you (you keep failing at it, it needs deeper reasoning than you can give, or you are unsure of a change that matters), call escalate with a short reason. The work then moves to the next model up, if there is one and the user's settings allow it; the user may be asked first. Don't escalate for routine work or before trying.",
@@ -76,9 +76,9 @@ export function systemPrompt({
   const sections = [
     agent.prompt,
     `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${shell}\nFile paths in tool calls are relative to the workspace root.`,
-    switchbackGuide(!agent.tools || agent.tools.includes('task')),
+    // A subagent needs only to know how to report; 150 of them shouldn't each carry the guide.
+    subagent ? REPORTING : switchbackGuide(!agent.tools || agent.tools.includes('task')),
   ];
-  if (subagent) sections.push(REPORTING);
   if (user) sections.push(`# ${INSTRUCTION_HEADINGS.user}\n${user.trim()}`);
   if (project) sections.push(`# ${INSTRUCTION_HEADINGS.project}\n${project.trim()}`);
   if (session) sections.push(`# Instructions for this session\n${session.trim()}`);

@@ -23,16 +23,9 @@ test('an agent without the task tool is not told about subagents', () => {
   expect(prompt).not.toContain('(task)');
 });
 
-test('a subagent is told that its last message is a short report for its parent', () => {
-  expect(systemPrompt({ ...parts, agent: agent('general'), subagent: true })).toContain(
-    '# Reporting back',
-  );
+test('a subagent is told how to report, and not given the Switchback guide', () => {
+  const sub = systemPrompt({ ...parts, agent: agent('general'), subagent: true });
+  expect(sub).toContain('# Reporting back');
+  expect(sub).not.toContain('# Working in Switchback');
   expect(systemPrompt({ ...parts, agent: agent('build') })).not.toContain('# Reporting back');
-});
-
-test('the subagent guide covers counts, parallel pieces, and files no two subagents share', () => {
-  const prompt = systemPrompt({ ...parts, agent: agent('build') });
-  expect(prompt).toContain('start exactly as many as they ask for');
-  expect(prompt).toContain('in one response so they run in parallel');
-  expect(prompt).toContain('never let two edit the same file');
 });

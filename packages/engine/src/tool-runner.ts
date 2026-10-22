@@ -68,6 +68,7 @@ export class ToolRunner {
       sessionId: s.header.id,
       signal,
       agentCatalog: catalog,
+      tasksInStep: calls.filter((c) => c.name === 'task').length,
       runSubagent: (agent, prompt, description, options) =>
         this.deps.runSubagent(s, agent, prompt, description, signal, options),
       hidden: (path) => policy.hides(path, root),

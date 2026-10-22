@@ -374,7 +374,7 @@ function mockTurn(id: string, messages: ChatRequest['messages']): ScriptedTurn {
   const text = lastUserText(messages);
   const fan = /^use (\d+) subagents? to (.+)$/is.exec(text.trim());
   if (fan?.[1] && fan[2]) {
-    const n = Math.min(Number(fan[1]), 8);
+    const n = Math.min(Number(fan[1]), 200);
     return {
       toolCalls: Array.from({ length: n }, (_, i) => ({
         name: 'task',

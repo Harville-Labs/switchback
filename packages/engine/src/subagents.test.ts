@@ -6,6 +6,7 @@ import type { EngineEvent } from '@switchback/protocol';
 import { type ChatRequest, type Provider, ScriptedProvider } from '@switchback/providers';
 import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
+import { taskTool } from './tools/task.ts';
 
 let root: string;
 beforeEach(() => {
@@ -21,7 +22,7 @@ const briefOf = (req: ChatRequest) => {
 
 /**
  * A parent that fans `tasks` out in one step, then answers with the reports it
- * got back. Children report `done: <brief>` after `childMs`, or wait for
+ * got back. Children report `done: <brief's first line>` after `childMs`, or wait for
  * cancellation when `childMs` is undefined.
  */
 function orchestrate(
@@ -31,7 +32,7 @@ function orchestrate(
   let running = 0;
   let peak = 0;
   const lp = new ScriptedProvider('lp', 'local', (req) => {
-    if (isChild(req)) return { text: `done: ${briefOf(req)}` };
+    if (isChild(req)) return { text: `done: ${briefOf(req).split('\n')[0]}` };
     const results = req.messages.at(-1)?.parts.filter((p) => p.type === 'tool_result') ?? [];
     if (results.length)
       return { text: results.map((r) => (r.type === 'tool_result' ? r.content : '')).join(' | ') };
@@ -193,5 +194,32 @@ describe('orchestrating subagents', () => {
     // The queued one never got a slot.
     expect(of('subagent.started').map((e) => e.task)).toEqual(['search a', 'search b']);
     expect(engine.busy()).toBe(false);
+  });
+
+  test('150 subagents run within the cap, and their reports share one budget', async () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({ agent: 'explore', brief: `part ${i}` }));
+    const { engine, of, lp, peak } = orchestrate(many, { childMs: 1 });
+    const s = engine.createSession({});
+    await engine.runTurn(s.id, 'use 150 subagents');
+    expect(peak()).toBe(4);
+    expect(of('subagent.queued')).toHaveLength(146);
+    expect(of('subagent.completed').filter((e) => e.ok)).toHaveLength(150);
+    // Each child is told its share: 60,000 characters across 150.
+    const briefs = lp.requests.filter(isChild).map(briefOf);
+    expect(briefs.every((b) => b.includes('under 400 characters'))).toBe(true);
+  });
+
+  test('a lone subagent gets the whole report budget and no length note', async () => {
+    const { engine, lp } = orchestrate(four.slice(0, 1));
+    await engine.runTurn(engine.createSession({}).id, 'go');
+    expect(lp.requests.filter(isChild).map(briefOf)).toEqual(['search a']);
+  });
+
+  test('the task tool covers counts, agreeing on one, parallel pieces, and shared files', () => {
+    const d = taskTool.description;
+    expect(d).toContain('Start as many as the user asks for');
+    expect(d).toContain('agree on one before starting');
+    expect(d).toContain('in one response to run them in parallel');
+    expect(d).toContain('Never let two edit the same file');
   });
 });

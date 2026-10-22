@@ -41,6 +41,8 @@ export interface ToolContext {
     description: string,
     options?: SubagentOptions,
   ) => Promise<SubagentResult>;
+  /** How many task calls the model made in this step; their reports share one budget. */
+  tasksInStep?: number;
   /** Names and descriptions of agents available as subagents. */
   agentCatalog: { name: string; description: string }[];
   /**
