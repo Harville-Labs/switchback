@@ -187,14 +187,7 @@ describe('default rules', () => {
   ]);
   const verdict = (command: string) => p.evaluate(bash(command), root)?.behavior;
 
-  test('allow exploring, ask before publishing or rewriting history', () => {
-    for (const c of [
-      'find . -name "*.ts"',
-      'grep -rn foo src',
-      'git log --oneline -5',
-      'ls | wc -l',
-    ])
-      expect(verdict(c)).toBe('allow');
+  test('ask before publishing or rewriting history', () => {
     for (const c of [
       'git commit -m x',
       'git push origin main',
@@ -203,17 +196,6 @@ describe('default rules', () => {
     ])
       expect(verdict(c)).toBe('ask');
     expect(verdict('npm install')).toBeUndefined();
-  });
-
-  test('flags that write or run programs ask', () => {
-    for (const c of [
-      'find . -exec rm {} ;',
-      'find . -name x -delete',
-      'rg --pre ./x foo',
-      'git log --output=/tmp/x',
-    ])
-      expect(verdict(c)).toBe('ask');
-    expect(verdict('grep x a > out')).toBeUndefined();
   });
 
   test('setup writes them into a new config only, and adds presets to what is there', () => {

@@ -3,53 +3,10 @@
  * the test and build presets it adds. Once written they are the user's own rules,
  * to edit like any other; nothing here applies at runtime.
  *
- * Allows name exact commands or prefixes, never a tool with a subcommand or
- * flag that writes or runs other programs; those flags get an ask rule
- * instead, which beats the allow (`find -exec`, `rg --pre`, `git log --output`).
+ * Exploring the workspace (`ls`, `grep`, `git status`, ...) needs no rule:
+ * the gate lets read-only commands run under `permissions.read` (explore.ts).
  */
-/** Read-only commands: exploring the workspace and the repository's history. */
-const EXPLORE = [
-  'bash(ls:*)',
-  'bash(pwd)',
-  'bash(cat:*)',
-  'bash(head:*)',
-  'bash(tail:*)',
-  'bash(wc:*)',
-  'bash(stat:*)',
-  'bash(du:*)',
-  'bash(diff:*)',
-  'bash(which:*)',
-  'bash(find:*)',
-  'bash(grep:*)',
-  'bash(egrep:*)',
-  'bash(fgrep:*)',
-  'bash(rg:*)',
-  'bash(git status:*)',
-  'bash(git log:*)',
-  'bash(git diff:*)',
-  'bash(git show:*)',
-  'bash(git blame:*)',
-  'bash(git ls-files:*)',
-  'bash(git rev-parse:*)',
-  'bash(git describe:*)',
-  'bash(git shortlog:*)',
-  'bash(git branch)',
-  'bash(git branch --show-current)',
-  'bash(git branch -a)',
-  'bash(git branch -v)',
-  'bash(git remote -v)',
-  'bash(git stash list:*)',
-];
-
 const ASK = [
-  // Options that turn an allowed read into a write or another program.
-  'bash(find* -exec*)',
-  'bash(find* -ok*)',
-  'bash(find* -delete*)',
-  'bash(find* -fprint*)',
-  'bash(find* -fls*)',
-  'bash(rg* --pre*)',
-  'bash(git* --output*)',
   // Publishing work and rewriting history, even with `permissions.bash: "allow"`.
   'bash(git commit:*)',
   'bash(git push:*)',
@@ -73,7 +30,7 @@ export interface DefaultPermissions {
 
 /** The rules for a new user config. */
 export function defaultPermissions(): DefaultPermissions {
-  return { allow: [...EXPLORE], ask: [...ASK] };
+  return { allow: [], ask: [...ASK] };
 }
 
 export interface PermissionPreset {

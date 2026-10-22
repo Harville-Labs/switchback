@@ -556,8 +556,10 @@ function autosize() {
 sendBtn.addEventListener('click', () => send());
 nowBtn.addEventListener('click', () => send('interrupt'));
 queueEl.addEventListener('click', (e) => {
-  const id = (e.target as HTMLElement).closest('button')?.dataset.dequeue;
-  if (id) vscode.postMessage({ type: 'dequeue', id });
+  const button = (e.target as HTMLElement).closest('button');
+  if (button?.dataset.sendQueued !== undefined) vscode.postMessage({ type: 'sendQueued' });
+  else if (button?.dataset.dequeue)
+    vscode.postMessage({ type: 'dequeue', id: button.dataset.dequeue });
 });
 input.addEventListener('input', () => {
   autosize();
@@ -571,9 +573,9 @@ input.addEventListener('keydown', (e) => {
     e.preventDefault();
     send();
   } else if (e.key === 'Escape' && view.running && !input.value) {
-    // As in the TUI: Esc cancels the running turn; with text in the box it does nothing.
+    // As in the TUI: Esc sends what's queued now, or with nothing queued cancels the turn.
     e.preventDefault();
-    vscode.postMessage({ type: 'cancel' });
+    vscode.postMessage({ type: view.queue?.length ? 'sendQueued' : 'cancel' });
   }
 });
 

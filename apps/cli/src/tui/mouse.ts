@@ -1,8 +1,8 @@
 /**
  * The mouse in the full-screen TUI: the wheel scrolls and a click picks a
- * tab. The terminal reports both only once mouse reporting is on, and then as
- * escape sequences on stdin (`ESC [ < 64 ; x ; y M`), which Ink would hand to
- * the prompt as keystrokes. So Ink reads from a stand-in stream: mouse events
+ * tab, an answer, or a picker row (Clickable.tsx). The terminal reports both
+ * only once mouse reporting is on, and then as escape sequences on stdin
+ * (`ESC [ < 64 ; x ; y M`), which Ink would hand to the prompt as keystrokes. So Ink reads from a stand-in stream: mouse events
  * are taken out and reported, and everything else passes through.
  *
  * Mouse reporting also captures clicks, so selecting text takes Shift (or

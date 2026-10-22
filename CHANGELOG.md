@@ -5,6 +5,10 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Added
+- **Auto-approve mode** asks a local judge model before allowing tool calls that normally need permission. Explicit ask rules and access outside the workspace still ask.
+- **Read-only shell commands** can explore workspace files without a prompt when no rule requires one.
+- **Clickable TUI controls** include answers, picker rows, and key hints. Esc sends queued messages while a turn is running.
+- **Model pickers** can refresh endpoint lists and open setup; route labels and setup prompts explain their choices.
 - **`switchback resume [id]` reopens a session from the shell.** With no id it opens the TUI on the session picker; with one, that session, or a clear error when the workspace has no session with that id. `-r` / `--resume` is the same command. Leaving the TUI prints `Resume this session with: switchback resume <id>` for a session with messages ([#154](https://github.com/Harville-Labs/switchback/issues/154))
 
 ### Changed

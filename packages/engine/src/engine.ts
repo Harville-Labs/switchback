@@ -267,6 +267,12 @@ export class Engine {
     return { removed: this.p.turns.dequeue(this.p.sessions.live(sessionId), id) };
   }
 
+  /** `session.sendQueued`. */
+  sendQueued(sessionId: string): { turnId?: string } {
+    const turnId = this.p.turns.sendQueued(this.p.sessions.live(sessionId));
+    return turnId ? { turnId } : {};
+  }
+
   /** Run a full user turn to completion. Used directly by headless mode and subagents. */
   runTurn(
     s: LiveSession | string,
@@ -359,8 +365,9 @@ export class Engine {
     org?: OrgStatus;
     untrustedMcp?: { name: string; source: string }[];
     rules?: SourcedRule[];
+    listedModels?: string[];
   }): void {
-    this.p.models.apply(next.config);
+    this.p.models.apply(next.config, next.listedModels);
     this.p.gate.revokeGrants();
     this.options.rules = next.rules;
     if (JSON.stringify(next.config.mcpServers) !== JSON.stringify(this.options.config.mcpServers)) {

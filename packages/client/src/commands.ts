@@ -7,6 +7,7 @@
  * expands it.
  */
 import type { CustomCommandInfo } from '@switchback/protocol';
+import { ROUTES } from './modes.ts';
 
 export type ClientName = 'tui' | 'vscode';
 
@@ -31,13 +32,7 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
-  {
-    name: 'auto',
-    group: 'Routing',
-    description: 'run on the current model; escalate when stuck',
-  },
-  { name: 'local', group: 'Routing', description: 'only local models for the next prompts' },
-  { name: 'remote', group: 'Routing', description: 'only hosted models for the next prompts' },
+  ...ROUTES.map((r) => ({ name: r.value, group: 'Routing' as const, description: r.description })),
   {
     name: 'up',
     group: 'Routing',
@@ -107,7 +102,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'mode',
-    args: '[default|accept-edits|plan|bypass]',
+    args: '[default|accept-edits|auto-approve|plan|bypass]',
     group: 'Permissions',
     description: 'how tool calls are approved in this session (Shift+Tab cycles)',
   },

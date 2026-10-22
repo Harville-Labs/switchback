@@ -30,6 +30,7 @@ import {
   SessionRenameParams,
   SessionRewindParams,
   SessionRolesParams,
+  SessionSendQueuedParams,
   SessionSetEffortParams,
   SessionSetGoalParams,
   SessionSetModeParams,
@@ -135,6 +136,8 @@ export function serve(
         const p = parse(SessionDequeueParams, req.params);
         return engine.dequeue(p.sessionId, p.id);
       }
+      case 'session.sendQueued':
+        return engine.sendQueued(parse(SessionSendQueuedParams, req.params).sessionId);
       case 'session.cancel':
         return { cancelled: engine.cancel(parse(SessionCancelParams, req.params).sessionId) };
       case 'permission.respond': {

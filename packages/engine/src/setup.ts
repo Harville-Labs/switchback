@@ -3,6 +3,7 @@
  * lives in @switchback/providers (it's also used at runtime). Used by `switchback init`; kept here (not in the CLI) so any
  * client can drive setup through the same logic.
  */
+import type { EffortLevel } from '@switchback/protocol';
 import {
   aliasModels,
   CATALOG,
@@ -67,6 +68,7 @@ export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 /** Model settings carried over from another agent's config, written as they are. */
 export interface ModelSettings {
   vision?: boolean;
+  effort?: EffortLevel;
   temperature?: number;
   topP?: number;
   topK?: number;

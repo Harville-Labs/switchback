@@ -15,8 +15,12 @@
  *    ask asks, its allow skips a level's prompt), then allow rules, including
  *    what the user allowed this session.
  * 7. The mode: `acceptEdits` allows edits.
- * 8. The category's level (`websearch` has its own): `allow`, or ask.
+ * 8. The category's level (`websearch` has its own): `allow`, or ask. A bash
+ *    command that only explores the workspace takes the `read` level (ADR 0026). In
+ *    `autoApprove`, a model judges the call first (ADR 0025) and the user is
+ *    asked only when it doesn't approve.
  */
+import { relative } from 'node:path';
 import type { PermissionDecision, PermissionMode } from '@switchback/protocol';
 import type { PermissionLevel, SwitchbackConfig } from '../config-schema.ts';
 import type { HookOutcome } from '../hooks/runner.ts';
@@ -31,6 +35,8 @@ import {
   type ToolPreview,
   toWorkspacePath,
 } from '../tools/index.ts';
+import { exploration } from './explore.ts';
+import type { JudgedCall, Verdict } from './judge.ts';
 import { folderRule, type Places, pathOf, type Reach, reachOf } from './outside.ts';
 import { PermissionPolicy, type SourcedRule, suggestRules, type ToolCall } from './policy.ts';
 import { ignoreInGit, saveAllowRules } from './save.ts';
@@ -53,6 +59,8 @@ export interface GateDeps {
   saveTo: { project: string; user: string };
   /** Switchback's own folders and the credentials no tool may read. */
   places(): Places;
+  /** `autoApprove`: whether a model approves a call that would ask. */
+  judge(s: LiveSession, call: JudgedCall, signal: AbortSignal): Promise<Verdict>;
 }
 
 /** Why the user is asked, and whether "always" may be offered (and as which rules). */
@@ -186,7 +194,60 @@ export class PermissionGate {
     if (verdict?.behavior === 'allow') return { allowed: true };
     if (mode === 'acceptEdits' && tool.permission === 'edit') return { allowed: true };
     if (level === 'allow') return { allowed: true };
+    if (levels.read === 'allow' && this.explores(call, ctx)) return { allowed: true };
+    if (mode === 'autoApprove') {
+      const verdict = await this.judge(s, tool, call, signal);
+      if (verdict.approve) return { allowed: true };
+      return this.ask(s, tool, call, ctx, signal, {
+        reason: `not auto-approved: ${verdict.reason}`,
+      });
+    }
     return this.ask(s, tool, call, ctx, signal, {});
+  }
+
+  /**
+   * The judge's verdict, shown in the transcript either way. Only the
+   * category's level is judged: ask rules, hooks that ask, and the calls that
+   * always ask stay with the user.
+   */
+  private async judge(
+    s: LiveSession,
+    tool: Tool,
+    call: ToolCall,
+    signal: AbortSignal,
+  ): Promise<{ approve: boolean; reason: string }> {
+    const summary = tool.summarize(call.input);
+    const v = await this.deps.judge(s, { tool: tool.name, summary, input: call.input }, signal);
+    this.host.emit({
+      type: 'permission.judged',
+      ...scope(s),
+      tool: tool.name,
+      summary,
+      approved: v.allow,
+      reason: v.reason,
+      ...(v.model ? { judge: v.model } : {}),
+    });
+    return { approve: v.allow, reason: v.reason };
+  }
+
+  /**
+   * A bash call that only looks around the workspace (ADR 0026), with no read
+   * rule that denies or asks about a path it reads (`read(.env)`).
+   */
+  private explores(call: ToolCall, ctx: ToolContext): boolean {
+    const command = (call.input as { command?: unknown } | undefined)?.command;
+    if (call.name !== 'bash' || typeof command !== 'string') return false;
+    const explored = exploration(command, ctx.workspaceRoot);
+    if (!explored || (explored.searchesDirectory && this.policy().guardsReads())) return false;
+    // Rules match paths as the read tool gets them: relative to the workspace,
+    // whose own path may run through a symlink.
+    const base = resolveFile(ctx.workspaceRoot, '.');
+    return explored.paths.every((file) => {
+      const path = relative(base, file) || '.';
+      const read: ToolCall = { name: 'read', category: 'read', input: { path } };
+      const rule = this.policy().evaluate(read, ctx.workspaceRoot)?.behavior;
+      return rule !== 'deny' && rule !== 'ask';
+    });
   }
 
   /** Where a file tool's path goes; undefined for other tools. */

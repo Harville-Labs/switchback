@@ -5,8 +5,9 @@
  * ordinary Switchback config the person sees before it's written.
  *
  * Format: opencode.ai/docs/config, /providers, /mcp-servers, /permissions
- * (checked 2026-10-20), and the newer format with `providers`, `settings`,
- * `modelID`, a `permissions` list, and `mcp.servers` (checked 2026-10-21).
+ * (checked 2026-10-20), and the V2 format with `providers`, `settings`,
+ * `modelID`, a `permissions` list, and `mcp.servers` (opencode.ai/v2/docs/migrate-v1,
+ * checked 2026-10-22).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -102,6 +103,7 @@ export function readOpenCode(files: string[], env: Env = process.env): Imported 
  * both: `providers` (`package`, `settings`) as `provider` (`npm`, `options`),
  * `agents` as `agent`, the `permissions` list as a `permission` table, and
  * `mcp.servers` as `mcp`. Where a file has both, the older key wins.
+ * V2's provider IDs (`google-vertex`) and V1's `api` (the base URL) are read too.
  */
 function olderFormat(cfg: Obj): Obj {
   const provider: Obj = {};
@@ -113,6 +115,13 @@ function olderFormat(cfg: Obj): Obj {
       options: { ...obj(p.settings), ...obj(p.options) },
     };
   }
+  const apiFixed: Obj = {};
+  for (const [pid, raw] of Object.entries(obj(cfg.provider))) {
+    const p = obj(raw);
+    const options = obj(p.options);
+    if (str(p.api) && !str(options.baseURL))
+      apiFixed[pid] = { ...p, options: { ...options, baseURL: p.api } };
+  }
   const permission = cfg.permission ?? permissionTable(cfg.permissions);
   const agent: Obj = {};
   for (const [name, raw] of Object.entries({ ...obj(cfg.agents), ...obj(cfg.agent) })) {
@@ -120,14 +129,16 @@ function olderFormat(cfg: Obj): Obj {
     const table = a.permission ?? permissionTable(a.permissions);
     agent[name] = table === undefined ? a : { ...a, permission: table };
   }
+  // V2's `mcp.timeout` sits beside `servers`; it isn't a server.
   const { servers, ...mcp } = obj(cfg.mcp);
+  if (servers !== undefined && !obj(mcp.timeout).type) delete mcp.timeout;
   for (const [name, raw] of Object.entries(obj(servers))) {
     const { disabled, ...s } = obj(raw);
     mcp[name] ??= { ...s, ...(disabled === true ? { enabled: false } : {}) };
   }
   return {
     ...cfg,
-    provider: { ...provider, ...obj(cfg.provider) },
+    provider: { ...provider, ...obj(cfg.provider), ...apiFixed },
     agent,
     ...(permission !== undefined ? { permission } : {}),
     mcp,
@@ -204,7 +215,7 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     const variant = variantName === undefined ? undefined : variantOf(m, variantName);
     const settings = modelSettings(m, variant);
     // A variant that changes nothing, or isn't defined, is the model itself.
-    if (variantName !== undefined && (!variant || !Object.keys(obj(variant.body)).length)) {
+    if (variantName !== undefined && !settingsDiffer(settings, modelSettings(m))) {
       const same = byRef.get(`${pid}/${mid}`);
       if (same) byRef.set(ref, same);
       continue;
@@ -265,7 +276,7 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     current && 'contextWindow' in current ? current.contextWindow : undefined,
     skipped,
   );
-  for (const k of ['command', 'plugin', 'plugins', 'formatter', 'lsp'])
+  for (const k of ['command', 'commands', 'skills', 'plugin', 'plugins', 'formatter', 'lsp'])
     if (
       Object.keys(obj(cfg[k])).length ||
       (Array.isArray(cfg[k]) && cfg[k].length) ||
@@ -284,6 +295,9 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     skipped,
   };
 }
+
+/** Whether a variant's settings change anything about its model's. */
+const settingsDiffer = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
 
 const LEVELS = new Set(['allow', 'ask', 'deny']);
 const isLevel = (v: unknown): v is Level => typeof v === 'string' && LEVELS.has(v);

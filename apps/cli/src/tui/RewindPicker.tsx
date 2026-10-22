@@ -3,6 +3,7 @@ import type { CheckpointInfo, SessionRewindParams } from '@switchback/protocol';
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Keys } from './Chrome.tsx';
+import { Clickable } from './Clickable.tsx';
 import { ago } from './SessionPicker.tsx';
 
 const ROWS = 8;
@@ -55,10 +56,10 @@ export function RewindPicker({
         </Text>
         <Keys
           keys={[
-            ['b', 'files and conversation'],
-            ['f', 'files only'],
-            ['c', 'conversation only'],
-            ['esc', 'back'],
+            ['b', 'files and conversation', () => onRewind(chosen.turnId, 'both')],
+            ['f', 'files only', () => onRewind(chosen.turnId, 'files')],
+            ['c', 'conversation only', () => onRewind(chosen.turnId, 'conversation')],
+            ['esc', 'back', () => setChosen(undefined)],
           ]}
         />
       </Box>
@@ -71,24 +72,26 @@ export function RewindPicker({
       {newest.slice(start, start + ROWS).map((c, i) => {
         const on = start + i === selected;
         return (
-          <Text key={c.turnId} wrap="truncate-end">
-            <Text color="cyan">{on ? '› ' : '  '}</Text>
-            <Text bold={on} color={on ? 'cyan' : undefined}>
-              {c.prompt}
+          <Clickable key={c.turnId} onClick={() => setChosen(c)}>
+            <Text wrap="truncate-end">
+              <Text color="cyan">{on ? '› ' : '  '}</Text>
+              <Text bold={on} color={on ? 'cyan' : undefined}>
+                {c.prompt}
+              </Text>
+              <Text dimColor>
+                {'  '}
+                {ago(c.at)}
+                {c.files.length ? ` · ${c.files.length} file(s)` : ''}
+              </Text>
             </Text>
-            <Text dimColor>
-              {'  '}
-              {ago(c.at)}
-              {c.files.length ? ` · ${c.files.length} file(s)` : ''}
-            </Text>
-          </Text>
+          </Clickable>
         );
       })}
       <Keys
         keys={[
           ['↑↓', 'choose'],
           ['enter', 'select'],
-          ['esc', 'close'],
+          ['esc', 'close', onCancel],
         ]}
       />
     </Box>

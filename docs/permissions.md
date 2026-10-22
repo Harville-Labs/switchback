@@ -27,7 +27,7 @@ Every call that passes validation and confinement is decided in this order:
 5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`): the user is asked, including in `acceptEdits`. A path **outside the workspace** asks too, unless an allow rule names it; `read: allow`, a bare `read` rule, a hook, and `acceptEdits` don't count.
 6. **Allow rules,** including what the user allowed earlier in the session.
 7. **The mode.** `acceptEdits` allows edits.
-8. **The category's level:** `allow`, or ask.
+8. **The category's level:** `allow`, or ask. A `bash` command that only [explores the workspace](#exploring-with-bash) runs under the `read` level instead. In `autoApprove`, a call that would ask goes to a model first, and asks only if the model doesn't approve it.
 
 ### Outside the workspace
 
@@ -101,10 +101,21 @@ Tool names are case-insensitive (`Bash` is `bash`); `glob` and `grep` are read r
 
 `switchback init` gives a new user config a starting set of rules, which are then yours to edit like any other:
 
-- **Allow:** read-only commands: `ls`, `pwd`, `cat`, `head`, `tail`, `wc`, `stat`, `du`, `diff`, `which`, `find`, `grep`, `rg`, and `git status`, `log`, `diff`, `show`, `blame`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, and plain `git branch`.
-- **Ask:** options that make those write or run other programs (`find -exec`, `-ok`, `-delete`, `-fprint`, `-fls`; `rg --pre`; `git ... --output`), which beat the allows, and commands that publish work or rewrite history, so they ask even with `permissions.bash: "allow"`: `git commit`, `git push`, `git rebase`, `git reset --hard`, `git clean`, `gh pr create`, `gh pr merge`, `gh release`, and `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`.
+- **Ask:** commands that publish work or rewrite history, so they ask even with `permissions.bash: "allow"`: `git commit`, `git push`, `git rebase`, `git reset --hard`, `git clean`, `gh pr create`, `gh pr merge`, `gh release`, and `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`.
 
 Setup also allows the common test, build, and lint commands (Bun, npm, pnpm, Cargo, Go, Python), which run inside the sandbox. Re-running setup adds them to your rules and never removes one; the defaults are written only into a config that has no rules yet. When you sign in to an organization, its permissions replace these ([organizations.md](organizations.md#permissions)).
+
+### Exploring with bash
+
+Looking around the workspace with the shell doesn't ask, as long as `permissions.read` is `allow` (the default) ([ADR 0026](adr/0026-explore-without-asking.md)). That covers `ls`, `pwd`, `cd`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `du`, `diff`, `cut`, `echo`, `which`, `basename`, `dirname`, `realpath`, `find`, `grep`, `egrep`, `fgrep`, `rg`, and `sed` with a script that only prints (`sed -n '1,20p'`, `sed 's/a/b/g' file`), chained with `&&`, `;`, or pipes. Read-only git counts too: `status`, `diff`, `log`, `show`, `blame`, `grep`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, `tag -l`, and `branch` with only listing flags.
+
+A command line asks as before, under `permissions.bash`, when any part of it:
+
+- names a path outside the folder Switchback was started in, including through `cd ..`, `~`, or an option value (`grep -f/etc/passwd`);
+- writes or runs something: an output redirection, `$` variables or substitution, a wrapper (`sudo`, `xargs`, `env`), `find -exec` or `-delete`, `rg --pre`, `git --output`, `sed -i`, or a sed script with `w`, `r`, or `e`;
+- runs any other program or git subcommand, or passes git a global option other than `--no-pager`.
+
+Your rules still apply first: a `deny` or `ask` rule on a command wins, and so does `permissions.bash: "deny"`. A `read(...)` rule that denies or asks about a path covers commands that name it, and while any such rule exists, a recursive search (`grep -r`, `rg`, `git grep`) asks, since it could read that file without naming it.
 
 ### Answering a prompt
 
@@ -123,10 +134,19 @@ A call an ask rule caught offers no "always": the rule says to ask every time. C
 |---|---|
 | `default` | Nothing: the levels and rules decide |
 | `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
+| `autoApprove` | A model reads each call that would ask, with your latest request, and approves it when it plainly serves that request and stays in the project. Anything it doesn't approve, or can't judge, asks you, with its reason. Ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration always ask. See [Auto-approve](#auto-approve) |
 | `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
 | `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration included. Only a category `deny`, a deny rule, `permissions.outsideWorkspace: "deny"`, the off-limits places, and `bash.sandbox.allowUnsandboxed: false` stop a call |
 
 New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
+
+### Auto-approve
+
+The judge is `permissions.judge` when you set it (an alias from `models`), or else the first local model among the session's current and escalation models. Without a `permissions.judge`, judging never uses a remote model, so it never costs money; a remote judge runs only while remote calls are allowed and counts toward your budget. The judge sees your latest message and the call (its input cut at 6,000 characters), not the conversation or your files. Remote judges get secrets redacted like any remote request, unless `privacy.secrets` is `off`.
+
+The judge approves reading, searching, editing project files, builds, tests, linters, formatters, and version-control commands that publish nothing. It refuses, so you're asked, anything that deletes or overwrites more than the task needs, publishes or sends something (push, deploy, release, pull requests), installs software globally, touches credentials, downloads and runs code, or goes beyond what you asked. Each approved call shows in the transcript as `auto-approved <call> (<judge>): <reason>`.
+
+A model can be talked into things, so this mode trades some safety for fewer prompts. Prefer allow rules for commands you always approve, and keep `deny` rules for what must never run: they hold in every mode. See [ADR 0025](adr/0025-auto-approve.md).
 
 An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
 

@@ -21,3 +21,20 @@ test('a subagent row keeps the model and effort its parent chose', () => {
   const row = reduce(initialView('s'), started).items.find((i) => i.kind === 'subagent');
   expect(row).toMatchObject({ model: 'remote', effort: 'max' });
 });
+
+test('an auto-approved call shows who approved it and why; a refused one adds nothing', () => {
+  const judged = {
+    type: 'permission.judged',
+    sessionId: 's',
+    tool: 'bash',
+    summary: 'bun test',
+    reason: 'runs the tests',
+    judge: 'local',
+  } as const;
+  const approved = reduce(initialView('s'), { ...judged, approved: true });
+  expect(approved.items.at(-1)).toMatchObject({
+    kind: 'info',
+    text: 'auto-approved bun test (local): runs the tests',
+  });
+  expect(reduce(initialView('s'), { ...judged, approved: false }).items).toEqual([]);
+});

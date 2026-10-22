@@ -11,6 +11,7 @@ import { CLI_VERSION, type CommonFlags, checksForUpdates, connectShared } from '
 import { exitHint, resumeTarget } from '../commands/resume.ts';
 import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
+import { MouseContext } from './Clickable.tsx';
 import { mouseInput, savedMouse } from './mouse.ts';
 import type { Opening } from './SetupPanel.tsx';
 import { terminalTitles } from './terminal-title.ts';
@@ -87,21 +88,22 @@ export async function tui(
   const titles = terminalTitles(process.stdout);
   titles.set(session.title);
   const app = render(
-    <App
-      client={client}
-      init={init}
-      initialSession={session}
-      {...(history ? { initialView: history } : {})}
-      initialRoute={opts.route}
-      {...(opts.opening ? { opening: opts.opening } : {})}
-      warnings={warnings}
-      initialTheme={savedTheme()}
-      mouse={mouse}
-      onSession={(s) => {
-        open = s;
-        titles.set(s.title);
-      }}
-    />,
+    <MouseContext.Provider value={mouse}>
+      <App
+        client={client}
+        init={init}
+        initialSession={session}
+        {...(history ? { initialView: history } : {})}
+        initialRoute={opts.route}
+        {...(opts.opening ? { opening: opts.opening } : {})}
+        warnings={warnings}
+        initialTheme={savedTheme()}
+        onSession={(s) => {
+          open = s;
+          titles.set(s.title);
+        }}
+      />
+    </MouseContext.Provider>,
     {
       // Ctrl+C clears the prompt or cancels a turn; quitting takes a second press (App.tsx).
       exitOnCtrlC: false,

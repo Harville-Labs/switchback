@@ -24,6 +24,11 @@ export type AcpUpdate = acp.SessionNotification['update'];
 const MODES: acp.SessionMode[] = [
   { id: 'default', name: 'Default', description: 'Ask before edits and commands' },
   { id: 'acceptEdits', name: 'Accept edits', description: 'Edit files without asking' },
+  {
+    id: 'autoApprove',
+    name: 'Auto-approve',
+    description: 'A model approves calls that fit your request; risky ones still ask',
+  },
   { id: 'plan', name: 'Plan', description: 'Read and plan; change nothing until you approve' },
   { id: 'bypassPermissions', name: 'Bypass permissions', description: 'Never ask' },
 ];

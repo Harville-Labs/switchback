@@ -54,7 +54,7 @@ export const STYLES = `
   details.subagent > .children { margin: 4px 0 8px 6px; padding-left: 10px; border-left: 2px solid var(--vscode-panel-border); }
   .ok { color: var(--vscode-charts-green); } .error { color: var(--vscode-errorForeground); } .running { color: var(--vscode-charts-yellow); }
   .detail { color: var(--vscode-descriptionForeground); margin-left: 1.4em; white-space: pre-wrap; }
-  .info { color: var(--vscode-descriptionForeground); white-space: pre-wrap; font-family: var(--vscode-editor-font-family); font-size: .88em; margin: 6px 0; padding: 2px 0 2px 10px; border-left: 2px solid var(--vscode-panel-border); }
+  .info { white-space: pre-wrap; font-family: var(--vscode-editor-font-family); font-size: .88em; margin: 6px 0; padding: 2px 0 2px 10px; border-left: 2px solid var(--vscode-panel-border); }
   .tool .private { color: var(--vscode-charts-blue); font-size: 0.9em; }
   .tool + .detail { margin-left: 1.4em; font-size: .85em; }
   .output { font-family: var(--vscode-editor-font-family); font-size: .82em; white-space: pre; overflow-x: auto; color: var(--vscode-descriptionForeground); margin: 2px 0 6px 2.4em; }
@@ -151,7 +151,11 @@ export const STYLES = `
   .menu-empty { padding: 8px; color: var(--vscode-descriptionForeground); }
 
   /* Routing and roles, under the composer */
-  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 4px; font-size: .8em; }
+  .controls { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; font-size: .8em; }
+  .controls .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+  .controls .bar.quiet { gap: 2px 10px; padding-left: 2px; }
+  .controls .bar.quiet .pill { padding: 1px 4px; }
+  .controls .pill.up { margin-left: auto; color: var(--vscode-textLink-foreground); }
   .controls:empty { display: none; }
   .segmented { display: inline-flex; gap: 1px; padding: 1px; margin-right: 4px; border: 1px solid var(--vscode-panel-border); border-radius: 5px; }
   .segmented button { background: transparent; color: var(--vscode-descriptionForeground); border: 1px solid transparent; border-radius: 4px; padding: 1px 8px; }
@@ -162,7 +166,7 @@ export const STYLES = `
   .pill .k { color: var(--vscode-descriptionForeground); }
   .pill .here { font-weight: 600; color: var(--vscode-charts-yellow); }
   .pill.model { display: inline-flex; align-items: center; gap: 4px; padding: 0 2px 0 6px; }
-  .pill.model select { font: inherit; color: var(--vscode-foreground); background: transparent; border: none; padding: 2px 2px; max-width: 220px; text-overflow: ellipsis; cursor: pointer; }
+  .pill.model select { font: inherit; color: var(--vscode-foreground); background: transparent; border: none; padding: 2px 2px; max-width: 220px; field-sizing: content; text-overflow: ellipsis; cursor: pointer; }
   .pill.model select:focus { outline: 1px solid var(--vscode-focusBorder); border-radius: 4px; }
   .pill.model option { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); }
 

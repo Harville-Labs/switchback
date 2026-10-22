@@ -58,24 +58,23 @@ export async function chooseRoles(
   });
   for (;;) {
     p.note({ kind: 'text', text: 'Which model does what', tone: 'heading' });
+    p.note({
+      kind: 'text',
+      text: 'Every turn starts on one model. When a turn is too hard for it (it keeps failing, loops, or the prompt will not fit), Switchback hands the turn to the next model on the escalation ladder.',
+    });
     p.note({ kind: 'roles', roles: asSession(), models });
     // One model does everything: there's no ladder, reviewer, or subagent model to choose.
     if (plan.length < 2) return roles;
     const action = await p.select('Which model does what', [
-      { label: 'Looks good', value: 'done' as const },
-      { label: 'Change the current model', value: 'current' as const },
-      { label: 'Change the escalation ladder', value: 'escalate' as const },
+      { label: 'Looks good, save it', value: 'done' as const },
+      { label: 'Change where turns start', value: 'current' as const },
+      { label: 'Change where hard turns go', value: 'escalate' as const },
       { label: 'Change who reviews edits', value: 'review' as const },
-      { label: 'Change the subagent model', value: 'subagents' as const },
+      { label: 'Change what subagents use', value: 'subagents' as const },
     ]);
     if (action === 'done') return roles;
     if (action === 'current') {
-      const first = await pickModel(
-        p,
-        plan,
-        'Which model should be current (where turns start)?',
-        [],
-      );
+      const first = await pickModel(p, plan, 'Which model should turns start on?', []);
       if (!first) continue;
       roles.current = [first];
       for (;;) {
@@ -100,10 +99,10 @@ export async function chooseRoles(
           p,
           plan,
           roles.escalate.length
-            ? 'If that one struggles too, escalate to:'
-            : 'When the current model struggles, escalate to:',
+            ? `If ${roles.escalate.at(-1)?.[0]} can't manage it either, hand it to:`
+            : `When a turn is too hard for ${roles.current[0]}, hand it to:`,
           [...roles.current, ...roles.escalate.flat()],
-          roles.escalate.length ? 'Nothing more' : 'Nothing: no escalation',
+          roles.escalate.length ? 'Stop here' : 'Nobody: hard turns stay where they started',
         );
         if (!next) break;
         roles.escalate.push([next]);

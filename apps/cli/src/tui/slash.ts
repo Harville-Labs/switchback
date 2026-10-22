@@ -16,6 +16,7 @@ import {
   formatDashboard,
   formatMcpServers,
   formatModels,
+  formatModes,
   formatPermissions,
   formatReceipt,
   formatRefresh,
@@ -55,9 +56,10 @@ Tabs: ctrl+t shows every session (open tabs, and ones working in other windows);
       alt+↓ shows each subagent in turn, alt+↑ the session again; /model there
       picks the subagent model.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
-      esc on an empty prompt cancels; ↑ takes back the last queued message;
+      esc on an empty prompt sends what's queued now, or cancels when nothing is;
+      ctrl+c cancels the turn and the queue; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
-      tab switches to the next model, going round them all;
+      tab switches to the next model you chose, going round them;
       PgUp/PgDn or the mouse wheel scroll (hold shift or option to select text);
       prompts: ↑↓ and enter, or the option's number (y/a/p/n still work).
 Your own commands are Markdown files in .switchback/commands/ or
@@ -94,13 +96,17 @@ async function changeRoles(
   }
 }
 
-/** Tab: the next model in config order becomes the current one, for this session. */
+/** Tab: the next model the user chose becomes the current one, for this session. */
 export async function cycleModel(
   ctx: SlashContext,
   roles: SessionRoles | undefined,
 ): Promise<void> {
   const next = nextModel(ctx.init.models, roles);
-  if (!next) return say(ctx, 'No other model to switch to. `switchback init` sets more up.');
+  if (!next)
+    return say(
+      ctx,
+      'No other chosen model to switch to. /current picks from every model, listed ones too; `switchback init` sets more up.',
+    );
   try {
     const r = await ctx.client.request('session.setRoles', {
       sessionId: ctx.session.id,
@@ -316,18 +322,9 @@ const HANDLERS: Record<string, Handler> = {
     const { modes, mode } = await ctx.client.request('permissions.list', {
       sessionId: ctx.session.id,
     });
-    if (!args[0])
-      return say(
-        ctx,
-        [
-          ...modes.map(
-            (m) => `${m === mode ? '●' : ' '} ${modeLabel(m).padEnd(18)} ${MODE_DESCRIPTIONS[m]}`,
-          ),
-          '/mode <name> to switch; Shift+Tab cycles',
-        ].join('\n'),
-      );
+    if (!args[0]) return say(ctx, formatModes(modes, mode));
     const next = parseMode(args[0]);
-    if (!next) return say(ctx, 'usage: /mode default|accept-edits|plan|bypass');
+    if (!next) return say(ctx, 'usage: /mode default|accept-edits|auto-approve|plan|bypass');
     try {
       await ctx.client.request('session.setMode', { sessionId: ctx.session.id, mode: next });
       say(ctx, `mode: ${modeLabel(next)}. ${MODE_DESCRIPTIONS[next]}`);

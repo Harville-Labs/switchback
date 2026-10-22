@@ -4,6 +4,7 @@
  */
 import {
   currentChange,
+  formatRefresh,
   formatReviewers,
   formatSteps,
   MODE_DESCRIPTIONS,
@@ -49,8 +50,8 @@ export async function chooseModels(engine: EngineConnection): Promise<void> {
         role: 'current' as const,
       },
       {
-        label: 'Escalate to',
-        description: formatSteps(roles.escalate) || 'nothing',
+        label: 'Hard turns go to',
+        description: formatSteps(roles.escalate) || 'nowhere',
         role: 'escalate' as const,
       },
       { label: 'Review edits', description: formatReviewers(roles), role: 'review' as const },
@@ -62,10 +63,28 @@ export async function chooseModels(engine: EngineConnection): Promise<void> {
       ...(roles.overridden.length
         ? [{ label: 'Follow my config again', description: '', role: 'reset' as const }]
         : []),
+      { label: '', kind: vscode.QuickPickItemKind.Separator, role: 'refresh' as const },
+      {
+        label: 'Refresh the model list',
+        description: 'ask your endpoints what they serve now',
+        role: 'refresh' as const,
+      },
+      { label: 'Add or edit models…', description: 'run setup', role: 'setup' as const },
     ],
     { title: 'Switchback: Models for This Session' },
   );
+  if (pick?.role === 'refresh') return refreshModels(engine);
+  if (pick?.role === 'setup') return void vscode.commands.executeCommand('switchback.runSetup');
   if (pick) await chooseRole(engine, pick.role);
+}
+
+async function refreshModels(engine: EngineConnection): Promise<void> {
+  try {
+    const r = await engine.client?.request('models.refresh', {});
+    if (r) void vscode.window.showInformationMessage(`Switchback: ${formatRefresh(r)}`);
+  } catch (err) {
+    void vscode.window.showErrorMessage(`Switchback: ${(err as Error).message}`);
+  }
 }
 
 /**

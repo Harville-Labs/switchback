@@ -8,6 +8,11 @@ export interface ModelSummary {
   alias: string;
   ref: ModelRef;
   tier: Tier;
+  /**
+   * An endpoint or plan lists it but no config file names it. Pickers offer
+   * it; cycling with Tab skips it unless a role uses it.
+   */
+  listed?: true;
 }
 
 /** What one provider listed: models new since the last refresh, ones gone, or why it couldn't be asked. */

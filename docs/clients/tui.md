@@ -68,7 +68,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 - **Routing** shows a `⌂` (local) or `▲` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
 - **Subagents** are rows of their own, with their tier, tool-call count, and current activity, and their latest steps indented under them while they run. Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did.
 - **While a turn runs**, a line above the input says what's happening (thinking, writing, running a tool, waiting on a subagent), for how long, about how many tokens the model has written, and on which model.
-- **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference, how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
+- **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference (`auto-escalate`, `local only`, or `remote only`; `/auto`, `/local`, and `/remote` switch it), how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
 - Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`. Your [custom commands](../commands-and-skills.md) follow under **Custom**.
 
 ### Tabs
@@ -97,7 +97,9 @@ While subagents run, **Alt+↓** shows the next one in place of the session: its
 
 Page Up and Page Down scroll the transcript, and so does the mouse wheel. Scrolled up, a bar says how far, and new output collects below without moving what you're reading; Page Down to the end follows the conversation again, and sending a prompt jumps there.
 
-On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and tab clicks, which also captures clicks, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2.
+Clicks work where there's something to pick: an answer to a permission, plan, or escalation question; a row in the model, session, rewind, and tab pickers; and a key hint with an action, such as `esc close` or `r refresh list`.
+
+On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and clicks, which also captures plain drags, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2.
 
 On Windows mouse reporting starts off, so dragging selects text as in any other console program and Ctrl+C or Enter copies it (Windows Terminal, conhost, and VS Code's terminal). The wheel doesn't scroll the transcript then; Page Up and Page Down do. `/mouse on` turns reporting on (Shift+drag then selects in Windows Terminal and VS Code), `/mouse off` turns it off on any platform, and the choice is remembered.
 
@@ -137,10 +139,10 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
 | `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
-| `/models [refresh]` | Every configured model, its tier, and the roles it fills. `refresh` asks each endpoint and subscription what it serves now and adds the new models, without running setup again |
+| `/models [refresh]` | Every model, its tier, and the roles it fills; models an endpoint lists that you haven't given a role are marked. `refresh` asks each endpoint and subscription what it serves now and adds the new models, without running setup again |
 | `/init` | Run setup inside the TUI: the same questions as `switchback init` (local servers and their models, remote providers, which model does what), asked in a panel above the prompt. ↑/↓ and Enter answer, space ticks in a checklist, typing filters a long list, Esc cancels without writing anything. The new config is in use as soon as it's saved |
 | `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
-| `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
+| `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. In the picker, **r** asks your endpoints for their models again and **e** opens setup to add or edit models. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
 | `/model [model]` | The model for what's in front: `/current` in the session's view, the subagent model in a subagent's ([Subagents](#subagents)) |
 | `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
 | `/subagent-model <model>\|none` | Default model for subagents |
@@ -159,16 +161,17 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Paste | Arrives whole (bracketed paste), so newlines in it never send the prompt. Terminal colors and control characters are removed. A paste of 12 lines or 1,500 characters or more shows as a chip, `[Pasted text #1 · 240 lines]`, that Backspace deletes in one go and that expands to the full text when you send. A file dragged into the terminal becomes an `@` mention when it's in the workspace |
 | Ctrl+A / Ctrl+E, Ctrl+U, Ctrl+W | Line start / end, delete to line start, delete word (on an empty prompt, Ctrl+W closes the tab) |
 | Enter during a turn | Queue the message: the model reads it at its next step (between tool calls), or as the next turn if it's already finishing. Queued messages show under the transcript |
-| `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt: cancel the turn and drop the queue. Otherwise it closes a menu |
+| `esc` | During a turn, with a message typed: stop the turn and send it now. With an empty prompt and messages queued: stop the turn and send them now. With an empty prompt and nothing queued: cancel the turn. Ctrl+C cancels the turn and drops the queue. Otherwise it closes a menu |
 | `↑` on an empty prompt | Take back the last queued message to edit it |
 | Ctrl+T | The sessions dashboard ([Tabs](#tabs)) |
 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |
 | Alt+↓ / Alt+↑ | Show the next running subagent / come back to the session ([Subagents](#subagents)). On macOS Terminal, alt needs "Use Option as Meta key" |
 | Tab (no menu open) | Switch to the next model: the one after the current model in config order, back to the first after the last. It says `Switched to <model>.` and applies to this session; the model you leave doesn't stay behind as a backup |
-| Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
+| Shift+Tab | Cycle the permission mode: default → accept edits → auto-approve → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |
 | Page Up / Page Down, mouse wheel | Scroll the transcript (the wheel only while `/mouse` is on) |
+| Click | Pick an answer, a picker row, or a key hint (while `/mouse` is on) |
 | `ctrl+v` | Attach the image on the clipboard as an `[Image #n]` chip (deleting the chip drops it). On macOS it reads the clipboard with `osascript`, on Linux with `wl-paste` or `xclip`, and on Windows with PowerShell; over SSH, drag the file in or mention it with `@` instead. Dragged-in image files and `@image.png` mentions attach the image too |
 | `ctrl+o` | Expand or collapse the details: the model's thinking (one line, or its paragraphs), commands' full output, whole diffs, and every call in an Explored block. It applies to the whole transcript |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
@@ -191,8 +194,8 @@ The active goal and its turn count stay above the prompt (`◎ goal · turn 3/25
 ## Implementation notes
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
-- Ink reads keys from a stand-in for stdin that takes the wheel's mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text.
-- Marks in the status bar and transcript (`⌂`, `▲`, the mode's `»`, `║`, `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
+- Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout.
+- Marks in the status bar and transcript (`⌂`, `▲`, the mode's `»`, `√`, `║`, `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
 - Child processes the user doesn't look at (commands, hooks, git, ripgrep, clipboard helpers) start with `windowsHide` (`hideWindow` in the engine), so on Windows a detached engine doesn't open a console window for each one.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
 - Colors come from roles in `tui/theme.ts` (brand, local, remote, added, removed, ...), never from color names in components.

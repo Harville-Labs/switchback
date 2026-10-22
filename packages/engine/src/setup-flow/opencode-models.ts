@@ -111,7 +111,10 @@ export function translateModel(
         ...(str(opts.profile) ? { profile: opts.profile as string } : {}),
       };
     }
+    // V2 folds `google-vertex-anthropic` into `google-vertex`; Switchback uses Vertex for Claude.
+    case 'google-vertex':
     case 'google-vertex-anthropic': {
+      if (!model.startsWith('claude-')) return 'Switchback uses Vertex for Claude models only';
       const projectId =
         str(opts.project) ?? env.GOOGLE_CLOUD_PROJECT ?? env.GCP_PROJECT ?? env.GCLOUD_PROJECT;
       if (!projectId) return 'no Google Cloud project in the config or GOOGLE_CLOUD_PROJECT';
@@ -149,19 +152,25 @@ function isLocalHost(url: string): boolean {
   );
 }
 
-/** A variant from either format: a list of `{ id, body }`, or a table by name. */
+/** A variant from either format: a list of `{ id, settings }` (or `body`), or a table by name. */
 export function variantOf(m: Obj, name: string): Obj | undefined {
   if (Array.isArray(m.variants)) return m.variants.map(obj).find((v) => v.id === name);
   return name in obj(m.variants) ? obj(obj(m.variants)[name]) : undefined;
 }
 
+const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
+
 /**
  * A model's request settings in Switchback's terms: `body` (with a variant's
  * merged over it, as OpenCode does) as typed sampling keys where there are
- * some, the rest sent as given, and image input as `vision`.
+ * some, the rest sent as given, and image input as `vision`. A variant's
+ * `settings` (V2) or the keys of a V1 variant are provider options, of which
+ * only reasoning effort has a Switchback equivalent.
  */
 export function modelSettings(m: Obj, variant?: Obj): ModelSettings | undefined {
   const { temperature, top_p, top_k, ...rest } = { ...obj(m.body), ...obj(variant?.body) };
+  const options = { ...variant, ...obj(variant?.settings) };
+  const effort = str(options.reasoningEffort) ?? str(options.reasoning_effort);
   const inputs = [obj(m.capabilities).input, obj(m.modalities).input].flatMap((v) =>
     Array.isArray(v) ? v : [],
   );
@@ -170,6 +179,7 @@ export function modelSettings(m: Obj, variant?: Obj): ModelSettings | undefined 
     ...(typeof temperature === 'number' ? { temperature } : {}),
     ...(typeof top_p === 'number' ? { topP: top_p } : {}),
     ...(num(top_k) ? { topK: top_k as number } : {}),
+    ...(effort && EFFORTS.has(effort) ? { effort: effort as ModelSettings['effort'] } : {}),
     ...(Object.keys(rest).length ? { body: rest } : {}),
   };
   return Object.keys(settings).length ? settings : undefined;

@@ -395,12 +395,14 @@ test('the model picker lines up models whose aliases differ in length', () => {
     tier,
     roles: [],
     current: false,
+    listed: false,
   });
   const ui = render(
     <ModelPicker
       choices={[choice('local', 'local'), choice('remote', 'remote')]}
       onPick={() => {}}
       onCancel={() => {}}
+      onCommand={() => {}}
     />,
   );
   const frame = ui.lastFrame() ?? '';

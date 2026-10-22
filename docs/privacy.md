@@ -40,12 +40,12 @@ The mark lives in the transcript (`private` on the tool result or attachment), s
 | `read`, `edit`, `write` | The file path |
 | `grep` | Any matching line from a private file in the output |
 | `@file` mentions and editor attachments | The file path |
-| `bash` | Paths the command names (`cat secrets/db.yml`, `FILE=secrets/x ./run`) |
+| `bash` | Paths the command names (`cat secrets/db.yml`, `FILE=secrets/x ./run`), and files its output quotes at the start of a line, as `grep -rn` prints them |
 | Subagent reports | The subagent's own session was private |
 
 `glob` returns file names, not contents, so listing private files doesn't pin a session.
 
-**Limits.** Detection for `bash` is by the paths a command names. A command that reads a private file indirectly (a script, `find . -exec cat`, a program's own config loading) isn't detected. MCP tools aren't inspected. If that matters to you, set `permissions.bash` to `ask` or `deny`, or use `routing.mode: local-only` for that project.
+**Limits.** Detection for `bash` is by the paths a command names and the file names it prints. A command that reads a private file without naming or printing it (a script, `find . -exec cat`, a program's own config loading) isn't detected. MCP tools aren't inspected. If that matters to you, set `permissions.bash` to `ask` or `deny`, or use `routing.mode: local-only` for that project.
 
 ## Secrets
 

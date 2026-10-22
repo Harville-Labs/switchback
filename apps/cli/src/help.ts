@@ -35,7 +35,7 @@ Options
   -c, --continue     Resume the most recent session in this workspace
   -r, --resume [id]  Same as \`switchback resume [id]\`
   --session <id>     Resume a specific session
-  --permission-mode <m>  default | acceptEdits | plan | bypassPermissions
+  --permission-mode <m>  default | acceptEdits | autoApprove | plan | bypassPermissions
   --effort <e>       Reasoning effort for the session: none | low | medium | high | xhigh | max
                      (default: permissions.defaultMode)
   --no-daemon        TUI: use a private engine instead of the shared one

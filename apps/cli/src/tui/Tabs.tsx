@@ -10,6 +10,7 @@ import {
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useState } from 'react';
 import { Keys } from './Chrome.tsx';
+import { Clickable } from './Clickable.tsx';
 import type { MouseInput } from './mouse.ts';
 import { type Theme, useTheme } from './theme.ts';
 
@@ -149,27 +150,29 @@ export function Dashboard({
         return (
           <Box key={r.sessionId} flexDirection="column">
             {start + i === firstElsewhere ? <Text dimColor>Working in other windows</Text> : null}
-            <Text wrap="truncate-end">
-              <Text color={t.accent}>{on ? '› ' : '  '}</Text>
-              <Text dimColor>{r.tab ? `${r.tab}`.padStart(2) : '  '} </Text>
-              <Text color={stateColor(r, t)}>{STATE_ICONS[r.state]} </Text>
-              <Text bold={on || r.active}>{r.title.padEnd(width)}</Text>
-              <Text color={stateColor(r, t)}>
-                {'  '}
-                {STATE_LABELS[r.state]}
-              </Text>
-              {r.model ? (
-                <Text color={r.tier === 'local' ? t.local : t.remote} dimColor>
-                  {' · '}
-                  {tierIcon(r.tier)} {r.model}
+            <Clickable onClick={() => onOpen(r.sessionId)}>
+              <Text wrap="truncate-end">
+                <Text color={t.accent}>{on ? '› ' : '  '}</Text>
+                <Text dimColor>{r.tab ? `${r.tab}`.padStart(2) : '  '} </Text>
+                <Text color={stateColor(r, t)}>{STATE_ICONS[r.state]} </Text>
+                <Text bold={on || r.active}>{r.title.padEnd(width)}</Text>
+                <Text color={stateColor(r, t)}>
+                  {'  '}
+                  {STATE_LABELS[r.state]}
                 </Text>
-              ) : null}
-              <Text dimColor>
-                {r.doing ? ` · ${r.doing}` : ''}
-                {r.costUsd >= 0.0005 ? ` · $${r.costUsd.toFixed(3)}` : ''}
-                {r.active ? ' · here' : ''}
+                {r.model ? (
+                  <Text color={r.tier === 'local' ? t.local : t.remote} dimColor>
+                    {' · '}
+                    {tierIcon(r.tier)} {r.model}
+                  </Text>
+                ) : null}
+                <Text dimColor>
+                  {r.doing ? ` · ${r.doing}` : ''}
+                  {r.costUsd >= 0.0005 ? ` · $${r.costUsd.toFixed(3)}` : ''}
+                  {r.active ? ' · here' : ''}
+                </Text>
               </Text>
-            </Text>
+            </Clickable>
           </Box>
         );
       })}
@@ -177,9 +180,9 @@ export function Dashboard({
         keys={[
           ['↑↓ enter', 'switch'],
           ['1-9', 'tab'],
-          ['n', 'new tab'],
+          ['n', 'new tab', onNew],
           ['x', 'close tab'],
-          ['esc', 'back'],
+          ['esc', 'back', onCancel],
         ]}
       />
       <Text dimColor>

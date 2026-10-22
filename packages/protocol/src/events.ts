@@ -112,6 +112,19 @@ export type EngineEvent =
       requestId: string;
       decision: PermissionDecision;
     } & SessionScoped)
+  | ({
+      /**
+       * In `autoApprove`, a model judged a call that would have asked: approved,
+       * it runs without a prompt; otherwise the user is asked as usual.
+       */
+      type: 'permission.judged';
+      tool: string;
+      summary: string;
+      approved: boolean;
+      reason: string;
+      /** The judge's alias; absent when no model was reachable to judge. */
+      judge?: string;
+    } & SessionScoped)
   | ({ type: 'escalation.resolved'; requestId: string; approved: boolean } & SessionScoped)
   | ({
       type: 'context.compacted';

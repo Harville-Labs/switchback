@@ -8,7 +8,6 @@ import type {
   McpServerInfo,
   ModelRef,
   PermissionMode,
-  PermissionsListResult,
   SessionRoles,
   ShellInfo,
 } from '@switchback/protocol';
@@ -276,15 +275,29 @@ export function rolesOfModel(alias: string, roles: SessionRoles): string[] {
   ].filter(Boolean);
 }
 
-/** A session's roles for people, marking what the session changed (ADR 0015). */
+/**
+ * A session's roles for people, marking what the session changed (ADR 0015).
+ * Plain labels: "current" and "escalate" are the config's words, not what a
+ * newcomer reads them as.
+ */
 export function formatRoles(roles: SessionRoles, models: ModelSummary[]): string {
   const mark = (k: SessionRoles['overridden'][number]) =>
     roles.overridden.includes(k) ? '  (this session)' : '';
+  const [first, ...backups] = roles.current;
+  const ladder = roles.escalate.map((step, i) => `${i + 1}. ${formatSteps([step], models)}`);
   return [
-    `current    ${formatSteps([roles.current], models) || '(none)'}${mark('current')}`,
-    `escalate   ${formatSteps(roles.escalate, models) || '(nothing)'}${mark('escalate')}`,
-    `review     ${formatReviewers(roles, models)}${mark('review')}`,
-    `subagents  ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
+    `turns start on    ${first ? formatSteps([[first]], models) : '(none)'}${mark('current')}`,
+    ...(backups.length
+      ? [
+          `  then backups    ${formatSteps(
+            backups.map((b) => [b]),
+            models,
+          )}  (when it's down or a prompt won't fit)`,
+        ]
+      : []),
+    `hard turns go to  ${ladder.length ? ladder.join(', then ') : 'nowhere (they stay where they started)'}${mark('escalate')}`,
+    `edits reviewed    ${roles.review.mode === 'off' ? 'never' : `by ${formatReviewers(roles, models)}`}${mark('review')}`,
+    `subagents use     ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
   ].join('\n');
 }
 
@@ -298,32 +311,17 @@ export function formatLadder(ladder: ViewState['ladder']): string {
 /** Everything configured, with its tier and the roles it fills. */
 export function formatModels(models: ModelSummary[], roles?: SessionRoles): string {
   const width = Math.max(0, ...models.map((m) => m.alias.length));
-  return models
-    .map((m) => {
-      const filled = roles ? rolesOfModel(m.alias, roles) : [];
-      return `${m.alias.padEnd(width)}  ${m.ref.model} (${m.tier})${filled.length ? `  · ${filled.join(', ')}` : ''}`;
-    })
-    .join('\n');
+  const rows = models.map((m) => {
+    const filled = roles ? rolesOfModel(m.alias, roles) : [];
+    const notes = [...filled, ...(m.listed && !filled.length ? ['listed by its endpoint'] : [])];
+    return `${m.alias.padEnd(width)}  ${m.ref.model} (${m.tier})${notes.length ? `  · ${notes.join(', ')}` : ''}`;
+  });
+  return [...rows, MODELS_HINT].join('\n');
 }
 
-const MODE_LABELS: Record<PermissionMode, string> = {
-  default: 'default',
-  acceptEdits: 'accept edits',
-  plan: 'plan',
-  bypassPermissions: 'bypass permissions',
-};
-
-/** What each mode does, for pickers and `/mode`. */
-export const MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
-  default: 'ask before edits and commands, as the permission levels say',
-  acceptEdits: 'edits in the workspace go ahead; commands still ask',
-  plan: 'read and plan only; nothing changes until you approve the plan',
-  bypassPermissions: 'everything goes ahead without asking; only deny rules stop a call',
-};
-
-export function modeLabel(mode: PermissionMode): string {
-  return MODE_LABELS[mode];
-}
+/** Where to go from a model list: both clients take these commands. */
+export const MODELS_HINT =
+  '/models refresh asks your endpoints for their models again · /init adds or edits models';
 
 /*
  * Marks in the status bar and the transcript are one terminal cell in every
@@ -335,6 +333,7 @@ export function modeLabel(mode: PermissionMode): string {
 const MODE_ICONS: Record<PermissionMode, string> = {
   default: '',
   acceptEdits: '»',
+  autoApprove: '√',
   plan: '║',
   bypassPermissions: '!',
 };
@@ -347,80 +346,6 @@ export function modeIcon(mode: PermissionMode): string {
 /** The mark before a model's name: a house for local, an arrow up the ladder for remote. */
 export function tierIcon(tier: string | undefined): string {
   return tier === 'local' ? '⌂' : '▲';
-}
-
-/** A mode as people type it: `plan`, `accept-edits`, `bypass`, or the config name. */
-export function parseMode(input: string): PermissionMode | undefined {
-  const key = input.toLowerCase().replace(/[-_\s]/g, '');
-  const aliases: Record<string, PermissionMode> = {
-    default: 'default',
-    normal: 'default',
-    acceptedits: 'acceptEdits',
-    accept: 'acceptEdits',
-    plan: 'plan',
-    bypass: 'bypassPermissions',
-    bypasspermissions: 'bypassPermissions',
-  };
-  return aliases[key];
-}
-
-/** The mode after `current` when cycling (Shift+Tab), among those allowed. */
-export function nextMode(current: PermissionMode, allowed: PermissionMode[]): PermissionMode {
-  const i = allowed.indexOf(current);
-  return allowed[(i + 1) % allowed.length] ?? 'default';
-}
-
-/** `/permissions`: the mode, the levels, and every rule with where it came from. */
-export function formatPermissions(p: PermissionsListResult): string {
-  const row = (label: string, text: string) => `${label.padEnd(8)}${text}`;
-  const lines = [
-    ...(p.mode ? [row('mode', `${modeLabel(p.mode)}: ${MODE_DESCRIPTIONS[p.mode]}`)] : []),
-    row(
-      'levels',
-      `read ${p.levels.read} · edit ${p.levels.edit} · bash ${p.levels.bash} · web ${p.levels.web} · websearch ${p.levels.websearch} · mcp ${p.levels.mcp}`,
-    ),
-    row(
-      'sandbox',
-      p.sandbox.active ? 'on: bash commands run in the OS sandbox' : `off: ${p.sandbox.reason}`,
-    ),
-  ];
-  if (!p.rules.length) lines.push(row('rules', 'none (see docs/permissions.md)'));
-  else {
-    lines.push('rules');
-    // Grouped by where they came from, then by behavior: a config holds dozens.
-    const sources = [...new Set(p.rules.map((r) => r.source))];
-    for (const source of sources) {
-      lines.push(`  ${source}`);
-      for (const behavior of ['deny', 'ask', 'allow'] as const) {
-        const rules = p.rules.filter((r) => r.source === source && r.behavior === behavior);
-        if (rules.length)
-          lines.push(
-            ...wrapList(
-              `    ${behavior.padEnd(6)}`,
-              rules.map((r) => r.rule),
-            ),
-          );
-      }
-    }
-  }
-  return lines.join('\n');
-}
-
-/** Items joined with commas, wrapped under the label at 100 columns. */
-function wrapList(label: string, items: string[]): string[] {
-  const indent = ' '.repeat(label.length);
-  const lines: string[] = [];
-  let line = '';
-  for (const [i, item] of items.entries()) {
-    const text = i < items.length - 1 ? `${item},` : item;
-    const prefix = lines.length ? indent : label;
-    if (line && prefix.length + line.length + 1 + text.length > 100) {
-      lines.push(prefix + line);
-      line = text;
-    } else line = line ? `${line} ${text}` : text;
-  }
-  lines.push((lines.length ? indent : label) + line);
-  return lines;
 }
 
 /** The conversation as Markdown: prompts, replies, and tool calls, for `/copy all`. */

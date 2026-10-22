@@ -5,6 +5,7 @@ import {
   formatTodos,
   modeIcon,
   modeLabel,
+  routeLabel,
   runningShells,
   sessionEffort,
   speedLabel,
@@ -25,25 +26,34 @@ import type {
 } from '@switchback/protocol';
 import { Box, Text } from 'ink';
 import { useEffect, useState } from 'react';
+import { Clickable } from './Clickable.tsx';
 import { type Theme, useTheme } from './theme.ts';
 
 type SubagentRow = Extract<ViewItem, { kind: 'subagent' }>;
 
-/** Key hints: the key highlighted, then what it does. */
-export function Keys({ keys }: { keys: [string, string][] }) {
+/** Key hints: the key highlighted, then what it does. One with a handler does it on a click too. */
+export function Keys({ keys }: { keys: [string, string, (() => void)?][] }) {
   const t = useTheme();
   return (
-    <Text>
-      {keys.map(([k, what], i) => (
-        <Text key={k}>
-          {i ? '   ' : ''}
-          <Text color={t.accent} bold>
-            {k}
-          </Text>{' '}
-          <Text dimColor>{what}</Text>
-        </Text>
-      ))}
-    </Text>
+    <Box flexWrap="wrap" columnGap={3}>
+      {keys.map(([k, what, onClick]) => {
+        const hint = (
+          <Text key={k}>
+            <Text color={t.accent} bold>
+              {k}
+            </Text>{' '}
+            <Text dimColor>{what}</Text>
+          </Text>
+        );
+        return onClick ? (
+          <Clickable key={k} onClick={onClick}>
+            {hint}
+          </Clickable>
+        ) : (
+          hint
+        );
+      })}
+    </Box>
   );
 }
 
@@ -137,7 +147,7 @@ export function Queue({ queue }: { queue: QueuedPrompt[] }) {
         </Text>
       ))}
       <Text dimColor>
-        {'  '}↑ to edit the last one · esc on an empty prompt cancels the turn and the queue
+        {'  '}↑ to edit the last one · esc sends it now · ctrl+c cancels the turn and the queue
       </Text>
     </Box>
   );
@@ -306,7 +316,7 @@ export function StatusBar({
         <ModeBadge mode={mode} />
         {mode !== 'default' ? <Text dimColor> · </Text> : null}
         <Text dimColor>
-          {session.agent} · {route}
+          {session.agent} · {routeLabel(route)}
           {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
           {effort ? ` · effort ${effort}` : ''}
           {ladder ? ` · ${ladder}` : ''}

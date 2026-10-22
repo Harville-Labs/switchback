@@ -341,10 +341,10 @@ describe('roles and the ladder', () => {
   test('roles and models read clearly, marking session changes', () => {
     expect(formatRoles(roles, models)).toBe(
       [
-        'current    fast (qwen3:8b, local)',
-        'escalate   large (qwen3-coder-480b, local) → opus (claude-opus-5, remote)  (this session)',
-        'review     the escalation ladder',
-        'subagents  normal routing',
+        'turns start on    fast (qwen3:8b, local)',
+        'hard turns go to  1. large (qwen3-coder-480b, local), then 2. opus (claude-opus-5, remote)  (this session)',
+        'edits reviewed    by the escalation ladder',
+        'subagents use     normal routing',
       ].join('\n'),
     );
     expect(formatModels(models, roles)).toContain('opus   claude-opus-5 (remote)  · step 2');

@@ -1,11 +1,7 @@
 /** The controls row under the composer, as HTML (pure, so it can be tested). */
-import {
-  formatReviewers,
-  formatSteps,
-  MODE_DESCRIPTIONS,
-  modeLabel,
-} from '@switchback/client/format';
+import { formatReviewers, formatSteps } from '@switchback/client/format';
 import { choiceLabel, modelChoices } from '@switchback/client/models';
+import { MODE_DESCRIPTIONS, modeLabel, ROUTES } from '@switchback/client/modes';
 import type {
   InitializeResult,
   PermissionMode,
@@ -13,12 +9,6 @@ import type {
   SessionRoles,
 } from '@switchback/protocol';
 import { esc } from './render.ts';
-
-const ROUTES: { value: RoutePreference; label: string; title: string }[] = [
-  { value: 'auto', label: 'Auto', title: 'Run on the current model; escalate when it struggles' },
-  { value: 'local', label: 'Local', title: 'Only local models for the next prompts' },
-  { value: 'remote', label: 'Remote', title: 'Only hosted models for the next prompts' },
-];
 
 export interface ControlsState {
   route: RoutePreference;
@@ -75,13 +65,13 @@ export function renderControls({
     `<button class="pill" ${attrs} title="${esc(title)}"><span class="k">${key}</span> ${value}</button>`;
   const routes = `<span class="segmented">${ROUTES.map(
     (r) =>
-      `<button class="${r.value === route ? 'on' : ''}" data-route="${r.value}" title="${esc(r.title)}">${r.label}</button>`,
+      `<button class="${r.value === route ? 'on' : ''}" data-route="${r.value}" title="${esc(r.description)}">${r.label}</button>`,
   ).join('')}</span>`;
   // The model first: it's what people change most.
-  const parts = roles ? [renderModelSelect(roles, models), routes] : [routes];
-  parts.push(
+  const main = roles ? [renderModelSelect(roles, models), routes] : [routes];
+  const parts = [
     pill('data-mode', 'Mode', esc(modeLabel(mode)), `${MODE_DESCRIPTIONS[mode]} (click to change)`),
-  );
+  ];
   if (agent)
     parts.push(pill('data-agent', 'Agent', esc(agent), 'Start a new session with another agent'));
   if (roles) {
@@ -103,9 +93,10 @@ export function renderControls({
       pill('data-role="review"', 'Review', esc(formatReviewers(roles)), 'Who reviews edits'),
     );
     if (roles.escalate.length)
-      parts.push(
+      main.push(
         `<button class="pill up" data-escalate-now title="A stronger model takes over: the next step of this turn, or your next prompt (/up)">↑ Escalate now</button>`,
       );
   }
-  return parts.join('');
+  // What people change on one line, the session's settings quieter under it.
+  return `<div class="bar">${main.join('')}</div><div class="bar quiet">${parts.join('')}</div>`;
 }

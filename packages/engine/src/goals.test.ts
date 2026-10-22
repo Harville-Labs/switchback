@@ -48,7 +48,8 @@ const say = (text: string) => ({ text });
 const report = (status: 'done' | 'blocked', summary: string) => ({
   toolCalls: [{ name: 'goal', input: { status, summary } }],
 });
-const askFirst = { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] };
+// Not a read-only command, so it asks (ADR 0026).
+const askFirst = { toolCalls: [{ name: 'bash', input: { command: 'touch hi' } }] };
 const userText = (lp: ScriptedProvider, i: number) =>
   lp.requests[i]?.messages
     .filter((m) => m.role === 'user')

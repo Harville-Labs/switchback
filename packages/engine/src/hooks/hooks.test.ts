@@ -119,20 +119,20 @@ describe('hooks in a session', () => {
     e.subscribe((ev) => events.push(ev));
     return { e, lp, events };
   }
-  const echo = { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] };
+  const shell = { toolCalls: [{ name: 'bash', input: { command: 'printf hi' } }] };
   const resultOf = (lp: ScriptedProvider) =>
     lp.requests[1]?.messages.at(-1)?.parts[0] as ToolResultPart;
   const reminders = (m: Message | undefined) =>
     (m?.parts ?? []).flatMap((p) => (p.type === 'text' && p.reminder ? [p.text] : []));
 
   test('PreToolUse can deny a call, or allow one a level would ask about', async () => {
-    const denied = engine([echo, { text: 'ok' }], {
+    const denied = engine([shell, { text: 'ok' }], {
       PreToolUse: [{ matcher: 'bash', hooks: [cmd('echo "not today" >&2; exit 2')] }],
     });
     await denied.e.runTurn(denied.e.createSession({}).id, 'go');
     expect(resultOf(denied.lp).content).toBe('Blocked by a PreToolUse hook: not today');
 
-    const allowed = engine([echo, { text: 'ok' }], {
+    const allowed = engine([shell, { text: 'ok' }], {
       PreToolUse: [
         { hooks: [cmd(`echo '{"hookSpecificOutput":{"permissionDecision":"allow"}}'`)] },
       ],
@@ -143,17 +143,17 @@ describe('hooks in a session', () => {
 
   test('a hook allow never overrides a deny rule', async () => {
     const { e, lp } = engine(
-      [echo, { text: 'ok' }],
+      [shell, { text: 'ok' }],
       { PreToolUse: [{ hooks: [cmd(`echo '{"decision":"approve"}'`)] }] },
-      { bash: 'allow', deny: ['bash(echo:*)'] },
+      { bash: 'allow', deny: ['bash(printf:*)'] },
     );
     await e.runTurn(e.createSession({}).id, 'go');
-    expect(resultOf(lp).content).toContain('Denied by the permission rule bash(echo:*)');
+    expect(resultOf(lp).content).toContain('Denied by the permission rule bash(printf:*)');
   });
 
   test('PostToolUse feedback reaches the model with the result', async () => {
     const { e, lp } = engine(
-      [echo, { text: 'ok' }],
+      [shell, { text: 'ok' }],
       { PostToolUse: [{ hooks: [cmd('echo "lint failed" >&2; exit 2')] }] },
       { bash: 'allow' },
     );
@@ -191,7 +191,7 @@ describe('hooks in a session', () => {
       permissions: { bash: 'ask' },
       hooks: { Notification: [{ hooks: [cmd('cat > notified.json')] }] },
     });
-    const lp = new ScriptedProvider('lp', 'local', [echo, { text: 'ok' }]);
+    const lp = new ScriptedProvider('lp', 'local', [shell, { text: 'ok' }]);
     const e = new Engine({
       workspaceRoot: root,
       config,
@@ -206,7 +206,7 @@ describe('hooks in a session', () => {
         const got = JSON.parse(readFileSync(join(root, 'notified.json'), 'utf8'));
         expect(got).toMatchObject({
           hook_event_name: 'Notification',
-          message: 'Switchback needs your permission: $ echo hi',
+          message: 'Switchback needs your permission: $ printf hi',
         });
         return;
       } catch {
