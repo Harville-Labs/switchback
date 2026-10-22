@@ -77,6 +77,38 @@ describe('custom commands', () => {
   });
 });
 
+describe('command menu', () => {
+  const menu = () =>
+    render(
+      <PromptInput
+        focus
+        busy={false}
+        placeholder="Ask"
+        history={[]}
+        root="/tmp"
+        custom={[]}
+        onSubmit={() => {}}
+        onInterrupt={() => {}}
+        onSubmitNow={() => {}}
+        onCancel={() => {}}
+        recall={() => undefined}
+      />,
+    );
+
+  test('shows a short usage whole, and the selected long one in full below', async () => {
+    const tab = menu();
+    tab.stdin.write('/tab');
+    await tick();
+    expect(tab.lastFrame()).toContain('/tab [n|new [agent]|close]');
+    const effort = menu();
+    effort.stdin.write('/eff');
+    await tick();
+    const lines = effort.lastFrame()?.split('\n') ?? [];
+    expect(lines.some((l) => l.includes('/effort [none|low|') && l.includes('…'))).toBe(true);
+    expect(lines).toContain('  /effort [none|low|medium|high|xhigh|max|default]');
+  });
+});
+
 describe('during a turn', () => {
   test('Enter queues, Esc sends now, Esc on an empty prompt cancels, ↑ recalls', async () => {
     const got: string[] = [];
