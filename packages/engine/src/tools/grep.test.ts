@@ -30,6 +30,34 @@ describe('grepJs', () => {
       await grepJs({ pattern: 'retry', ignoreCase: true, glob: '**/*.md' }, root, root),
     ).toEqual(['src/b.md:1: Retry policy']);
   });
+
+  test('shows context lines around matches without repeating overlaps', async () => {
+    expect(await grepJs({ pattern: 'const', glob: 'src/**', context: 2 }, root, root)).toEqual([
+      'src/a.ts:1: const retry = 3;',
+      'src/a.ts-2- function retryLater() {}',
+    ]);
+  });
+
+  test('lists only the matching files, leaving out hidden ones', async () => {
+    const hidden = (file: string) => file.endsWith('b.md');
+    expect(
+      (
+        await grepJs(
+          { pattern: 'retry', ignoreCase: true, filesOnly: true, glob: 'src/**' },
+          root,
+          root,
+        )
+      ).sort(),
+    ).toEqual(['src/a.ts', 'src/b.md']);
+    expect(
+      await grepJs(
+        { pattern: 'retry', ignoreCase: true, filesOnly: true, glob: 'src/**' },
+        root,
+        root,
+        hidden,
+      ),
+    ).toEqual(['src/a.ts']);
+  });
 });
 
 describe.skipIf(!rg)('grepRipgrep', () => {
@@ -47,6 +75,19 @@ describe.skipIf(!rg)('grepRipgrep', () => {
     ).toBeUndefined();
     expect(await grepJs({ pattern: 'retry(?=Later)' }, root, root)).toEqual([
       'src/a.ts:2: function retryLater() {}',
+    ]);
+  });
+
+  test('marks context lines and lists matching files like the JS search', async () => {
+    const run = (input: Parameters<typeof grepJs>[0]) =>
+      grepRipgrep(rg as string, input, join(root, 'src'), root);
+    expect(await run({ pattern: 'function', context: 1 })).toEqual([
+      'src/a.ts-1- const retry = 3;',
+      'src/a.ts:2: function retryLater() {}',
+    ]);
+    expect((await run({ pattern: 'retry', ignoreCase: true, filesOnly: true }))?.sort()).toEqual([
+      'src/a.ts',
+      'src/b.md',
     ]);
   });
 

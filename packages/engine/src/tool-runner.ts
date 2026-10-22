@@ -15,6 +15,7 @@ import {
   MAX_RESULT_CHARS,
   type SubagentOptions,
   type SubagentResult,
+  type SwitchbackControls,
   type Tool,
   type ToolContext,
 } from './tools/index.ts';
@@ -41,6 +42,8 @@ export interface ToolRunnerDeps {
   configFiles: NonNullable<ToolContext['configFiles']>;
   validate: NonNullable<ToolContext['validate']>;
   goals: Goals;
+  /** Switchback's models, roles, and settings, as the session's tools see them. */
+  switchback(s: LiveSession): SwitchbackControls;
 }
 
 export interface ToolCall {
@@ -88,6 +91,7 @@ export class ToolRunner {
       skills: () => this.deps.skills(),
       configFiles: this.deps.configFiles,
       validate: this.deps.validate,
+      switchback: this.deps.switchback(s),
       requestEscalation: (reason) => s.signals.recordEscalationRequest(reason),
       ...(s.depth === 0
         ? {

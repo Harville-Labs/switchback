@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadAgents, parseAgentFile, renderAgentFile } from './agents.ts';
-import { ConfigError, loadConfig, parseJsonc } from './config.ts';
+import { ConfigError, loadConfig, parseJsonc, redactConfig } from './config.ts';
 
 let dir: string;
 beforeEach(() => {
@@ -90,6 +90,25 @@ test('keys removed by role-based routing say what replaced them', () => {
     writeFileSync(join(dir, '.switchback', 'config.json'), JSON.stringify({ routing }));
     expect(() => loadConfig(dir, { SWITCHBACK_HOME: join(dir, 'home') })).toThrow(message);
   }
+});
+
+test('redaction hides secret keys and every header and env value, keeping the rest', () => {
+  const provider = {
+    baseUrl: 'http://localhost:9',
+    apiKey: 'sk-1',
+    headers: { 'X-Team': 'team-token' },
+    env: { TOKEN: 'abc' },
+  };
+  expect(redactConfig({ providers: { rp: provider } })).toEqual({
+    providers: {
+      rp: {
+        baseUrl: 'http://localhost:9',
+        apiKey: '<redacted>',
+        headers: { 'X-Team': '<redacted>' },
+        env: { TOKEN: '<redacted>' },
+      },
+    },
+  });
 });
 
 describe('agents', () => {

@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
 import { hideWindow } from '../hide-window.ts';
@@ -22,10 +22,23 @@ const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.ven
 /** Workspace-relative path with forward slashes, so tool output is the same on every OS. */
 const workspacePath = (root: string, file: string) => toWorkspacePath(root, file) ?? file;
 
+const LIST_LIMIT = 500;
+
+/** A directory's entries, folders first, leaving out what deny rules hide. */
+async function listDirectory(dir: string, ctx: ToolContext): Promise<string> {
+  const entries = (await readdir(dir, { withFileTypes: true }))
+    .filter((e) => !ctx.hidden?.(join(dir, e.name)))
+    .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
+    .sort((a, b) => Number(b.endsWith('/')) - Number(a.endsWith('/')) || a.localeCompare(b));
+  if (!entries.length) return '(empty directory)';
+  const more = entries.length > LIST_LIMIT ? `\n[${entries.length - LIST_LIMIT} more entries]` : '';
+  return entries.slice(0, LIST_LIMIT).join('\n') + more;
+}
+
 export const readTool = defineTool({
   name: 'read',
   description:
-    'Read a file from the workspace. Text comes back as lines prefixed with 1-based line numbers (use offset/limit for large files); a PNG, JPEG, GIF, or WebP image comes back as the image.',
+    'Read a file from the workspace. Text comes back as lines prefixed with 1-based line numbers (use offset/limit for large files); a PNG, JPEG, GIF, or WebP image comes back as the image; a directory comes back as its entries, folders ending in /.',
   schema: z.object({
     path: z.string().describe(PATH_HELP),
     offset: z.number().int().min(1).optional().describe('First line to return (1-based)'),
@@ -43,7 +56,7 @@ export const readTool = defineTool({
     const file = resolveFile(ctx.workspaceRoot, input.path);
     const info = await stat(file).catch(() => undefined);
     if (!info) throw new ToolError(`${input.path} does not exist`);
-    if (info.isDirectory()) throw new ToolError(`${input.path} is a directory; use glob`);
+    if (info.isDirectory()) return listDirectory(file, ctx);
     if (looksLikeImage(input.path)) {
       // `file` is canonical (symlinks resolved); so must the root be to relate them.
       const path = workspacePath(realpathSync(ctx.workspaceRoot), file);
@@ -191,10 +204,39 @@ export interface GrepInput {
   path?: string | undefined;
   glob?: string | undefined;
   ignoreCase?: boolean | undefined;
+  /** Lines to show before and after each match. */
+  context?: number | undefined;
+  /** Only the paths of files that match. */
+  filesOnly?: boolean | undefined;
+}
+
+/** `path:12: match` for a matching line, `path-13- text` for context, as grep prints them. */
+const grepLine = (path: string, n: number, text: string, match: boolean) =>
+  match ? `${path}:${n}: ${text}` : `${path}-${n}- ${text}`;
+
+/** Lines to print for one file's matches: each match with its context, overlaps merged. */
+function withContext(path: string, lines: string[], hits: number[], context: number): string[] {
+  const out: string[] = [];
+  let last = -1;
+  for (const i of hits)
+    for (
+      let j = Math.max(last + 1, i - context);
+      j <= Math.min(lines.length - 1, i + context);
+      j++
+    ) {
+      out.push(grepLine(path, j + 1, (lines[j] ?? '').slice(0, 300), hits.includes(j)));
+      last = j;
+    }
+  return out;
 }
 
 /** Plain JavaScript search: the fallback when ripgrep is missing or rejects the regex. */
-export async function grepJs(input: GrepInput, cwd: string, root: string): Promise<string[]> {
+export async function grepJs(
+  input: GrepInput,
+  cwd: string,
+  root: string,
+  hidden?: (file: string) => boolean,
+): Promise<string[]> {
   let re: RegExp;
   try {
     re = new RegExp(input.pattern, input.ignoreCase ? 'i' : '');
@@ -203,17 +245,17 @@ export async function grepJs(input: GrepInput, cwd: string, root: string): Promi
   }
   const out: string[] = [];
   for await (const f of new Glob(input.glob ?? '**/*').scan({ cwd, onlyFiles: true })) {
-    if (IGNORED.test(f)) continue;
     const full = join(cwd, f);
+    if (IGNORED.test(f) || hidden?.(full)) continue;
     const text = await readFile(full, 'utf8').catch(() => '');
     if (text.includes('\u0000')) continue; // binary
-    const lines = text.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      if (re.test(lines[i] ?? '')) {
-        out.push(`${workspacePath(root, full)}:${i + 1}: ${(lines[i] ?? '').slice(0, 300)}`);
-        if (out.length >= GREP_LIMIT) return out;
-      }
-    }
+    // A trailing newline ends the last line rather than starting another, as in ripgrep.
+    const lines = text.replace(/\r?\n$/, '').split('\n');
+    const hits = lines.flatMap((line, i) => (re.test(line) ? [i] : []));
+    if (!hits.length) continue;
+    const path = workspacePath(root, full);
+    out.push(...(input.filesOnly ? [path] : withContext(path, lines, hits, input.context ?? 0)));
+    if (out.length >= GREP_LIMIT) return out.slice(0, GREP_LIMIT);
   }
   return out;
 }
@@ -228,9 +270,11 @@ export async function grepRipgrep(
   input: GrepInput,
   cwd: string,
   root: string,
+  hidden?: (file: string) => boolean,
 ): Promise<string[] | undefined> {
   const args = ['--json', '--no-config', '--no-require-git', '--max-columns', '300'];
   if (input.ignoreCase) args.push('-i');
+  if (input.context && !input.filesOnly) args.push('-C', String(input.context));
   for (const dir of ['node_modules', '.git', 'dist', '.tsbuild', '.next', 'target', '.venv'])
     args.push('--glob', `!${dir}`);
   if (input.glob) args.push('--glob', input.glob);
@@ -253,11 +297,17 @@ export async function grepRipgrep(
         type: string;
         data: { path?: { text?: string }; lines?: { text?: string }; line_number?: number };
       };
-      if (ev.type !== 'match' || !ev.data.path?.text) continue;
-      const text = (ev.data.lines?.text ?? '').replace(/\r?\n$/, '');
-      out.push(
-        `${workspacePath(root, join(cwd, ev.data.path.text))}:${ev.data.line_number}: ${text}`,
-      );
+      if ((ev.type !== 'match' && ev.type !== 'context') || !ev.data.path?.text) continue;
+      const full = join(cwd, ev.data.path.text);
+      if (hidden?.(full)) continue;
+      const path = workspacePath(root, full);
+      if (input.filesOnly) {
+        // Matches arrive grouped by file, so a new path is a new file.
+        if (out.at(-1) !== path) out.push(path);
+      } else {
+        const text = (ev.data.lines?.text ?? '').replace(/\r?\n$/, '');
+        out.push(grepLine(path, ev.data.line_number ?? 0, text, ev.type === 'match'));
+      }
       if (out.length >= GREP_LIMIT) {
         proc.kill();
         return out;
@@ -279,12 +329,20 @@ let ripgrep: string | null | undefined;
 export const grepTool = defineTool({
   name: 'grep',
   description:
-    'Search file contents with a regular expression. Returns path:line: text. Optionally filter files with a glob. Respects .gitignore when ripgrep is installed.',
+    'Search file contents with a regular expression. Returns path:line: text for matches (path-line- text for context lines), or only the matching files with filesOnly. Optionally filter files with a glob. Respects .gitignore when ripgrep is installed.',
   schema: z.object({
     pattern: z.string(),
     path: z.string().optional(),
     glob: z.string().optional().describe('File filter, e.g. "**/*.ts"'),
     ignoreCase: z.boolean().optional(),
+    context: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .describe('Lines to show before and after each match'),
+    filesOnly: z.boolean().optional().describe('List only the files that match'),
   }),
   permission: 'read',
   mutating: false,
@@ -292,17 +350,11 @@ export const grepTool = defineTool({
   async run(input, ctx) {
     const cwd = resolveFile(ctx.workspaceRoot, input.path ?? '.');
     if (ripgrep === undefined) ripgrep = process.env.SWITCHBACK_NO_RIPGREP ? null : Bun.which('rg');
-    const found =
-      (ripgrep ? await grepRipgrep(ripgrep, input, cwd, ctx.workspaceRoot) : undefined) ??
-      (await grepJs(input, cwd, ctx.workspaceRoot));
     // Files deny rules keep from being read don't show up in what they contain either.
-    const hidden = ctx.hidden;
-    const out = hidden
-      ? found.filter((line) => {
-          const path = /^(.+?):\d+: /.exec(line)?.[1];
-          return !path || !hidden(resolve(ctx.workspaceRoot, path));
-        })
-      : found;
+    const out =
+      (ripgrep
+        ? await grepRipgrep(ripgrep, input, cwd, ctx.workspaceRoot, ctx.hidden)
+        : undefined) ?? (await grepJs(input, cwd, ctx.workspaceRoot, ctx.hidden));
     if (!out.length) return 'no matches';
     const body = out.join('\n');
     return out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body;

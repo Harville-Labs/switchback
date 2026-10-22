@@ -102,6 +102,8 @@ export class Engine {
       emit: (e) => this.emit(e),
       notify: (level, message) => this.notify(level, message),
       mcp: () => this.mcp,
+      reload: () => this.reload().changed,
+      setRoles: (params) => this.setRoles(params),
     });
     this.p.instructions.watch?.((scopes) =>
       this.emit({ type: 'config.updated', notes: scopes.map(changeNote) }),
@@ -118,10 +120,7 @@ export class Engine {
     }
   }
 
-  /**
-   * `config.reload`: read and apply the user, project, and organization config again
-   * (files aren't watched). A file that won't load throws; the config in effect stays.
-   */
+  /** `config.reload`: apply the config files again. One that won't load throws; the old stays. */
   reload(): ConfigReloadResult {
     if (!this.options.reloadConfig)
       throw new Error('this engine takes its config only from its host; restart it instead');

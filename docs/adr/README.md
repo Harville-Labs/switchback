@@ -31,3 +31,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0025](0025-auto-approve.md) | An auto-approve mode where a model approves calls that would ask; anything it refuses still asks | Accepted |
 | [0026](0026-explore-without-asking.md) | Read-only shell commands inside the workspace run under the `read` level instead of asking | Accepted |
 | [0027](0027-map-reduce-compaction.md) | Compaction prunes stale tool output, summarizes the history in parts and merges them, and appends a word-for-word record | Accepted |
+| [0028](0028-agents-change-their-settings.md) | The model reads Switchback's settings and models with tools, and changes them with tools that always ask and apply at once | Accepted |
