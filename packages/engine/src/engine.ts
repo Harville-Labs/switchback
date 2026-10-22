@@ -81,7 +81,7 @@ function changedKeys(prev: SwitchbackConfig, next: SwitchbackConfig): string[] {
   );
 }
 
-export const ENGINE_VERSION = '2.6.0';
+export const ENGINE_VERSION = '3.0.0';
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();

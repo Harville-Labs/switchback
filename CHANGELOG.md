@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-22
+
 ### Added
 - **Tab completes slash command arguments in the TUI.** Models, agents, themes, effort levels, and each command's fixed words complete as you type. With several matches, Tab completes what they share, lists them, and goes round them. Inside a command, Tab no longer switches the model
 - **Commands open a list when run with no argument.** `/agent`, `/subagent`, `/subagent-model`, `/effort`, `/theme`, and `/review` let you pick the value, and `/tab` opens the sessions dashboard
