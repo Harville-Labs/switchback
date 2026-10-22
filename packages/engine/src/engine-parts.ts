@@ -21,6 +21,7 @@ import type { McpHub } from './mcp/hub.ts';
 import { ModelDirectory } from './model-directory.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { PermissionGate } from './permissions/gate.ts';
+import { PermissionJudge } from './permissions/judge.ts';
 import { configRules } from './permissions/policy.ts';
 import { ReviewRunner } from './review-runner.ts';
 import { SessionControls } from './session-controls.ts';
@@ -119,6 +120,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     privatePaths: () => policy.privatePaths(),
   };
   const compactor: Compactor = new Compactor(host, models);
+  const judge = new PermissionJudge(host, models);
   const controls: SessionControls = new SessionControls(host, {
     sessions: sessions,
     checkpoints: new Checkpoints(options.checkpoints ?? new MemoryCheckpointStore()),
@@ -167,6 +169,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
       denyRead: options.config.bash.sandbox.denyRead,
     }),
     saveTo: { project: configFiles.projectLocal, user: configFiles.user },
+    judge: (s, call, signal) => judge.judge(s, call, signal),
   });
   const tools: ToolRunner = new ToolRunner(host, gate, {
     commands: commands,

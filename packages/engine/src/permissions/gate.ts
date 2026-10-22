@@ -15,7 +15,9 @@
  *    ask asks, its allow skips a level's prompt), then allow rules, including
  *    what the user allowed this session.
  * 7. The mode: `acceptEdits` allows edits.
- * 8. The category's level (`websearch` has its own): `allow`, or ask.
+ * 8. The category's level (`websearch` has its own): `allow`, or ask. In
+ *    `autoApprove`, a model judges the call first (ADR 0024) and the user is
+ *    asked only when it doesn't approve.
  */
 import type { PermissionDecision, PermissionMode } from '@switchback/protocol';
 import type { PermissionLevel, SwitchbackConfig } from '../config-schema.ts';
@@ -31,6 +33,7 @@ import {
   type ToolPreview,
   toWorkspacePath,
 } from '../tools/index.ts';
+import type { JudgedCall, Verdict } from './judge.ts';
 import { folderRule, type Places, pathOf, type Reach, reachOf } from './outside.ts';
 import { PermissionPolicy, type SourcedRule, suggestRules, type ToolCall } from './policy.ts';
 import { ignoreInGit, saveAllowRules } from './save.ts';
@@ -53,6 +56,8 @@ export interface GateDeps {
   saveTo: { project: string; user: string };
   /** Switchback's own folders and the credentials no tool may read. */
   places(): Places;
+  /** `autoApprove`: whether a model approves a call that would ask. */
+  judge(s: LiveSession, call: JudgedCall, signal: AbortSignal): Promise<Verdict>;
 }
 
 /** Why the user is asked, and whether "always" may be offered (and as which rules). */
@@ -186,7 +191,39 @@ export class PermissionGate {
     if (verdict?.behavior === 'allow') return { allowed: true };
     if (mode === 'acceptEdits' && tool.permission === 'edit') return { allowed: true };
     if (level === 'allow') return { allowed: true };
+    if (mode === 'autoApprove') {
+      const verdict = await this.judge(s, tool, call, signal);
+      if (verdict.approve) return { allowed: true };
+      return this.ask(s, tool, call, ctx, signal, {
+        reason: `not auto-approved: ${verdict.reason}`,
+      });
+    }
     return this.ask(s, tool, call, ctx, signal, {});
+  }
+
+  /**
+   * The judge's verdict, shown in the transcript either way. Only the
+   * category's level is judged: ask rules, hooks that ask, and the calls that
+   * always ask stay with the user.
+   */
+  private async judge(
+    s: LiveSession,
+    tool: Tool,
+    call: ToolCall,
+    signal: AbortSignal,
+  ): Promise<{ approve: boolean; reason: string }> {
+    const summary = tool.summarize(call.input);
+    const v = await this.deps.judge(s, { tool: tool.name, summary, input: call.input }, signal);
+    this.host.emit({
+      type: 'permission.judged',
+      ...scope(s),
+      tool: tool.name,
+      summary,
+      approved: v.allow,
+      reason: v.reason,
+      ...(v.model ? { judge: v.model } : {}),
+    });
+    return { approve: v.allow, reason: v.reason };
   }
 
   /** Where a file tool's path goes; undefined for other tools. */

@@ -12,6 +12,7 @@ import {
   type SessionSummary,
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
+import { judgedLabel } from './modes.ts';
 import {
   agentOf,
   foldCache,
@@ -420,6 +421,11 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         id: `s${items.length}`,
         text: redactedLabel(event.kinds, event.model),
       });
+      return { ...state, items };
+    case 'permission.judged':
+      // A call it didn't approve asks, and the prompt carries the reason.
+      if (!event.approved) return state;
+      items.push({ kind: 'info', id: `j${items.length}`, text: judgedLabel(event) });
       return { ...state, items };
     case 'context.compacted':
       items.push({

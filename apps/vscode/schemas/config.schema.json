@@ -559,7 +559,10 @@
         "defaultMode": {
           "default": "default",
           "type": "string",
-          "enum": ["default", "acceptEdits", "plan", "bypassPermissions"]
+          "enum": ["default", "acceptEdits", "autoApprove", "plan", "bypassPermissions"]
+        },
+        "judge": {
+          "type": "string"
         },
         "outsideWorkspace": {
           "default": "ask",

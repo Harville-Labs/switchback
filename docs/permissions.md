@@ -27,7 +27,7 @@ Every call that passes validation and confinement is decided in this order:
 5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`): the user is asked, including in `acceptEdits`. A path **outside the workspace** asks too, unless an allow rule names it; `read: allow`, a bare `read` rule, a hook, and `acceptEdits` don't count.
 6. **Allow rules,** including what the user allowed earlier in the session.
 7. **The mode.** `acceptEdits` allows edits.
-8. **The category's level:** `allow`, or ask.
+8. **The category's level:** `allow`, or ask. In `autoApprove`, a call that would ask goes to a model first, and asks only if the model doesn't approve it.
 
 ### Outside the workspace
 
@@ -123,10 +123,19 @@ A call an ask rule caught offers no "always": the rule says to ask every time. C
 |---|---|
 | `default` | Nothing: the levels and rules decide |
 | `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
+| `autoApprove` | A model reads each call that would ask, with your latest request, and approves it when it plainly serves that request and stays in the project. Anything it doesn't approve, or can't judge, asks you, with its reason. Ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration always ask. See [Auto-approve](#auto-approve) |
 | `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
 | `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration included. Only a category `deny`, a deny rule, `permissions.outsideWorkspace: "deny"`, the off-limits places, and `bash.sandbox.allowUnsandboxed: false` stop a call |
 
 New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
+
+### Auto-approve
+
+The judge is `permissions.judge` when you set it (an alias from `models`), or else the first local model among the session's current and escalation models. Without a `permissions.judge`, judging never uses a remote model, so it never costs money; a remote judge runs only while remote calls are allowed and counts toward your budget. The judge sees your latest message and the call (its input cut at 6,000 characters), not the conversation or your files. Remote judges get secrets redacted like any remote request, unless `privacy.secrets` is `off`.
+
+The judge approves reading, searching, editing project files, builds, tests, linters, formatters, and version-control commands that publish nothing. It refuses, so you're asked, anything that deletes or overwrites more than the task needs, publishes or sends something (push, deploy, release, pull requests), installs software globally, touches credentials, downloads and runs code, or goes beyond what you asked. Each approved call shows in the transcript as `auto-approved <call> (<judge>): <reason>`.
+
+A model can be talked into things, so this mode trades some safety for fewer prompts. Prefer allow rules for commands you always approve, and keep `deny` rules for what must never run: they hold in every mode. See [ADR 0024](adr/0024-auto-approve.md).
 
 An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
 

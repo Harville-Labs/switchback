@@ -20,7 +20,14 @@ export type RoutePreference = z.infer<typeof RoutePreference>;
  * workspace, `plan` allows no edits until the user approves a plan, and
  * `bypassPermissions` allows everything but deny and ask rules.
  */
-export const PermissionMode = z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']);
+// Listed in the order Shift+Tab cycles through them.
+export const PermissionMode = z.enum([
+  'default',
+  'acceptEdits',
+  'autoApprove',
+  'plan',
+  'bypassPermissions',
+]);
 export type PermissionMode = z.infer<typeof PermissionMode>;
 
 // ---------------------------------------------------------------------------

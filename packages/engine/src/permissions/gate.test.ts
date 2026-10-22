@@ -107,6 +107,69 @@ describe('permission modes', () => {
     expect(engine.getSession(id).session.permissionMode).toBe('default');
   });
 
+  test('autoApprove lets a call through when the judge approves it', async () => {
+    const approve = { text: 'Sure. {"approve": true, "reason": "the user asked for b.txt"}' };
+    const { engine, lp, events } = setup([{ toolCalls: [edit] }, approve, { text: 'done' }], {
+      edit: 'ask',
+    });
+    await engine.runTurn(session(engine, 'autoApprove'), 'write b.txt');
+    expect(readFileSync(join(root, 'b.txt'), 'utf8')).toBe('beta\n');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(events.find((e) => e.type === 'permission.judged')).toMatchObject({
+      tool: 'write',
+      approved: true,
+      reason: 'the user asked for b.txt',
+      judge: 'local',
+    });
+    // The judge sees the user's words and the call, not the whole transcript.
+    const judged = lp.requests[1];
+    expect(judged?.tools).toEqual([]);
+    const asked = judged?.messages[0]?.parts[0];
+    expect(asked?.type === 'text' && asked.text).toContain('The user asked:\nwrite b.txt');
+  });
+
+  test('autoApprove asks the user about anything the judge refuses', async () => {
+    const push = { name: 'bash', input: { command: 'git push origin main' } };
+    const refuse = { text: '{"approve": false, "reason": "pushing publishes the branch"}' };
+    const { engine, events } = setup([{ toolCalls: [push] }, refuse, { text: 'ok' }], {
+      bash: 'ask',
+    });
+    engine.subscribe((e) => {
+      if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'deny');
+    });
+    await engine.runTurn(session(engine, 'autoApprove'), 'fix the test');
+    expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
+      reason: 'not auto-approved: pushing publishes the branch',
+    });
+  });
+
+  test('autoApprove asks when the judge answers with something unreadable', async () => {
+    const { engine, events } = setup(
+      [{ toolCalls: [edit] }, { text: 'yes, go ahead' }, { text: 'ok' }],
+      { edit: 'ask' },
+    );
+    engine.subscribe((e) => {
+      if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'deny');
+    });
+    await engine.runTurn(session(engine, 'autoApprove'), 'write it');
+    expect(existsSync(join(root, 'b.txt'))).toBe(false);
+    expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
+      reason: "not auto-approved: the judge's answer wasn't readable",
+    });
+  });
+
+  test('autoApprove still asks for ask rules without calling the judge', async () => {
+    const push = { name: 'bash', input: { command: 'git push origin main' } };
+    const { engine, lp } = setup(
+      [{ toolCalls: [push] }, { text: 'ok' }],
+      { bash: 'allow', ask: ['bash(git push:*)'] },
+      { interaction: 'deny' },
+    );
+    await engine.runTurn(session(engine, 'autoApprove'), 'push it');
+    expect(lp.requests).toHaveLength(2);
+    expect(results(lp)[0]?.isError).toBe(true);
+  });
+
   test('bypass allows everything except deny rules, without asking', async () => {
     const calls = [
       { name: 'bash', input: { command: 'echo ok' } },

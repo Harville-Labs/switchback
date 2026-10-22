@@ -1,9 +1,10 @@
 /** Permission modes and rules, in words: the mode pickers, `/mode`, and `/permissions`. */
-import type { PermissionMode, PermissionsListResult } from '@switchback/protocol';
+import type { EngineEvent, PermissionMode, PermissionsListResult } from '@switchback/protocol';
 
 const MODE_LABELS: Record<PermissionMode, string> = {
   default: 'default',
   acceptEdits: 'accept edits',
+  autoApprove: 'auto-approve',
   plan: 'plan',
   bypassPermissions: 'bypass permissions',
 };
@@ -12,9 +13,16 @@ const MODE_LABELS: Record<PermissionMode, string> = {
 export const MODE_DESCRIPTIONS: Record<PermissionMode, string> = {
   default: 'ask before edits and commands, as the permission levels say',
   acceptEdits: 'edits in the workspace go ahead; commands still ask',
+  autoApprove:
+    'a model approves calls that fit your request; it asks you about anything risky or unclear',
   plan: 'read and plan only; nothing changes until you approve the plan',
   bypassPermissions: 'everything goes ahead without asking; only deny rules stop a call',
 };
+
+/** A call `autoApprove`'s judge let through, and why. */
+export function judgedLabel(e: Extract<EngineEvent, { type: 'permission.judged' }>): string {
+  return `auto-approved ${e.summary}${e.judge ? ` (${e.judge})` : ''}: ${e.reason}`;
+}
 
 export function modeLabel(mode: PermissionMode): string {
   return MODE_LABELS[mode];
@@ -28,6 +36,9 @@ export function parseMode(input: string): PermissionMode | undefined {
     normal: 'default',
     acceptedits: 'acceptEdits',
     accept: 'acceptEdits',
+    autoapprove: 'autoApprove',
+    autoapproval: 'autoApprove',
+    judge: 'autoApprove',
     plan: 'plan',
     bypass: 'bypassPermissions',
     bypasspermissions: 'bypassPermissions',

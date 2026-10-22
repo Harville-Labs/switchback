@@ -151,7 +151,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |
 | Alt+↓ / Alt+↑ | Show the next running subagent / come back to the session ([Subagents](#subagents)). On macOS Terminal, alt needs "Use Option as Meta key" |
 | Tab (no menu open) | Switch to the next model: the one after the current model in config order, back to the first after the last. It says `Switched to <model>.` and applies to this session; the model you leave doesn't stay behind as a backup |
-| Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
+| Shift+Tab | Cycle the permission mode: default → accept edits → auto-approve → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |
 | Page Up / Page Down, mouse wheel | Scroll the transcript |

@@ -253,7 +253,7 @@ export function Working({ view }: { view: ViewState }) {
 function ModeBadge({ mode }: { mode: PermissionMode }) {
   const t = useTheme();
   if (mode === 'default') return null;
-  const icon = { acceptEdits: '⏵⏵', plan: '⏸', bypassPermissions: '⚠' }[mode];
+  const icon = { acceptEdits: '⏵⏵', autoApprove: '⏵?', plan: '⏸', bypassPermissions: '⚠' }[mode];
   return (
     <Text color={t.modes[mode]} bold>
       {icon} {modeLabel(mode)}
