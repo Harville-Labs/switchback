@@ -4,6 +4,12 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **`switchback resume [id]` reopens a session from the shell.** With no id it opens the TUI on the session picker; with one, that session, or a clear error when the workspace has no session with that id. `-r` / `--resume` is the same command. Leaving the TUI prints `Resume this session with: switchback resume <id>` for a session with messages ([#154](https://github.com/Harville-Labs/switchback/issues/154))
+
+### Fixed
+- **The resume command printed on exit works.** It said `switchback --resume <id>`, which the CLI rejected as an unknown command
+
 ## [2.4.0] - 2026-10-22
 
 ### Added
