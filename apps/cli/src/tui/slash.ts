@@ -25,8 +25,6 @@ import {
   formatUsage,
   formatWorktreeDiff,
   formatWorktrees,
-  fromTranscript,
-  initialView,
   MODE_DESCRIPTIONS,
   modeLabel,
   nextModel,
@@ -34,23 +32,12 @@ import {
   parseMode,
   pickCopy,
   type SlashCommand,
-  type SwitchbackClient,
   sessionEffort,
   subagentList,
-  type TabsState,
   tabAt,
-  type ViewState,
 } from '@switchback/client';
-import type {
-  InitializeResult,
-  RoutePreference,
-  SessionRoles,
-  SessionSetRolesParams,
-  SessionSummary,
-  UsageReport,
-} from '@switchback/protocol';
+import type { RoutePreference, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
 import { copyText } from './clipboard.ts';
-import { ago } from './SessionPicker.tsx';
 import { THEME_NAMES, type ThemeName } from './theme.ts';
 
 export const helpText = (custom: readonly SlashCommand[]) => `Commands
@@ -73,51 +60,11 @@ Keys: during a turn, enter queues a message and esc sends it now (interrupting);
 Your own commands are Markdown files in .switchback/commands/ or
 ~/.switchback/commands/.`;
 
-/** What a command can see and change in the app. */
-export interface SlashContext {
-  client: SwitchbackClient;
-  init: InitializeResult;
-  session: SessionSummary;
-  view: ViewState;
-  setView(update: (v: ViewState) => ViewState): void;
-  setSession(s: SessionSummary): void;
-  setRoute(route: RoutePreference): void;
-  setReview(review: boolean | undefined): void;
-  setUsage(u: UsageReport): void;
-  /** Custom commands, for /help. */
-  custom: readonly SlashCommand[];
-  /** Sessions from the last /sessions, for `/resume <n>`. */
-  listed: SessionSummary[];
-  setListed(sessions: SessionSummary[]): void;
-  /** Write raw bytes to the terminal (OSC 52 clipboard). */
-  writeRaw(s: string): void;
-  /** Show the session picker. */
-  openPicker(): Promise<void>;
-  /** Show the checkpoint picker. */
-  openRewind(): Promise<void>;
-  /** Show the current-model picker. */
-  openModelPicker(role: ChosenRole): void;
-  /** Run setup (`/init`), as `switchback init` does. */
-  openSetup(): void;
-  /** The agent of the subagent shown in place of the session (Tab), if any. */
-  focusedSubagent?: string;
-  /** The open tabs and the sessions the dashboard knows about. */
-  tabs: TabsState;
-  openDashboard(): void;
-  /** A new session in a new tab. */
-  newTab(agent?: string): Promise<void>;
-  /** Bring a session forward: its tab, or a new one if it isn't open here. */
-  showSession(sessionId: string): Promise<void>;
-  closeTab(sessionId: string): void;
-  /** The color theme, and a way to change it (saved for next time). */
-  theme: ThemeName;
-  setTheme(name: ThemeName): void;
-  exit(): void;
-}
+import { type Handler, type SlashContext, say } from './slash-context.ts';
+import { listSessions, newSession, rename, resume } from './slash-sessions.ts';
 
-type Handler = (ctx: SlashContext, args: string[]) => Promise<void> | void;
-
-const say = (ctx: SlashContext, text: string) => ctx.setView((v) => addInfo(v, text));
+export type { SlashContext } from './slash-context.ts';
+export { newSession, resume } from './slash-sessions.ts';
 
 /** Role command arguments without the --save flag. */
 const rest = (args: string[]) => args.filter((a) => a && a !== '--save');
@@ -170,62 +117,6 @@ export async function escalateNow(ctx: SlashContext): Promise<void> {
   } catch (err) {
     say(ctx, `escalate: ${(err as Error).message}`);
   }
-}
-
-export async function newSession(ctx: SlashContext, agent?: string): Promise<void> {
-  try {
-    const s = await ctx.client.request('session.create', agent ? { agent } : {});
-    ctx.setSession(s);
-    ctx.setView((v) =>
-      addInfo({ ...initialView(s.id), items: v.items }, `new session · agent ${s.agent}`),
-    );
-  } catch (err) {
-    say(ctx, (err as Error).message);
-  }
-}
-
-/** Switch to a saved session: by number from /sessions, by ID, or (with neither) from a picker. */
-export async function resume(ctx: SlashContext, which: string | undefined): Promise<void> {
-  if (!which) return ctx.openPicker();
-  const target = /^\d+$/.test(which) ? ctx.listed[Number(which) - 1]?.id : which;
-  if (!target) return say(ctx, `no session ${which} in the last /sessions list`);
-  if (target === ctx.session.id) return say(ctx, 'already in that session');
-  // Open in another tab: go there rather than showing it twice.
-  if (ctx.tabs.tabs.some((t) => t.session.id === target)) return ctx.showSession(target);
-  try {
-    const { session: s, messages } = await ctx.client.request('session.get', {
-      sessionId: target,
-    });
-    const history = fromTranscript(s, messages);
-    ctx.setSession(s);
-    ctx.setView((v) => ({
-      ...history,
-      items: [
-        ...v.items,
-        {
-          kind: 'info',
-          id: `resume-${s.id}-${v.items.length}`,
-          text: `── resumed "${s.title || s.id}" ──`,
-        },
-        ...history.items,
-      ],
-    }));
-  } catch (err) {
-    say(ctx, (err as Error).message);
-  }
-}
-
-async function listSessions(ctx: SlashContext): Promise<void> {
-  const all = await ctx.client.request('session.list', {});
-  ctx.setListed(all);
-  if (!all.length) return say(ctx, 'no saved sessions in this workspace yet');
-  const rows = all
-    .slice(0, 20)
-    .map(
-      (x, i) =>
-        `${String(i + 1).padStart(2)}. ${x.id === ctx.session.id ? '* ' : ''}${x.title || '(untitled)'}  ${x.agent} · ${ago(x.updatedAt)} · $${x.costUsd.toFixed(3)}`,
-    );
-  say(ctx, [...rows, '/resume to pick one, or /resume <number>'].join('\n'));
 }
 
 function review(ctx: SlashContext, args: string[]): Promise<void> | void {
@@ -372,6 +263,7 @@ const HANDLERS: Record<string, Handler> = {
   tab,
   sessions: listSessions,
   resume: (ctx, args) => resume(ctx, args[0]),
+  rename: (ctx, args) => rename(ctx, args.join(' ')),
   usage: async (ctx, args) => {
     // `/usage` is the weekly picture: where the money went and why.
     const u = await ctx.client.request('usage.get', { period: 'week' });

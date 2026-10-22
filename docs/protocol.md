@@ -43,6 +43,7 @@ await client.request('session.prompt', { sessionId: session.id, text: 'hello' })
 | `session.dequeue` | `{ sessionId, id }` | `{ removed }`. Withdraws a queued prompt before it's delivered |
 | `session.cancel` | `sessionId` | `{ cancelled }` (also cancels subagents) |
 | `session.escalate` | `sessionId` | `{ when }`: the next model call climbs one step up the ladder (`next-step` during a turn, `next-prompt` otherwise); rule `user-escalation` |
+| `session.rename` | `{ sessionId, title }` | `SessionSummary`. Sets the title (trimmed, 1 to 60 characters, `SESSION_TITLE_MAX`); the engine won't retitle it after that. Emits `session.renamed` |
 | `session.compact` | `sessionId` | `{ compacted }`: summarize earlier messages now. `SessionBusy` while a turn runs |
 | `permission.respond` | `requestId`, `decision` (`allow_once`\|`allow_always`\|`deny`), `save?` (`project`\|`user`), `feedback?` | `{ ok }`. `allow_always` grants the request's `rules` for the engine's lifetime; `save` also writes them to `.switchback/config.local.json` or the user config. With `deny`, `feedback` is what the user wants instead, and the model gets it with the refusal |
 | `session.setMode` | `{ sessionId, mode }` (`default`\|`acceptEdits`\|`plan`\|`bypassPermissions`) | `{ mode }`. Applies to the session and its subagents; modes the organization rules out are refused. Emits `mode.changed` |
@@ -93,6 +94,7 @@ A shared daemon sends every attached client every session's events, so a client 
 | `usage.updated` | Cumulative session usage, cost, and `savingsUsd` |
 | `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `usage` (this call's tokens, cache reads and writes included; clients compute the cache hit rate from it), `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
+| `session.renamed` | The session has a new `title`. `source` is `user` (`session.rename`), `prompt` (the first prompt), or `compaction` (the summarizer's suggestion, from the local summary call; never over a `user` title) |
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config, `models.refresh`); carries `org`, human-readable `notes`, and `models` when the configuration itself was reloaded |
 | `setup.ask` | A setup question for the client that started it (`setupId`, `requestId`, `question`: text, number, confirm, select, multiSelect, or search, with options and a default). A text question with `secret: true` (an API key) should hide what's typed |

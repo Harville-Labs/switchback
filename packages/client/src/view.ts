@@ -12,6 +12,7 @@ import {
   type SessionSummary,
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
+import { renamedLabel } from './titles.ts';
 import {
   agentOf,
   foldCache,
@@ -428,6 +429,12 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         text: compactedLabel(event.messages, event.tokensBefore, event.tokensAfter),
       });
       return { ...state, items };
+    case 'session.renamed': {
+      const text = renamedLabel(event.title, event.source);
+      if (!text) return state;
+      items.push({ kind: 'info', id: `c${items.length}`, text });
+      return { ...state, items };
+    }
     case 'call.stats': {
       const cache = foldCache(state.cache, event.tier, event.usage);
       const withCache = cache ? { ...state, cache } : state;

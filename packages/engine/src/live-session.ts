@@ -14,6 +14,7 @@ import type {
   StopReason,
   TextPart,
   Tier,
+  TitleSource,
   Usage,
 } from '@switchback/protocol';
 import type { Effort } from '@switchback/providers';
@@ -105,6 +106,8 @@ export interface EngineHost {
   emit(event: EngineEvent): void;
   notify(level: 'debug' | 'info' | 'warn' | 'error', message: string): void;
   append(s: LiveSession, message: Message): void;
+  /** Retitle a session and tell clients (`session.renamed`). */
+  rename(s: LiveSession, title: string, source: TitleSource): void;
   rolesOf(s: LiveSession): SessionRoles;
   /** Why a remote model may not be called for this session now; undefined when it may. */
   remoteBlocked(s?: LiveSession): string | undefined;

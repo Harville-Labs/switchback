@@ -19,6 +19,7 @@ import {
   parseEffort,
   parseMode,
 } from '@switchback/client';
+import { SESSION_TITLE_MAX } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
 import { chooseAgent, chooseMode, chooseModels, chooseRewind, chooseRole } from './pickers.ts';
@@ -44,6 +45,20 @@ export async function runChatCommand(
     case 'sessions':
     case 'resume':
       return engine.openSession();
+    case 'rename': {
+      const title =
+        args.join(' ').trim() ||
+        (await vscode.window.showInputBox({
+          title: 'Rename session',
+          value: session.title,
+          prompt: `Up to ${SESSION_TITLE_MAX} characters`,
+        }));
+      if (!title) return;
+      return c
+        .request('session.rename', { sessionId: session.id, title })
+        .then(() => undefined)
+        .catch((err: Error) => info(`rename: ${err.message}`));
+    }
     case 'rewind':
       return chooseRewind(engine);
     case 'compact':

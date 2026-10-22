@@ -28,6 +28,7 @@ The ACP agent is a client of the engine, like the terminal UI. Each workspace th
 | Permission prompts | Permission prompts. **Always allow** is the TUI's **Always this session**: it grants the rule for as long as the engine runs. To save a rule, answer in the TUI or VS Code, or edit your config. A plan in plan mode can be approved, approved with edits accepted from then on, or sent back |
 | A cost prompt such as "Escalate to …" | An [escalation](../routing.md) that needs your approval, with its estimated cost |
 | The plan | The `todo` checklist |
+| The thread's title | The session's title, from its first prompt, `/rename` in the TUI or VS Code, or compaction |
 | Past threads | Saved sessions in the workspace, which load with their conversation |
 | `@`-mentioned files and selections | Attachments: files in the workspace by path (so [privacy](../privacy.md) and deny rules apply), other context as text, and images |
 

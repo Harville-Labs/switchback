@@ -6,6 +6,7 @@
 import { resolve } from 'node:path';
 import {
   type Attachment,
+  clipTitle,
   ErrorCode,
   type PermissionMode,
   type RoutePreference,
@@ -182,7 +183,7 @@ export class TurnRunner {
     session.controller = controller;
     let finished = () => {};
     session.turn = { id: turnId, done: new Promise<void>((r) => (finished = r)) };
-    if (!session.header.title && text) session.header.title = text.slice(0, 60);
+    if (!session.header.title && text) this.host.rename(session, clipTitle(text), 'prompt');
 
     this.host.emit({ type: 'turn.started', ...scope(session), turnId });
     // An empty prompt continues the session with whatever reports are waiting.

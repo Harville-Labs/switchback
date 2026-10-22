@@ -14,6 +14,7 @@ import type {
 } from './methods.ts';
 import type { ModelSummary } from './models.ts';
 import type { SetupNote, SetupOutcome, SetupQuestion } from './setup.ts';
+import type { TitleSource } from './titles.ts';
 import type { ModelRef, StopReason, Tier, Usage } from './transcript.ts';
 import type { WorktreeOutcome, WorktreeStart } from './worktrees.ts';
 
@@ -42,6 +43,11 @@ export type EngineEvent =
       /** Calls left before routing returns to `current` after an escalation. */
       stickyTurns?: number;
     } & SessionScoped)
+  /**
+   * The session's title changed: `user` by `session.rename`, `prompt` from
+   * the first prompt, `compaction` summarized from the conversation so far.
+   */
+  | ({ type: 'session.renamed'; title: string; source: TitleSource } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
   /** The session's reasoning effort; none means the agent's or model's own. */

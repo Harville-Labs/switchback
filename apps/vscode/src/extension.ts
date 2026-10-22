@@ -9,10 +9,11 @@ import type { EngineEvent, InitializeResult, Message, RoutePreference } from '@s
 import * as vscode from 'vscode';
 import { AttentionNotifier } from './attention.ts';
 import { ChatViewProvider } from './chat-view.ts';
-import { EngineConnection, NoEngineError, resolveEngine } from './connection.ts';
+import { EngineConnection } from './connection.ts';
 import { type AttachChoice, EditorContext } from './context.ts';
 import { installerShell } from './engine-binary.ts';
 import { chooseModels, chooseReview, chooseRewind } from './pickers.ts';
+import { NoEngineError } from './resolve-engine.ts';
 import { EditReview, PROPOSED_SCHEME } from './review.ts';
 import { runSetup } from './setup-wizard.ts';
 import { WORKTREE_SCHEME, worktreeDiffs } from './worktree-diff.ts';
@@ -120,6 +121,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     const connection = engine;
     engine.onMessage((m) => {
       chat.post(m);
+      chat.describe(connection.session?.title);
       attention.observe(m, connection.scope);
     });
     try {
