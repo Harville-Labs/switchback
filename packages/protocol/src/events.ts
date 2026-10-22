@@ -171,13 +171,15 @@ export type EngineEvent =
       savingsUsd?: number;
       tier: Tier;
     } & SessionScoped)
-  /** A model call finished: how fast the model answered. */
+  /** A model call finished: how fast the model answered and what it read from cache. */
   | ({
       type: 'call.stats';
       turnId: string;
       model: ModelRef;
       tier: Tier;
       outputTokens: number;
+      /** This call's token usage, cache reads and writes included. */
+      usage?: Usage;
       /**
        * Output tokens per second, from the first streamed token to the last
        * (the whole call when nothing streamed). Absent for very short answers,

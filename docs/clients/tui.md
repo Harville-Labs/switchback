@@ -53,7 +53,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 ╭──────────────────────────────────────────────────────────────────────────╮
 │ ❯ Ask anything · / for commands · @ to mention a file                    │
 ╰──────────────────────────────────────────────────────────────────────────╯
- build · auto · ⌂ qwen3-coder                  82% context left · $0.014 · 52 tok/s
+ build · auto · ⌂ qwen3-coder     82% context left · $0.014 · cache 91% · 52 tok/s
 ```
 
 - **The welcome card** names the current model (where your prompts run), what it escalates to, the permission mode, and the directory. The status bar names the current model too, until an escalation moves the session up the ladder. `/current` picks another ([routing.md](../routing.md#picking-the-current-model)).
@@ -62,7 +62,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 - **Routing** shows a `⌂` (local) or `☁` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
 - **Subagents** are rows of their own, with their tier, tool-call count, and current activity, and their latest steps indented under them while they run. Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did.
 - **While a turn runs**, a line above the input says what's happening (thinking, writing, running a tool, waiting on a subagent), for how long, about how many tokens the model has written, and on which model.
-- **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference, how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, and the last call's speed.
+- **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference, how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
 - Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`. Your [custom commands](../commands-and-skills.md) follow under **Custom**.
 
 ### Tabs

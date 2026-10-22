@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { ChatEvent, ChatRequest } from './index.ts';
-import { ScriptedProvider } from './scripted.ts';
+import { prefixCache, ScriptedProvider } from './scripted.ts';
 
 const request: ChatRequest = { model: 'demo', system: '', messages: [], tools: [], maxTokens: 100 };
 
@@ -25,4 +25,25 @@ test('scripted reasoning streams before the text and is kept with the model that
     { type: 'reasoning', text: 'Check first.', origin: { provider: 'p', model: 'demo' } },
     { type: 'text', text: 'Done.' },
   ]);
+});
+
+test('the mock prefix cache reads what a request shares with the session’s previous one', () => {
+  const usage = prefixCache();
+  const first: ChatRequest = {
+    ...request,
+    system: 'x'.repeat(4000),
+    messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+    cacheKey: 'a',
+  };
+  expect(usage(first).cacheReadTokens).toBe(0);
+  const next: ChatRequest = {
+    ...first,
+    messages: [...first.messages, { role: 'assistant', parts: [{ type: 'text', text: 'hello' }] }],
+  };
+  const hit = usage(next);
+  expect(hit.cacheReadTokens).toBeGreaterThan(1000);
+  expect(hit.inputTokens).toBeLessThan(20);
+  // Another session starts cold; a changed system prompt misses.
+  expect(usage({ ...next, cacheKey: 'b' }).cacheReadTokens).toBe(0);
+  expect(usage({ ...next, system: 'y' }).cacheReadTokens).toBe(0);
 });

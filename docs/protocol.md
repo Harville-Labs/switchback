@@ -91,7 +91,7 @@ A shared daemon sends every attached client every session's events, so a client 
 | `escalation.requested` | Waiting on `escalation.respond` (policy `ask`). `estimatedCostUsd` is the rough cost of approving, when the target model has a known price |
 | `subagent.started` / `subagent.completed` | A `task` call spawned or finished a child session; `background: true` when the parent didn't wait. `model` and `effort` are set when the parent chose them for this task. For an isolated subagent, `worktree` carries its branch and path at the start, and at the end whether it changed anything, files, insertions, deletions, and `kept` (the path) if its worktree was kept |
 | `usage.updated` | Cumulative session usage, cost, and `savingsUsd` |
-| `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
+| `call.stats` | A model call finished: `model`, `tier`, `outputTokens`, `usage` (this call's tokens, cache reads and writes included; clients compute the cache hit rate from it), `tokensPerSecond` (from the first streamed token to the last; absent below 16 tokens), `firstTokenMs` |
 | `context.compacted` | Earlier messages were summarized: how many, and the prompt size before and after. The transcript gains a `compaction` part (never sent to models) |
 | `error` | Something failed; the turn may continue or end |
 | `config.updated` | Configuration changed while running (an organization policy update, an `AGENTS.md` edit, setup writing a config, `models.refresh`); carries `org`, human-readable `notes`, and `models` when the configuration itself was reloaded |

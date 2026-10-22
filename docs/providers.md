@@ -229,7 +229,7 @@ If you're signed in to Claude Code (`claude`) or Codex (`codex login`), on a sub
 
 - Streaming output and tool calls, normalized into one transcript format, so a session can move between providers mid-turn.
 - Reasoning is kept in the transcript with the model that produced it and is only ever sent back to that model (Claude thinking signatures, DeepSeek `reasoning_content`, OpenRouter `reasoning_details`).
-- Prompt caching: Claude gets a top-level `cache_control` breakpoint; OpenAI and DeepSeek cache automatically. The engine keeps the system prompt and tool list byte-stable to make all three effective.
+- Prompt caching: Claude gets a breakpoint on the system prompt and a top-level `cache_control` breakpoint at the end, so tools and system stay cached even when the tail misses (after compaction, or past Claude's 20-block lookback in a long turn). OpenAI (Chat Completions and Responses, including Azure) gets `prompt_cache_key` set to the session ID, so a session's calls land on the same cache. DeepSeek and Gemini cache automatically. The engine keeps the system prompt and tool list byte-stable to make all of them effective. Every adapter reports cache reads and writes, which the clients show as a hit rate.
 - `effort` maps to each provider's control: `output_config.effort` (Claude), `reasoning_effort` (OpenAI), thinking plus `reasoning_effort` (DeepSeek), `reasoning.effort` (OpenRouter).
 - Rate limits, 5xx errors, and connection failures are retryable, so the router can fall back.
 - The engine validates every tool input against its schema and never runs tools from a response cut off by `max_tokens` or a refusal.

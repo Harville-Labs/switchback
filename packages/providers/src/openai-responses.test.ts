@@ -164,6 +164,7 @@ test('streams through the SDK: deltas, then the canonical result', async () => {
     tools: [{ name: 'read', description: 'Read a file', inputSchema: { type: 'object' } }],
     maxTokens: 100,
     effort: 'high',
+    cacheKey: 'ses_1',
   }))
     out.push(e);
   expect(out.map((e) => e.type)).toEqual(['reasoning.delta', 'text.delta', 'text.delta', 'done']);
@@ -177,6 +178,7 @@ test('streams through the SDK: deltas, then the canonical result', async () => {
     instructions: 'be brief',
     store: false,
     include: ['reasoning.encrypted_content'],
+    prompt_cache_key: 'ses_1',
     max_output_tokens: 100,
     reasoning: { effort: 'high', summary: 'auto' },
     tools: [{ type: 'function', name: 'read', strict: false }],

@@ -4,6 +4,12 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **The prompt-cache hit rate is in the status bar.** The TUI's status bar and VS Code's composer show how much of the session's input came from the provider's cache (`cache 91%`), with the latest turn's when it differs. `call.stats` events carry each call's usage. `--mock` simulates a prefix cache, so the rate shows there too
+
+### Changed
+- **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
+
 ## [2.3.0] - 2026-10-21
 
 ### Added

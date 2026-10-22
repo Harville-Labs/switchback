@@ -68,3 +68,28 @@ export class ScriptedProvider implements Provider {
     };
   }
 }
+
+/**
+ * Simulated prefix caching for the mock provider: each request reads from
+ * cache the bytes it shares with the previous request of the same session
+ * (about four characters a token), so `--mock` shows a live hit rate and a
+ * change that breaks the prompt prefix shows up as a drop.
+ */
+export function prefixCache(): (request: ChatRequest) => Usage {
+  const previous = new Map<string, string>();
+  return (request) => {
+    const key = request.cacheKey ?? '';
+    const bytes = JSON.stringify([request.system, request.tools, request.messages]);
+    const before = previous.get(key) ?? '';
+    previous.set(key, bytes);
+    let shared = 0;
+    while (shared < before.length && before[shared] === bytes[shared]) shared++;
+    const read = Math.floor(shared / 4);
+    return {
+      inputTokens: Math.ceil(bytes.length / 4) - read,
+      outputTokens: 20,
+      cacheReadTokens: read,
+      cacheWriteTokens: 0,
+    };
+  };
+}

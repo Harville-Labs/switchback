@@ -1,6 +1,7 @@
 /** Everything around the transcript: the welcome card, the working line, and the status bar. */
 import { homedir } from 'node:os';
 import {
+  cacheLabel,
   formatLadder,
   formatTodos,
   modeLabel,
@@ -295,6 +296,7 @@ export function StatusBar({
       ? `today $${budget.spentTodayUsd.toFixed(2)}/$${budget.dailyUsd.toFixed(2)}`
       : '',
     view.savingsUsd >= 0.01 ? `saved ~$${view.savingsUsd.toFixed(2)}` : '',
+    cacheLabel(view.cache) ?? '',
   ].filter(Boolean);
   return (
     <Box justifyContent="space-between" paddingX={1} gap={2}>

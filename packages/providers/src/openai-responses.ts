@@ -214,6 +214,7 @@ export class OpenAIResponsesProvider implements Provider {
           // Nothing is stored server-side; reasoning comes back encrypted instead.
           store: false,
           include: ['reasoning.encrypted_content'],
+          ...(request.cacheKey ? { prompt_cache_key: request.cacheKey } : {}),
           ...responsesSampling(request.sampling),
           ...(request.effort
             ? {
