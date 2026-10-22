@@ -235,7 +235,10 @@ test('OpenCode V2 as its migration guide writes it', () => {
     projectId: 'p',
     region: 'global',
   });
-  expect(got.agents?.reviewer?.config).toMatchObject({ prompt: 'Review carefully.', disable: true });
+  expect(got.agents?.reviewer?.config).toMatchObject({
+    prompt: 'Review carefully.',
+    disable: true,
+  });
   // `mcp.timeout` is a setting, not a server.
   expect(got.mcpServers).toEqual({ docs: { url: 'https://mcp.example.com/mcp' } });
   expect(got.skipped).toEqual([

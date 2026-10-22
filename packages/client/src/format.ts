@@ -353,15 +353,29 @@ export function rolesOfModel(alias: string, roles: SessionRoles): string[] {
   ].filter(Boolean);
 }
 
-/** A session's roles for people, marking what the session changed (ADR 0015). */
+/**
+ * A session's roles for people, marking what the session changed (ADR 0015).
+ * Plain labels: "current" and "escalate" are the config's words, not what a
+ * newcomer reads them as.
+ */
 export function formatRoles(roles: SessionRoles, models: ModelSummary[]): string {
   const mark = (k: SessionRoles['overridden'][number]) =>
     roles.overridden.includes(k) ? '  (this session)' : '';
+  const [first, ...backups] = roles.current;
+  const ladder = roles.escalate.map((step, i) => `${i + 1}. ${formatSteps([step], models)}`);
   return [
-    `current    ${formatSteps([roles.current], models) || '(none)'}${mark('current')}`,
-    `escalate   ${formatSteps(roles.escalate, models) || '(nothing)'}${mark('escalate')}`,
-    `review     ${formatReviewers(roles, models)}${mark('review')}`,
-    `subagents  ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
+    `turns start on    ${first ? formatSteps([[first]], models) : '(none)'}${mark('current')}`,
+    ...(backups.length
+      ? [
+          `  then backups    ${formatSteps(
+            backups.map((b) => [b]),
+            models,
+          )}  (when it's down or a prompt won't fit)`,
+        ]
+      : []),
+    `hard turns go to  ${ladder.length ? ladder.join(', then ') : 'nowhere (they stay where they started)'}${mark('escalate')}`,
+    `edits reviewed    ${roles.review.mode === 'off' ? 'never' : `by ${formatReviewers(roles, models)}`}${mark('review')}`,
+    `subagents use     ${roles.subagents ? modelLabel(roles.subagents, models) : 'normal routing'}${mark('subagents')}`,
   ].join('\n');
 }
 
