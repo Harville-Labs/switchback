@@ -7,9 +7,14 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 ### Added
 - **Tab completes slash command arguments in the TUI.** Models, agents, themes, effort levels, and each command's fixed words complete as you type. With several matches, Tab completes what they share, lists them, and goes round them. Inside a command, Tab no longer switches the model
 - **Commands open a list when run with no argument.** `/agent`, `/subagent`, `/subagent-model`, `/effort`, `/theme`, and `/review` let you pick the value, and `/tab` opens the sessions dashboard
+- **Agents can tighten permissions.** An agent's `permissions` (in its frontmatter or the `agents` config key) sets stricter category levels and adds ask and deny rules while it works. It never loosens yours ([ADR 0029](docs/adr/0029-agents-and-permission-levels.md))
 
 ### Changed
 - **`/review` with no argument opens a list** instead of going back to `review.mode`. Use `/review default` for that
+- **Shift+Tab switches agents instead of permission modes.** It goes build → plan → your own primary agents, and `/agent <name>` switches this session's agent while keeping the conversation instead of starting a new session. `explore`, `review`, and `general` only run as subagents ([ADR 0029](docs/adr/0029-agents-and-permission-levels.md))
+- **Plan mode is the `plan` agent.** It can read, search, run commands after asking, and browse, but not edit. Approving its plan switches back to the agent before it; **Approve and auto-approve** also sets the `auto` level
+- **Permission modes became three levels: `ask`, `auto`, and `bypass`.** `/permissions ask|auto|bypass` switches them, and `/mode` is gone. `permissions.level` replaces `permissions.defaultMode`; the old value still loads, with `plan` starting the plan agent and `acceptEdits` becoming `ask` with a warning. `--permission-mode` takes the levels and the old names
+- **Protocol 3.** `session.setPermissions` and `permissions.changed` carry the level, and `session.setAgent` and `agent.changed` are new. `session.setMode` and `mode.changed` are gone ([protocol.md](docs/protocol.md))
 
 ## [2.6.0] - 2026-10-22
 
