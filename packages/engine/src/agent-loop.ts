@@ -178,7 +178,7 @@ export class AgentLoop {
               [call],
               turnId,
               signal,
-              model.alias,
+              model,
             );
             return (
               result ?? { type: 'tool_result' as const, callId: call.id, content: 'no result' }
@@ -278,7 +278,7 @@ export class AgentLoop {
         toolCalls,
         turnId,
         signal,
-        model.alias,
+        model,
       );
       this.host.append(s, { role: 'user', parts: results });
       if (signal.aborted) return 'cancelled';

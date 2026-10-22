@@ -187,7 +187,10 @@ export function resolveInWorkspace(root: string, path: string): string {
   return canonical;
 }
 
-export function truncate(text: string, max = 30_000): string {
+/** The most any tool result keeps, whatever the model's window. */
+export const MAX_RESULT_CHARS = 30_000;
+
+export function truncate(text: string, max = MAX_RESULT_CHARS): string {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
   return `${head}\n\n[truncated ${text.length - max} characters]`;

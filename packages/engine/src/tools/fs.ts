@@ -11,7 +11,6 @@ import {
   type ToolContext,
   ToolError,
   toWorkspacePath,
-  truncate,
 } from './tool.ts';
 
 const PATH_HELP =
@@ -59,7 +58,7 @@ export const readTool = defineTool({
       start + slice.length < lines.length
         ? `\n[${lines.length - start - slice.length} more lines]`
         : '';
-    return truncate(body + more);
+    return body + more;
   },
 });
 
@@ -302,6 +301,6 @@ export const grepTool = defineTool({
       : found;
     if (!out.length) return 'no matches';
     const body = out.join('\n');
-    return truncate(out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body);
+    return out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body;
   },
 });

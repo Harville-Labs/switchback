@@ -4,7 +4,7 @@
  */
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { z } from 'zod';
-import { type Tool, ToolError, truncate } from '../tools/tool.ts';
+import { type Tool, ToolError } from '../tools/tool.ts';
 import type { McpServerConfig } from './config.ts';
 import { fromContent, fromResource } from './content.ts';
 
@@ -67,9 +67,8 @@ export function toTool(server: string, cfg: McpServerConfig, client: Client, t: 
         { signal: ctx.signal, timeout: cfg.timeoutMs },
       );
       const { text: raw, images } = fromContent(result.content, `${server} ${t.name}`);
-      const text = truncate(
-        raw || (result.structuredContent ? JSON.stringify(result.structuredContent) : ''),
-      );
+      const text =
+        raw || (result.structuredContent ? JSON.stringify(result.structuredContent) : '');
       if (result.isError) throw new ToolError(text || `${t.name} failed`);
       return images.length ? { text: text || '(images)', images } : text || '(no output)';
     },
@@ -106,12 +105,10 @@ export function readResourceTool(
         { signal: ctx.signal, timeout: cfg.timeoutMs },
       );
       const parts = result.contents.map((c) => fromResource(c, `${server}:${c.uri}`));
-      const text = truncate(
-        parts
-          .map((p) => p.text)
-          .filter(Boolean)
-          .join('\n'),
-      );
+      const text = parts
+        .map((p) => p.text)
+        .filter(Boolean)
+        .join('\n');
       const images = parts.flatMap((p) => p.images);
       return images.length ? { text: text || `${uri}: image`, images } : text || '(empty)';
     },

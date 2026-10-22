@@ -16,6 +16,7 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ### Changed
 - **16 subagents run at once by default,** up from 4 (`subagents.maxConcurrent`), so a large fan-out finishes sooner. Local servers queue what they can't run at once
+- **Tool results and `@` mentions fit the model's context window.** A step's tool results share a quarter of the calling model's window (2,000 to 30,000 characters each), and a prompt's attachments half the session's, so a small local model isn't swamped by one read and pushed to escalate. Cut results keep their last lines, so a command's exit code survives. The cap is applied in one place for every tool, MCP tools included
 - **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
 
 ### Fixed

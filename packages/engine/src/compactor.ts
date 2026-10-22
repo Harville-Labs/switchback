@@ -132,7 +132,7 @@ export class Compactor {
    * The window compaction keeps a session inside: the largest in the start
    * chain, so turns can always go back to it; else the first escalation step's.
    */
-  private window(): number | undefined {
+  window(): number | undefined {
     const routing = this.host.config().routing;
     const start = routing.current.flatMap((a) => this.models.info(a) ?? []);
     if (start.length) return Math.max(...start.map((m) => m.contextWindow));

@@ -67,7 +67,7 @@ describe('docs tool', () => {
       /no docs topic "architecture"\. Topics:\n- configuration: /,
     );
     await expect(docsTool.run({ topic: 'tools', section: 'nope' }, ctx)).rejects.toThrow(
-      /no heading in tools matches "nope"\. Its sections:\n- Asking about Switchback\n- The checklist/,
+      /no heading in tools matches "nope"\. Its sections:\n- How much of a result the model gets\n- Asking about Switchback\n- The checklist/,
     );
   });
 });

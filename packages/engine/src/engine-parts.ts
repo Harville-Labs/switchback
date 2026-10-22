@@ -231,6 +231,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     checkpoint: (s, turnId, prompt) => controls.beginCheckpoint(s, turnId, prompt),
     instructions,
     mcp: () => io.mcp(),
+    contextWindow: () => compactor.window(),
   });
 
   /** What every hook hears about the session. */

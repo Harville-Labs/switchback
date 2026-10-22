@@ -5,6 +5,7 @@
  */
 import { readFile, stat } from 'node:fs/promises';
 import type { Attachment, ImagePart, TextPart } from '@switchback/protocol';
+import { attachmentChars } from './context-budget.ts';
 import { looksLikeImage, pastedImage, readImage } from './images.ts';
 import { resolveInWorkspace } from './tools/tool.ts';
 
@@ -21,8 +22,18 @@ const MAX_FILES = 10;
 const MAX_FILE_BYTES = 200_000;
 const MAX_TOTAL_BYTES = 500_000;
 
-/** Attachment parts for each distinct, readable workspace file mentioned. Unknown mentions are left alone. */
-export async function expandMentions(text: string, root: string): Promise<AttachedPart[]> {
+/**
+ * Attachment parts for each distinct, readable workspace file mentioned.
+ * Unknown mentions are left alone. `window` is the context window the session
+ * is kept inside; mentions share part of it.
+ */
+export async function expandMentions(
+  text: string,
+  root: string,
+  window?: number,
+): Promise<AttachedPart[]> {
+  const maxTotal = attachmentChars(window, MAX_TOTAL_BYTES);
+  const maxFile = Math.min(MAX_FILE_BYTES, maxTotal);
   const paths = [...new Set([...text.matchAll(/(?:^|\s)@([^\s@]+)/g)].map((m) => m[1] ?? ''))]
     .map((p) => p.replace(/[.,;:!?)\]]+$/, '')) // trailing punctuation from prose
     .filter(Boolean)
@@ -43,7 +54,7 @@ export async function expandMentions(text: string, root: string): Promise<Attach
       parts.push(typeof image === 'string' ? notAttached(path, image) : image);
       continue;
     }
-    if (info.size > MAX_FILE_BYTES || total + info.size > MAX_TOTAL_BYTES) {
+    if (info.size > maxFile || total + info.size > maxTotal) {
       parts.push({
         type: 'text',
         text: `<file path="${path}" omitted="too large (${info.size} bytes); use the read tool" />`,
@@ -67,7 +78,9 @@ export async function expandMentions(text: string, root: string): Promise<Attach
 export async function expandAttachments(
   attachments: Attachment[],
   root: string,
+  window?: number,
 ): Promise<AttachedPart[]> {
+  const maxTotal = attachmentChars(window, MAX_TOTAL_BYTES);
   const parts: AttachedPart[] = [];
   let total = 0;
   for (const a of attachments) {
@@ -77,7 +90,7 @@ export async function expandAttachments(
       continue;
     }
     if (a.kind === 'text') {
-      if (total + a.text.length > MAX_TOTAL_BYTES) continue;
+      if (total + a.text.length > maxTotal) continue;
       total += a.text.length;
       parts.push({
         type: 'text',
@@ -106,7 +119,7 @@ export async function expandAttachments(
     const start = a.startLine ?? 1;
     const end = Math.min(a.endLine ?? lines.length, lines.length);
     const slice = lines.slice(start - 1, end).join('\n');
-    if (total + slice.length > MAX_TOTAL_BYTES) continue;
+    if (total + slice.length > maxTotal) continue;
     total += slice.length;
     const range = a.startLine ? `:${start}-${end}` : '';
     parts.push({

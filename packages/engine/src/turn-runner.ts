@@ -54,6 +54,8 @@ export interface TurnRunnerDeps {
   mcp(): McpHub | undefined;
   /** Both AGENTS.md files; changes reach the session with its next prompt (ADR 0017). */
   instructions: InstructionsSource;
+  /** The window compaction keeps the session inside, which a prompt's attachments share. */
+  contextWindow(): number | undefined;
 }
 
 export class TurnRunner {
@@ -277,10 +279,11 @@ export class TurnRunner {
     const hooked = await this.deps.hooks.beforePrompt(s, text);
     if (hooked.blocked) return hooked.blocked;
     const matches = this.host.privatePaths();
+    const window = this.deps.contextWindow();
     const attachments = [
       ...mcp.parts,
-      ...(await expandAttachments(extra, this.host.rootOf(s)).catch(() => [])),
-      ...(await expandMentions(text, this.host.rootOf(s)).catch(() => [])),
+      ...(await expandAttachments(extra, this.host.rootOf(s), window).catch(() => [])),
+      ...(await expandMentions(text, this.host.rootOf(s), window).catch(() => [])),
     ].map((p) => {
       // A file attachment's path may carry a line range (`src/a.ts:3-9`).
       const path = p.attachment?.path.replace(/:\d+-\d+$/, '');

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { readUntilExit, terminate } from './process.ts';
-import { defineTool, type ToolContext, ToolError, truncate } from './tool.ts';
+import { defineTool, type ToolContext, ToolError } from './tool.ts';
 
 /** Longest a foreground command may run, whatever it asks for. */
 const MAX_TIMEOUT_MS = 600_000;
@@ -82,7 +82,7 @@ export const bashTool = defineTool({
         explained && `stderr:\n${explained}`,
         `exit code: ${ended}`,
       ].filter(Boolean);
-      return truncate(parts.join('\n'));
+      return parts.join('\n');
     } finally {
       clearTimeout(timeout);
       ctx.signal.removeEventListener('abort', onAbort);
@@ -108,16 +108,14 @@ export const bashOutputTool = defineTool({
           ? 'killed'
           : `exited with code ${shell.exitCode}`;
     // The command comes first: the privacy check reads it from there (privacy.ts).
-    return truncate(
-      [
-        `$ ${shell.command}`,
-        `[${shell.id}: ${state}]`,
-        skipped ? `[${skipped} earlier characters were dropped]` : '',
-        output || '(no new output)',
-      ]
-        .filter(Boolean)
-        .join('\n'),
-    );
+    return [
+      `$ ${shell.command}`,
+      `[${shell.id}: ${state}]`,
+      skipped ? `[${skipped} earlier characters were dropped]` : '',
+      output || '(no new output)',
+    ]
+      .filter(Boolean)
+      .join('\n');
   },
 });
 

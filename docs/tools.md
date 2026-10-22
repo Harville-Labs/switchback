@@ -24,6 +24,10 @@ What the model can call, in the fixed order it sees them (the order is part of t
 
 An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `merge_worktree` with `task`, `exit_plan_mode` comes with every top-level session, and `todo`, `skill`, `docs`, and `escalate` with every session.
 
+## How much of a result the model gets
+
+Every tool result, MCP tools' and subagents' reports included, is cut to fit the context window of the model that made the call. All the results of one step share a quarter of that window (at about 3 characters a token), split evenly between parallel calls, with no result cut below 2,000 characters or kept past 30,000. A cut result keeps its start and its last lines, which say how it ended (a command's exit code, how many lines a read left out), and tells the model to ask for less: a line range, a narrower pattern. On an 8k-token local model one read keeps about 6,000 characters; on a 200k-token model, 30,000. The privacy check and hooks see the whole result before it is cut.
+
 ## Asking about Switchback
 
 Because every session has `docs`, you can ask the model how Switchback works or to change its settings ("route turns over 50k tokens to the remote model", "allow `bun test` without asking") and it reads the documentation for the version you're running first, offline. It edits the project's `.switchback/config.json` or `.switchback/config.local.json`, or your user config (`~/.switchback/config.json`), and you're asked every time with the diff. An edit that would make the config invalid fails before you're asked ([permissions.md](permissions.md#outside-the-workspace)). The running engine reads its config when it starts, so a change takes effect after it restarts.

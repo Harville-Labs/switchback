@@ -3,17 +3,19 @@
  * marks, and parallel execution of calls that don't mutate anything.
  */
 import type { ImagePart, ToolResultPart } from '@switchback/protocol';
+import { fitResult, resultChars } from './context-budget.ts';
 import type { HookOutcome, HookRunner } from './hooks/runner.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
 import { privateToolUse } from './privacy.ts';
 import type { Skill } from './skills.ts';
-import type {
-  CommandRunner,
-  SubagentOptions,
-  SubagentResult,
-  Tool,
-  ToolContext,
+import {
+  type CommandRunner,
+  MAX_RESULT_CHARS,
+  type SubagentOptions,
+  type SubagentResult,
+  type Tool,
+  type ToolContext,
 } from './tools/index.ts';
 
 export type Interaction = 'prompt' | 'approve' | 'deny';
@@ -58,9 +60,14 @@ export class ToolRunner {
     calls: ToolCall[],
     turnId: string,
     signal: AbortSignal,
-    /** The alias of the model that made these calls, for review. */
-    writer: string,
+    /**
+     * The model that made these calls: its alias, for review, and its window,
+     * which bounds how much of each result it gets back.
+     */
+    model: { alias: string; contextWindow: number },
   ): Promise<ToolResultPart[]> {
+    const writer = model.alias;
+    const maxChars = resultChars(model.contextWindow, calls.length, MAX_RESULT_CHARS);
     const root = this.host.rootOf(s);
     const policy = this.gate.policy();
     const ctx: ToolContext = {
@@ -83,7 +90,8 @@ export class ToolRunner {
         ? { approvePlan: (plan: string) => this.gate.approvePlan(s, plan, signal) }
         : {}),
     };
-    const runOne = (call: ToolCall) => this.runOne(s, tools, ctx, call, turnId, signal, writer);
+    const runOne = (call: ToolCall) =>
+      this.runOne(s, tools, ctx, call, turnId, signal, writer, maxChars);
     const allParallelSafe = calls.every(
       (c) => tools.find((t) => t.name === c.name)?.mutating === false,
     );
@@ -121,6 +129,7 @@ export class ToolRunner {
     turnId: string,
     signal: AbortSignal,
     writer: string,
+    maxChars: number,
   ): Promise<ToolResultPart> {
     const tool = tools.find((t) => t.name === call.name);
     // A subagent that saw private content passes that on with its report.
@@ -206,6 +215,12 @@ export class ToolRunner {
       (ran && matches
         ? privateToolUse(matches, ctx.workspaceRoot, call.name, parsed.data, output)
         : undefined);
+    // After the privacy check, which must see everything the call returned.
+    output = fitResult(
+      output,
+      maxChars,
+      "to fit the model's context window; ask for less (a line range, a narrower pattern)",
+    );
     this.host.emit({
       type: 'tool.completed',
       ...scope(s),

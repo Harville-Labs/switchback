@@ -167,7 +167,7 @@ Personal settings for one project go in `.switchback/config.local.json`. It's re
 | Key | Default | Meaning |
 |---|---|---|
 | `search` | Exa | The `websearch` tool's backend: `{ "provider": "exa" }` (Exa's hosted search, which needs no key; an optional `apiKey` raises its rate limits), `{ "provider": "brave", "apiKey": "{env:BRAVE_API_KEY}" }`, `{ "provider": "tavily", "apiKey": "{env:TAVILY_API_KEY}" }`, or `{ "provider": "searxng", "baseUrl": "https://search.example.com" }` (a self-hosted SearXNG with the JSON format enabled). Searches go to that service without asking; set `permissions.websearch` to `ask` or `deny` to change that |
-| `maxChars` | `100000` | Most characters of a fetched page returned to the model |
+| `maxChars` | `100000` | Most characters of a fetched page returned to the model; a page is also cut to fit the model's context window, like every tool result ([tools.md](tools.md#how-much-of-a-result-the-model-gets)) |
 | `timeoutMs` | `30000` | How long a fetch or search may take |
 
 `webfetch` reads a page as Markdown (HTML is converted; other text is returned as is; binary content is refused). It follows redirects on the same host and reports one to another host instead of following it. `webfetch` follows `permissions.web` (default `ask`) and `websearch` follows `permissions.websearch` (default `allow`). Neither runs in a session holding private content, since a URL or query could carry it out.

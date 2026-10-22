@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { skillFiles, splitSkill } from '../skills.ts';
-import { defineTool, resolveInWorkspace, ToolError, truncate } from './tool.ts';
+import { defineTool, resolveInWorkspace, ToolError } from './tool.ts';
 
 /**
  * Loads a skill listed in the system prompt: its instructions, and the other
@@ -28,13 +28,13 @@ export const skillTool = defineTool({
       const text = await readFile(file, 'utf8').catch(() => {
         throw new ToolError(`skill ${skill.name} has no file ${input.file}`);
       });
-      return truncate(text);
+      return text;
     }
     const { body } = splitSkill(await readFile(join(skill.dir, 'SKILL.md'), 'utf8'));
     const files = skillFiles(skill);
     const listing = files.length
       ? `\n\nFiles in this skill:\n${files.map((f) => `- ${f}`).join('\n')}`
       : '';
-    return truncate(body + listing);
+    return body + listing;
   },
 });
