@@ -12,8 +12,10 @@ import { exitHint, resumeTarget } from '../commands/resume.ts';
 import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
 import { MouseContext } from './Clickable.tsx';
+import { copyText } from './clipboard.ts';
 import { mouseInput, savedMouse } from './mouse.ts';
 import type { Opening } from './SetupPanel.tsx';
+import { selection } from './selection.ts';
 import { terminalTitles } from './terminal-title.ts';
 import { savedTheme } from './theme.ts';
 
@@ -84,6 +86,10 @@ export async function tui(
   const latest = await Promise.race([update, Bun.sleep(UPDATE_WAIT_MS)]);
   if (latest) warnings.push(updateNotice(latest, CLI_VERSION));
   const mouse = mouseInput(process.stdin, process.stdout, savedMouse());
+  const kitty = await mouse.kittyKeyboard();
+  const selecting = selection(process.stdout, mouse, (text) => {
+    void copyText(text, (s) => process.stdout.write(s));
+  });
   let open = session;
   const titles = terminalTitles(process.stdout);
   titles.set(session.title);
@@ -110,15 +116,18 @@ export async function tui(
       // Full screen, like an editor: the shell's scrollback is back as it was on exit.
       alternateScreen: true,
       stdin: mouse.stdin,
+      stdout: selecting.stdout,
       // Where the terminal supports kitty's keyboard protocol, keys it would
       // otherwise merge arrive distinct: ctrl+tab, shift+enter, ctrl+i vs tab.
-      kittyKeyboard: { mode: 'auto' },
+      // Asked by `mouse`, not Ink's 'auto', whose answer leaked into the prompt.
+      kittyKeyboard: { mode: kitty ? 'enabled' : 'disabled' },
     },
   );
   try {
     await app.waitUntilExit();
   } finally {
     mouse.dispose();
+    selecting.dispose();
     titles.restore();
   }
   const messages = await client

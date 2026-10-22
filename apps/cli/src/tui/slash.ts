@@ -63,7 +63,7 @@ Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       ctrl+c cancels the turn and the queue; ↑ takes back the last queued message;
       shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
       tab switches to the next model you chose, going round them;
-      PgUp/PgDn or the mouse wheel scroll (hold shift or option to select text);
+      PgUp/PgDn or the mouse wheel scroll; drag to select and copy text;
       prompts: ↑↓ and enter, or the option's number (y/a/p/n still work).
 Your own commands are Markdown files in .switchback/commands/ or
 ~/.switchback/commands/.`;
@@ -416,8 +416,8 @@ const HANDLERS: Record<string, Handler> = {
 
 function mouseNotice(on: boolean): string {
   return on
-    ? 'mouse: on. The wheel scrolls and clicks pick tabs; hold Shift (Option on macOS) while dragging to select text.'
-    : 'mouse: off. Drag to select text as usual; Page Up and Page Down scroll.';
+    ? 'mouse: on. The wheel scrolls, clicks pick tabs, and dragging selects and copies text.'
+    : 'mouse: off. Drag to select text as usual; Page Up and Page Down scroll. Many terminals now send the wheel as ↑↓, which walks prompt history.';
 }
 
 /** Run `/cmd args...`. */

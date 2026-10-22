@@ -21,7 +21,7 @@
     },
     "apps/cli": {
       "name": "@switchback/cli",
-      "version": "2.5.0",
+      "version": "2.6.0",
       "bin": {
         "switchback": "./src/main.ts",
       },
@@ -32,6 +32,7 @@
         "@switchback/engine": "workspace:*",
         "@switchback/protocol": "workspace:*",
         "@switchback/providers": "workspace:*",
+        "@xterm/headless": "^6.0.0",
         "fzf": "^0.5.2",
         "ink": "^7.1.1",
         "marked": "15",
@@ -41,13 +42,12 @@
       "devDependencies": {
         "@types/marked-terminal": "^6.1.1",
         "@types/react": "^19.3.0",
-        "@xterm/headless": "^6.0.0",
         "ink-testing-library": "^4.0.0",
       },
     },
     "apps/vscode": {
       "name": "switchback",
-      "version": "2.5.0",
+      "version": "2.6.0",
       "dependencies": {
         "@switchback/client": "workspace:*",
         "@switchback/protocol": "workspace:*",
