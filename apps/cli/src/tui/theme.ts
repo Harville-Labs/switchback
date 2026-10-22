@@ -2,14 +2,14 @@
  * The TUI's colors, by role rather than by name, so every row agrees on what
  * "remote" or "removed" looks like and a light terminal gets readable ones.
  * `plain` uses no color at all, for terminals and people who'd rather not.
- * The choice is the user's display preference, kept with the TUI's other
- * state (prompt history) rather than in the engine's configuration.
+ * The choice is saved with the TUI's other preferences (`prefs.ts`).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { switchbackPaths } from '@switchback/engine';
 import type { PermissionMode } from '@switchback/protocol';
 import { createContext, useContext } from 'react';
+import { prefsFile, readPrefs, savePref } from './prefs.ts';
 
 export const THEME_NAMES = ['dark', 'light', 'plain'] as const;
 export type ThemeName = (typeof THEME_NAMES)[number];
@@ -101,24 +101,12 @@ export function useTheme(): Theme {
   return useContext(ThemeContext);
 }
 
-const prefsFile = () => join(switchbackPaths().dataDir, 'tui.json');
-
 /** The theme chosen last time, or dark. */
 export function savedTheme(file = prefsFile()): ThemeName {
-  try {
-    if (!existsSync(file)) return 'dark';
-    const name = (JSON.parse(readFileSync(file, 'utf8')) as { theme?: unknown }).theme;
-    return THEME_NAMES.includes(name as ThemeName) ? (name as ThemeName) : 'dark';
-  } catch {
-    return 'dark';
-  }
+  const name = readPrefs(file).theme;
+  return THEME_NAMES.includes(name as ThemeName) ? (name as ThemeName) : 'dark';
 }
 
 export function saveTheme(name: ThemeName, file = prefsFile()): void {
-  try {
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, `${JSON.stringify({ theme: name })}\n`);
-  } catch {
-    // A preference that can't be saved still applies for this session.
-  }
+  savePref('theme', name, file);
 }

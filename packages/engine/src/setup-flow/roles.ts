@@ -63,6 +63,8 @@ export async function chooseRoles(
       text: 'Every turn starts on one model. When a turn is too hard for it (it keeps failing, loops, or the prompt will not fit), Switchback hands the turn to the next model on the escalation ladder.',
     });
     p.note({ kind: 'roles', roles: asSession(), models });
+    // One model does everything: there's no ladder, reviewer, or subagent model to choose.
+    if (plan.length < 2) return roles;
     const action = await p.select('Which model does what', [
       { label: 'Looks good, save it', value: 'done' as const },
       { label: 'Change where turns start', value: 'current' as const },

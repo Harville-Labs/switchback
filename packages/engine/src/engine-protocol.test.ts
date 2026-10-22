@@ -52,6 +52,39 @@ describe('protocol round-trip', () => {
     expect(p.rules).toEqual([{ rule: 'bash(rm:*)', behavior: 'deny', source: 'config' }]);
   });
 
+  test('session.setGoal round-trip: the goal runs, reports done, and shows in the summary', async () => {
+    const { engine } = setup(
+      [
+        { text: 'working' },
+        { toolCalls: [{ name: 'goal', input: { status: 'done', summary: 'shipped' } }] },
+        { text: 'shipped' },
+      ],
+      [],
+    );
+    const [serverSide, clientSide] = createTransportPair();
+    serve(engine, serverSide);
+    const client = new SwitchbackClient(clientSide);
+    await client.initialize({ name: 'test', version: '0' }, ws.root);
+    const session = await client.request('session.create', {});
+    const done = new Promise<EngineEvent>((resolve) =>
+      client.on((e) => e.type === 'goal.updated' && e.goal.status === 'done' && resolve(e)),
+    );
+    const r = await client.request('session.setGoal', {
+      sessionId: session.id,
+      objective: ' ship ',
+    });
+    expect(r.goal).toMatchObject({ objective: 'ship', status: 'active', turns: 1 });
+    expect(await done).toMatchObject({
+      sessionId: session.id,
+      goal: { turns: 2, note: 'shipped' },
+    });
+    const got = await client.request('session.get', { sessionId: session.id });
+    expect(got.session.goal).toMatchObject({ status: 'done' });
+    await expect(
+      client.request('session.setGoal', { sessionId: session.id, objective: '' }),
+    ).rejects.toThrow();
+  });
+
   test('rejects calls before initialize', async () => {
     const { engine } = setup([], []);
     const [serverSide, clientSide] = createTransportPair();

@@ -4,8 +4,10 @@
  * this surface. Adding a capability means adding it here first.
  */
 import { z } from 'zod';
+import type { GoalInfo, SessionSetGoalParams, SessionSetGoalResult } from './goals.ts';
 import type { ModelSummary, ModelsRefreshResult } from './models.ts';
 import type { SetupAnswerParams, SetupCancelParams, SetupStartParams } from './setup.ts';
+import type { SessionRenameParams } from './titles.ts';
 import { MAX_IMAGE_BYTES, type Message, type Tier, type Usage } from './transcript.ts';
 import type { WorktreeDiff, WorktreeInfo, WorktreesDiffParams } from './worktrees.ts';
 
@@ -151,6 +153,8 @@ export interface SessionSummary {
   permissionMode?: PermissionMode;
   /** Top-level sessions: the reasoning effort the session set, if any. */
   effort?: EffortLevel;
+  /** Top-level sessions: the goal it is working toward or last worked toward (`/goal`). */
+  goal?: GoalInfo;
 }
 
 export const SessionGetParams = z.object({ sessionId: z.string() });
@@ -464,6 +468,8 @@ export interface Methods {
   'session.escalate': { params: SessionEscalateParams; result: SessionEscalateResult };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
   'session.compact': { params: SessionCompactParams; result: { compacted: boolean } };
+  /** Set the session's title; automatic retitling leaves it alone from then on. */
+  'session.rename': { params: SessionRenameParams; result: SessionSummary };
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };
   'escalation.respond': { params: EscalationRespondParams; result: { ok: true } };
   'agents.list': { params: Record<string, never>; result: AgentSummary[] };
@@ -485,6 +491,8 @@ export interface Methods {
   'session.setMode': { params: SessionSetModeParams; result: { mode: PermissionMode } };
   /** Set or clear a top-level session's reasoning effort. */
   'session.setEffort': { params: SessionSetEffortParams; result: { effort?: EffortLevel } };
+  /** Set a goal and start working toward it, or stop the current one (`/goal`). */
+  'session.setGoal': { params: SessionSetGoalParams; result: SessionSetGoalResult };
   'permissions.list': { params: PermissionsListParams; result: PermissionsListResult };
   /** Background shells, all or one session's. */
   'shells.list': { params: ShellsListParams; result: ShellInfo[] };

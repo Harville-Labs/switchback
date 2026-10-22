@@ -1106,7 +1106,7 @@
       "type": "object",
       "properties": {
         "maxConcurrent": {
-          "default": 4,
+          "default": 16,
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
@@ -1127,6 +1127,24 @@
         "effort": {
           "type": "string",
           "enum": ["none", "low", "medium", "high", "xhigh", "max"]
+        }
+      }
+    },
+    "goal": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "maxTurns": {
+          "default": 25,
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 1000
+        },
+        "maxMinutes": {
+          "default": 120,
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 10080
         }
       }
     },

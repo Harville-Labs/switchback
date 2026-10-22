@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   adoptOrgPermissions,
   clearAuth,
+  hideWindow,
   loadConfig,
   OrgAuthError,
   OrgClient,
@@ -40,7 +41,7 @@ function openBrowser(url: string) {
         ? ['cmd', '/c', 'start', '', url]
         : ['xdg-open', url];
   try {
-    Bun.spawn(cmd, { stdout: 'ignore', stderr: 'ignore' });
+    Bun.spawn(cmd, hideWindow({ stdout: 'ignore', stderr: 'ignore' } as const));
   } catch {
     // No browser; the URL is printed anyway.
   }

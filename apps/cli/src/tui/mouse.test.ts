@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { mouseInput, takeMouse } from './mouse.ts';
+import { mouseInput, savedMouse, saveMouse, takeMouse } from './mouse.ts';
+import { savedTheme, saveTheme } from './theme.ts';
 
 describe('mouse input', () => {
   test('wheel events come out of the input; keys and clicks never reach the prompt as text', () => {
@@ -35,5 +39,45 @@ describe('mouse input', () => {
     input.write('hi');
     expect(await got).toBe('hi');
     mouse.dispose();
+  });
+
+  test('reporting starts off when asked and switches with escape sequences', () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const written: string[] = [];
+    output.on('data', (d: Buffer) => written.push(d.toString()));
+    const mouse = mouseInput(
+      input as unknown as NodeJS.ReadStream,
+      output as unknown as NodeJS.WriteStream,
+      false,
+    );
+    expect(written).toEqual([]);
+    mouse.setReporting(true);
+    expect(mouse.reporting).toBe(true);
+    expect(written.join('')).toBe('\x1b[?1000h\x1b[?1006h');
+    mouse.setReporting(true);
+    mouse.setReporting(false);
+    expect(written.join('')).toBe('\x1b[?1000h\x1b[?1006h\x1b[?1006l\x1b[?1000l');
+    mouse.dispose();
+  });
+
+  test('Windows starts with plain drag-to-select; a saved choice wins everywhere', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'switchback-prefs-')), 'tui.json');
+    expect(savedMouse(file, 'win32')).toBe(false);
+    expect(savedMouse(file, 'darwin')).toBe(true);
+    expect(savedMouse(file, 'linux')).toBe(true);
+    saveMouse(true, file);
+    expect(savedMouse(file, 'win32')).toBe(true);
+    saveMouse(false, file);
+    expect(savedMouse(file, 'linux')).toBe(false);
+  });
+
+  test('saving the theme keeps the mouse choice, and the other way round', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'switchback-prefs-')), 'tui.json');
+    saveMouse(false, file);
+    saveTheme('light', file);
+    saveMouse(false, file);
+    expect(savedTheme(file)).toBe('light');
+    expect(savedMouse(file, 'darwin')).toBe(false);
   });
 });

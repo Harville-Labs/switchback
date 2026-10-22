@@ -27,7 +27,7 @@ test('each client sees only the commands it implements', () => {
 
 test('name prefixes rank ahead of other matches', () => {
   const names = matchCommands('re', 'vscode').map((c) => c.name);
-  expect(names.slice(0, 4)).toEqual(['remote', 'resume', 'rewind', 'review']);
+  expect(names.slice(0, 5)).toEqual(['remote', 'resume', 'rename', 'rewind', 'review']);
   expect(names).toContain('restart');
   // Two letters don't reach into descriptions ("their tier", "reset").
   expect(names).not.toContain('models');

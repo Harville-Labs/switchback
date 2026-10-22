@@ -2,6 +2,7 @@ import { bashOutputTool, bashTool, killShellTool } from './bash.ts';
 import { docsTool } from './docs.ts';
 import { escalateTool } from './escalate.ts';
 import { editTool, globTool, grepTool, readTool, writeTool } from './fs.ts';
+import { goalTool } from './goal.ts';
 import { mergeWorktreeTool } from './merge.ts';
 import { exitPlanModeTool } from './plan.ts';
 import { skillTool } from './skill.ts';
@@ -35,6 +36,7 @@ export const ALL_TOOLS: Tool[] = [
   docsTool,
   mergeWorktreeTool,
   escalateTool,
+  goalTool,
 ];
 
 /** Tools that come with another: an agent that may run bash may also read and stop what it started. */
@@ -47,13 +49,14 @@ const COMPANIONS: Record<string, string> = {
 
 /**
  * An agent's tools in their fixed order. Some aren't capabilities an agent
- * definition grants: exit_plan_mode is offered to every top-level session,
+ * definition grants: exit_plan_mode and goal are offered to every top-level session,
  * and the todo checklist, skills, Switchback's docs, and escalate to every session.
  */
 export function toolsFor(allowed: string[] | undefined, topLevel: boolean): Tool[] {
   const always = [todoTool.name, skillTool.name, docsTool.name, escalateTool.name];
   return ALL_TOOLS.filter((t) => {
-    if (t.name === exitPlanModeTool.name) return topLevel;
+    // Offered whether or not a goal is active, so the tool list (cache prefix) stays the same.
+    if (t.name === exitPlanModeTool.name || t.name === goalTool.name) return topLevel;
     if (always.includes(t.name)) return true;
     const needs = COMPANIONS[t.name] ?? t.name;
     return !allowed || allowed.includes(needs);

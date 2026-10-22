@@ -98,6 +98,8 @@ test('a file created after the watch starts is seen, and rewriting the same byte
   const file = join(dir, 'config.json');
   let changes = 0;
   const w = new ConfigWatcher([file], () => changes++, 20);
+  // macOS starts a folder watch asynchronously; a write in its first moments can go unseen.
+  await Bun.sleep(100);
   writeFileSync(file, '{}');
   expect(await until(() => changes === 1)).toBe(true);
   await Bun.sleep(100);

@@ -6,6 +6,7 @@
 import { resolve } from 'node:path';
 import {
   type Attachment,
+  clipTitle,
   ErrorCode,
   type PermissionMode,
   type RoutePreference,
@@ -17,6 +18,7 @@ import {
   textOf,
 } from '@switchback/protocol';
 import type { AgentLoop } from './agent-loop.ts';
+import type { Goals } from './goals.ts';
 import type { TurnHooks } from './hooks/turn-hooks.ts';
 import {
   hashesOf,
@@ -53,6 +55,10 @@ export interface TurnRunnerDeps {
   mcp(): McpHub | undefined;
   /** Both AGENTS.md files; changes reach the session with its next prompt (ADR 0017). */
   instructions: InstructionsSource;
+  /** The window compaction keeps the session inside, which a prompt's attachments share. */
+  contextWindow(): number | undefined;
+  /** The session's goal: told to the model with the first prompt, continued after each turn. */
+  goals: Goals;
 }
 
 export class TurnRunner {
@@ -205,7 +211,7 @@ export class TurnRunner {
     session.controller = controller;
     let finished = () => {};
     session.turn = { id: turnId, done: new Promise<void>((r) => (finished = r)) };
-    if (!session.header.title && text) session.header.title = text.slice(0, 60);
+    if (!session.header.title && text) this.host.rename(session, clipTitle(text), 'prompt');
 
     this.host.emit({ type: 'turn.started', ...scope(session), turnId });
     // An empty prompt continues the session with whatever reports are waiting.
@@ -275,8 +281,20 @@ export class TurnRunner {
     this.host.emit({ type: 'turn.completed', ...scope(session), turnId, stopReason });
     session.turn = undefined;
     finished();
-    // Prompts queued after the model's last step start the next turn.
-    if (session.queue?.length && stopReason !== 'cancelled') this.begin(session, { text: '' });
+    // Prompts queued after the model's last step start the next turn; a goal
+    // continues after that one.
+    const queued = !!session.queue?.length && stopReason !== 'cancelled';
+    const goal =
+      session.depth === 0 && !queued ? this.deps.goals.afterTurn(session, stopReason) : undefined;
+    if (queued) this.begin(session, { text: '' });
+    else if (goal) {
+      // Routed like any turn, so budgets and escalation prompts still apply (invariant 10).
+      this.host.append(session, {
+        role: 'user',
+        parts: [{ type: 'text', text: goal, reminder: true }],
+      });
+      this.begin(session, { text: '' });
+    }
     const last = session.messages.findLast((m) => m.role === 'assistant');
     return { stopReason, text: last ? textOf(last) : '' };
   }
@@ -299,10 +317,11 @@ export class TurnRunner {
     const hooked = await this.deps.hooks.beforePrompt(s, text);
     if (hooked.blocked) return hooked.blocked;
     const matches = this.host.privatePaths();
+    const window = this.deps.contextWindow();
     const attachments = [
       ...mcp.parts,
-      ...(await expandAttachments(extra, this.host.rootOf(s)).catch(() => [])),
-      ...(await expandMentions(text, this.host.rootOf(s)).catch(() => [])),
+      ...(await expandAttachments(extra, this.host.rootOf(s), window).catch(() => [])),
+      ...(await expandMentions(text, this.host.rootOf(s), window).catch(() => [])),
     ].map((p) => {
       // A file attachment's path may carry a line range (`src/a.ts:3-9`).
       const path = p.attachment?.path.replace(/:\d+-\d+$/, '');
@@ -314,7 +333,8 @@ export class TurnRunner {
     const mode = this.deps.mode(s);
     const reminder = s.depth === 0 ? modeReminder(s.toldMode, mode) : undefined;
     s.toldMode = mode;
-    const notes = [...hooked.context, ...(reminder ? [reminder] : [])];
+    const goal = s.depth === 0 ? this.deps.goals.note(s) : undefined;
+    const notes = [...hooked.context, ...(reminder ? [reminder] : []), ...(goal ? [goal] : [])];
     this.host.append(s, {
       role: 'user',
       parts: [

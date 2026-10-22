@@ -121,6 +121,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Switch
     const connection = engine;
     engine.onMessage((m) => {
       chat.post(m);
+      chat.describe(connection.session?.title);
       attention.observe(m, connection.scope);
     });
     try {

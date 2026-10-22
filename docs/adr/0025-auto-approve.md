@@ -1,4 +1,4 @@
-# 0024: An auto-approve mode where a model judges calls
+# 0025: An auto-approve mode where a model judges calls
 
 **Status:** Accepted · 2026-10-22
 

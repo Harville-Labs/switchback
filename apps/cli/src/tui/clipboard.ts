@@ -9,6 +9,7 @@
  * clipboardy would do the second part, but it ships helper binaries that don't
  * survive `bun build --compile`.
  */
+import { hideWindow } from '@switchback/engine';
 
 export function osc52(text: string): string {
   const seq = `\x1b]52;c;${Buffer.from(text, 'utf8').toString('base64')}\x07`;
@@ -31,7 +32,10 @@ export async function copyText(text: string, write: (s: string) => void): Promis
   for (const cmd of nativeCommands()) {
     if (!Bun.which(cmd[0] as string)) continue;
     try {
-      const proc = Bun.spawn(cmd, { stdin: 'pipe', stdout: 'ignore', stderr: 'ignore' });
+      const proc = Bun.spawn(
+        cmd,
+        hideWindow({ stdin: 'pipe', stdout: 'ignore', stderr: 'ignore' } as const),
+      );
       proc.stdin.write(text);
       await proc.stdin.end();
       if ((await proc.exited) === 0) return true;
@@ -46,7 +50,10 @@ export async function copyText(text: string, write: (s: string) => void): Promis
 async function output(cmd: string[]): Promise<Uint8Array | undefined> {
   if (!Bun.which(cmd[0] as string)) return undefined;
   try {
-    const proc = Bun.spawn(cmd, { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' });
+    const proc = Bun.spawn(
+      cmd,
+      hideWindow({ stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' } as const),
+    );
     const [bytes, code] = await Promise.all([new Response(proc.stdout).bytes(), proc.exited]);
     return code === 0 && bytes.length ? bytes : undefined;
   } catch {

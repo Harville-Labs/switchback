@@ -1,5 +1,5 @@
 /**
- * The `autoApprove` mode's judge (ADR 0024): a model reads a call that would
+ * The `autoApprove` mode's judge (ADR 0025): a model reads a call that would
  * ask and says whether it plainly serves what the user asked for. It can only
  * spare the user a prompt; anything it doesn't approve still asks.
  */

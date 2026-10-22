@@ -26,6 +26,8 @@ export function spawnEngine(options: SpawnOptions): Transport {
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
     stdio: ['pipe', 'pipe', 'pipe'],
+    // VS Code is a GUI process, so on Windows the engine would get a console window of its own.
+    windowsHide: true,
   });
   const handlers: ((m: JsonRpcMessage) => void)[] = [];
   const closers: (() => void)[] = [];

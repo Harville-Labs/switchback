@@ -3,7 +3,7 @@
  * first use. Appending writes through to the store (transcripts are
  * append-only, invariant 4).
  */
-import { ErrorCode, type Message, RpcError } from '@switchback/protocol';
+import { ErrorCode, type Message, RpcError, type TitleSource } from '@switchback/protocol';
 import { SignalTracker } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import type { LiveSession } from './live-session.ts';
@@ -90,6 +90,13 @@ export class SessionRegistry {
     s.messages.push(message);
     s.updatedAt = this.now().toISOString();
     this.store.append(s.header.id, message);
+  }
+
+  /** Retitle a session. The title is metadata: the transcript is untouched. */
+  rename(s: LiveSession, title: string, source: TitleSource): void {
+    s.header.title = title;
+    s.header.titleSource = source;
+    this.store.rename(s.header.id, title, source);
   }
 
   /** The top-level session of a subagent (or the session itself). */

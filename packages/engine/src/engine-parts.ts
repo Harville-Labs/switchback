@@ -11,12 +11,13 @@ import { Compactor } from './compactor.ts';
 import { configTextProblem, referenceModel } from './config.ts';
 import type { EngineOptions } from './engine-options.ts';
 import { ExternalRuntimes } from './external-runtime.ts';
+import { Goals } from './goals.ts';
 import { HookRunner } from './hooks/runner.ts';
 import { TurnHooks } from './hooks/turn-hooks.ts';
 import { fixedInstructions } from './instructions-live.ts';
 import { UsageLedger } from './ledger.ts';
 import { Library } from './library.ts';
-import type { EngineHost, LiveSession } from './live-session.ts';
+import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { McpHub } from './mcp/hub.ts';
 import { ModelDirectory } from './model-directory.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
@@ -111,6 +112,10 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     emit: (e) => io.emit(e),
     notify: (level, message) => io.notify(level, message),
     append: (s, m) => sessions.append(s, m),
+    rename: (s, title, source) => {
+      sessions.rename(s, title, source);
+      io.emit({ type: 'session.renamed', ...scope(s), title, source });
+    },
     rolesOf: (s) => policy.rolesOf(s),
     remoteBlocked: (s) => policy.remoteBlocked(s),
     recordUsage: (s, tier, model, usage, meta) => recorder.record(s, tier, model, usage, meta),
@@ -121,6 +126,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
   };
   const compactor: Compactor = new Compactor(host, models);
   const judge = new PermissionJudge(host, models);
+  const goals: Goals = new Goals(host, () => now().getTime());
   const controls: SessionControls = new SessionControls(host, {
     sessions: sessions,
     checkpoints: new Checkpoints(options.checkpoints ?? new MemoryCheckpointStore()),
@@ -185,6 +191,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     configFiles,
     validate: (file, content) =>
       canonicalConfigFiles.has(file) ? configTextProblem(content) : undefined,
+    goals,
   });
   const external: ExternalRuntimes = new ExternalRuntimes(host, {
     injected: options.runtimes,
@@ -231,6 +238,8 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     checkpoint: (s, turnId, prompt) => controls.beginCheckpoint(s, turnId, prompt),
     instructions,
     mcp: () => io.mcp(),
+    contextWindow: () => compactor.window(),
+    goals,
   });
 
   /** What every hook hears about the session. */
@@ -255,6 +264,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     factory,
     host,
     compactor,
+    goals,
     controls,
     hooks,
     commands,

@@ -2,6 +2,8 @@
  * Engine -> client events: JSON-RPC notifications with method "event". Every
  * client folds them into its view through `reduce()` in @switchback/client.
  */
+
+import type { GoalInfo } from './goals.ts';
 import type {
   EffortLevel,
   OrgInfo,
@@ -14,6 +16,7 @@ import type {
 } from './methods.ts';
 import type { ModelSummary } from './models.ts';
 import type { SetupNote, SetupOutcome, SetupQuestion } from './setup.ts';
+import type { TitleSource } from './titles.ts';
 import type { ModelRef, StopReason, Tier, Usage } from './transcript.ts';
 import type { WorktreeOutcome, WorktreeStart } from './worktrees.ts';
 
@@ -42,10 +45,17 @@ export type EngineEvent =
       /** Calls left before routing returns to `current` after an escalation. */
       stickyTurns?: number;
     } & SessionScoped)
+  /**
+   * The session's title changed: `user` by `session.rename`, `prompt` from
+   * the first prompt, `compaction` summarized from the conversation so far.
+   */
+  | ({ type: 'session.renamed'; title: string; source: TitleSource } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
   /** The session's reasoning effort; none means the agent's or model's own. */
   | ({ type: 'effort.changed'; effort?: EffortLevel } & SessionScoped)
+  /** The session's goal was set, made progress (a turn ended), or ended. */
+  | ({ type: 'goal.updated'; goal: GoalInfo } & SessionScoped)
   /** The session's queued prompts changed. */
   | ({ type: 'queue.updated'; queued: QueuedPrompt[] } & SessionScoped)
   /** A queued prompt reached the model; clients show it as the user's message now. */
@@ -134,6 +144,18 @@ export type EngineEvent =
        * target model has no known price.
        */
       estimatedCostUsd?: number;
+    } & SessionScoped)
+  | ({
+      /**
+       * Every slot at its depth is taken (`subagents.maxConcurrent`), so it
+       * waits; `subagent.started` follows when it gets one.
+       */
+      type: 'subagent.queued';
+      childSessionId: string;
+      agent: string;
+      task: string;
+      background?: boolean;
+      model?: string;
     } & SessionScoped)
   | ({
       type: 'subagent.started';

@@ -1,7 +1,7 @@
 /**
  * Shell commands that only look around the workspace: listing, reading,
  * searching, and read-only git. With `permissions.read: allow` they run without
- * asking, like the read, glob, and grep tools (ADR 0025). Anything that names a
+ * asking, like the read, glob, and grep tools (ADR 0026). Anything that names a
  * place outside the workspace, writes, or could run another program isn't
  * exploring, and goes through the usual bash permission.
  */

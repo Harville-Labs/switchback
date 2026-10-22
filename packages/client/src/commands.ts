@@ -65,6 +65,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'switch to a saved session (no argument: pick from a list)',
   },
   {
+    name: 'rename',
+    args: '[title]',
+    group: 'Session',
+    description: 'rename this session (no argument: show its title)',
+  },
+  {
     name: 'compact',
     group: 'Session',
     description: 'summarize earlier messages now (also automatic)',
@@ -75,6 +81,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'go back to before a prompt: files, the conversation, or both',
   },
   { name: 'subagents', group: 'Session', description: "list this session's subagents as a tree" },
+  {
+    name: 'goal',
+    args: '[objective|stop]',
+    group: 'Session',
+    description: 'keep working, turn after turn, until the objective is met; no argument shows it',
+  },
   {
     name: 'subagent',
     args: '<n>',
@@ -175,6 +187,13 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     args: '[dark|light|plain]',
     group: 'Extension',
     description: 'colors for the terminal UI',
+    clients: ['tui'],
+  },
+  {
+    name: 'mouse',
+    args: '[on|off]',
+    group: 'Extension',
+    description: 'mouse wheel and tab clicks, or plain drag to select text (off)',
     clients: ['tui'],
   },
   {

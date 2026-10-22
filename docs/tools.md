@@ -10,7 +10,7 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `edit` | edit | Replace exact text in a file; the prompt shows a diff |
 | `write` | edit | Create or overwrite a file; the prompt shows a diff |
 | `bash` | bash | Run a shell command in the [sandbox](permissions.md#sandbox); `background: true` for long-running ones |
-| `task` | none | Delegate to a subagent ([subagents.md](subagents.md)) |
+| `task` | none | Delegate to a subagent ([subagents.md](subagents.md)). Several calls in one response run in parallel, up to `subagents.maxConcurrent` |
 | `exit_plan_mode` | none | Present a plan for approval in [plan mode](permissions.md#modes) (top-level sessions only) |
 | `bash_output` | none | Read new output from a background shell |
 | `kill_shell` | none | Stop a background shell |
@@ -20,9 +20,14 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `skill` | none | Load a [skill](commands-and-skills.md#skills): its instructions, or one of its files |
 | `merge_worktree` | edit (always asks) | Merge a branch an [isolated subagent](subagents.md#worktree-isolation) left into your checked-out branch, after you see the diff |
 | `escalate` | none | Ask for the next step to run one model up the escalation ladder, with a reason; the router decides under `escalation.policy` ([routing.md](routing.md#the-model-escalating-itself)) |
+| `goal` | none | End the goal the user set with `/goal`: `done` when it's met, `blocked` when the model needs the user, with a summary the user sees (top-level sessions only; [ADR 0024](adr/0024-goals.md)) |
 | `docs` | none | Read Switchback's own documentation, as built into this version: the topics below "Using Switchback" in the docs index, a whole page or one section. The configuration page starts with where this machine's config files are |
 
-An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `merge_worktree` with `task`, `exit_plan_mode` comes with every top-level session, and `todo`, `skill`, `docs`, and `escalate` with every session.
+An agent definition's `tools` list limits which of these it gets, with some exceptions that aren't capabilities: `bash_output` and `kill_shell` come with `bash`, `merge_worktree` with `task`, `exit_plan_mode` and `goal` come with every top-level session, and `todo`, `skill`, `docs`, and `escalate` with every session.
+
+## How much of a result the model gets
+
+Every tool result, MCP tools' and subagents' reports included, is cut to fit the context window of the model that made the call. All the results of one step share a quarter of that window (at about 3 characters a token), split evenly between parallel calls, with no result cut below 2,000 characters or kept past 30,000. A cut result keeps its start and its last lines, which say how it ended (a command's exit code, how many lines a read left out), and tells the model to ask for less: a line range, a narrower pattern. On an 8k-token local model one read keeps about 6,000 characters; on a 200k-token model, 30,000. The privacy check and hooks see the whole result before it is cut.
 
 ## Asking about Switchback
 

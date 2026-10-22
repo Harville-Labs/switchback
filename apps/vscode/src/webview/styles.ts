@@ -88,6 +88,7 @@ export const STYLES = `
   .prompt.plan { max-height: 50vh; overflow-y: auto; }
   .prompt .plan-title { font-weight: 600; margin-bottom: 4px; }
   .todos { margin: 0 12px 6px; padding: 8px 12px; border-radius: 8px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border); }
+  .goal { margin: 0 12px 6px; padding: 4px 12px; color: var(--vscode-textLink-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .todo { line-height: 1.6; }
   .todo.done { color: var(--vscode-descriptionForeground); text-decoration: line-through; }
   .todo.in_progress { font-weight: 600; color: var(--vscode-textLink-foreground); }

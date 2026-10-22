@@ -78,6 +78,17 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     source: 'builtin',
   },
   {
+    name: 'review',
+    description:
+      'Read-only code review: finds bugs and missed cases in a change. Use after changes, or when asked for a review.',
+    prompt:
+      'You are a code reviewer. Read the changes you were asked to review (use git diff through bash when no files are named) and the code around them. Look for bugs that would cause wrong behavior, missed edge cases, and tests that no longer cover the change. Do not modify files. Reply with the problems you found, most serious first, each with its file path and line number and a one-line fix; say so plainly if you found none.',
+    mode: 'subagent',
+    tools: ['read', 'glob', 'grep', 'bash'],
+    route: 'auto',
+    source: 'builtin',
+  },
+  {
     name: 'general',
     description: 'General-purpose subagent for multi-step tasks that need full tool access.',
     prompt:

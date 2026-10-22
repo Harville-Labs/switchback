@@ -357,17 +357,35 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
  * The mock provider echoes prompts. For demos and client development it can
  * also call tools: a prompt of `mock:tool {"name": "...", "input": {...}}`
  * makes one tool call, then reports the result; an array of them makes
- * several at once.
+ * several at once. `use 3 subagents to <goal>` starts that many `task` calls.
  */
 function mockTurn(id: string, messages: ChatRequest['messages']): ScriptedTurn {
-  const last = messages.at(-1);
-  const result = last?.parts.find((p) => p.type === 'tool_result');
-  if (result?.type === 'tool_result') {
+  const results = (messages.at(-1)?.parts ?? []).filter((p) => p.type === 'tool_result');
+  if (results.length) {
     return {
-      text: `[mock ${id}] tool ${result.isError ? 'failed' : 'finished'}: ${result.content.split('\n')[0]}`,
+      text: results
+        .map(
+          (r) =>
+            `[mock ${id}] tool ${r.isError ? 'failed' : 'finished'}: ${r.content.split('\n')[0]}`,
+        )
+        .join('\n'),
     };
   }
   const text = lastUserText(messages);
+  const fan = /^use (\d+) subagents? to (.+)$/is.exec(text.trim());
+  if (fan?.[1] && fan[2]) {
+    const n = Math.min(Number(fan[1]), 200);
+    return {
+      toolCalls: Array.from({ length: n }, (_, i) => ({
+        name: 'task',
+        input: {
+          agent: 'explore',
+          description: `part ${i + 1} of ${n}`,
+          prompt: `Part ${i + 1} of ${n}: ${fan[2]}`,
+        },
+      })),
+    };
+  }
   const call = /^mock:tool\s+([[{][\s\S]*[\]}])\s*$/.exec(text);
   if (call?.[1]) {
     try {

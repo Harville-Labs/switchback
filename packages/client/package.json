@@ -8,10 +8,12 @@
     ".": "./src/index.ts",
     "./view": "./src/view.ts",
     "./format": "./src/format.ts",
+    "./goal": "./src/goal.ts",
     "./models": "./src/models.ts",
     "./modes": "./src/modes.ts",
     "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts",
+    "./subagent-format": "./src/subagent-format.ts",
     "./tabs": "./src/tabs.ts",
     "./tool-display": "./src/tool-display.ts",
     "./usage": "./src/usage.ts",
@@ -24,6 +26,7 @@
     "semver": "^7.8.5"
   },
   "devDependencies": {
-    "@types/semver": "^7.8.0"
+    "@types/semver": "^7.8.0",
+    "string-width": "^8.3.0"
   }
 }

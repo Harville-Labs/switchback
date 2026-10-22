@@ -89,6 +89,7 @@ export class SessionFactory {
         ...(instructions.project ? { project: instructions.project } : {}),
         ...(params.instructions ? { session: params.instructions } : {}),
         skills: skillsSection(this.deps.library.skills().values()),
+        ...(params.parentId ? { subagent: true } : {}),
       }),
     };
     return this.deps.sessions.create(
@@ -134,6 +135,7 @@ export class SessionFactory {
         : {
             permissionMode: live?.mode ?? this.deps.config().permissions.defaultMode,
             ...(live?.effort ? { effort: live.effort } : {}),
+            ...(live?.goal ? { goal: live.goal.info } : {}),
           }),
     };
   }

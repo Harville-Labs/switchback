@@ -3,6 +3,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
+import { hideWindow } from '../hide-window.ts';
 import { looksLikeImage, readImage } from '../images.ts';
 import {
   defineTool,
@@ -11,7 +12,6 @@ import {
   type ToolContext,
   ToolError,
   toWorkspacePath,
-  truncate,
 } from './tool.ts';
 
 const PATH_HELP =
@@ -59,7 +59,7 @@ export const readTool = defineTool({
       start + slice.length < lines.length
         ? `\n[${lines.length - start - slice.length} more lines]`
         : '';
-    return truncate(body + more);
+    return body + more;
   },
 });
 
@@ -235,7 +235,10 @@ export async function grepRipgrep(
     args.push('--glob', `!${dir}`);
   if (input.glob) args.push('--glob', input.glob);
   args.push('-e', input.pattern);
-  const proc = Bun.spawn([rg, ...args], { cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' });
+  const proc = Bun.spawn(
+    [rg, ...args],
+    hideWindow({ cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' } as const),
+  );
   const out: string[] = [];
   let buffer = '';
   const decoder = new TextDecoder();
@@ -302,6 +305,6 @@ export const grepTool = defineTool({
       : found;
     if (!out.length) return 'no matches';
     const body = out.join('\n');
-    return truncate(out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body);
+    return out.length >= GREP_LIMIT ? `${body}\n[result limit reached]` : body;
   },
 });

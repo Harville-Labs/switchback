@@ -41,6 +41,8 @@ export interface ToolContext {
     description: string,
     options?: SubagentOptions,
   ) => Promise<SubagentResult>;
+  /** How many task calls the model made in this step; their reports share one budget. */
+  tasksInStep?: number;
   /** Names and descriptions of agents available as subagents. */
   agentCatalog: { name: string; description: string }[];
   /**
@@ -68,6 +70,8 @@ export interface ToolContext {
   validate?: (file: string, content: string) => string | undefined;
   /** Ask the router to move the session's next call up the ladder (the escalate tool). */
   requestEscalation?: (reason: string) => void;
+  /** End the session's goal; false when none is active. Only top-level sessions have it (the goal tool). */
+  reportGoal?: (status: 'done' | 'blocked', summary: string) => boolean;
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';
@@ -185,7 +189,10 @@ export function resolveInWorkspace(root: string, path: string): string {
   return canonical;
 }
 
-export function truncate(text: string, max = 30_000): string {
+/** The most any tool result keeps, whatever the model's window. */
+export const MAX_RESULT_CHARS = 30_000;
+
+export function truncate(text: string, max = MAX_RESULT_CHARS): string {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
   return `${head}\n\n[truncated ${text.length - max} characters]`;

@@ -14,6 +14,8 @@ When a newer release is out, the TUI says so in the chat at launch: `Switchback 
 
 Sessions are saved as you go. `switchback --continue` (`-c`) reopens the most recent session in this workspace, and `switchback --session <id>` opens a specific one. Inside the TUI, `/sessions` lists them and `/resume <n>` switches. History is rebuilt from the transcript through the shared view model, so it looks the same as it did live (minus streamed reasoning).
 
+The terminal's window or tab title shows the session's title (`Fix the login bug · Switchback`) and follows the tab in front. On exit Switchback restores the title you had before, in terminals that keep a title stack (xterm, iTerm2, kitty, WezTerm, VS Code's terminal); others keep the last title.
+
 ## Screen
 
 The TUI takes over the whole terminal, like an editor: the transcript fills the window and the input stays at the bottom. Quitting puts your shell back as it was and prints how to resume the session.
@@ -59,7 +61,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 - **The welcome card** names the current model (where your prompts run), what it escalates to, the permission mode, and the directory. The status bar names the current model too, until an escalation moves the session up the ladder. `/current` picks another ([routing.md](../routing.md#picking-the-current-model)).
 - **Tool calls** are `●` rows: what the call does and to what (`Read src/x.ts`, `Bash bun test`, `Update a.ts`), with what came of it under `⎿`: lines read, files listed, matches found, the first lines a command printed (and its exit code when it failed), or an edit's size and diff with line numbers. The dot is yellow while it runs, green when it worked, red when it failed.
 - **Exploring** — two or more reads, listings, and searches in a row — folds into one **Explored** block listing each call and what it found.
-- **Routing** shows a `⌂` (local) or `☁` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
+- **Routing** shows a `⌂` (local) or `▲` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
 - **Subagents** are rows of their own, with their tier, tool-call count, and current activity, and their latest steps indented under them while they run. Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did.
 - **While a turn runs**, a line above the input says what's happening (thinking, writing, running a tool, waiting on a subagent), for how long, about how many tokens the model has written, and on which model.
 - **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference (`auto-escalate`, `local only`, or `remote only`; `/auto`, `/local`, and `/remote` switch it), how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
@@ -93,7 +95,11 @@ Page Up and Page Down scroll the transcript, and so does the mouse wheel. Scroll
 
 Clicks work where there's something to pick: an answer to a permission, plan, or escalation question; a row in the model, session, rewind, and tab pickers; and a key hint with an action, such as `esc close` or `r refresh list`.
 
-The TUI turns on the terminal's mouse reporting for the wheel and clicks, which also captures plain drags, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2. `/copy` copies replies, code blocks, and tool output without selecting anything.
+On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and clicks, which also captures plain drags, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2.
+
+On Windows mouse reporting starts off, so dragging selects text as in any other console program and Ctrl+C or Enter copies it (Windows Terminal, conhost, and VS Code's terminal). The wheel doesn't scroll the transcript then; Page Up and Page Down do. `/mouse on` turns reporting on (Shift+drag then selects in Windows Terminal and VS Code), `/mouse off` turns it off on any platform, and the choice is remembered.
+
+`/copy` copies replies, code blocks, and tool output without selecting anything.
 
 ### Themes
 
@@ -116,12 +122,14 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/tab [n\|new [agent]\|close]` | Switch to tab `n`, open a new tab, or close the one in front (its session keeps running) |
 | `/sessions` | Saved sessions in this workspace, newest first |
 | `/resume [n\|id]` | Switch to a saved session. With no argument, a picker: type to filter by title, agent, or ID, ↑/↓ to choose, Enter to open. `switchback --resume` opens it at startup, `-c` resumes the latest, `--session <id>` a specific one, and `switchback sessions [--json]` lists them for scripts |
+| `/rename [title]` | Name this session (at most 60 characters). With no argument, shows the current title. A session is titled from its first prompt until you rename it, and a summary at compaction can retitle it, but never over a name you gave |
 | `/subagents` | This session's subagents as a numbered tree |
 | `/subagent <n>` | Drill into one subagent: routes, tool calls, nested subagents, and its report |
 | `/shells` · `/shells kill <id>` | Background shells the model started (dev servers, watchers), and stopping one. The status bar counts the running ones |
 | `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
 | `/worktrees` · `/worktrees <branch>` | Branches isolated subagents made (running, ready to merge, merged, or kept), or one branch's diff ([subagents.md](../subagents.md#seeing-what-they-did)) |
 | `/rewind` | Go back to before a prompt: pick it, then `b` (files and conversation), `f` (files only), or `c` (conversation only). Files changed since then by edit or write go back and files created since are removed; changes made by shell commands aren't tracked. The conversation continues in a new session, and this one is kept |
+| `/goal <objective>` · `/goal` · `/goal stop` | Keep working toward an objective across turns until the model says it's done or blocked ([Goals](#goals)). Bare `/goal` shows progress; `/goal stop` ends it after the running turn, and Esc ends it now |
 | `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
@@ -140,6 +148,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/copy [n\|tool\|all]` | Copy to the clipboard as raw text (no wrapping, indentation, or colors from the terminal rendering): the last reply, its `n`th code block, the last tool's output, or the whole conversation as Markdown. Works over SSH in terminals that support OSC 52 (iTerm2, kitty, WezTerm, Ghostty, Windows Terminal, and tmux with `set-clipboard on`) |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/theme [dark\|light\|plain]` | Show or switch the colors; the choice is remembered |
+| `/mouse [on\|off]` | Mouse reporting: on, the wheel scrolls and clicks pick tabs; off, a plain drag selects text. Off by default on Windows, on elsewhere; with no argument it switches, and the choice is remembered ([Scrolling and selecting](#scrolling-and-selecting)) |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
@@ -156,8 +165,8 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Shift+Tab | Cycle the permission mode: default → accept edits → auto-approve → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |
-| Page Up / Page Down, mouse wheel | Scroll the transcript |
-| Click | Pick an answer, a picker row, or a key hint |
+| Page Up / Page Down, mouse wheel | Scroll the transcript (the wheel only while `/mouse` is on) |
+| Click | Pick an answer, a picker row, or a key hint (while `/mouse` is on) |
 | `ctrl+v` | Attach the image on the clipboard as an `[Image #n]` chip (deleting the chip drops it). On macOS it reads the clipboard with `osascript`, on Linux with `wl-paste` or `xclip`, and on Windows with PowerShell; over SSH, drag the file in or mention it with `@` instead. Dragged-in image files and `@image.png` mentions attach the image too |
 | `ctrl+o` | Expand or collapse the details: the model's thinking (one line, or its paragraphs), commands' full output, whole diffs, and every call in an Explored block. It applies to the whole transcript |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
@@ -166,10 +175,23 @@ When a prompt is waiting for you, or a turn that ran 30 seconds or more finishes
 
 Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission mode when it isn't `default`.
 
+## Goals
+
+`/goal <objective>` hands the agent a job that takes more than one turn: "make `bun test` pass", "move every caller off the old config API". The objective is your first prompt. When a turn ends, Switchback starts another with a short reminder of the goal, until one of these happens:
+
+- the model calls the `goal` tool to say it's **done** or **blocked** (it needs you), with a summary
+- the goal reaches `goal.maxTurns` turns (25) or `goal.maxMinutes` minutes (120; [configuration.md](../configuration.md))
+- three turns in a row fail
+- you press Esc, which stops the turn and the goal, or type `/goal stop`, which lets the running turn finish
+
+The active goal and its turn count stay above the prompt (`◎ goal · turn 3/25 · …`), and the conversation notes when it starts and ends. Nothing is approved for a goal. Each turn routes as usual, so budgets and `remote` blocks still apply, and a permission prompt waits for you. A prompt you type while a goal runs is handled first, and then the goal goes on. Goals aren't saved: resuming the session later doesn't restart one ([ADR 0024](../adr/0024-goals.md)).
+
 ## Implementation notes
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
 - Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout.
+- Marks in the status bar and transcript (`⌂`, `▲`, the mode's `»`, `√`, `║`, `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
+- Child processes the user doesn't look at (commands, hooks, git, ripgrep, clipboard helpers) start with `windowsHide` (`hideWindow` in the engine), so on Windows a detached engine doesn't open a console window for each one.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
 - Colors come from roles in `tui/theme.ts` (brand, local, remote, added, removed, ...), never from color names in components.
 - All display state comes from `reduce()` in `@switchback/client/view`, and what a tool call says about itself from `@switchback/client/tool-display`. If something looks wrong in both clients, fix it there.

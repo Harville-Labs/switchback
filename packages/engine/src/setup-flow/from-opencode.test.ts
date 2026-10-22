@@ -62,8 +62,9 @@ describe('translating an OpenCode config', () => {
       },
     ]);
     expect(got.current).toBe(got.remotes[0]);
+    // `review` is a built-in, so the import only tunes it and keeps its description.
     expect(got.agents?.review).toEqual({
-      config: { description: 'The "review" agent from OpenCode.' },
+      config: {},
       model: expect.objectContaining({ model: 'qwen/qwen3-coder' }),
     });
     expect(got.skipped).toEqual([]);

@@ -1,12 +1,14 @@
 import { expect, test } from 'bun:test';
+import stringWidth from 'string-width';
 import {
   effortNotice,
   estimateLabel,
   formatAgents,
+  modeIcon,
   parseEffort,
   permissionWhy,
   sessionEffort,
-  subagentDetail,
+  tierIcon,
 } from './format.ts';
 import { formatModes, formatPermissions } from './modes.ts';
 
@@ -16,6 +18,22 @@ test('/mode lines up descriptions after the longest mode name and marks the curr
     '  default             ask before edits and commands, as the permission levels say',
     '● plan                read and plan only; nothing changes until you approve the plan',
     '  bypass permissions  everything goes ahead without asking; only deny rules stop a call',
+  ]);
+});
+
+test('/permissions lines up its labels', () => {
+  const text = formatPermissions({
+    mode: 'default',
+    modes: ['default'],
+    levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', websearch: 'allow', mcp: 'ask' },
+    sandbox: { active: true },
+    rules: [],
+  } as Parameters<typeof formatPermissions>[0]);
+  expect(text.split('\n').map((l) => l.slice(0, 8))).toEqual([
+    'mode    ',
+    'levels  ',
+    'sandbox ',
+    'rules   ',
   ]);
 });
 
@@ -109,16 +127,25 @@ test('/agents shows mode, route, model, and effort only when they differ from th
   ]);
 });
 
-test('a subagent row names the model and effort its parent chose', () => {
-  const row = {
-    kind: 'subagent',
-    status: 'done',
-    model: 'remote',
-    effort: 'max',
-    tier: 'remote',
-    toolCalls: 3,
-  } as unknown as Parameters<typeof subagentDetail>[0];
-  expect(subagentDetail(row)).toBe('remote · effort max · remote · 3 tool calls');
+test('status marks take one cell in every terminal, so the space after them shows', () => {
+  const marks = [
+    ...(['acceptEdits', 'autoApprove', 'plan', 'bypassPermissions'] as const).map(modeIcon),
+    tierIcon('local'),
+    tierIcon('remote'),
+  ];
+  for (const mark of marks) {
+    expect(stringWidth(mark)).toBe(1);
+    // Emoji-capable symbols (☁ ⚠ ⏸) are drawn two cells wide by some terminals.
+    expect(mark).not.toMatch(/\p{Emoji}/u);
+  }
+  expect(modeIcon('default')).toBe('');
+});
+
+test('cost estimates round to cents, with a floor for tiny ones', () => {
+  expect(estimateLabel(undefined)).toBe('');
+  expect(estimateLabel(0.004)).toBe('≈ <$0.01');
+  expect(estimateLabel(0.0412)).toBe('≈ $0.04');
+  expect(estimateLabel(1.5)).toBe('≈ $1.50');
 });
 
 test('cost estimates round to cents, with a floor for tiny ones', () => {

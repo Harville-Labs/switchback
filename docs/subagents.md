@@ -7,7 +7,7 @@ An **agent** is a system prompt, a tool allowlist, and a routing preference. The
 Subagents are both a quality feature and a cost feature:
 
 - **Context isolation.** A subagent reads fifty files and returns a ten-line summary. The parent's context, and the size of every later remote call, stays small.
-- **Parallelism.** Several `task` calls in one response run concurrently, up to `subagents.maxConcurrent` per depth level.
+- **Parallelism.** Several `task` calls in one response run concurrently, up to `subagents.maxConcurrent` per depth level. The rest wait for a free slot.
 - **Per-agent routing.** Each subagent has its own routing. The built-in `explore` agent is pinned to `local`, so broad codebase searches never cost anything, even when the parent is running on a remote model.
 
 ## Built-in agents
@@ -17,6 +17,7 @@ Subagents are both a quality feature and a cost feature:
 | `build` | primary | all | auto | Default primary agent for coding work |
 | `explore` | subagent | read, glob, grep | **local**, effort `low` | Find files, symbols, and usages; returns a summary |
 | `plan` | all | read, glob, grep | auto | Produce an implementation plan without editing |
+| `review` | subagent | read, glob, grep, bash | auto | Read-only review of a change; lists bugs and missed cases with file:line |
 | `general` | subagent | all | auto | Delegated multi-step tasks |
 
 Change any of them, or turn them off, with the config `agents` key ([below](#agents-in-config)).
@@ -108,7 +109,9 @@ Files that fail to parse are skipped and reported by `switchback doctor` and at 
 The parent can also choose, for one task, `model` (any configured model alias, over the agent's own) and `effort`. Switchback refuses a `model` that isn't configured, a remote model for an agent pinned to `local`, and any `model` for an agent on an external runtime, and the parent gets the reason as the task result. The subagent row shows the model and effort it ran with.
 
 - The subagent starts with an empty transcript. `prompt` has to be self-contained, because the subagent can't see the parent conversation.
-- Only the subagent's final text returns to the parent. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model.
+- Only the subagent's final text returns to the parent. Its tool calls are visible to the user (clients show them nested under the task) but not to the parent model. A subagent's system prompt has a short "Reporting back" section in place of the Switchback guide the top-level session gets: report what you found or changed, with file paths and line numbers, what you couldn't do, and what the caller should check.
+- Reports are cut to 30,000 characters. The subagents started in one step share 60,000 between them, so a fan-out of 150 adds about as much to the parent's context as two do: each is told its share in its brief (`Keep your final report under 400 characters`), and anything past it is cut.
+- A subagent's model calls go through the router like the parent's, under its own agent's routing, budget, and `routing.allowRemote`. Its row shows the model each step ran on.
 - A subagent that fails or is cancelled returns an error result, which the parent can handle.
 - Cancelling the parent turn cancels its subagents.
 
@@ -181,11 +184,25 @@ With `"background": true` the call returns at once with the task's ID and the pa
 - Headless `switchback run` and subagents wait for their own background tasks before they finish, so nothing is left running unattended.
 - Cancelling the session (esc in the TUI, Cancel in VS Code) cancels its background tasks and drops their reports.
 
+### Splitting work across subagents
+
+Ask for it in plain words: "use 4 subagents to find every caller of `parseConfig`", "split this migration across subagents", "have a reviewer check it". There's no limit on how many; 150 works. The `task` tool's description tells the model how:
+
+- Start as many subagents as you ask for. With no number, as few as the work needs. If the number looks wrong for the work, too many to be worth the cost or too few to split it, the model says so and you agree on one first.
+- Split the work into independent pieces and start them all in one response, so they run in parallel.
+- Give each a complete brief: the goal, the files it owns, and what to report.
+- Never let two subagents edit the same file. Each gets its own files, or `isolation: "worktree"` and a `merge_worktree` afterwards.
+- Combine the reports into one answer.
+
+Each subagent is a full model run, so many of them cost what that many runs cost, under the usual routing and budgets. Calls beyond `subagents.maxConcurrent` show as waiting (`◷ … waiting for a free slot`) and start as earlier ones finish (`subagent.queued`, then `subagent.started`, in the [protocol](protocol.md)). Cancelling the parent cancels the running ones and the waiting ones.
+
+To try it without a model, the mock provider fans out a prompt of the form `use 3 subagents to <goal>`: `bun run dev -- --mock`.
+
 ## Limits
 
 | Config | Default | Effect |
 |---|---|---|
-| `subagents.maxConcurrent` | 4 | Concurrent subagents per depth level. Extra calls queue. |
+| `subagents.maxConcurrent` | 16 | Concurrent subagents per depth level. Extra calls wait for a free slot. A local server that runs fewer at once queues the rest itself, so lower this only to keep a fan-out from crowding out your own work, or to stay under a remote provider's rate limit. |
 | `subagents.maxDepth` | 2 | Agents at this depth don't get the `task` tool. |
 | `subagents.model` | none | Model for subagents whose agent doesn't pin a model or tier, for example a cheap local one for every delegated search. Any alias, local or remote. |
 | `subagents.effort` | none | Reasoning effort for subagents whose agent sets none. |
@@ -206,5 +223,5 @@ Each model call gets the first effort set, most specific first:
 ## Patterns
 
 - **Search locally, decide remotely.** Keep the primary agent on `auto`. Have it delegate "find X" to `explore` (local) and make decisions with the summary.
-- **Fan out reviews.** Define `security-reviewer`, `perf-reviewer`, and `test-reviewer` with `model: sonnet` and ask the primary agent to run them in parallel.
+- **Fan out reviews.** Ask for a review and the primary agent sends the built-in `review` agent. For more angles, define `security-reviewer`, `perf-reviewer`, and `test-reviewer` with `model: large` and ask the primary agent to run them in parallel.
 - **Cheap bulk edits.** An agent with `model: local` and `tools: read, edit` can apply mechanical changes across many files at zero cost. The primary agent verifies afterwards.

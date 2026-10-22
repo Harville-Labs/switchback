@@ -127,6 +127,7 @@ export class EngineConnection implements vscode.Disposable {
     });
     client.on((event) => {
       const mine = this.scope.observe(event);
+      if (event.type === 'session.renamed') this.retitle(event.sessionId, event.title);
       this.broadcast({ type: 'event', event });
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
@@ -241,7 +242,15 @@ export class EngineConnection implements vscode.Disposable {
     const sessions = await this.client?.request('session.list', {}).catch(() => undefined);
     if (!sessions) return;
     for (const s of sessions) this.remember(s);
+    if (this.session) this.session = this.known.get(this.session.id) ?? this.session;
     this.broadcast({ type: 'sessions', sessions });
+  }
+
+  /** Keep a renamed session's title, for the chat's title and the next tab switch. */
+  private retitle(sessionId: string, title: string) {
+    const known = this.known.get(sessionId);
+    if (known) this.known.set(sessionId, { ...known, title });
+    if (this.session?.id === sessionId) this.session = { ...this.session, title };
   }
 
   /** Show the dashboard in the chat (Switchback: Show Sessions). */

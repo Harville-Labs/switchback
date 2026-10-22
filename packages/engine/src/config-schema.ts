@@ -223,7 +223,9 @@ export const SwitchbackConfig = z.object({
   agents: z.record(z.string(), AgentConfig).default({}),
   subagents: z
     .object({
-      maxConcurrent: z.number().int().positive().default(4),
+      // Local servers queue what they can't run at once (Ollama) or batch it (vLLM),
+      // and remote 429s are retried, so this mostly bounds how fast a big fan-out goes.
+      maxConcurrent: z.number().int().positive().default(16),
       maxDepth: z.number().int().positive().default(2),
       /** Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it. */
       budgetUsd: z.number().nonnegative().optional(),
@@ -231,6 +233,13 @@ export const SwitchbackConfig = z.object({
       model: z.string().optional(),
       /** Reasoning effort for subagents whose agent doesn't set one; else the model's. */
       effort: EffortLevel.optional(),
+    })
+    .prefault({}),
+  /** Limits on `/goal`: it stops after this many turns or minutes, whichever comes first. */
+  goal: z
+    .object({
+      maxTurns: z.number().int().positive().max(1000).default(25),
+      maxMinutes: z.number().positive().max(10_080).default(120),
     })
     .prefault({}),
   /** Hard cap on model calls per user prompt, to stop runaway loops. */

@@ -6,6 +6,7 @@
 import { basename, join } from 'node:path';
 import type { ShellInfo } from '@switchback/protocol';
 import type { Subprocess } from 'bun';
+import { hideWindow } from '../hide-window.ts';
 import {
   BashSandbox,
   type SandboxContext,
@@ -61,10 +62,10 @@ interface Entry extends BackgroundShell {
  */
 export function terminate(proc: Subprocess): void {
   if (process.platform === 'win32')
-    Bun.spawnSync(['taskkill', '/pid', String(proc.pid), '/T', '/F'], {
-      stdout: 'ignore',
-      stderr: 'ignore',
-    });
+    Bun.spawnSync(
+      ['taskkill', '/pid', String(proc.pid), '/T', '/F'],
+      hideWindow({ stdout: 'ignore', stderr: 'ignore' } as const),
+    );
   else proc.kill();
 }
 
@@ -159,6 +160,7 @@ export class CommandRunner {
     private readonly onChange: (shell: BackgroundShell) => void = () => {},
     /** Without it, commands run unsandboxed (tests, embedding). */
     private readonly sandbox?: SandboxDeps,
+    private readonly spawnProcess: typeof Bun.spawn = Bun.spawn,
   ) {}
 
   get timeoutMs(): number {
@@ -172,7 +174,7 @@ export class CommandRunner {
   async spawn(command: string, cwd: string, unsandboxed = false): Promise<Spawned> {
     const s = this.settings();
     const env = { ...s.env, SWITCHBACK: '1' };
-    const io = { cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' } as const;
+    const io = hideWindow({ cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' } as const);
     const shell = shellOf(s);
     const state: SandboxState =
       this.sandbox && !unsandboxed
@@ -183,7 +185,7 @@ export class CommandRunner {
       const policy = sandboxPolicy(s.sandbox, this.sandbox.context(cwd));
       const shellPath = shell.argv('')[0] as string;
       const wrapped = await this.sandbox.runtime.wrap(command, shellPath, cwd, policy, sandboxId);
-      const proc = Bun.spawn(wrapped.argv, { ...io, env: { ...wrapped.env, ...env } });
+      const proc = this.spawnProcess(wrapped.argv, { ...io, env: { ...wrapped.env, ...env } });
       return { proc, sandboxId };
     }
     const reason = state.active ? '' : state.reason;
@@ -195,7 +197,9 @@ export class CommandRunner {
       this.noticed = true;
       this.sandbox.notice(`bash commands run without the OS sandbox: ${reason}`);
     }
-    return { proc: Bun.spawn(shell.argv(command), { ...io, env: { ...process.env, ...env } }) };
+    return {
+      proc: this.spawnProcess(shell.argv(command), { ...io, env: { ...process.env, ...env } }),
+    };
   }
 
   /** Whether commands will run sandboxed, and if not, why. */

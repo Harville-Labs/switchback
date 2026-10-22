@@ -16,8 +16,8 @@
  *    what the user allowed this session.
  * 7. The mode: `acceptEdits` allows edits.
  * 8. The category's level (`websearch` has its own): `allow`, or ask. A bash
- *    command that only explores the workspace takes the `read` level (ADR 0025). In
- *    `autoApprove`, a model judges the call first (ADR 0024) and the user is
+ *    command that only explores the workspace takes the `read` level (ADR 0026). In
+ *    `autoApprove`, a model judges the call first (ADR 0025) and the user is
  *    asked only when it doesn't approve.
  */
 import { relative } from 'node:path';
@@ -231,7 +231,7 @@ export class PermissionGate {
   }
 
   /**
-   * A bash call that only looks around the workspace (ADR 0025), with no read
+   * A bash call that only looks around the workspace (ADR 0026), with no read
    * rule that denies or asks about a path it reads (`read(.env)`).
    */
   private explores(call: ToolCall, ctx: ToolContext): boolean {

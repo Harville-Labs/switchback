@@ -4,11 +4,29 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-22
+
 ### Added
+- **Asking for subagents gets you subagents.** "Use 4 subagents to…" starts four, in parallel, each with its own brief and files; with no number the model uses as few as the work needs, and when a number looks wrong for the work it says so and you agree on one. Two subagents never edit the same file: each gets its own files or its own worktree
+- **Big fan-outs don't flood the parent's context.** The subagents started in one step share 60,000 characters of report, and each is told its share, so 150 of them cost the parent about what two do. Subagents get a short note on reporting instead of the whole Switchback guide
+- **A built-in `review` agent.** "Have a reviewer check it" sends a read-only reviewer over the change, which lists bugs and missed cases with file and line
+- **Subagents waiting for a slot show as waiting.** Past `subagents.maxConcurrent`, a subagent's row says `waiting for a free slot` until it starts (`subagent.queued` in the protocol), and a running row shows the model it's on
+- **The mock provider fans out `use 3 subagents to <goal>`,** so `--mock` demos orchestration without a model
 - **The prompt-cache hit rate is in the status bar.** The TUI's status bar and VS Code's composer show how much of the session's input came from the provider's cache (`cache 91%`), with the latest turn's when it differs. `call.stats` events carry each call's usage. `--mock` simulates a prefix cache, so the rate shows there too
+- **`/rename` names a session.** Up to 60 characters, in the TUI and VS Code (`session.rename` in the protocol). The title shows in `/sessions`, `--resume`, the VS Code view, the terminal's title (restored on exit), and ACP editors. `/rename` alone shows the current title
+- **Sessions are retitled at compaction.** The summary that compaction already makes suggests a title, so it costs no extra model call; a title you set is never replaced
+- **`/goal <objective>` keeps working until it's done.** The agent starts turn after turn until the model reports the goal done or blocked with the new `goal` tool, a `goal.maxTurns` or `goal.maxMinutes` limit is reached, three turns in a row fail, or you stop it with Esc or `/goal stop`. Each new turn is an appended reminder, so routing, budgets, and permission prompts apply as usual. Both clients show the goal above the prompt ([ADR 0024](docs/adr/0024-goals.md))
 
 ### Changed
+- **16 subagents run at once by default,** up from 4 (`subagents.maxConcurrent`), so a large fan-out finishes sooner. Local servers queue what they can't run at once
+- **Tool results and `@` mentions fit the model's context window.** A step's tool results share a quarter of the calling model's window (2,000 to 30,000 characters each), and a prompt's attachments half the session's, so a small local model isn't swamped by one read and pushed to escalate. Cut results keep their last lines, so a command's exit code survives. The cap is applied in one place for every tool, MCP tools included
 - **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
+
+### Fixed
+- **Copying text works on Windows.** The TUI no longer turns on mouse reporting there, so dragging selects text and Ctrl+C or Enter copies it in Windows Terminal, conhost, and VS Code's terminal. `/mouse on` brings back wheel scrolling and tab clicks, and `/mouse off` gives plain selection on macOS and Linux; the choice is remembered
+- **PowerShell commands don't flash a console window on Windows.** Commands run outside the sandbox, hooks, git, ripgrep, the clipboard helpers, and the engine VS Code starts now run with their window hidden
+- **Status bar marks have their space back.** The permission mode's mark (`»` accept edits, `║` plan, `!` bypass) and the remote model's (`▲`, was `☁`) are one cell wide in every terminal; the emoji-capable ones they replace (`⚠`, `⏸`, `☁`) were drawn two cells wide on Windows and covered the space after them
+- **Setup with one model doesn't ask which model does what.** It used to offer an escalation ladder, reviewers, and a subagent model that a single model can't have
 
 ## [2.3.0] - 2026-10-21
 

@@ -13,13 +13,16 @@ import {
   readFileSync,
   readSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import type { Message } from '@switchback/protocol';
+import type { Message, TitleSource } from '@switchback/protocol';
 
 export interface SessionHeader {
   id: string;
   title: string;
+  /** Who set `title`; absent in sessions from before titles had a source (the first prompt). */
+  titleSource?: TitleSource;
   agent: string;
   parentId?: string;
   workspaceRoot: string;
@@ -46,6 +49,8 @@ export interface StoredSessionInfo {
 export interface SessionStore {
   create(header: SessionHeader): void;
   append(id: string, message: Message): void;
+  /** Change the title without touching the transcript. */
+  rename(id: string, title: string, source: TitleSource): void;
   load(id: string): StoredSession | undefined;
   list(): StoredSessionInfo[];
 }
@@ -61,6 +66,10 @@ export class MemorySessionStore implements SessionStore {
     s.messages.push(message);
     s.updatedAt = new Date().toISOString();
   }
+  rename(id: string, title: string, source: TitleSource) {
+    const s = this.sessions.get(id);
+    if (s) s.header = { ...s.header, title, titleSource: source };
+  }
   load(id: string) {
     return this.sessions.get(id);
   }
@@ -73,14 +82,16 @@ export class FileSessionStore implements SessionStore {
   /**
    * Sessions are written on their first message, so the header carries the
    * title (set from the first prompt) and unused sessions leave no files.
+   * A later title goes in `<id>.title.json` beside the transcript: the header
+   * line is never rewritten, and listing reads only headers and these.
    */
   private pending = new Map<string, SessionHeader>();
 
   constructor(private readonly dir: string) {}
 
-  private file(id: string) {
+  private file(id: string, ext = 'jsonl') {
     if (!/^[\w-]+$/.test(id)) throw new Error(`invalid session id: ${id}`);
-    return join(this.dir, `${id}.jsonl`);
+    return join(this.dir, `${id}.${ext}`);
   }
 
   create(header: SessionHeader) {
@@ -96,6 +107,30 @@ export class FileSessionStore implements SessionStore {
       this.pending.delete(id);
     }
     appendFileSync(this.file(id), `${JSON.stringify({ message })}\n`);
+  }
+
+  rename(id: string, title: string, source: TitleSource) {
+    const pending = this.pending.get(id);
+    if (pending) {
+      this.pending.set(id, { ...pending, title, titleSource: source });
+      return;
+    }
+    mkdirSync(this.dir, { recursive: true });
+    writeFileSync(this.file(id, 'title.json'), `${JSON.stringify({ title, source })}\n`);
+  }
+
+  /** The header with any later title over the one it was written with. */
+  private retitled(header: SessionHeader): SessionHeader {
+    const file = this.file(header.id, 'title.json');
+    if (!existsSync(file)) return header;
+    try {
+      const t = JSON.parse(readFileSync(file, 'utf8')) as { title?: unknown; source?: unknown };
+      if (typeof t.title !== 'string') return header;
+      const source = t.source === 'user' || t.source === 'compaction' ? t.source : 'prompt';
+      return { ...header, title: t.title, titleSource: source };
+    } catch {
+      return header; // a torn write: the title it had before is still right
+    }
   }
 
   load(id: string): StoredSession | undefined {
@@ -115,7 +150,7 @@ export class FileSessionStore implements SessionStore {
         break; // torn write at the tail; everything before it is intact
       }
     }
-    return header ? { header, messages } : undefined;
+    return header ? { header: this.retitled(header), messages } : undefined;
   }
 
   list(): StoredSessionInfo[] {
@@ -125,7 +160,8 @@ export class FileSessionStore implements SessionStore {
       if (!f.endsWith('.jsonl')) continue;
       const file = join(this.dir, f);
       const header = readHeader(file);
-      if (header) out.push({ header, updatedAt: statSync(file).mtime.toISOString() });
+      if (header)
+        out.push({ header: this.retitled(header), updatedAt: statSync(file).mtime.toISOString() });
     }
     return out;
   }

@@ -8,7 +8,9 @@ import {
   reviewLines,
   speedLabel,
   subagentDetail,
+  subagentIcon,
   tailLines,
+  tierIcon,
   toolResult,
   toolTitle,
   type ViewItem,
@@ -276,7 +278,7 @@ export function Item({
         <Box marginTop={1}>
           <Text dimColor wrap="truncate-end">
             <Text color={color}>
-              {item.tier === 'local' ? '⌂' : '☁'} {item.model.model}
+              {tierIcon(item.tier)} {item.model.model}
             </Text>{' '}
             · {item.reason}
             {item.tokensPerSecond !== undefined ? ` · ${speedLabel(item.tokensPerSecond)}` : ''}
@@ -308,7 +310,7 @@ export function Item({
     case 'tool':
       return <ToolRow item={item} width={width} expanded={expanded} compact={compact} />;
     case 'subagent': {
-      const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
+      const icon = subagentIcon(item.status);
       return (
         <Box marginTop={compact ? 0 : 1} flexDirection="column">
           <Text>

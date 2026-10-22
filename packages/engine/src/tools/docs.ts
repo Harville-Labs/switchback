@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DOCS_TOPICS, docsHeadings, docsSection, EMBEDDED_DOCS } from '../docs.ts';
-import { defineTool, type ToolContext, ToolError, truncate } from './tool.ts';
+import { defineTool, type ToolContext, ToolError } from './tool.ts';
 
 /**
  * Reads Switchback's own documentation, as built into this version, so the
@@ -46,7 +46,7 @@ export const docsTool = defineTool({
         );
       text = section;
     }
-    return truncate(slug === 'configuration' ? `${whereConfigLives(ctx)}\n\n${text}` : text);
+    return slug === 'configuration' ? `${whereConfigLives(ctx)}\n\n${text}` : text;
   },
 });
 

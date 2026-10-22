@@ -5,6 +5,7 @@ import {
   STATE_LABELS,
   switchTab,
   type TabsState,
+  tierIcon,
 } from '@switchback/client';
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useMemo, useState } from 'react';
@@ -162,7 +163,7 @@ export function Dashboard({
                 {r.model ? (
                   <Text color={r.tier === 'local' ? t.local : t.remote} dimColor>
                     {' · '}
-                    {r.tier === 'local' ? '⌂' : '☁'} {r.model}
+                    {tierIcon(r.tier)} {r.model}
                   </Text>
                 ) : null}
                 <Text dimColor>

@@ -75,7 +75,7 @@ Then five guards run on the target. They only ever act on remote models; a local
 - `policy: off` means no escalation on quality signals at any step.
 - An alias that isn't under `models` is a config error, so a typo can't silently remove a step.
 
-`switchback init` asks for your models first, then which model does what, with defaults filled in: the first local model is current, other local models come next on the ladder, then hosted models from cheapest to most expensive. Unattended, `--current` (formerly `--start`, which still works), `--escalate` (repeat for each step; commas for alternatives), `--reviewers`, and `--subagent-model` set the roles by model ID or alias. `switchback doctor` shows the roles, each model's tier, and its context window.
+`switchback init` asks for your models first, then which model does what, with defaults filled in: the first local model is current, other local models come next on the ladder, then hosted models from cheapest to most expensive. With only one model there's nothing to choose, so it shows the roles and moves on. Unattended, `--current` (formerly `--start`, which still works), `--escalate` (repeat for each step; commas for alternatives), `--reviewers`, and `--subagent-model` set the roles by model ID or alias. `switchback doctor` shows the roles, each model's tier, and its context window.
 
 ## Changing roles during a session
 

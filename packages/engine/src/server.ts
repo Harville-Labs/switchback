@@ -27,10 +27,12 @@ import {
   SessionEscalateParams,
   SessionGetParams,
   SessionPromptParams,
+  SessionRenameParams,
   SessionRewindParams,
   SessionRolesParams,
   SessionSendQueuedParams,
   SessionSetEffortParams,
+  SessionSetGoalParams,
   SessionSetModeParams,
   SessionSetRolesParams,
   SetupAnswerParams,
@@ -114,6 +116,10 @@ export function serve(
         return engine.listSessions();
       case 'session.get':
         return engine.getSession(parse(SessionGetParams, req.params).sessionId);
+      case 'session.rename': {
+        const p = parse(SessionRenameParams, req.params);
+        return engine.renameSession(p.sessionId, p.title);
+      }
       case 'session.prompt':
         return engine.prompt(parse(SessionPromptParams, req.params));
       case 'session.roles':
@@ -148,6 +154,10 @@ export function serve(
       case 'session.setEffort': {
         const p = parse(SessionSetEffortParams, req.params);
         return engine.setEffort(p.sessionId, p.effort);
+      }
+      case 'session.setGoal': {
+        const p = parse(SessionSetGoalParams, req.params);
+        return engine.setGoal(p.sessionId, p.objective);
       }
       case 'shells.list':
         return engine.shells(parse(ShellsListParams, req.params).sessionId);

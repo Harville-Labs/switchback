@@ -187,3 +187,15 @@ test('a prompt for a session this connection never opened is an error that says 
     }),
   ).rejects.toThrow('session/new');
 });
+
+test("the session's title reaches the editor when the first prompt names it", async () => {
+  const { agent, updates } = await editor([{ text: 'ok' }]);
+  const { sessionId } = await agent.request('session/new', { cwd: root, mcpServers: [] });
+  await agent.request('session/prompt', {
+    sessionId,
+    prompt: [{ type: 'text', text: 'refactor the parser' }],
+  });
+  expect(updates.find((u) => u.sessionUpdate === 'session_info_update')).toMatchObject({
+    title: 'refactor the parser',
+  });
+});

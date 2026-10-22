@@ -1,4 +1,4 @@
-# 0025: Read-only shell commands explore without asking
+# 0026: Read-only shell commands explore without asking
 
 **Status:** Accepted · 2026-10-22
 

@@ -6,6 +6,7 @@
  */
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import { hideWindow } from '../hide-window.ts';
 
 export interface ListedSubscriptionModel {
   id: string;
@@ -34,11 +35,10 @@ export interface CodexConnection {
 
 /** `codex app-server` over stdio: one JSON-RPC message per line. */
 function spawnCodex(executable: string): CodexConnection {
-  const child = Bun.spawn([executable, 'app-server'], {
-    stdin: 'pipe',
-    stdout: 'pipe',
-    stderr: 'ignore',
-  });
+  const child = Bun.spawn(
+    [executable, 'app-server'],
+    hideWindow({ stdin: 'pipe', stdout: 'pipe', stderr: 'ignore' } as const),
+  );
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   let next = 0;
   void (async () => {

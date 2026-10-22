@@ -35,6 +35,7 @@ import {
   type SessionRewindParams,
   type SessionRewindResult,
   type SessionRoles,
+  type SessionSetGoalResult,
   type SessionSetRolesParams,
   type SessionSummary,
   type SetupAnswerParams,
@@ -68,7 +69,7 @@ import { listWorktrees, worktreeDiff } from './worktree-info.ts';
 
 export type { EngineOptions } from './engine-options.ts';
 
-export const ENGINE_VERSION = '2.3.0';
+export const ENGINE_VERSION = '2.4.0';
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();
@@ -188,6 +189,13 @@ export class Engine {
     return { session: this.p.factory.summary(s), messages: s.messages };
   }
 
+  /** `session.rename`: a title the user chose, which automatic retitling keeps. */
+  renameSession(sessionId: string, title: string): SessionSummary {
+    const s = this.p.sessions.live(sessionId);
+    this.p.host.rename(s, title, 'user');
+    return this.p.factory.summary(s);
+  }
+
   /** A session's effective roles: its own changes over the config. */
   roles(sessionId: string): SessionRoles {
     return this.p.policy.rolesOf(this.p.sessions.live(sessionId));
@@ -252,10 +260,28 @@ export class Engine {
     return this.p.turns.run(session, text, route, turnId, parentSignal, extra, options);
   }
 
-  /** Cancel the running turn and every background subagent the session started. */
+  /** Cancel the running turn and every background subagent the session started, and stop its goal. */
   cancel(sessionId: string): boolean {
     const s = this.p.sessions.get(sessionId);
-    return s ? this.p.turns.cancel(s) : false;
+    if (!s) return false;
+    if (s.depth === 0) this.p.goals.stop(s, 'interrupted');
+    return this.p.turns.cancel(s);
+  }
+
+  /**
+   * `session.setGoal`: start working toward an objective, the objective
+   * being the first prompt (queued while a turn runs), or stop the goal.
+   */
+  setGoal(sessionId: string, objective: string | null): SessionSetGoalResult {
+    const s = this.p.sessions.live(sessionId);
+    if (s.depth > 0)
+      throw new RpcError(ErrorCode.InvalidParams, 'only a top-level session can have a goal');
+    if (objective === null) {
+      const goal = this.p.goals.stop(s, 'stopped by the user');
+      return goal ? { goal } : {};
+    }
+    const goal = this.p.goals.set(s, objective);
+    return { goal, turnId: this.p.turns.start(s, { text: objective }).turnId };
   }
 
   respondPermission(

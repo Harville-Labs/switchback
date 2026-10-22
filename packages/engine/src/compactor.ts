@@ -2,7 +2,7 @@
  * Append-only compaction (ADR 0008): when a prompt grows past the threshold,
  * summarize older history into a marker appended to the transcript.
  */
-import { ErrorCode, type Message, RpcError } from '@switchback/protocol';
+import { clipTitle, ErrorCode, type Message, RpcError } from '@switchback/protocol';
 import type { ChatEvent, Provider } from '@switchback/providers';
 import { type ModelInfo, roleAliases } from '@switchback/router';
 import {
@@ -11,6 +11,7 @@ import {
   latestMarker,
   renderForSummary,
   SUMMARIZER_PROMPT,
+  splitTitle,
   summaryRequest,
 } from './compaction.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
@@ -79,7 +80,14 @@ export class Compactor {
         reason: 'no local model is reachable to summarize earlier context',
       });
 
-    const summary = await this.summarizeRange(s, provider, summarizer, start, keepFrom, signal);
+    const { summary, title } = await this.summarizeRange(
+      s,
+      provider,
+      summarizer,
+      start,
+      keepFrom,
+      signal,
+    );
     if (!summary || signal.aborted) return false;
 
     const marker: Message = {
@@ -96,6 +104,10 @@ export class Compactor {
       tokensBefore: before,
       tokensAfter: part.tokensAfter,
     });
+    // The summary's title, from the same call: retitling costs nothing more.
+    // A title the user chose stays; subagent sessions keep their task's name.
+    if (title && !s.header.parentId && s.header.titleSource !== 'user')
+      this.host.rename(s, clipTitle(title), 'compaction');
     return true;
   }
 
@@ -120,7 +132,7 @@ export class Compactor {
    * The window compaction keeps a session inside: the largest in the start
    * chain, so turns can always go back to it; else the first escalation step's.
    */
-  private window(): number | undefined {
+  window(): number | undefined {
     const routing = this.host.config().routing;
     const start = routing.current.flatMap((a) => this.models.info(a) ?? []);
     if (start.length) return Math.max(...start.map((m) => m.contextWindow));
@@ -128,7 +140,7 @@ export class Compactor {
     return first?.contextWindow;
   }
 
-  /** Fold chunks that fit the summarizer's window into a running summary. */
+  /** Fold chunks that fit the summarizer's window into a running summary, and title the last one. */
   private async summarizeRange(
     s: LiveSession,
     provider: Provider,
@@ -136,14 +148,23 @@ export class Compactor {
     start: number,
     keepFrom: number,
     signal: AbortSignal,
-  ): Promise<string | undefined> {
+  ): Promise<{ summary?: string; title?: string }> {
     const budget = Math.floor(summarizer.contextWindow * 0.5);
     let summary = latestMarker(s.messages)?.part.summary;
+    let title: string | undefined;
     let chunk: string[] = [];
     let chunkTokens = 0;
     const flush = async () => {
       if (!chunk.length) return;
-      summary = await this.summarize(s, provider, summarizer, summary, chunk.join('\n\n'), signal);
+      const text = await this.summarize(
+        s,
+        provider,
+        summarizer,
+        summary,
+        chunk.join('\n\n'),
+        signal,
+      );
+      ({ summary, title } = splitTitle(text));
       chunk = [];
       chunkTokens = 0;
     };
@@ -155,7 +176,7 @@ export class Compactor {
       chunkTokens += Math.min(n, budget);
     }
     await flush();
-    return summary;
+    return { summary, title };
   }
 
   private async summarize(

@@ -107,7 +107,7 @@ Setup also allows the common test, build, and lint commands (Bun, npm, pnpm, Car
 
 ### Exploring with bash
 
-Looking around the workspace with the shell doesn't ask, as long as `permissions.read` is `allow` (the default) ([ADR 0025](adr/0025-explore-without-asking.md)). That covers `ls`, `pwd`, `cd`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `du`, `diff`, `cut`, `echo`, `which`, `basename`, `dirname`, `realpath`, `find`, `grep`, `egrep`, `fgrep`, `rg`, and `sed` with a script that only prints (`sed -n '1,20p'`, `sed 's/a/b/g' file`), chained with `&&`, `;`, or pipes. Read-only git counts too: `status`, `diff`, `log`, `show`, `blame`, `grep`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, `tag -l`, and `branch` with only listing flags.
+Looking around the workspace with the shell doesn't ask, as long as `permissions.read` is `allow` (the default) ([ADR 0026](adr/0026-explore-without-asking.md)). That covers `ls`, `pwd`, `cd`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `du`, `diff`, `cut`, `echo`, `which`, `basename`, `dirname`, `realpath`, `find`, `grep`, `egrep`, `fgrep`, `rg`, and `sed` with a script that only prints (`sed -n '1,20p'`, `sed 's/a/b/g' file`), chained with `&&`, `;`, or pipes. Read-only git counts too: `status`, `diff`, `log`, `show`, `blame`, `grep`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, `tag -l`, and `branch` with only listing flags.
 
 A command line asks as before, under `permissions.bash`, when any part of it:
 
@@ -146,7 +146,7 @@ The judge is `permissions.judge` when you set it (an alias from `models`), or el
 
 The judge approves reading, searching, editing project files, builds, tests, linters, formatters, and version-control commands that publish nothing. It refuses, so you're asked, anything that deletes or overwrites more than the task needs, publishes or sends something (push, deploy, release, pull requests), installs software globally, touches credentials, downloads and runs code, or goes beyond what you asked. Each approved call shows in the transcript as `auto-approved <call> (<judge>): <reason>`.
 
-A model can be talked into things, so this mode trades some safety for fewer prompts. Prefer allow rules for commands you always approve, and keep `deny` rules for what must never run: they hold in every mode. See [ADR 0024](adr/0024-auto-approve.md).
+A model can be talked into things, so this mode trades some safety for fewer prompts. Prefer allow rules for commands you always approve, and keep `deny` rules for what must never run: they hold in every mode. See [ADR 0025](adr/0025-auto-approve.md).
 
 An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
 
