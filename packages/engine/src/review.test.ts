@@ -227,8 +227,16 @@ describe('draft locally, review with a stronger model', () => {
       review: { mode: 'off' },
     });
     const s = off.engine.createSession({});
+    const completed = new Promise<void>((resolve) => {
+      const unsubscribe = off.engine.subscribe((event) => {
+        if (event.type === 'turn.completed') {
+          unsubscribe();
+          resolve();
+        }
+      });
+    });
     off.engine.prompt({ sessionId: s.id, text: 'fix add', review: true });
-    await Bun.sleep(50);
+    await completed;
     expect(reviews(off.events)).toHaveLength(1);
 
     writeFileSync(join(root, 'math.ts'), 'export const add = (a, b) => a - b;\n');
