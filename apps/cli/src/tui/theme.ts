@@ -4,7 +4,7 @@
  * `plain` uses no color at all, for terminals and people who'd rather not.
  * The choice is saved with the TUI's other preferences (`prefs.ts`).
  */
-import type { PermissionMode } from '@switchback/protocol';
+import type { PermissionLevel } from '@switchback/protocol';
 import { createContext, useContext } from 'react';
 import { prefsFile, readPrefs, savePref } from './prefs.ts';
 
@@ -29,8 +29,10 @@ export interface Theme {
   removed?: string;
   addedBg?: string;
   removedBg?: string;
-  /** Permission modes, as the status bar's badge shows them. */
-  modes: Record<PermissionMode, string | undefined>;
+  /** An agent other than build, in the status bar. */
+  agent?: string;
+  /** Permission levels, as the status bar's badge shows them. */
+  levels: Record<PermissionLevel, string | undefined>;
 }
 
 const DARK: Theme = {
@@ -47,13 +49,8 @@ const DARK: Theme = {
   removed: '#fecaca',
   addedBg: '#123524',
   removedBg: '#3f1519',
-  modes: {
-    default: undefined,
-    acceptEdits: '#c084fc',
-    autoApprove: '#fbbf24',
-    plan: '#38bdf8',
-    bypassPermissions: '#f87171',
-  },
+  agent: '#38bdf8',
+  levels: { ask: undefined, auto: '#fbbf24', bypass: '#f87171' },
 };
 
 const LIGHT: Theme = {
@@ -70,24 +67,13 @@ const LIGHT: Theme = {
   removed: '#7f1d1d',
   addedBg: '#dcfce7',
   removedBg: '#fee2e2',
-  modes: {
-    default: undefined,
-    acceptEdits: '#7e22ce',
-    autoApprove: '#a16207',
-    plan: '#0369a1',
-    bypassPermissions: '#b91c1c',
-  },
+  agent: '#0369a1',
+  levels: { ask: undefined, auto: '#a16207', bypass: '#b91c1c' },
 };
 
 const PLAIN: Theme = {
   name: 'plain',
-  modes: {
-    default: undefined,
-    acceptEdits: undefined,
-    autoApprove: undefined,
-    plan: undefined,
-    bypassPermissions: undefined,
-  },
+  levels: { ask: undefined, auto: undefined, bypass: undefined },
 };
 
 export const THEMES: Record<ThemeName, Theme> = { dark: DARK, light: LIGHT, plain: PLAIN };

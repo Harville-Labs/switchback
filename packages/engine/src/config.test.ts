@@ -220,3 +220,27 @@ test('routing.start, the old name of routing.current, still loads; the new name 
   );
   expect(loadConfig(dir, env).config.routing.current).toEqual(['big']);
 });
+
+test('permissions.defaultMode still loads as permissions.level (ADR 0029)', () => {
+  mkdirSync(join(dir, '.switchback'), { recursive: true });
+  const file = join(dir, '.switchback', 'config.json');
+  const env = { SWITCHBACK_HOME: join(dir, 'home') };
+  const load = (permissions: object, extra: object = {}) => {
+    writeFileSync(file, JSON.stringify({ permissions, ...extra }));
+    return loadConfig(dir, env);
+  };
+  expect(load({ defaultMode: 'autoApprove' }).config.permissions.level).toBe('auto');
+  expect(load({ defaultMode: 'bypassPermissions' }).config.permissions.level).toBe('bypass');
+  // Plan mode became the plan agent; a defaultAgent the file sets still wins.
+  expect(load({ defaultMode: 'plan' }).config).toMatchObject({
+    defaultAgent: 'plan',
+    permissions: { level: 'ask' },
+  });
+  expect(load({ defaultMode: 'plan' }, { defaultAgent: 'build' }).config.defaultAgent).toBe(
+    'build',
+  );
+  const accept = load({ defaultMode: 'acceptEdits' });
+  expect(accept.config.permissions.level).toBe('ask');
+  expect(accept.warnings.join('\n')).toContain('set permissions.edit to "allow"');
+  expect(load({ defaultMode: 'default' }).warnings).toEqual([]);
+});

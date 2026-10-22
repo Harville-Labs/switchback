@@ -9,36 +9,30 @@
 import { isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type * as acp from '@agentclientprotocol/sdk';
-import { toolTitle } from '@switchback/client';
+import { switchableAgents, toolTitle } from '@switchback/client';
 import type {
+  AgentSummary,
   Attachment,
   EngineEvent,
   Message,
-  PermissionMode,
   StopReason,
 } from '@switchback/protocol';
 
 export type AcpUpdate = acp.SessionNotification['update'];
 
-/** Switchback's permission modes, as ACP session modes. */
-const MODES: acp.SessionMode[] = [
-  { id: 'default', name: 'Default', description: 'Ask before edits and commands' },
-  { id: 'acceptEdits', name: 'Accept edits', description: 'Edit files without asking' },
-  {
-    id: 'autoApprove',
-    name: 'Auto-approve',
-    description: 'A model approves calls that fit your request; risky ones still ask',
-  },
-  { id: 'plan', name: 'Plan', description: 'Read and plan; change nothing until you approve' },
-  { id: 'bypassPermissions', name: 'Bypass permissions', description: 'Never ask' },
-];
-
-export function modeState(mode: PermissionMode | undefined): acp.SessionModeState {
-  return { currentModeId: mode ?? 'default', availableModes: MODES };
-}
-
-export function isMode(id: string): id is PermissionMode {
-  return MODES.some((m) => m.id === id);
+/**
+ * The agents that can lead a session, as ACP session modes: an editor's mode
+ * menu picks how the agent works, which is the agent (ADR 0029).
+ */
+export function modeState(agents: AgentSummary[], current: string): acp.SessionModeState {
+  return {
+    currentModeId: current,
+    availableModes: switchableAgents(agents).map((a) => ({
+      id: a.name,
+      name: a.name,
+      description: a.description,
+    })),
+  };
 }
 
 const KINDS: Record<string, acp.ToolKind> = {

@@ -31,10 +31,11 @@ import {
   SessionRewindParams,
   SessionRolesParams,
   SessionSendQueuedParams,
+  SessionSetAgentParams,
   SessionSetAutoCompactParams,
   SessionSetEffortParams,
   SessionSetGoalParams,
-  SessionSetModeParams,
+  SessionSetPermissionsParams,
   SessionSetRolesParams,
   SetupAnswerParams,
   SetupCancelParams,
@@ -150,9 +151,13 @@ export function serve(
       }
       case 'session.escalate':
         return engine.escalate(parse(SessionEscalateParams, req.params).sessionId);
-      case 'session.setMode': {
-        const p = parse(SessionSetModeParams, req.params);
-        return engine.setMode(p.sessionId, p.mode);
+      case 'session.setPermissions': {
+        const p = parse(SessionSetPermissionsParams, req.params);
+        return engine.setPermissions(p.sessionId, p.level);
+      }
+      case 'session.setAgent': {
+        const p = parse(SessionSetAgentParams, req.params);
+        return engine.setAgent(p.sessionId, p.agent);
       }
       case 'session.setEffort': {
         const p = parse(SessionSetEffortParams, req.params);

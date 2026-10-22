@@ -11,7 +11,7 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `write` | edit | Create or overwrite a file; the prompt shows a diff |
 | `bash` | bash | Run a shell command in the [sandbox](permissions.md#sandbox); `background: true` for long-running ones |
 | `task` | none | Delegate to a subagent ([subagents.md](subagents.md)). Several calls in one response run in parallel, up to `subagents.maxConcurrent` |
-| `exit_plan_mode` | none | Present a plan for approval in [plan mode](permissions.md#modes) (top-level sessions only) |
+| `exit_plan_mode` | none | Present a plan for approval and leave the [`plan` agent](permissions.md#agents) (top-level sessions whose agent lists it) |
 | `bash_output` | none | Read new output from a background shell |
 | `kill_shell` | none | Stop a background shell |
 | `webfetch` | web | Read a web page as Markdown |
@@ -37,7 +37,7 @@ Every tool result, MCP tools' and subagents' reports included, is cut to fit the
 
 ## Asking about Switchback
 
-Because every session has `docs`, you can ask the model how Switchback works or to change its settings ("route turns over 50k tokens to the remote model", "allow `bun test` without asking") and it reads the documentation for the version you're running first, offline. It reads the settings in effect with `config` and `models`, then changes them with `set_config` in the project's `.switchback/config.json` or `.switchback/config.local.json`, or your user config (`~/.switchback/config.json`), or with `set_roles` for the session's models and escalation ladder. You're asked every time, even in `acceptEdits`, `autoApprove`, or with `edit: "allow"`, and a change that would make the config invalid fails before you're asked. A change made this way takes effect at once ([ADR 0028](adr/0028-agents-change-their-settings.md)). A config file edited with `edit` or `write` is checked the same way ([permissions.md](permissions.md#outside-the-workspace)), but the running engine doesn't watch its files, so that change takes effect when you type `/reload` or with the next engine.
+Because every session has `docs`, you can ask the model how Switchback works or to change its settings ("route turns over 50k tokens to the remote model", "allow `bun test` without asking") and it reads the documentation for the version you're running first, offline. It reads the settings in effect with `config` and `models`, then changes them with `set_config` in the project's `.switchback/config.json` or `.switchback/config.local.json`, or your user config (`~/.switchback/config.json`), or with `set_roles` for the session's models and escalation ladder. You're asked every time, even at the `auto` level or with `edit: "allow"`, and a change that would make the config invalid fails before you're asked. A change made this way takes effect at once ([ADR 0028](adr/0028-agents-change-their-settings.md)). A config file edited with `edit` or `write` is checked the same way ([permissions.md](permissions.md#outside-the-workspace)), but the running engine doesn't watch its files, so that change takes effect when you type `/reload` or with the next engine.
 
 ## The checklist
 

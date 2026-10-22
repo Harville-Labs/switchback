@@ -13,7 +13,6 @@ import {
   initialTabs,
   initialView,
   isCustomCommand,
-  nextMode,
   openTab,
   replaceActive,
   resolveEscalation,
@@ -41,8 +40,6 @@ import { useEngineFeeds } from './feeds.ts';
 import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
 import { useAppKeys } from './keys.ts';
-import { ModelPicker } from './ModelPicker.tsx';
-import type { MouseInput } from './mouse.ts';
 import { Pinned } from './Pinned.tsx';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
@@ -50,7 +47,7 @@ import { RewindPicker } from './RewindPicker.tsx';
 import { RolePicker } from './RolePicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
 import { type Opening, useSetup } from './SetupPanel.tsx';
-import { cycleModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { cycleAgent, cycleModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
 import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
 import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
@@ -124,10 +121,14 @@ export function App({
   /** Review of local edits; undefined follows `review.mode` in config. */
   const [review, setReview] = useState<boolean | undefined>(undefined);
   const [history] = useState(() => new PromptHistory(launched.workspaceRoot));
-  const { usage, setUsage, modes, roles, custom, resources, models, refreshSessions } =
-    useEngineFeeds(client, launched, session.id, tabs, setTabs);
+  const { usage, setUsage, roles, custom, resources, models, refreshSessions } = useEngineFeeds(
+    client,
+    launched,
+    session.id,
+    tabs,
+    setTabs,
+  );
   const init = useMemo(() => ({ ...launched, models }), [launched, models]);
-  const mode = view.mode ?? session.permissionMode ?? 'default';
   const sessionRoles = view.roles ?? roles;
   /** Saved sessions while the picker is open. */
   const [picking, setPicking] = useState<SessionSummary[] | undefined>();
@@ -185,9 +186,9 @@ export function App({
     header: focusedRow ? (
       <SubagentHeader row={focusedRow} />
     ) : (
-      <Header init={init} roles={sessionRoles} mode={mode} width={width} />
+      <Header init={init} roles={sessionRoles} session={session} view={view} width={width} />
     ),
-    headerKey: `${focused}|${mode}|${JSON.stringify(sessionRoles ?? null)}`,
+    headerKey: `${focused}|${view.agent}|${view.level}|${JSON.stringify(sessionRoles ?? null)}`,
   });
   const scroll = useScroll(lines.length, height);
   useEffect(() => mouse?.onWheel((d) => scroll.by(d)), [mouse, scroll.by]);
@@ -361,10 +362,7 @@ export function App({
     toggleExpanded: () => setExpanded((v) => !v),
     nextSubagent: next,
     showSession: unfocus,
-    nextMode: () =>
-      client
-        .request('session.setMode', { sessionId: session.id, mode: nextMode(mode, modes) })
-        .catch((err: Error) => setView((v) => addInfo(v, `mode: ${err.message}`))),
+    nextAgent: () => cycleAgent(slash),
   });
 
   return (
@@ -486,7 +484,6 @@ export function App({
             review={review}
             view={view}
             usage={usage}
-            mode={mode}
             viewing={focusedRow?.agent}
             current={
               currentModel ? { model: currentModel.ref.model, tier: currentModel.tier } : undefined

@@ -13,7 +13,7 @@ import type { AgentSummary, RoutePreference } from '@switchback/protocol';
 import type { Effort } from '@switchback/providers';
 import { Glob } from 'bun';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { AgentConfig, type SwitchbackConfig } from './config-schema.ts';
+import { AgentConfig, type AgentPermissions, type SwitchbackConfig } from './config-schema.ts';
 
 export type AgentMode = 'primary' | 'subagent' | 'all';
 
@@ -40,6 +40,8 @@ export interface AgentDefinition {
   isolation?: 'worktree';
   /** Run on an external agent runtime (`runtimes.<name>`) instead of the switchback loop. */
   runtime?: string;
+  /** Levels and rules that tighten the config's while this agent works (ADR 0029). */
+  permissions?: AgentPermissions;
   source: AgentSummary['source'];
   file?: string;
 }
@@ -71,9 +73,11 @@ export const BUILTIN_AGENTS: AgentDefinition[] = [
     name: 'plan',
     description: 'Read-only architect that produces a step-by-step implementation plan.',
     prompt:
-      'You are a software architect. Investigate the code with read-only tools and produce a concrete, ordered implementation plan naming the files to change and the risks. Do not modify anything.',
+      'You are a software architect. Investigate the code, and the web when it helps, and produce a concrete, ordered implementation plan naming the files to change and the risks. Change nothing: no edits, and no commands with side effects. When you have a complete plan, present it with exit_plan_mode if you have it, so the user can approve it; otherwise reply with the plan.',
     mode: 'all',
-    tools: ['read', 'glob', 'grep'],
+    tools: ['read', 'glob', 'grep', 'bash', 'task', 'webfetch', 'websearch', 'exit_plan_mode'],
+    // Commands that only look around the workspace still run without asking (ADR 0026).
+    permissions: { edit: 'deny', bash: 'ask' },
     route: 'auto',
     source: 'builtin',
   },
@@ -160,7 +164,30 @@ export function applyAgentConfig(
   if (cfg.budgetUsd !== undefined) agent.budgetUsd = cfg.budgetUsd;
   if (cfg.isolation) agent.isolation = cfg.isolation;
   if (cfg.runtime) agent.runtime = cfg.runtime;
+  // A layer adds to what the agent already restricts, so it can't loosen a built-in's.
+  if (cfg.permissions) agent.permissions = combinePermissions(agent.permissions, cfg.permissions);
   return agent;
+}
+
+const STRICTNESS = { allow: 0, ask: 1, deny: 2 } as const;
+
+/** The stricter of two category levels; undefined counts as no restriction. */
+export function stricter<L extends keyof typeof STRICTNESS>(a: L, b: L | undefined): L {
+  return b !== undefined && STRICTNESS[b] > STRICTNESS[a] ? b : a;
+}
+
+function combinePermissions(
+  base: AgentPermissions | undefined,
+  more: AgentPermissions,
+): AgentPermissions {
+  const out: AgentPermissions = { ...base };
+  for (const key of ['read', 'edit', 'bash', 'web', 'mcp'] as const) {
+    const level = more[key];
+    if (level) out[key] = out[key] ? stricter(out[key], level) : level;
+  }
+  for (const key of ['ask', 'deny'] as const)
+    if (more[key]?.length) out[key] = [...new Set([...(out[key] ?? []), ...more[key]])];
+  return out;
 }
 
 function names(list: string | string[]): string[] {

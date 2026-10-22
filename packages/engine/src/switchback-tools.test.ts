@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent, PermissionMode, ToolResultPart } from '@switchback/protocol';
+import type { EngineEvent, ToolResultPart } from '@switchback/protocol';
 import { type Script, ScriptedProvider } from '@switchback/providers';
 import { loadConfig } from './config.ts';
 import { Engine, type EngineOptions } from './engine.ts';
@@ -62,8 +62,7 @@ function setup(script: Script, opts: Partial<EngineOptions> = {}) {
 /** The tool results the model saw on its second call. */
 const results = (lp: ScriptedProvider) =>
   (lp.requests[1]?.messages.at(-1)?.parts ?? []) as ToolResultPart[];
-const session = (engine: Engine, mode?: PermissionMode) =>
-  engine.createSession(mode ? { permissionMode: mode } : {}).id;
+const session = (engine: Engine) => engine.createSession({}).id;
 
 describe('reading settings', () => {
   test('models lists each model with its tier, price, and role in the session', async () => {
@@ -170,9 +169,12 @@ describe('changing settings', () => {
       name: 'set_config',
       input: { key: 'compaction.enabled', value: 'false', file: 'user' },
     };
-    const { engine, lp } = setup([{ toolCalls: [set] }, { text: 'ok' }], { interaction: 'deny' });
+    const { engine, lp } = setup([{ toolCalls: [set] }, { text: 'ok' }], {
+      interaction: 'deny',
+      rules: [{ rule: 'edit', behavior: 'allow', source: 'config' }],
+    });
     const before = readFileSync(file, 'utf8');
-    await engine.runTurn(session(engine, 'acceptEdits'), 'turn off compaction');
+    await engine.runTurn(session(engine), 'turn off compaction');
     expect(results(lp)[0]?.isError).toBe(true);
     expect(readFileSync(file, 'utf8')).toBe(before);
   });

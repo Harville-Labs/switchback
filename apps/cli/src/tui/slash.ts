@@ -12,12 +12,12 @@ import {
   describeSession,
   effortNotice,
   escalateNotice,
+  formatAgentChoices,
   formatAgents,
   formatCommands,
   formatDashboard,
   formatMcpServers,
   formatModels,
-  formatModes,
   formatPermissions,
   formatReceipt,
   formatRefresh,
@@ -28,16 +28,18 @@ import {
   formatWorktreeDiff,
   formatWorktrees,
   type Ladder,
-  MODE_DESCRIPTIONS,
-  modeLabel,
+  LEVEL_DESCRIPTIONS,
+  levelLabel,
+  nextAgent,
   nextModel,
   parseAutoCompact,
   parseEffort,
-  parseMode,
+  parseLevel,
   pickCopy,
   runGoalCommand,
   runReload,
   type SlashCommand,
+  sessionAgent,
   sessionEffort,
   subagentList,
   tabAt,
@@ -61,7 +63,7 @@ Tabs: ctrl+t shows every session (open tabs, and ones working in other windows);
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
       esc on an empty prompt sends what's queued now, or cancels when nothing is;
       ctrl+c cancels the turn and the queue; ↑ takes back the last queued message;
-      shift+tab cycles the permission mode; ctrl+o expands thinking, output, and diffs;
+      shift+tab cycles agents (build, plan, yours); ctrl+o expands thinking, output, and diffs;
       tab switches to the next model you chose, going round them;
       PgUp/PgDn or the mouse wheel scroll (hold shift or option to select text);
       prompts: ↑↓ and enter, or the option's number (y/a/p/n still work).
@@ -122,6 +124,28 @@ export async function cycleModel(
 }
 
 /** `/up`: a stronger model takes over (`session.escalate`). */
+/** Switch the session to `name`, saying why when the engine refuses. */
+function switchAgent(ctx: SlashContext, name: string): Promise<{ agent: string }> {
+  return ctx.client
+    .request('session.setAgent', { sessionId: ctx.session.id, agent: name })
+    .catch((err: Error) => {
+      say(ctx, `agent: ${err.message}`);
+      throw err;
+    });
+}
+
+/** Shift+Tab: the next agent, in the order build, plan, then custom agents by name. */
+export async function cycleAgent(ctx: SlashContext): Promise<void> {
+  const next = nextAgent(ctx.init.agents, sessionAgent(ctx.view, ctx.session));
+  if (!next)
+    return say(
+      ctx,
+      'No other agent to switch to. Agents whose mode is primary or all can lead a session; /agents lists them.',
+    );
+  // The status bar shows the switch; a failure has already been said.
+  await switchAgent(ctx, next).catch(() => {});
+}
+
 async function escalateNow(ctx: SlashContext): Promise<void> {
   try {
     const { when } = await ctx.client.request('session.escalate', { sessionId: ctx.session.id });
@@ -283,7 +307,14 @@ const HANDLERS: Record<string, Handler> = {
   'subagent-model': subagentModel,
   model,
   review,
-  agent: (ctx, args) => newSession(ctx, args[0]),
+  agent: async (ctx, args) => {
+    const agents = await ctx.client.request('agents.list', {}).catch(() => ctx.init.agents);
+    if (!args[0]) return say(ctx, formatAgentChoices(agents, sessionAgent(ctx.view, ctx.session)));
+    await switchAgent(ctx, args[0]).then(
+      ({ agent }) => say(ctx, `agent: ${agent}`),
+      () => {},
+    );
+  },
   agents: async (ctx) => {
     // Asked each time, so agents created meanwhile (switchback agents new) show up.
     const agents = await ctx.client.request('agents.list', {}).catch(() => ctx.init.agents);
@@ -340,20 +371,6 @@ const HANDLERS: Record<string, Handler> = {
     }
     say(ctx, formatShells(await ctx.client.request('shells.list', {})));
   },
-  mode: async (ctx, args) => {
-    const { modes, mode } = await ctx.client.request('permissions.list', {
-      sessionId: ctx.session.id,
-    });
-    if (!args[0]) return say(ctx, formatModes(modes, mode));
-    const next = parseMode(args[0]);
-    if (!next) return say(ctx, 'usage: /mode default|accept-edits|auto-approve|plan|bypass');
-    try {
-      await ctx.client.request('session.setMode', { sessionId: ctx.session.id, mode: next });
-      say(ctx, `mode: ${modeLabel(next)}. ${MODE_DESCRIPTIONS[next]}`);
-    } catch (err) {
-      say(ctx, `mode: ${(err as Error).message}`);
-    }
-  },
   effort: async (ctx, args) => {
     if (!args[0]) return say(ctx, effortNotice(sessionEffort(ctx.view, ctx.session)));
     const effort = parseEffort(args[0]);
@@ -369,9 +386,17 @@ const HANDLERS: Record<string, Handler> = {
     const text = await runGoalCommand(ctx.client, ctx.session, ctx.view, args);
     if (text) say(ctx, text);
   },
-  permissions: async (ctx) => {
-    const p = await ctx.client.request('permissions.list', { sessionId: ctx.session.id });
-    say(ctx, formatPermissions(p));
+  permissions: async (ctx, args) => {
+    if (!args[0]) {
+      const p = await ctx.client.request('permissions.list', { sessionId: ctx.session.id });
+      return say(ctx, `${formatPermissions(p)}\n/permissions ask|auto|bypass sets the level`);
+    }
+    const level = parseLevel(args[0]);
+    if (!level) return say(ctx, 'usage: /permissions [ask|auto|bypass]');
+    await ctx.client
+      .request('session.setPermissions', { sessionId: ctx.session.id, level })
+      .then(() => say(ctx, `permissions: ${levelLabel(level)}. ${LEVEL_DESCRIPTIONS[level]}`))
+      .catch((err: Error) => say(ctx, `permissions: ${err.message}`));
   },
   receipt: async (ctx) => {
     const u = await ctx.client.request('usage.get', { sessionId: ctx.session.id });

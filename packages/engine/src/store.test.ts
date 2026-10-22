@@ -48,6 +48,17 @@ test('sessions persist with their title and resume in a new engine', async () =>
   expect(second.getSession(s.id).messages).toHaveLength(4);
 });
 
+test('a session resumes with the agent it last switched to (ADR 0029)', async () => {
+  const sessionsDir = join(dir, 'sessions');
+  const first = engine(dir, new FileSessionStore(sessionsDir));
+  const s = first.createSession({});
+  first.setAgent(s.id, 'plan'); // before the first prompt: no file yet
+  await first.runTurn(s.id, 'plan the parser');
+  const second = engine(dir, new FileSessionStore(sessionsDir));
+  expect(second.listSessions()[0]?.agent).toBe('plan');
+  expect(second.getSession(s.id).session.agent).toBe('plan');
+});
+
 test('listing is scoped to the workspace, newest first, and tolerates huge headers', async () => {
   const sessionsDir = join(dir, 'sessions');
   const store = new FileSessionStore(sessionsDir);

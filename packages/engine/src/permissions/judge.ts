@@ -1,5 +1,5 @@
 /**
- * The `autoApprove` mode's judge (ADR 0025): a model reads a call that would
+ * The `auto` permission level's judge (ADR 0025): a model reads a call that would
  * ask and says whether it plainly serves what the user asked for. It can only
  * spare the user a prompt; anything it doesn't approve still asks.
  */
@@ -8,7 +8,7 @@ import type { ChatEvent } from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
 import { z } from 'zod';
 import { contextOf } from '../compaction.ts';
-import type { EngineHost, LiveSession } from '../live-session.ts';
+import { agentNameOf, type EngineHost, type LiveSession } from '../live-session.ts';
 import { type ModelDirectory, withSampling } from '../model-directory.ts';
 import { redactSecrets } from '../privacy.ts';
 
@@ -82,7 +82,7 @@ export class PermissionJudge {
     if (!done) return { ...verdict, allow: false, reason: 'the judge gave no answer' };
     this.host.recordUsage(s, model.tier, model.ref, done.usage, {
       rule: 'auto-approve',
-      agent: s.header.agent,
+      agent: agentNameOf(s),
     });
     const reply = parseReply(
       done.parts.flatMap((p) => (p.type === 'text' ? [p.text] : [])).join(''),

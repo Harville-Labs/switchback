@@ -8,7 +8,7 @@ import type {
   EffortLevel,
   OrgInfo,
   PermissionDecision,
-  PermissionMode,
+  PermissionLevel,
   QueuedPrompt,
   ReviewIssue,
   SessionRoles,
@@ -51,7 +51,9 @@ export type EngineEvent =
    */
   | ({ type: 'session.renamed'; title: string; source: TitleSource } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
-  | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
+  | ({ type: 'permissions.changed'; level: PermissionLevel } & SessionScoped)
+  /** The agent a top-level session works as (`session.setAgent`, or approving a plan). */
+  | ({ type: 'agent.changed'; agent: string } & SessionScoped)
   /** The session's reasoning effort; none means the agent's or model's own. */
   | ({ type: 'effort.changed'; effort?: EffortLevel } & SessionScoped)
   /** The session's goal was set, made progress (a turn ended), or ended. */
@@ -114,7 +116,7 @@ export type EngineEvent =
     } & SessionScoped)
   | ({
       /**
-       * In `autoApprove`, a model judged a call that would have asked: approved,
+       * At the `auto` level, a model judged a call that would have asked: approved,
        * it runs without a prompt; otherwise the user is asked as usual.
        */
       type: 'permission.judged';

@@ -556,10 +556,10 @@
           "type": "string",
           "enum": ["allow", "ask", "deny"]
         },
-        "defaultMode": {
-          "default": "default",
+        "level": {
+          "default": "ask",
           "type": "string",
-          "enum": ["default", "acceptEdits", "autoApprove", "plan", "bypassPermissions"]
+          "enum": ["ask", "auto", "bypass"]
         },
         "judge": {
           "type": "string"
@@ -1094,6 +1094,45 @@
           },
           "runtime": {
             "type": "string"
+          },
+          "permissions": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "string",
+                "enum": ["allow", "ask", "deny"]
+              },
+              "edit": {
+                "type": "string",
+                "enum": ["allow", "ask", "deny"]
+              },
+              "bash": {
+                "type": "string",
+                "enum": ["allow", "ask", "deny"]
+              },
+              "web": {
+                "type": "string",
+                "enum": ["allow", "ask", "deny"]
+              },
+              "mcp": {
+                "type": "string",
+                "enum": ["allow", "ask", "deny"]
+              },
+              "ask": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "deny": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "disable": {
             "type": "boolean"

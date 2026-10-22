@@ -22,7 +22,7 @@ import { estimateEscalationCost } from './estimate.ts';
 import type { ExternalRuntimes } from './external-runtime.ts';
 import { hasImages, withoutImages } from './images.ts';
 import type { UsageLedger } from './ledger.ts';
-import { type EngineHost, type LiveSession, scope } from './live-session.ts';
+import { agentNameOf, type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { McpHub } from './mcp/hub.ts';
 import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactOutbound } from './privacy.ts';
@@ -302,11 +302,22 @@ export class AgentLoop {
     return 'max_tokens';
   }
 
-  /** The agent's tools and their specs for a session; fixed order keeps the cache prefix stable. */
+  /**
+   * The agent a session works as, and the tools and specs it's offered in a
+   * fixed order that keeps the cache prefix stable. A top-level session is
+   * offered every tool any agent could use, whichever agent it works as now;
+   * the permission gate holds each call to the active agent's (ADR 0029).
+   * The task tool's subagent list follows the agent the session started as,
+   * so it doesn't move either; the gate checks delegation for the active one.
+   */
   toolSetup(s: LiveSession) {
-    const agent = this.deps.agent(s.header.agent);
-    if (!agent) throw new Error(`agent "${s.header.agent}" no longer exists`);
-    return { agent, ...sessionTools(s, agent, this.host.config().subagents.maxDepth, this.deps) };
+    const name = agentNameOf(s);
+    const agent = this.deps.agent(name);
+    if (!agent) throw new Error(`agent "${name}" no longer exists`);
+    const offered =
+      s.depth === 0 ? { ...(this.deps.agent(s.header.agent) ?? agent), tools: undefined } : agent;
+    const maxDepth = this.host.config().subagents.maxDepth;
+    return { agent, ...sessionTools(s, offered, maxDepth, this.deps) };
   }
 
   /**

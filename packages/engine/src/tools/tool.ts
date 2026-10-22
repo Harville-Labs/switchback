@@ -111,7 +111,7 @@ export interface SwitchbackControls {
   setRoles(params: Omit<SessionSetRolesParams, 'sessionId'>): SessionRoles & { savedTo?: string };
 }
 
-export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';
+export type PlanAnswer = 'approved' | 'approved-auto' | 'rejected' | 'not-planning';
 
 /** What a mutating call would change, for review before approval. */
 export interface ToolPreview {

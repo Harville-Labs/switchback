@@ -270,7 +270,7 @@ function PlanPrompt({
   const t = useTheme();
   const choices: Choice<PlanChoice>[] = [
     { label: 'Approve', key: 'y', value: 'approve' },
-    { label: 'Approve and accept edits', key: 'a', value: 'accept' },
+    { label: 'Approve and auto-approve', key: 'a', value: 'accept' },
     { label: 'Keep planning', key: 'n', value: 'keep' },
   ];
   const pick = (c: PlanChoice) =>
@@ -281,7 +281,7 @@ function PlanPrompt({
   const lines = renderMarkdown(plan, width - 4).split('\n');
   const shown = lines.slice(0, maxLines);
   return (
-    <Panel title="Plan" color={t.modes.plan ?? t.accent}>
+    <Panel title="Plan" color={t.agent ?? t.accent}>
       <Box marginY={1} flexDirection="column">
         <Text>{shown.join('\n')}</Text>
         {lines.length > shown.length ? (

@@ -8,7 +8,6 @@ import {
   type Attachment,
   clipTitle,
   ErrorCode,
-  type PermissionMode,
   type RoutePreference,
   RpcError,
   type SessionPromptParams,
@@ -18,6 +17,8 @@ import {
   textOf,
 } from '@switchback/protocol';
 import type { AgentLoop } from './agent-loop.ts';
+import { agentReminder } from './agent-reminder.ts';
+import type { AgentDefinition } from './agents.ts';
 import type { Goals } from './goals.ts';
 import type { TurnHooks } from './hooks/turn-hooks.ts';
 import {
@@ -26,11 +27,16 @@ import {
   instructionReminders,
   toldOf,
 } from './instructions-live.ts';
-import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
+import {
+  agentNameOf,
+  type EngineHost,
+  type LiveSession,
+  scope,
+  type TurnResult,
+} from './live-session.ts';
 import type { McpHub } from './mcp/hub.ts';
 import { expandMcp } from './mcp/mentions.ts';
 import { expandAttachments, expandMentions } from './mentions.ts';
-import { modeReminder } from './permissions/modes.ts';
 import type { ReviewRunner } from './review-runner.ts';
 
 export interface TurnOptions {
@@ -48,7 +54,7 @@ export interface TurnRunnerDeps {
   loop: AgentLoop;
   hooks: TurnHooks;
   reviews: ReviewRunner;
-  mode(s: LiveSession): PermissionMode;
+  agent(name: string): AgentDefinition | undefined;
   /** A top-level turn with a prompt starts: the checkpoint it can be rewound to. */
   checkpoint(s: LiveSession, turnId: string, prompt: string): void;
   /** Connected MCP servers, for `/server:prompt` and `@server:uri`. */
@@ -330,9 +336,7 @@ export class TurnRunner {
         ? { ...p, private: `attached ${path}` }
         : p;
     });
-    const mode = this.deps.mode(s);
-    const reminder = s.depth === 0 ? modeReminder(s.toldMode, mode) : undefined;
-    s.toldMode = mode;
+    const reminder = s.depth === 0 ? this.agentNote(s) : undefined;
     const goal = s.depth === 0 ? this.deps.goals.note(s) : undefined;
     const notes = [...hooked.context, ...(reminder ? [reminder] : []), ...(goal ? [goal] : [])];
     this.host.append(s, {
@@ -348,6 +352,15 @@ export class TurnRunner {
   }
 
   /** Reminders of AGENTS.md changes the session's model hasn't been told about. */
+  /** The agent switch the model hasn't heard about, if any (ADR 0029). */
+  private agentNote(s: LiveSession): string | undefined {
+    const now = this.deps.agent(agentNameOf(s));
+    if (!now) return undefined;
+    const note = agentReminder(s.toldAgent ?? s.header.agent, now, s.header.agent);
+    s.toldAgent = now.name;
+    return note;
+  }
+
   private instructionChanges(s: LiveSession): TextPart[] {
     this.deps.instructions.refresh();
     const now = this.deps.instructions.current();

@@ -12,7 +12,7 @@ File tools resolve paths against the workspace root, expand `~/` to your home di
 
 - **Inside the workspace**, the policy below decides as usual.
 - **Outside it** (`../other-repo`, `~/notes`, `/srv/data`), reads follow `permissions.read` as usual, and edits ask. See [Outside the workspace](#outside-the-workspace).
-- **Off limits, always:** Switchback's session data and usage ledger (`~/.switchback/data`), its sign-in credentials (`~/.switchback/auth.json`), and the credentials in `bash.sandbox.denyRead` (`~/.ssh`, `~/.aws`, ...). No rule, mode, or answer opens them, `bypassPermissions` included, even when the workspace contains them.
+- **Off limits, always:** Switchback's session data and usage ledger (`~/.switchback/data`), its sign-in credentials (`~/.switchback/auth.json`), and the credentials in `bash.sandbox.denyRead` (`~/.ssh`, `~/.aws`, ...). No rule, level, or answer opens them, `bypass` included, even when the workspace contains them.
 
 The `bash` tool runs with the workspace as its working directory, inside the OS sandbox where the platform has one (see [Sandbox](#sandbox)). It still defaults to `ask`: the sandbox limits what a command can reach, not what it does with what it can.
 
@@ -20,18 +20,17 @@ The `bash` tool runs with the workspace as its working directory, inside the OS 
 
 Every call that passes validation and confinement is decided in this order:
 
-1. **A category set to `deny`** (`permissions.bash: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off.
-2. **Deny rules,** and `permissions.outsideWorkspace: "deny"` for paths outside the workspace. The call is refused, and the model is told why.
-3. **Plan mode.** Edits are refused until the user approves a plan.
-4. **Bypass.** In `bypassPermissions`, everything else runs without a prompt.
-5. **Ask rules,** a command that asks to run outside the sandbox, edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`), and the `set_config` and `set_roles` tools: the user is asked, including in `acceptEdits`. A path **outside the workspace** asks too, unless an allow rule names it; `read: allow`, a bare `read` rule, a hook, and `acceptEdits` don't count.
+1. **The session's agent.** A tool outside the active agent's `tools`, or a subagent it may not delegate to, is refused, and the model hears which agent is active. See [Agents](#agents).
+2. **A category set to `deny`** (`permissions.bash: "deny"`, an agent's `edit: "deny"`, or an MCP server's `permission: "deny"`). Nothing below overrides it, so an organization can turn a tool off, and the `plan` agent can't edit.
+3. **Deny rules,** the config's and then the agent's, and `permissions.outsideWorkspace: "deny"` for paths outside the workspace. The call is refused, and the model is told why.
+4. **The `bypass` level.** Everything else runs without a prompt.
+5. **Ask rules** (an agent's ask rule beats a config allow), a command that asks to run outside the sandbox, edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`), and the `set_config` and `set_roles` tools: the user is asked. A path **outside the workspace** asks too, unless an allow rule names it; `edit: allow`, a bare `edit` rule, and a hook don't count.
 6. **Allow rules,** including what the user allowed earlier in the session.
-7. **The mode.** `acceptEdits` allows edits.
-8. **The category's level:** `allow`, or ask. A `bash` command that only [explores the workspace](#exploring-with-bash) runs under the `read` level instead. In `autoApprove`, a call that would ask goes to a model first, and asks only if the model doesn't approve it.
+7. **The category's level:** `allow`, or ask, made stricter by the agent's. A `bash` command that only [explores the workspace](#exploring-with-bash) runs under the `read` level instead. At the `auto` level, a call that would ask goes to a model first, and asks only if the model doesn't approve it.
 
 ### Outside the workspace
 
-The model can read and search files anywhere on your machine the way it reads the workspace: with `permissions.read` at its default `allow`, without asking. Editing outside the workspace always asks, even with `edit: "allow"` or in `acceptEdits`. The prompt says the path is outside the workspace, and **Always** grants that folder (`edit(~/Projects/shared-lib/)`), not every edit.
+The model can read and search files anywhere on your machine the way it reads the workspace: with `permissions.read` at its default `allow`, without asking. Editing outside the workspace always asks, even with `edit: "allow"`. The prompt says the path is outside the workspace, and **Always** grants that folder (`edit(~/Projects/shared-lib/)`), not every edit.
 
 Open folders for editing ahead of time with allow rules that name them, and keep places out with deny rules:
 
@@ -128,17 +127,29 @@ With `ask`, the engine emits `permission.requested` and waits. Only the tab show
 
 A call an ask rule caught offers no "always": the rule says to ask every time. Cancelling the turn denies any pending request. Headless `switchback run` denies `ask` permissions unless you pass `--yes`.
 
-### Modes
+### Permission levels
 
-| Mode | What it changes |
+How much to ask is the session's permission level, one of three:
+
+| Level | What it changes |
 |---|---|
-| `default` | Nothing: the levels and rules decide |
-| `acceptEdits` | Edits in the workspace go ahead without asking; commands still ask |
-| `autoApprove` | A model reads each call that would ask, with your latest request, and approves it when it plainly serves that request and stays in the project. Anything it doesn't approve, or can't judge, asks you, with its reason. Ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration always ask. See [Auto-approve](#auto-approve) |
-| `plan` | No edits. The model reads, explores, and ends by presenting a plan with `exit_plan_mode`. **Approve** returns to `default`, **Approve and accept edits** switches to `acceptEdits`, and **Keep planning** stays in plan mode |
-| `bypassPermissions` | Everything goes ahead without asking: ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration included. Only a category `deny`, a deny rule, `permissions.outsideWorkspace: "deny"`, the off-limits places, and `bash.sandbox.allowUnsandboxed: false` stop a call |
+| `ask` | Nothing: the categories and rules decide, and anything that asks, asks you |
+| `auto` | A model reads each call that would ask, with your latest request, and approves it when it plainly serves that request and stays in the project. Anything it doesn't approve, or can't judge, asks you, with its reason. Ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration always ask. See [Auto-approve](#auto-approve) |
+| `bypass` | Everything goes ahead without asking: ask rules, leaving the sandbox, edits outside the workspace, and edits to Switchback's configuration included. Only a category `deny` (the config's or the agent's), a deny rule, `permissions.outsideWorkspace: "deny"`, the off-limits places, and `bash.sandbox.allowUnsandboxed: false` stop a call |
 
-New sessions start in `permissions.defaultMode`. Switch with Shift+Tab or `/mode` in the TUI, the **Mode** button above the VS Code chat input, `--permission-mode` on the command line, or `session.setMode` in the protocol. A session's subagents use its mode. The model hears about plan mode in a note added to your next prompt, never in the system prompt, so switching modes doesn't break the prompt cache.
+New sessions start at `permissions.level`. Change it with `/permissions ask|auto|bypass` in the TUI or VS Code chat, the **Permissions** pill under the VS Code chat input, `--permission-mode` on the command line, or `session.setPermissions` in the protocol. A session's subagents use its level.
+
+To let edits in the workspace go ahead without asking (what the old `acceptEdits` mode did), set `permissions.edit` to `"allow"`. Config files and `--permission-mode` still accept the old mode names: `default`, `autoApprove`, and `bypassPermissions` become `ask`, `auto`, and `bypass`; `plan` starts the `plan` agent; and `acceptEdits` becomes `ask` with a warning ([ADR 0029](adr/0029-agents-and-permission-levels.md)).
+
+### Agents
+
+How the session works is its agent: `build` (the default), `plan`, or an agent you define with `mode: "primary"` or `"all"` ([subagents.md](subagents.md)). Shift+Tab in the TUI cycles them in that order, custom agents by name; `/agent <name>`, the **Agent** pill in VS Code, `--agent`, and `session.setAgent` pick one. `explore`, `review`, and `general` only run as subagents.
+
+Switching keeps the conversation. The model hears about the new agent, its instructions and tools, in a note added to your next prompt, never in the system prompt, so switching doesn't break the prompt cache. A resumed session continues with the agent it last used.
+
+An agent's `tools` limits what it may call, and its `permissions` can only tighten yours: a stricter category level (`edit: "ask"` where your config allows), and its own `ask` and `deny` rules. An agent can't turn `ask` into `allow`, so an agent file in a cloned repository can't open up what your config closes.
+
+The `plan` agent reads, explores, and ends by presenting a plan with `exit_plan_mode`. It can't edit (`edit: "deny"`), and its commands ask (`bash: "ask"`) except read-only ones. **Approve** switches back to the agent you were using before `plan` (the default agent if the session started in `plan`), **Approve and auto-approve** does that and sets the `auto` level, and **Keep planning** stays.
 
 ### Auto-approve
 
@@ -146,9 +157,9 @@ The judge is `permissions.judge` when you set it (an alias from `models`), or el
 
 The judge approves reading, searching, editing project files, builds, tests, linters, formatters, and version-control commands that publish nothing. It refuses, so you're asked, anything that deletes or overwrites more than the task needs, publishes or sends something (push, deploy, release, pull requests), installs software globally, touches credentials, downloads and runs code, or goes beyond what you asked. Each approved call shows in the transcript as `auto-approved <call> (<judge>): <reason>`.
 
-A model can be talked into things, so this mode trades some safety for fewer prompts. Prefer allow rules for commands you always approve, and keep `deny` rules for what must never run: they hold in every mode. See [ADR 0025](adr/0025-auto-approve.md).
+A model can be talked into things, so this level trades some safety for fewer prompts. Prefer allow rules for commands you always approve, and keep `deny` rules for what must never run: they hold at every level. See [ADR 0025](adr/0025-auto-approve.md).
 
-An organization can turn off `bypassPermissions` (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
+An organization can rule out the `bypass` level (`restrictions.allowBypassPermissions: false`) and set everyone's permissions (`restrictions.allowUserPermissions: false`); see [organizations.md](organizations.md).
 
 ## Sandbox
 
@@ -158,7 +169,7 @@ Bash commands, foreground and background, run in an OS sandbox through Anthropic
 - **Reads** are open except credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.azure`, `~/.kube`, `~/.config/gcloud`, `~/.docker/config.json`, `~/.netrc`; set `bash.sandbox.denyRead` to change the list), Switchback's config and data directories, and files your `read(...)` deny rules name. `edit(...)` deny rules become write denies. So `read(.env)` holds for `cat .env` too.
 - **Network** is open by default (`bash.sandbox.network: "all"`), so installs and `git fetch` work. Use a list of hosts (`["registry.npmjs.org", "*.github.com"]`) to allow only those, or `"none"`. Commands can listen on local ports (dev servers).
 
-When the sandbox blocks something, the command's error says what was blocked, so the model can explain or find another way. If it needs to step outside, it can ask to run one command with `unsandboxed: true`; that asks you in every mode but `bypassPermissions`, and `bash.sandbox.allowUnsandboxed: false` refuses it.
+When the sandbox blocks something, the command's error says what was blocked, so the model can explain or find another way. If it needs to step outside, it can ask to run one command with `unsandboxed: true`; that asks you at every level but `bypass`, and `bash.sandbox.allowUnsandboxed: false` refuses it.
 
 `bash.sandbox.mode` is `auto` by default: on where the platform supports it, off with a one-time notice where it can't run. `on` refuses to run commands without it; `off` turns it off. `/permissions` and `switchback doctor` say whether it's on and, if not, why.
 

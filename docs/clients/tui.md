@@ -30,10 +30,11 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 │                                                      │
 │ current       qwen3-coder (local)                    │
 │ escalates to  claude-opus-5 (remote)                 │
-│ mode          default                                │
+│ agent         build                                  │
+│ permissions   ask                                    │
 │ directory     ~/code/shop                            │
 ╰──────────────────────────────────────────────────────╯
-  / commands · @ files · tab model · alt+↓ subagents · shift+tab mode · ctrl+o expand · PgUp/PgDn scroll
+  / commands · @ files · tab model · alt+↓ subagents · shift+tab agent · ctrl+o expand · PgUp/PgDn scroll
 
 › where is the retry logic?
 
@@ -62,13 +63,13 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
  build · auto · ⌂ qwen3-coder     82% context left · $0.014 · cache 91% · 52 tok/s
 ```
 
-- **The welcome card** names the current model (where your prompts run), what it escalates to, the permission mode, and the directory. The status bar names the current model too, until an escalation moves the session up the ladder. `/current` picks another ([routing.md](../routing.md#picking-the-current-model)).
+- **The welcome card** names the current model (where your prompts run), what it escalates to, the session's agent and permission level, and the directory. The status bar names the current model too, until an escalation moves the session up the ladder. `/current` picks another ([routing.md](../routing.md#picking-the-current-model)).
 - **Tool calls** are `●` rows: what the call does and to what (`Read src/x.ts`, `Bash bun test`, `Update a.ts`), with what came of it under `⎿`: lines read, files listed, matches found, the first lines a command printed (and its exit code when it failed), or an edit's size and diff with line numbers. The dot is yellow while it runs, green when it worked, red when it failed.
 - **Exploring** — two or more reads, listings, and searches in a row — folds into one **Explored** block listing each call and what it found.
 - **Routing** shows a `⌂` (local) or `▲` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
 - **Subagents** are rows of their own, with their tier, tool-call count, and current activity, and their latest steps indented under them while they run. Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did.
 - **While a turn runs**, a line above the input says what's happening (thinking, writing, running a tool, waiting on a subagent), for how long, about how many tokens the model has written, and on which model.
-- **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference (`auto-escalate`, `local only`, or `remote only`; `/auto`, `/local`, and `/remote` switch it), how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
+- **The status bar** shows the agent (Shift+Tab switches it), the permission level as a badge when it isn't `ask`, and the route preference (`auto-escalate`, `local only`, or `remote only`; `/auto`, `/local`, and `/remote` switch it), how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
 - Typing `/` opens a command menu under the input, filtered as you type: ↑/↓ choose, Enter runs (or waits for the argument a command needs), Tab completes the name, Esc closes. It lists the same commands as `/help` and the VS Code chat; both come from `SLASH_COMMANDS` in `@switchback/client`. Your [custom commands](../commands-and-skills.md) follow under **Custom**.
 
 ### Tabs
@@ -85,7 +86,7 @@ Several sessions can be open at once, each in its own tab, and they all keep wor
   To give Ctrl+Tab and Ctrl+Shift+Tab to Switchback, copy the lines for your terminal: [kitty](../../examples/terminals/kitty.conf), [Ghostty](../../examples/terminals/ghostty.conf), [WezTerm](../../examples/terminals/wezterm.lua), or [iTerm2](../../examples/terminals/iterm2.md) (a few clicks in its settings). Terminal.app can't unbind it.
 - **Ctrl+W** on an empty prompt closes the tab in front; with text typed, it deletes a word.
 - `/tab new [agent]` opens a tab, `/tab <n>` switches, `/tab close` closes the one in front, and `/tab` alone prints the dashboard.
-- Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new`, `/agent`, and `/resume` change the session in the tab in front, as before; `/resume` of a session that's open in another tab switches to it.
+- Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new` and `/resume` change the session in the tab in front, and `/agent` switches its agent, as before; `/resume` of a session that's open in another tab switches to it.
 
 Tabs are the clients' own; the engine sends every session's events to every client, and both clients fold them with the same functions (`@switchback/client/tabs`), so the TUI and VS Code show the same states with the same words ([protocol.md](../protocol.md#several-sessions-at-once)).
 
@@ -119,7 +120,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 |---|---|
 | `/local`, `/remote`, `/auto` | Route the following prompts |
 | `/up` | Escalate: the turn's next step, or your next prompt, goes one step up the ladder ([routing.md](../routing.md#escalating-yourself)) |
-| `/agent <name>` | New session with that agent |
+| `/agent [name]` | Switch this session to that agent, keeping the conversation; with no name, a picker ([permissions.md](../permissions.md#agents)) |
 | `/agents` | List agents and where they came from |
 | `/new` | New session with the default agent, in the tab in front |
 | `/tabs` (ctrl+t) | The sessions dashboard: open tabs, then sessions working in other windows ([Tabs](#tabs)) |
@@ -148,8 +149,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/ladder` · `/ladder <step...>` · `/ladder none` | The escalation ladder; a step is a model, or `a,b` alternatives. With no argument, an editor: ↑/↓ choose, space adds or removes, `,` makes an alternative to the step before, `[` `]` move, Enter applies, `s` applies and saves. `/escalate` still works |
 | `/subagent-model <model>\|none` | Default model for subagents |
 | `/effort [none\|low\|medium\|high\|xhigh\|max\|default]` | Show or set reasoning effort for this session's own model calls (`switchback --effort` at startup). Subagents keep theirs; `default` goes back to the agent's or model's ([subagents.md](../subagents.md#reasoning-effort)) |
-| `/mode [default\|accept-edits\|plan\|bypass]` | Show or switch the permission mode ([permissions.md](../permissions.md#modes)) |
-| `/permissions` | The mode, the permission levels, and every rule with where it came from |
+| `/permissions [ask\|auto\|bypass]` | With no argument, the permission level, the category levels, and every rule with where it came from. With a level, switch to it ([permissions.md](../permissions.md#permission-levels)) |
 
 | `/copy [n\|tool\|all]` | Copy to the clipboard as raw text (no wrapping, indentation, or colors from the terminal rendering): the last reply, its `n`th code block, the last tool's output, or the whole conversation as Markdown. Works over SSH in terminals that support OSC 52 (iTerm2, kitty, WezTerm, Ghostty, Windows Terminal, and tmux with `set-clipboard on`) |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
@@ -168,9 +168,9 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Alt+←/→, click | Next or previous tab, tab n, or the tab clicked ([Tabs](#tabs)) |
 | Alt+↓ / Alt+↑ | Show the next running subagent / come back to the session ([Subagents](#subagents)). On macOS Terminal, alt needs "Use Option as Meta key" |
 | Tab (no menu open) | Switch to the next model: the one after the current model in config order, back to the first after the last. It says `Switched to <model>.` and applies to this session; the model you leave doesn't stay behind as a backup |
-| Shift+Tab | Cycle the permission mode: default → accept edits → auto-approve → plan (→ bypass, unless your organization turns it off) |
+| Shift+Tab | Switch to the next agent: build → plan → your own agents by name, then back to build |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
-| `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |
+| `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and auto-approve, keep planning) |
 | Page Up / Page Down, mouse wheel | Scroll the transcript (the wheel only while `/mouse` is on) |
 | Click | Pick an answer, a picker row, or a key hint (while `/mouse` is on) |
 | `ctrl+v` | Attach the image on the clipboard as an `[Image #n]` chip (deleting the chip drops it). On macOS it reads the clipboard with `osascript`, on Linux with `wl-paste` or `xclip`, and on Windows with PowerShell; over SSH, drag the file in or mention it with `@` instead. Dragged-in image files and `@image.png` mentions attach the image too |
@@ -179,7 +179,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 
 When a prompt is waiting for you, or a turn that ran 30 seconds or more finishes, the TUI asks the terminal for a desktop notification, or rings the bell where it can't (`notifications` in [configuration.md](../configuration.md#notifications)).
 
-Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission mode when it isn't `default`.
+Role commands change the current session; add `--save` to make the change your default (written to the user config). Keys an organization enforces can't be changed. The status line shows where the session is on the ladder (`step 1/2 qwen3-coder-480b, 2 more`) and the permission level when it isn't `ask`.
 
 ## Goals
 
@@ -196,7 +196,7 @@ The active goal and its turn count stay above the prompt (`◎ goal · turn 3/25
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
 - Ink reads keys from a stand-in for stdin that takes the mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text. `tui/Clickable.tsx` finds what a click landed on from Ink's layout.
-- Marks in the status bar and transcript (`⌂`, `▲`, the mode's `»`, `√`, `║`, `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
+- Marks in the status bar and transcript (`⌂`, `▲`, and the permission levels' `√` and `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
 - Child processes the user doesn't look at (commands, hooks, git, ripgrep, clipboard helpers) start with `windowsHide` (`hideWindow` in the engine), so on Windows a detached engine doesn't open a console window for each one.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
 - Colors come from roles in `tui/theme.ts` (brand, local, remote, added, removed, ...), never from color names in components.

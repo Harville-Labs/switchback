@@ -8,7 +8,7 @@ import type {
   InitializeResult,
   McpServerInfo,
   ModelRef,
-  PermissionMode,
+  PermissionLevel,
   SessionRoles,
   ShellInfo,
 } from '@switchback/protocol';
@@ -356,17 +356,15 @@ export const MODELS_HINT =
  * space after them. These are all in code page 437, so conhost's fonts have
  * them too.
  */
-const MODE_ICONS: Record<PermissionMode, string> = {
-  default: '',
-  acceptEdits: '»',
-  autoApprove: '√',
-  plan: '║',
-  bypassPermissions: '!',
+const LEVEL_ICONS: Record<PermissionLevel, string> = {
+  ask: '',
+  auto: '√',
+  bypass: '!',
 };
 
-/** The mark before a mode's name in the status bar; empty for the default mode. */
-export function modeIcon(mode: PermissionMode): string {
-  return MODE_ICONS[mode];
+/** The mark before a permission level's name in the status bar; empty for `ask`. */
+export function levelIcon(level: PermissionLevel): string {
+  return LEVEL_ICONS[level];
 }
 
 /** The mark before a model's name: a house for local, an arrow up the ladder for remote. */

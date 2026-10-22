@@ -32,7 +32,7 @@ Each event lists matchers, and each matcher lists commands. Commands run in the 
 | `SessionStart` | Before a session's first prompt in this engine | `startup` or `resume` | Add context for the model |
 | `Notification` | When Switchback waits on you: a permission or escalation prompt | none | Anything (a desktop notification, a chat message); its answer is ignored |
 
-Every event's JSON has `hook_event_name`, `session_id`, `cwd`, and `permission_mode`. Tool events add `tool_name` and `tool_input`, and `PostToolUse` adds `tool_response` (`output`, `isError`). `UserPromptSubmit` has `prompt`; `SessionStart` has `source`; `Stop` has `stop_hook_active` (true once a Stop hook already sent the model back); `Notification` has `message`.
+Every event's JSON has `hook_event_name`, `session_id`, `cwd`, and `permission_mode` (the session's permission level: `ask`, `auto`, or `bypass`). Tool events add `tool_name` and `tool_input`, and `PostToolUse` adds `tool_response` (`output`, `isError`). `UserPromptSubmit` has `prompt`; `SessionStart` has `source`; `Stop` has `stop_hook_active` (true once a Stop hook already sent the model back); `Notification` has `message`.
 
 ## What a hook says back
 
@@ -52,7 +52,7 @@ A hook can also print JSON:
 
 When several hooks answer, a block from any of them wins, and deny beats ask beats allow.
 
-**Hooks and permissions.** A `PreToolUse` hook's deny refuses the call. Its ask makes the call ask, whatever the mode. Its allow skips a prompt a [permission level](permissions.md) would show, but never a deny rule, an ask rule, a category set to `deny`, plan mode, or a command asking to leave the sandbox: those come first.
+**Hooks and permissions.** A `PreToolUse` hook's deny refuses the call. Its ask makes the call ask, whatever the level. Its allow skips a prompt a [permission level](permissions.md) would show, but never a deny rule, an ask rule, a category set to `deny` (the `plan` agent's `edit: deny` included), or a command asking to leave the sandbox: those come first.
 
 ## Where hooks come from
 

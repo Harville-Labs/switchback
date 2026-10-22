@@ -21,7 +21,7 @@ import { runChatCommand } from './chat-commands.ts';
 import type { EditorContext } from './context.ts';
 import type { EngineBinary } from './engine-binary.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
-import { chooseAgent, chooseMode, chooseRole, setCurrentModel } from './pickers.ts';
+import { chooseAgent, choosePermissions, chooseRole, setCurrentModel } from './pickers.ts';
 import { resolveEngine } from './resolve-engine.ts';
 import type { EditReview } from './review.ts';
 import { VERSION } from './version.ts';
@@ -127,7 +127,11 @@ export class EngineConnection implements vscode.Disposable {
     });
     client.on((event) => {
       const mine = this.scope.observe(event);
-      if (event.type === 'session.renamed') this.retitle(event.sessionId, event.title);
+      if (event.type === 'session.renamed') this.patch(event.sessionId, { title: event.title });
+      // Pickers mark the agent and level a session is on now.
+      if (event.type === 'agent.changed') this.patch(event.sessionId, { agent: event.agent });
+      if (event.type === 'permissions.changed')
+        this.patch(event.sessionId, { permissionLevel: event.level });
       this.broadcast({ type: 'event', event });
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
@@ -247,10 +251,10 @@ export class EngineConnection implements vscode.Disposable {
   }
 
   /** Keep a renamed session's title, for the chat's title and the next tab switch. */
-  private retitle(sessionId: string, title: string) {
+  private patch(sessionId: string, change: Partial<SessionSummary>) {
     const known = this.known.get(sessionId);
-    if (known) this.known.set(sessionId, { ...known, title });
-    if (this.session?.id === sessionId) this.session = { ...this.session, title };
+    if (known) this.known.set(sessionId, { ...known, ...change });
+    if (this.session?.id === sessionId) this.session = { ...this.session, ...change };
   }
 
   /** Show the dashboard in the chat (Switchback: Show Sessions). */
@@ -385,8 +389,8 @@ export class EngineConnection implements vscode.Disposable {
       case 'chooseAgent':
         await chooseAgent(this);
         return;
-      case 'chooseMode':
-        await chooseMode(this);
+      case 'choosePermissions':
+        await choosePermissions(this);
         return;
       case 'command':
         await runChatCommand(this, m.name, m.args);

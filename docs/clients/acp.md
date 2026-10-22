@@ -21,11 +21,11 @@ The ACP agent is a client of the engine, like the terminal UI. Each workspace th
 | In the editor | In Switchback |
 |---|---|
 | A new thread | A new session, with your config, agents, `AGENTS.md`, and permission rules |
-| The thread's mode | The [permission mode](../permissions.md#modes): Default, Accept edits, Plan, or Bypass permissions |
+| The thread's mode | The session's [agent](../permissions.md#agents): build, plan, and your own agents that can lead a session. The permission level stays a Switchback setting (`/permissions` in the TUI, or `permissions.level`) |
 | Messages and thinking | The model's answer and reasoning, as they stream |
 | A line of thinking such as `→ remote anthropic/claude-sonnet-5: …` | A routing decision: which model answers from here and why. It's shown whenever the model changes |
 | Tool calls | Tool calls, titled as in the TUI (`Read src/app.ts`, `Bash bun test`). Edits show their diff |
-| Permission prompts | Permission prompts. **Always allow** is the TUI's **Always this session**: it grants the rule for as long as the engine runs. To save a rule, answer in the TUI or VS Code, or edit your config. A plan in plan mode can be approved, approved with edits accepted from then on, or sent back |
+| Permission prompts | Permission prompts. **Always allow** is the TUI's **Always this session**: it grants the rule for as long as the engine runs. To save a rule, answer in the TUI or VS Code, or edit your config. A plan from the `plan` agent can be approved, approved with the `auto` level from then on, or sent back |
 | A cost prompt such as "Escalate to …" | An [escalation](../routing.md) that needs your approval, with its estimated cost |
 | The plan | The `todo` checklist |
 | The thread's title | The session's title, from its first prompt, `/rename` in the TUI or VS Code, or compaction |

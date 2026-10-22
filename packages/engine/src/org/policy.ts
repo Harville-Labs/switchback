@@ -31,7 +31,7 @@ export interface OrgStatus {
   enforcedKeys: string[];
   /** The policy disables remote models entirely. */
   remoteDisabled: boolean;
-  /** Sessions can't use the `bypassPermissions` mode. */
+  /** Sessions can't use the `bypass` permission level. */
   bypassDisabled: boolean;
   /** Members can't set their own permissions (`allowUserPermissions: false`). */
   userPermissionsDisabled: boolean;
@@ -167,9 +167,9 @@ export function applyRestrictions(
     ...(monthly !== undefined ? { monthlyUsd: monthly } : {}),
   };
   let { permissions } = config;
-  if (!r.allowBypassPermissions && permissions.defaultMode === 'bypassPermissions') {
-    notes.push('permissions.defaultMode bypassPermissions turned off');
-    permissions = { ...permissions, defaultMode: 'default' };
+  if (!r.allowBypassPermissions && permissions.level === 'bypass') {
+    notes.push('permissions.level bypass turned off');
+    permissions = { ...permissions, level: 'ask' };
   }
   return {
     config: { ...config, providers, models, routing, review, subagents, mcpServers, permissions },

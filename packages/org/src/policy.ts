@@ -48,7 +48,7 @@ export const OrgPolicy = z.object({
       allowUserPermissions: z.boolean().default(true),
       /** false: only hooks defined by the org policy run. */
       allowUserHooks: z.boolean().default(true),
-      /** false: sessions can't use the `bypassPermissions` mode. */
+      /** false: sessions can't use the `bypass` permission level. */
       allowBypassPermissions: z.boolean().default(true),
       /** Per-user remote spend caps; users may set lower budgets, never higher. */
       maxDailyUsd: z.number().positive().optional(),

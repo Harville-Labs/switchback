@@ -71,14 +71,21 @@ export function writeConfigLayer(
   for (const { path } of removedKeysIn(parseJsonc(text)))
     if (path[0] && path[0] in layer) text = applyEdits(text, modify(text, path, undefined, {}));
   // Renamed keys move to their new name, keeping their value, whatever the layer writes.
-  for (const { from, to } of renamedKeysIn(parseJsonc(text))) {
-    const value = withRenamedKeys(parseJsonc(text) as Record<string, unknown>);
-    const moved = to.reduce<unknown>((n, k) => (n as Record<string, unknown>)[k], value);
-    text = applyEdits(text, modify(text, from, undefined, {}));
-    text = applyEdits(
-      text,
-      modify(text, to, moved, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
+  for (const { from, to, implies } of renamedKeysIn(parseJsonc(text))) {
+    const old = parseJsonc(text) as Record<string, unknown>;
+    const renamed = withRenamedKeys(old);
+    // What the old value stood for besides the new key, where the file didn't set it.
+    const extras = (implies?.(pathValue(old, from)) ?? []).filter(
+      (e) => pathValue(old, e.path) === undefined,
     );
+    text = applyEdits(text, modify(text, from, undefined, {}));
+    for (const path of [to, ...extras.map((e) => e.path)])
+      text = applyEdits(
+        text,
+        modify(text, path, pathValue(renamed, path), {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        }),
+      );
   }
   for (const key of options.replace ?? [])
     text = applyEdits(text, modify(text, [key], undefined, {}));
@@ -89,6 +96,13 @@ export function writeConfigLayer(
   for (const [path, value] of leaves(layer)) text = setConfigText(text, path, value);
   const backup = replaceConfigText(file, text);
   return { file, ...(backup ? { backup } : {}), config: merged };
+}
+
+function pathValue(node: unknown, path: string[]): unknown {
+  return path.reduce<unknown>(
+    (n, k) => (n && typeof n === 'object' ? (n as Record<string, unknown>)[k] : undefined),
+    node,
+  );
 }
 
 /**

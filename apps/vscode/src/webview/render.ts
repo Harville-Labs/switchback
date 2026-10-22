@@ -204,7 +204,7 @@ export function lastAssistantId(ctx: ViewState): string | undefined {
 export function renderPrompt(view: ViewState): string {
   const perm = view.permissions[0];
   if (perm?.plan)
-    return `<div class="prompt plan"><div class="plan-title">Plan</div><div class="md">${renderMarkdown(perm.plan)}</div><div class="actions"><button class="btn" data-perm="once">Approve</button><button class="btn secondary" data-perm="always">Approve and accept edits</button><button class="btn secondary" data-perm="deny">Keep planning</button></div></div>`;
+    return `<div class="prompt plan"><div class="plan-title">Plan</div><div class="md">${renderMarkdown(perm.plan)}</div><div class="actions"><button class="btn" data-perm="once">Approve</button><button class="btn secondary" data-perm="always">Approve and auto-approve</button><button class="btn secondary" data-perm="deny">Keep planning</button></div></div>`;
   if (perm) {
     const always = perm.rules
       ? `<button class="btn secondary" data-perm="always" title="${esc(perm.rules.join(', '))}">Always this session</button><button class="btn secondary" data-perm="project" title="Saved to .switchback/config.local.json">Always in this project</button>`

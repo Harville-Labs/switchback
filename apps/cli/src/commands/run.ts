@@ -9,7 +9,7 @@ import { receiptLine } from '@switchback/client';
 import {
   type EffortLevel,
   isSessionEvent,
-  type PermissionMode,
+  type PermissionLevel,
   type RoutePreference,
   type StopReason,
 } from '@switchback/protocol';
@@ -24,7 +24,7 @@ export interface RunFlags extends CommonFlags {
   output: RunOutput;
   /** Review of local edits; undefined follows `review.mode`. */
   review?: boolean;
-  permissionMode?: PermissionMode;
+  permissionLevel?: PermissionLevel;
   effort?: EffortLevel;
   /** Added to this run's system prompt. */
   instructions?: string;
@@ -35,11 +35,12 @@ export interface RunFlags extends CommonFlags {
 const EXIT = { done: 0, failed: 1, usage: 2, denied: 3 } as const;
 
 export async function run(flags: RunFlags): Promise<number> {
-  const { client } = await connectInProcess(
+  const { client, configWarnings } = await connectInProcess(
     flags,
     flags.yes ? 'approve' : 'deny',
     'switchback-run',
   );
+  for (const w of configWarnings) process.stderr.write(`switchback: ${w}\n`);
   const sessionId = await session(client, flags);
   if (!sessionId) {
     process.stderr.write('switchback run: no saved session in this workspace to continue\n');
@@ -103,7 +104,7 @@ async function session(
   }
   const s = await client.request('session.create', {
     ...(flags.agent ? { agent: flags.agent } : {}),
-    ...(flags.permissionMode ? { permissionMode: flags.permissionMode } : {}),
+    ...(flags.permissionLevel ? { permissionLevel: flags.permissionLevel } : {}),
     ...(flags.instructions ? { instructions: flags.instructions } : {}),
     ...(flags.effort ? { effort: flags.effort } : {}),
   });

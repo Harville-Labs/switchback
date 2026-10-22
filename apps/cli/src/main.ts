@@ -2,14 +2,10 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { SetupFlags as InitFlags, RemoteKind } from '@switchback/engine';
-import {
-  EffortLevel,
-  PermissionMode,
-  RoutePreference,
-  SWITCHBACK_BRANCH,
-} from '@switchback/protocol';
+import { EffortLevel, RoutePreference, SWITCHBACK_BRANCH } from '@switchback/protocol';
 import { CLI_VERSION } from './bootstrap.ts';
 import { HELP } from './help.ts';
+import { permissionFlag } from './permission-flag.ts';
 
 const MIN_BUN = [1, 4, 0];
 
@@ -129,13 +125,21 @@ async function main(argv: string[]): Promise<number> {
   const route = RoutePreference.safeParse(values.route);
   if (!route.success) throw new UsageError('--route must be auto, local, or remote');
   const common = { cwd: resolve(values.cwd ?? process.cwd()), mock: values.mock };
-  const permissionMode = oneOf(
-    'permission-mode',
-    values['permission-mode'],
-    PermissionMode.options,
-  );
+  const permission = (() => {
+    try {
+      return permissionFlag(values['permission-mode']);
+    } catch (err) {
+      throw new UsageError((err as Error).message);
+    }
+  })();
+  if (permission.warning) process.stderr.write(`switchback: ${permission.warning}\n`);
+  // An explicit --agent wins over the plan agent `--permission-mode plan` implies.
+  const agent = values.agent ?? permission.agent;
   const effort = oneOf('effort', values.effort, EffortLevel.options);
-  const mode = { ...(permissionMode ? { permissionMode } : {}), ...(effort ? { effort } : {}) };
+  const mode = {
+    ...(permission.permissionLevel ? { permissionLevel: permission.permissionLevel } : {}),
+    ...(effort ? { effort } : {}),
+  };
   const scope = oneOf('scope', values.scope, ['user', 'project'] as const);
   // `-r` is the `resume` command, so `switchback -r <id>` and `switchback resume <id>` agree.
   const [command, ...rest] = values.resume ? ['resume', ...positionals] : positionals;
@@ -153,7 +157,7 @@ async function main(argv: string[]): Promise<number> {
         route: route.data,
         ...mode,
         ...(firstRun ? { opening: { setup: {} } } : {}),
-        ...(values.agent ? { agent: values.agent } : {}),
+        ...(agent ? { agent } : {}),
         ...(values.session
           ? { resume: values.session }
           : values.continue
@@ -266,7 +270,7 @@ async function main(argv: string[]): Promise<number> {
             ? { resume: 'latest' }
             : {}),
         ...(values.review ? { review: true } : values['no-review'] ? { review: false } : {}),
-        ...(values.agent ? { agent: values.agent } : {}),
+        ...(agent ? { agent } : {}),
       });
     }
     case 'serve': {

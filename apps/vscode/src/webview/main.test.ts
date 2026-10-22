@@ -65,6 +65,20 @@ test('route, agent, and role controls render and post the right messages', async
   expect(posted.at(-1)).toEqual({ type: 'chooseAgent' });
 });
 
+test('the agent and permissions pills follow the engine and open their pickers', async () => {
+  await send({ type: 'ready', init, session, route: 'auto' });
+  expect($('#controls').textContent).toContain('Permissions ask');
+  await send({ type: 'event', event: { type: 'agent.changed', sessionId: 's1', agent: 'plan' } });
+  await send({
+    type: 'event',
+    event: { type: 'permissions.changed', sessionId: 's1', level: 'auto' },
+  });
+  expect($('#controls').textContent).toContain('Agent plan');
+  expect($('#controls').textContent).toContain('Permissions auto-approve');
+  $('[data-permissions]').click();
+  expect(posted.at(-1)).toEqual({ type: 'choosePermissions' });
+});
+
 test('the model dropdown makes a model current, or opens the full picker', async () => {
   const pick = (value: string) => {
     const model = $('select[data-current]') as HTMLSelectElement;

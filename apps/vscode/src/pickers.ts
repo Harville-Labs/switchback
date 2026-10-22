@@ -1,16 +1,22 @@
 /**
- * QuickPick flows that change a session: roles (ADR 0015), review, and the
- * agent for a new session. Shared by the command palette and the chat view.
+ * QuickPick flows that change a session: roles (ADR 0015), review, its agent,
+ * and its permission level (ADR 0029). Shared by the command palette and the chat view.
  */
 import {
   currentChange,
   formatRefresh,
   formatReviewers,
   formatSteps,
-  MODE_DESCRIPTIONS,
-  modeLabel,
+  LEVEL_DESCRIPTIONS,
+  levelLabel,
+  switchableAgents,
 } from '@switchback/client';
-import type { InitializeResult, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
+import type {
+  InitializeResult,
+  PermissionLevel,
+  SessionRoles,
+  SessionSetRolesParams,
+} from '@switchback/protocol';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
 import type { RoleName } from './messages.ts';
@@ -213,23 +219,31 @@ export async function setCurrentModel(
   }
 }
 
-/** Switch the session's permission mode. */
-export async function chooseMode(engine: EngineConnection): Promise<void> {
+/** Set the session's permission level. */
+export async function choosePermissions(engine: EngineConnection): Promise<void> {
   const { client, session } = engine;
   if (!client || !session) return;
-  const { modes, mode } = await client.request('permissions.list', { sessionId: session.id });
+  const { allowedLevels, level } = await client.request('permissions.list', {
+    sessionId: session.id,
+  });
   const pick = await vscode.window.showQuickPick(
-    modes.map((m) => ({
-      label: `${m === mode ? '$(check) ' : ''}${modeLabel(m)}`,
-      detail: MODE_DESCRIPTIONS[m],
-      mode: m,
+    allowedLevels.map((l) => ({
+      label: `${l === level ? '$(check) ' : ''}${levelLabel(l)}`,
+      detail: LEVEL_DESCRIPTIONS[l],
+      level: l,
     })),
-    { title: 'Switchback: Permission Mode' },
+    { title: 'Switchback: Permissions' },
   );
-  if (pick)
-    await client
-      .request('session.setMode', { sessionId: session.id, mode: pick.mode })
-      .catch((err: Error) => vscode.window.showErrorMessage(`Switchback: ${err.message}`));
+  if (pick) await setLevel(engine, pick.level);
+}
+
+/** Set the session's permission level, saying why when the engine refuses. */
+export async function setLevel(engine: EngineConnection, level: PermissionLevel): Promise<void> {
+  const { client, session } = engine;
+  if (!client || !session) return;
+  await client
+    .request('session.setPermissions', { sessionId: session.id, level })
+    .catch((err: Error) => vscode.window.showErrorMessage(`Switchback: ${err.message}`));
 }
 
 /** Go back to before a prompt: pick the checkpoint, then what to put back. */
@@ -282,19 +296,28 @@ export async function chooseRewind(engine: EngineConnection): Promise<void> {
   }
 }
 
-/** Start a new session with an agent the user picks. */
+/** Switch the session to an agent the user picks (Shift+Tab in the TUI). */
 export async function chooseAgent(engine: EngineConnection): Promise<void> {
-  // Subagent-only agents run through the task tool, not as a session's agent.
-  const agents = (engine.init?.agents ?? []).filter((a) => a.mode !== 'subagent');
+  const current = engine.session?.agent;
   const pick = await vscode.window.showQuickPick(
-    agents.map((a) => ({
-      label: a.name,
+    switchableAgents(engine.init?.agents ?? []).map((a) => ({
+      label: `${a.name === current ? '$(check) ' : ''}${a.name}`,
       description: a.route !== 'auto' ? a.route : (a.model ?? ''),
       detail: a.description,
+      agent: a.name,
     })),
-    { title: 'Switchback: New Session with Agent', matchOnDetail: true },
+    { title: 'Switchback: Agent', matchOnDetail: true },
   );
-  if (pick) await engine.newSession(pick.label);
+  if (pick) await switchAgent(engine, pick.agent);
+}
+
+/** Switch the session to another agent, keeping the conversation. */
+export async function switchAgent(engine: EngineConnection, agent: string): Promise<void> {
+  const { client, session } = engine;
+  if (!client || !session) return;
+  await client
+    .request('session.setAgent', { sessionId: session.id, agent })
+    .catch((err: Error) => vscode.window.showErrorMessage(`Switchback: ${err.message}`));
 }
 
 /** Models picked one at a time, in order; undefined when cancelled. */

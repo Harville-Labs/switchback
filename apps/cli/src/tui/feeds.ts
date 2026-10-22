@@ -1,7 +1,7 @@
 /**
  * What the app keeps from the engine besides the transcript: every
  * session's events folded into the tabs, plus usage, custom commands, MCP
- * resources, and the session in front's modes and roles.
+ * resources, and the session in front's roles.
  */
 import {
   AttentionTracker,
@@ -13,12 +13,7 @@ import {
   type TabsState,
   trackSessions,
 } from '@switchback/client';
-import type {
-  InitializeResult,
-  PermissionMode,
-  SessionRoles,
-  UsageReport,
-} from '@switchback/protocol';
+import type { InitializeResult, SessionRoles, UsageReport } from '@switchback/protocol';
 import { useStdout } from 'ink';
 import { useCallback, useEffect, useState } from 'react';
 import { terminalNotification } from './notify.ts';
@@ -32,8 +27,6 @@ export function useEngineFeeds(
 ) {
   const { stdout } = useStdout();
   const [usage, setUsage] = useState<UsageReport | undefined>();
-  /** Modes this session may cycle through; an organization can rule out bypass. */
-  const [modes, setModes] = useState<PermissionMode[]>(['default', 'acceptEdits', 'plan']);
   const [roles, setRoles] = useState<SessionRoles | undefined>();
   /** Custom commands from `.switchback/commands/` and yours, for the menu and /help. */
   const [custom, setCustom] = useState<SlashCommand[]>([]);
@@ -50,10 +43,6 @@ export function useEngineFeeds(
   }, [client]);
 
   useEffect(() => {
-    client.request('permissions.list', { sessionId }).then(
-      (p) => setModes(p.modes),
-      () => {},
-    );
     client.request('session.roles', { sessionId }).then(setRoles, () => {});
   }, [client, sessionId]);
 
@@ -110,5 +99,5 @@ export function useEngineFeeds(
     stdout,
   ]);
 
-  return { usage, setUsage, modes, roles, custom, resources, models, refreshSessions };
+  return { usage, setUsage, roles, custom, resources, models, refreshSessions };
 }

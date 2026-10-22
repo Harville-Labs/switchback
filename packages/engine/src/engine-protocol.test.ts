@@ -34,21 +34,31 @@ describe('protocol round-trip', () => {
     expect(text).toBe('over the wire');
   });
 
-  test('session.setMode and permissions.list round-trip', async () => {
+  test('session.setPermissions, session.setAgent, and permissions.list round-trip', async () => {
     const { engine } = setup([], [], { config: { permissions: { deny: ['bash(rm:*)'] } } });
     const [serverSide, clientSide] = createTransportPair();
     serve(engine, serverSide);
     const client = new SwitchbackClient(clientSide);
     await client.initialize({ name: 'test', version: '0' }, ws.root);
-    const session = await client.request('session.create', { permissionMode: 'plan' });
-    expect(session.permissionMode).toBe('plan');
+    const session = await client.request('session.create', { permissionLevel: 'auto' });
+    expect(session.permissionLevel).toBe('auto');
     const changed = new Promise<EngineEvent>((resolve) =>
-      client.on((e) => e.type === 'mode.changed' && resolve(e)),
+      client.on((e) => e.type === 'permissions.changed' && resolve(e)),
     );
-    await client.request('session.setMode', { sessionId: session.id, mode: 'acceptEdits' });
-    expect(await changed).toMatchObject({ mode: 'acceptEdits', sessionId: session.id });
+    await client.request('session.setPermissions', { sessionId: session.id, level: 'bypass' });
+    expect(await changed).toMatchObject({ level: 'bypass', sessionId: session.id });
+    const switched = new Promise<EngineEvent>((resolve) =>
+      client.on((e) => e.type === 'agent.changed' && resolve(e)),
+    );
+    expect(
+      await client.request('session.setAgent', { sessionId: session.id, agent: 'plan' }),
+    ).toEqual({ agent: 'plan' });
+    expect(await switched).toMatchObject({ agent: 'plan', sessionId: session.id });
+    const [listed] = await client.request('session.list', {});
+    expect(listed).toMatchObject({ id: session.id, agent: 'plan' });
     const p = await client.request('permissions.list', { sessionId: session.id });
-    expect(p.mode).toBe('acceptEdits');
+    expect(p.level).toBe('bypass');
+    expect(p.allowedLevels).toEqual(['ask', 'auto', 'bypass']);
     expect(p.rules).toEqual([{ rule: 'bash(rm:*)', behavior: 'deny', source: 'config' }]);
   });
 

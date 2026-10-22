@@ -8,7 +8,13 @@ import type { ModelRef } from '@switchback/protocol';
 import type { ModelInfo } from '@switchback/router';
 import { z } from 'zod';
 import type { AgentDefinition } from './agents.ts';
-import { type EngineHost, type LiveSession, scope, type TurnResult } from './live-session.ts';
+import {
+  agentNameOf,
+  type EngineHost,
+  type LiveSession,
+  scope,
+  type TurnResult,
+} from './live-session.ts';
 import { privateToolUse } from './privacy.ts';
 import { type AgentCliConfig, createRuntime, runtimeForModel } from './runtimes/index.ts';
 import type { AgentRuntime, RuntimeResult, RuntimeTools } from './runtimes/runtime.ts';
@@ -143,7 +149,7 @@ export class ExternalRuntimes {
       ...(resume ? { resume } : {}),
       record: {
         rule: 'agent-cli',
-        agent: s.header.agent,
+        agent: agentNameOf(s),
         model: model.ref,
         free: cfg.billing === 'subscription',
       },

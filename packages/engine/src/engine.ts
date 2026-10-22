@@ -25,7 +25,7 @@ import {
   type McpListResult,
   type ModelsRefreshResult,
   type PermissionDecision,
-  type PermissionMode,
+  type PermissionLevel,
   type PermissionsListResult,
   PROTOCOL_VERSION,
   type RoutePreference,
@@ -323,14 +323,15 @@ export class Engine {
    * escalation's stickiness keeps the session there for a while after.
    */
   escalate(sessionId: string): SessionEscalateResult {
-    const s = this.p.sessions.top(this.p.sessions.live(sessionId));
-    s.escalateNow = true;
-    return { when: s.controller ? 'next-step' : 'next-prompt' };
+    return this.p.controls.escalate(sessionId);
   }
 
-  /** `session.setMode`. */
-  setMode(sessionId: string, mode: PermissionMode): { mode: PermissionMode } {
-    return this.p.controls.setMode(sessionId, mode);
+  setPermissions(sessionId: string, level: PermissionLevel): { level: PermissionLevel } {
+    return this.p.controls.setPermissions(sessionId, level);
+  }
+
+  setAgent(sessionId: string, agent: string): { agent: string } {
+    return this.p.controls.setAgent(sessionId, agent);
   }
 
   /** `session.setEffort`. */

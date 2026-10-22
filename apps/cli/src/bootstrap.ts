@@ -170,7 +170,7 @@ export async function connectInProcess(
   options: { syncOrg?: boolean } = {},
 ) {
   await refreshOrgPolicyQuickly();
-  const { engine, agentErrors } = createEngine(flags, interaction, {
+  const { engine, loaded, agentErrors } = createEngine(flags, interaction, {
     ...options,
     telemetry: true,
     refreshModels: true,
@@ -179,7 +179,7 @@ export async function connectInProcess(
   serve(engine, serverSide);
   const client = new SwitchbackClient(clientSide);
   const init = await client.initialize({ name: clientName, version: CLI_VERSION }, flags.cwd);
-  return { client, init, agentErrors };
+  return { client, init, agentErrors, configWarnings: loaded.warnings };
 }
 
 /** How to start this same switchback as a daemon: the binary, or bun + this script in dev. */
@@ -220,7 +220,11 @@ export async function connectShared(
   return {
     client: local.client,
     init: local.init,
-    warnings: [...warnings, ...local.agentErrors.map((e) => `agent skipped: ${e}`)],
+    warnings: [
+      ...warnings,
+      ...local.configWarnings,
+      ...local.agentErrors.map((e) => `agent skipped: ${e}`),
+    ],
     shared: false,
   };
 }

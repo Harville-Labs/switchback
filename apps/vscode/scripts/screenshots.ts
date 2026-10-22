@@ -56,7 +56,7 @@ const session: SessionSummary = {
   updatedAt: '2026-10-06T00:00:00Z',
   usage: { inputTokens: 0, outputTokens: 0 },
   costUsd: 0,
-  permissionMode: 'default',
+  permissionLevel: 'ask',
 };
 const local = { provider: 'ollama', model: 'qwen3-coder:30b' };
 const remote = { provider: 'anthropic', model: 'claude-sonnet-5' };

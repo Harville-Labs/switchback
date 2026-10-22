@@ -25,7 +25,7 @@ export type Interaction = 'prompt' | 'approve' | 'deny';
 export interface ToolRunnerDeps {
   commands: CommandRunner;
   hooks: HookRunner;
-  /** What every hook hears about the session (its ID, the permission mode). */
+  /** What every hook hears about the session (its ID, the permission level). */
   hookPayload(s: LiveSession): Record<string, unknown>;
   runSubagent(
     parent: LiveSession,

@@ -19,14 +19,21 @@ import {
   formatWorktrees,
   parseAutoCompact,
   parseEffort,
-  parseMode,
+  parseLevel,
   runGoalCommand,
   runReload,
 } from '@switchback/client';
 import { SESSION_TITLE_MAX } from '@switchback/protocol';
 import * as vscode from 'vscode';
 import type { EngineConnection } from './connection.ts';
-import { chooseAgent, chooseMode, chooseModels, chooseRewind, chooseRole } from './pickers.ts';
+import {
+  chooseAgent,
+  chooseModels,
+  chooseRewind,
+  chooseRole,
+  setLevel,
+  switchAgent,
+} from './pickers.ts';
 import { worktreeDiffs } from './worktree-diff.ts';
 
 export async function runChatCommand(
@@ -41,7 +48,7 @@ export async function runChatCommand(
     case 'new':
       return engine.newSession();
     case 'agent':
-      return args[0] ? engine.newSession(args[0]) : chooseAgent(engine);
+      return args[0] ? switchAgent(engine, args[0]) : chooseAgent(engine);
     case 'agents': {
       const agents = await c.request('agents.list', {}).catch(() => engine.init?.agents ?? []);
       return info(formatAgents(agents));
@@ -107,14 +114,6 @@ export async function runChatCommand(
       const u = await c.request('usage.get', { sessionId: session.id });
       return info(formatReceipt(u, 'This session, including subagents'));
     }
-    case 'mode': {
-      const mode = args[0] ? parseMode(args[0]) : undefined;
-      if (!mode) return chooseMode(engine);
-      await c
-        .request('session.setMode', { sessionId: session.id, mode })
-        .catch((err: Error) => info(`mode: ${err.message}`));
-      return;
-    }
     case 'effort': {
       if (!args[0]) return info(effortNotice(session.effort));
       const effort = parseEffort(args[0]);
@@ -134,10 +133,15 @@ export async function runChatCommand(
       const text = await runGoalCommand(c, current, {}, args);
       return text ? info(text) : undefined;
     }
-    case 'permissions':
-      return info(
-        formatPermissions(await c.request('permissions.list', { sessionId: session.id })),
-      );
+    case 'permissions': {
+      if (!args[0])
+        return info(
+          formatPermissions(await c.request('permissions.list', { sessionId: session.id })),
+        );
+      const level = parseLevel(args[0]);
+      if (!level) return info('usage: /permissions ask|auto|bypass');
+      return setLevel(engine, level);
+    }
     case 'shells': {
       if (args[0] === 'kill' && args[1]) {
         const shell = await c.request('shells.kill', { shellId: args[1] });

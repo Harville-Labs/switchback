@@ -1,24 +1,26 @@
 /**
- * What a client can change about a session besides prompting it: its
- * permission mode, and going back to a checkpoint. Also what the rest of the
- * engine asks about modes and records for checkpoints.
+ * What a client can change about a session besides prompting it: its agent,
+ * its permission level, and going back to a checkpoint. Also what the rest of
+ * the engine asks about levels and records for checkpoints.
  */
 import { realpathSync } from 'node:fs';
 import {
   type CheckpointInfo,
   ErrorCode,
-  type PermissionMode,
+  type PermissionLevel,
   type PermissionsListResult,
   RpcError,
+  type SessionEscalateResult,
   type SessionRewindParams,
   type SessionRewindResult,
   type SessionSummary,
 } from '@switchback/protocol';
 import type { Effort } from '@switchback/providers';
+import type { AgentDefinition } from './agents.ts';
 import type { Checkpoints } from './checkpoints.ts';
-import { type EngineHost, type LiveSession, scope } from './live-session.ts';
+import { agentNameOf, type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { PermissionGate } from './permissions/gate.ts';
-import { allowedModes, assertModeAllowed } from './permissions/modes.ts';
+import { allowedLevels, assertLevelAllowed } from './permissions/levels.ts';
 import type { SessionRegistry } from './session-registry.ts';
 import { resolveInWorkspace, toWorkspacePath } from './tools/index.ts';
 import type { CommandRunner } from './tools/process.ts';
@@ -27,6 +29,7 @@ export interface SessionControlsDeps {
   sessions: SessionRegistry;
   checkpoints: Checkpoints;
   gate(): PermissionGate;
+  agent(name: string): AgentDefinition | undefined;
   commands(): CommandRunner;
   summary(s: LiveSession): SessionSummary;
   newSessionId(): string;
@@ -39,22 +42,83 @@ export class SessionControls {
     private readonly deps: SessionControlsDeps,
   ) {}
 
-  modeOf(s: LiveSession): PermissionMode {
-    return this.host.top(s).mode ?? this.host.config().permissions.defaultMode;
+  levelOf(s: LiveSession): PermissionLevel {
+    return this.host.top(s).level ?? this.host.config().permissions.level;
   }
 
-  /** `told`: the model already knows; otherwise it hears with the next prompt. */
-  changeMode(top: LiveSession, mode: PermissionMode, told: boolean): void {
-    top.mode = mode;
-    if (told) top.toldMode = mode;
-    this.host.emit({ type: 'mode.changed', ...scope(top), mode });
+  private changeLevel(top: LiveSession, level: PermissionLevel): void {
+    top.level = level;
+    this.host.emit({ type: 'permissions.changed', ...scope(top), level });
   }
 
-  /** `session.setMode`. Subagents follow their top-level session, so this changes the tree. */
-  setMode(sessionId: string, mode: PermissionMode): { mode: PermissionMode } {
-    assertModeAllowed(mode, this.host.org());
-    this.changeMode(this.host.top(this.deps.sessions.live(sessionId)), mode, false);
-    return { mode };
+  /** Climb one step at the running turn's next call, or at the next prompt. */
+  escalate(sessionId: string): SessionEscalateResult {
+    const s = this.host.top(this.deps.sessions.live(sessionId));
+    s.escalateNow = true;
+    return { when: s.controller ? 'next-step' : 'next-prompt' };
+  }
+
+  /** `session.setPermissions`. Subagents follow their top-level session, so this changes the tree. */
+  setPermissions(sessionId: string, level: PermissionLevel): { level: PermissionLevel } {
+    assertLevelAllowed(level, this.host.org());
+    this.changeLevel(this.host.top(this.deps.sessions.live(sessionId)), level);
+    return { level };
+  }
+
+  /** The agent a top-level session works as now; undefined for a subagent. */
+  activeAgent(s: LiveSession): AgentDefinition | undefined {
+    return s.depth === 0 ? this.deps.agent(agentNameOf(s)) : undefined;
+  }
+
+  /** The agents whose permissions apply to a session's calls. */
+  agentsFor(s: LiveSession): AgentDefinition[] {
+    const names = new Set([agentNameOf(s), agentNameOf(this.host.top(s))]);
+    return [...names].flatMap((name) => this.deps.agent(name) ?? []);
+  }
+
+  /**
+   * `session.setAgent` (ADR 0029). Only a top-level session switches, and
+   * only to an agent that can lead one; the model hears with the next prompt.
+   */
+  setAgent(sessionId: string, name: string): { agent: string } {
+    const s = this.deps.sessions.live(sessionId);
+    if (s.depth > 0)
+      throw new RpcError(ErrorCode.InvalidParams, "a subagent's agent can't be switched");
+    const agent = this.deps.agent(name);
+    if (!agent)
+      throw new RpcError(
+        ErrorCode.InvalidParams,
+        `unknown agent "${name}"; agent.list shows the agents there are`,
+      );
+    if (agent.mode === 'subagent')
+      throw new RpcError(
+        ErrorCode.InvalidParams,
+        `the ${name} agent only runs as a subagent; switch to one whose mode is primary or all`,
+      );
+    this.switchAgent(s, agent.name);
+    return { agent: agent.name };
+  }
+
+  private switchAgent(top: LiveSession, name: string): void {
+    const current = agentNameOf(top);
+    if (current === name) return;
+    this.deps.sessions.setAgent(top, name, current);
+    this.host.emit({ type: 'agent.changed', ...scope(top), agent: name });
+  }
+
+  /**
+   * An approved plan: back to the agent before the planning one, else the
+   * default agent, else build. The model hears it in exit_plan_mode's result.
+   */
+  leavePlan(s: LiveSession, auto: boolean): void {
+    const top = this.host.top(s);
+    const current = agentNameOf(top);
+    const { defaultAgent } = this.host.config();
+    const back = [top.previousAgent, defaultAgent].find(
+      (name) => name && name !== current && this.deps.agent(name),
+    );
+    this.switchAgent(top, back ?? 'build');
+    if (auto && this.levelOf(top) === 'ask') this.changeLevel(top, 'auto');
   }
 
   /** `session.setEffort`. Only the top-level session's own calls use it; subagents keep theirs. */
@@ -66,14 +130,14 @@ export class SessionControls {
     return effort ? { effort } : {};
   }
 
-  /** `permissions.list`: the rules in effect, with their sources, and the session's mode. */
+  /** `permissions.list`: the rules in effect, with their sources, and the session's level. */
   async permissions(sessionId?: string): Promise<PermissionsListResult> {
     const { read, edit, bash, web, websearch, mcp } = this.host.config().permissions;
     const sandbox = await this.deps.commands().sandboxState();
     return {
       sandbox: sandbox.active ? { active: true } : { active: false, reason: sandbox.reason },
-      ...(sessionId ? { mode: this.modeOf(this.deps.sessions.live(sessionId)) } : {}),
-      modes: allowedModes(this.host.org()),
+      ...(sessionId ? { level: this.levelOf(this.deps.sessions.live(sessionId)) } : {}),
+      allowedLevels: allowedLevels(this.host.org()),
       levels: { read, edit, bash, web, websearch, mcp },
       rules: this.deps.gate().policy().list(),
     };

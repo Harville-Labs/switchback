@@ -1,56 +1,14 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fromTranscript } from '@switchback/client';
-import type { EngineEvent, PermissionMode, ToolResultPart } from '@switchback/protocol';
-import { type Script, ScriptedProvider } from '@switchback/providers';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
-import { Engine, type EngineOptions } from '../engine.ts';
 import type { OrgPolicy } from '../org/policy.ts';
+import { edit, results, root, session, setup, useWorkspace } from './gate-fixture.ts';
 
-let root: string;
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'switchback-perm-'));
-  writeFileSync(join(root, 'a.txt'), 'alpha\n');
-  writeFileSync(join(root, '.env'), 'TOKEN=alpha\n');
-});
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+useWorkspace();
 
-function setup(
-  script: Script,
-  permissions: object = {},
-  opts: Partial<Omit<EngineOptions, 'config'>> = {},
-) {
-  const config = SwitchbackConfig.parse({
-    providers: { lp: { type: 'mock', tier: 'local' } },
-    models: { local: { provider: 'lp', model: 'small', contextWindow: 32_000 } },
-    routing: { current: ['local'] },
-    permissions,
-  });
-  const lp = new ScriptedProvider('lp', 'local', script);
-  const engine = new Engine({
-    workspaceRoot: root,
-    config,
-    providers: new Map([['lp', lp]]),
-    userConfigFile: join(root, 'user-config.json'),
-    ...opts,
-  });
-  const events: EngineEvent[] = [];
-  engine.subscribe((e) => events.push(e));
-  return { engine, lp, events };
-}
-
-/** The tool results the model saw on its second call. */
-function results(lp: ScriptedProvider, call = 1): ToolResultPart[] {
-  return (lp.requests[call]?.messages.at(-1)?.parts ?? []) as ToolResultPart[];
-}
-
-const edit = { name: 'write', input: { path: 'b.txt', content: 'beta\n' } };
-const session = (engine: Engine, mode?: PermissionMode) =>
-  engine.createSession(mode ? { permissionMode: mode } : {}).id;
-
-describe('permission modes', () => {
+describe('permission levels', () => {
   test('web set to deny turns search off too, though search is allowed on its own', async () => {
     const search = { name: 'websearch', input: { query: 'bun test' } };
     const { engine, lp } = setup([{ toolCalls: [search] }, { text: 'ok' }], { web: 'deny' });
@@ -58,61 +16,12 @@ describe('permission modes', () => {
     expect(results(lp)[0]?.content).toContain('permissions.web is deny');
   });
 
-  test('acceptEdits allows edits that would otherwise ask', async () => {
-    const { engine, events } = setup([{ toolCalls: [edit] }, { text: 'done' }], { edit: 'ask' });
-    await engine.runTurn(session(engine, 'acceptEdits'), 'write it');
-    expect(readFileSync(join(root, 'b.txt'), 'utf8')).toBe('beta\n');
-    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
-  });
-
-  test('plan mode refuses edits, and the model is told it is planning', async () => {
-    const { engine, lp } = setup([{ toolCalls: [edit] }, { text: 'ok' }], { edit: 'allow' });
-    const id = session(engine, 'plan');
-    await engine.runTurn(id, 'write it');
-    expect(existsSync(join(root, 'b.txt'))).toBe(false);
-    expect(results(lp)[0]?.content).toContain('Plan mode is on');
-    const prompt = lp.requests[0]?.messages.at(-1)?.parts ?? [];
-    expect(
-      prompt.some((p) => p.type === 'text' && p.reminder && /Plan mode is on/.test(p.text)),
-    ).toBe(true);
-    // The reminder is for the model, not the transcript view.
-    const { session: summary, messages } = engine.getSession(id);
-    const view = fromTranscript(summary, messages);
-    expect(
-      view.items.filter((i) => i.kind === 'user').map((i) => i.kind === 'user' && i.text),
-    ).toEqual(['write it']);
-  });
-
-  test('approving the plan leaves plan mode', async () => {
-    const { engine, lp, events } = setup(
-      [
-        { toolCalls: [{ name: 'exit_plan_mode', input: { plan: '1. add b.txt' } }] },
-        { toolCalls: [edit] },
-        { text: 'done' },
-      ],
-      { edit: 'allow' },
-    );
-    engine.subscribe((e) => {
-      if (e.type === 'permission.requested' && e.plan)
-        engine.respondPermission(e.requestId, 'allow_once');
-    });
-    const id = session(engine, 'plan');
-    await engine.runTurn(id, 'plan then do it');
-    expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
-      plan: '1. add b.txt',
-    });
-    expect(events.find((e) => e.type === 'mode.changed')).toMatchObject({ mode: 'default' });
-    expect(results(lp)[0]?.content).toContain('approved');
-    expect(readFileSync(join(root, 'b.txt'), 'utf8')).toBe('beta\n');
-    expect(engine.getSession(id).session.permissionMode).toBe('default');
-  });
-
-  test('autoApprove lets a call through when the judge approves it', async () => {
+  test('auto lets a call through when the judge approves it', async () => {
     const approve = { text: 'Sure. {"approve": true, "reason": "the user asked for b.txt"}' };
     const { engine, lp, events } = setup([{ toolCalls: [edit] }, approve, { text: 'done' }], {
       edit: 'ask',
     });
-    await engine.runTurn(session(engine, 'autoApprove'), 'write b.txt');
+    await engine.runTurn(session(engine, 'auto'), 'write b.txt');
     expect(readFileSync(join(root, 'b.txt'), 'utf8')).toBe('beta\n');
     expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
     expect(events.find((e) => e.type === 'permission.judged')).toMatchObject({
@@ -128,7 +37,7 @@ describe('permission modes', () => {
     expect(asked?.type === 'text' && asked.text).toContain('The user asked:\nwrite b.txt');
   });
 
-  test('autoApprove asks the user about anything the judge refuses', async () => {
+  test('auto asks the user about anything the judge refuses', async () => {
     const push = { name: 'bash', input: { command: 'git push origin main' } };
     const refuse = { text: '{"approve": false, "reason": "pushing publishes the branch"}' };
     const { engine, events } = setup([{ toolCalls: [push] }, refuse, { text: 'ok' }], {
@@ -137,13 +46,13 @@ describe('permission modes', () => {
     engine.subscribe((e) => {
       if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'deny');
     });
-    await engine.runTurn(session(engine, 'autoApprove'), 'fix the test');
+    await engine.runTurn(session(engine, 'auto'), 'fix the test');
     expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
       reason: 'not auto-approved: pushing publishes the branch',
     });
   });
 
-  test('autoApprove asks when the judge answers with something unreadable', async () => {
+  test('auto asks when the judge answers with something unreadable', async () => {
     const { engine, events } = setup(
       [{ toolCalls: [edit] }, { text: 'yes, go ahead' }, { text: 'ok' }],
       { edit: 'ask' },
@@ -151,21 +60,21 @@ describe('permission modes', () => {
     engine.subscribe((e) => {
       if (e.type === 'permission.requested') engine.respondPermission(e.requestId, 'deny');
     });
-    await engine.runTurn(session(engine, 'autoApprove'), 'write it');
+    await engine.runTurn(session(engine, 'auto'), 'write it');
     expect(existsSync(join(root, 'b.txt'))).toBe(false);
     expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
       reason: "not auto-approved: the judge's answer wasn't readable",
     });
   });
 
-  test('autoApprove still asks for ask rules without calling the judge', async () => {
+  test('auto still asks for ask rules without calling the judge', async () => {
     const push = { name: 'bash', input: { command: 'git push origin main' } };
     const { engine, lp } = setup(
       [{ toolCalls: [push] }, { text: 'ok' }],
       { bash: 'allow', ask: ['bash(git push:*)'] },
       { interaction: 'deny' },
     );
-    await engine.runTurn(session(engine, 'autoApprove'), 'push it');
+    await engine.runTurn(session(engine, 'auto'), 'push it');
     expect(lp.requests).toHaveLength(2);
     expect(results(lp)[0]?.isError).toBe(true);
   });
@@ -181,7 +90,7 @@ describe('permission modes', () => {
       { bash: 'ask', ask: ['bash(git push:*)'], deny: ['bash(rm:*)'] },
       { interaction: 'deny' },
     );
-    await engine.runTurn(session(engine, 'bypassPermissions'), 'go');
+    await engine.runTurn(session(engine, 'bypass'), 'go');
     const [echo, push, rm] = results(lp);
     expect(echo?.content).toContain('ok');
     expect(push?.isError).toBeFalsy(); // the ask rule doesn't hold in bypass
@@ -202,8 +111,8 @@ describe('permission modes', () => {
     };
     const { engine } = setup([], {}, { org });
     const id = session(engine);
-    expect(() => engine.setMode(id, 'bypassPermissions')).toThrow("Acme's policy doesn't allow");
-    expect((await engine.permissions(id)).modes).not.toContain('bypassPermissions');
+    expect(() => engine.setPermissions(id, 'bypass')).toThrow("Acme's policy doesn't allow");
+    expect((await engine.permissions(id)).allowedLevels).not.toContain('bypass');
   });
 });
 

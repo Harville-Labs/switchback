@@ -17,7 +17,7 @@ import { TurnHooks } from './hooks/turn-hooks.ts';
 import { fixedInstructions } from './instructions-live.ts';
 import { UsageLedger } from './ledger.ts';
 import { Library } from './library.ts';
-import { type EngineHost, type LiveSession, scope } from './live-session.ts';
+import { agentNameOf, type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { McpHub } from './mcp/hub.ts';
 import { ModelDirectory } from './model-directory.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
@@ -136,6 +136,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     sessions: sessions,
     checkpoints: new Checkpoints(options.checkpoints ?? new MemoryCheckpointStore()),
     gate: () => gate,
+    agent: (name) => agents.get(name),
     commands: () => commands,
     summary: (s) => factory.summary(s),
     newSessionId,
@@ -171,9 +172,11 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
   const gate: PermissionGate = new PermissionGate(host, {
     interaction: () => options.interaction ?? 'prompt',
     rules: () => (options.rules ??= configRules(options.config)),
-    mode: (s) => controls.modeOf(s),
-    // exit_plan_mode's result tells the model about the change itself.
-    setMode: (s, mode) => controls.changeMode(sessions.top(s), mode, true),
+    level: (s) => controls.levelOf(s),
+    activeAgent: (s) => controls.activeAgent(s),
+    agents: (s) => controls.agentsFor(s),
+    agent: (name) => agents.get(name),
+    leavePlan: (s, auto) => controls.leavePlan(s, auto),
     places: () => ({
       configDir: paths.configDir,
       dataDir,
@@ -249,7 +252,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     loop: agentLoop,
     hooks: new TurnHooks(hooks, (s) => hookPayload(s)),
     reviews: reviews,
-    mode: (s) => controls.modeOf(s),
+    agent: (name) => agents.get(name),
     checkpoint: (s, turnId, prompt) => controls.beginCheckpoint(s, turnId, prompt),
     instructions,
     mcp: () => io.mcp(),
@@ -259,7 +262,11 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
 
   /** What every hook hears about the session. */
   function hookPayload(s: LiveSession): Record<string, unknown> {
-    return { session_id: s.header.id, permission_mode: controls.modeOf(s) };
+    return {
+      session_id: s.header.id,
+      permission_mode: controls.levelOf(s),
+      agent: agentNameOf(s),
+    };
   }
   /** Where a session's tools operate: its worktree, or the workspace. */
   function rootOf(s: LiveSession): string {
