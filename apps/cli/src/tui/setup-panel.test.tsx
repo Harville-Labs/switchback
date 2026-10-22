@@ -71,6 +71,13 @@ describe('setup in the TUI', () => {
     expect(got).toEqual(['sk-1']);
   });
 
+  test('a text default is a suggestion: typing replaces it and enter on empty takes it', async () => {
+    const q: SetupQuestion = { kind: 'text', question: 'Endpoint URL', default: 'http://x:1/v1' };
+    const typed = await answer(q, [...'http://gpu:8000/v1', '\r']);
+    expect(typed.got).toEqual(['http://gpu:8000/v1']);
+    expect((await answer(q, ['\r'])).got).toEqual(['']);
+  });
+
   test('a number takes empty for its default and refuses what is not a number', async () => {
     const q: SetupQuestion = { kind: 'number', question: 'Context window', default: 32768 };
     expect((await answer(q, ['\r'])).got).toEqual(['']);

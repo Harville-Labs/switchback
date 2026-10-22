@@ -76,7 +76,8 @@ export async function askSetupQuestion(q: SetupQuestion): Promise<Answer> {
       const got = await vscode.window.showInputBox({
         title: TITLE,
         prompt: q.question,
-        ...(q.default !== undefined ? { value: q.default } : {}),
+        // A placeholder, not a value: an empty answer takes the default, and typing doesn't have to clear it first.
+        ...(q.default !== undefined ? { placeHolder: q.default } : {}),
         ...(q.secret ? { password: true } : {}),
         ignoreFocusOut: true,
       });
