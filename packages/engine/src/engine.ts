@@ -69,7 +69,7 @@ import { listWorktrees, worktreeDiff } from './worktree-info.ts';
 
 export type { EngineOptions } from './engine-options.ts';
 
-export const ENGINE_VERSION = '2.3.0';
+export const ENGINE_VERSION = '2.4.0';
 
 export class Engine {
   private listeners = new Set<(event: EngineEvent) => void>();

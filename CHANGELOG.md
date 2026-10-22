@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-22
+
 ### Added
 - **Asking for subagents gets you subagents.** "Use 4 subagents to…" starts four, in parallel, each with its own brief and files; with no number the model uses as few as the work needs, and when a number looks wrong for the work it says so and you agree on one. Two subagents never edit the same file: each gets its own files or its own worktree
 - **Big fan-outs don't flood the parent's context.** The subagents started in one step share 60,000 characters of report, and each is told its share, so 150 of them cost the parent about what two do. Subagents get a short note on reporting instead of the whole Switchback guide
