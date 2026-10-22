@@ -50,6 +50,8 @@ export interface LoadedConfig {
   rules: SourcedRule[];
   /** Project hooks left out until trusted (`switchback hooks trust`). */
   untrustedHooks: SourcedHook[];
+  /** Aliases an endpoint or plan lists that no config file names; Tab skips them. */
+  listedModels: string[];
 }
 
 /** How rules from an organization's policy are labeled. */
@@ -203,6 +205,7 @@ export function loadConfig(
   // The environment's opt-out beats every config file, including an org's.
   if (telemetryOptedOut(env))
     config = { ...config, telemetry: { ...config.telemetry, enabled: false } };
+  const chosen = new Set(Object.keys(config.models));
   config = withEndpointModels(
     withSubscriptionModels(config, readDiscovered(env)),
     readEndpointModels(env),
@@ -246,6 +249,7 @@ export function loadConfig(
     untrustedMcp,
     rules: ruleSet.sourced,
     untrustedHooks: hookSet.untrusted,
+    listedModels: Object.keys(config.models).filter((a) => !chosen.has(a)),
     ...(orgStatus ? { org: orgStatus } : {}),
   };
 }

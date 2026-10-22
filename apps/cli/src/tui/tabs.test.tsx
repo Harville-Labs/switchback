@@ -9,6 +9,7 @@ import {
 import type { EngineEvent, InitializeResult } from '@switchback/protocol';
 import { render } from 'ink-testing-library';
 import { App } from './App.tsx';
+import { MouseContext } from './Clickable.tsx';
 import type { ClickListener, MouseInput } from './mouse.ts';
 import { tabAtColumn, tabSpans } from './Tabs.tsx';
 import { frameWith, session, tick } from './test-support.ts';
@@ -43,7 +44,7 @@ const roles = {
 function app() {
   const calls: { method: string; params: unknown }[] = [];
   let listener: ((e: EngineEvent) => void) | undefined;
-  let click: ClickListener | undefined;
+  const clicks = new Set<ClickListener>();
   let created = 0;
   const client = {
     request: async (method: string, params: unknown) => {
@@ -66,22 +67,30 @@ function app() {
   const mouse = {
     onWheel: () => () => {},
     onClick: (l: ClickListener) => {
-      click = l;
-      return () => {};
+      clicks.add(l);
+      return () => clicks.delete(l);
     },
   } as unknown as MouseInput;
   const ui = render(
-    <App
-      client={client}
-      init={init}
-      initialSession={session('s1', 'fix the parser')}
-      initialRoute="auto"
-      warnings={[]}
-      mouse={mouse}
-    />,
+    <MouseContext.Provider value={mouse}>
+      <App
+        client={client}
+        init={init}
+        initialSession={session('s1', 'fix the parser')}
+        initialRoute="auto"
+        warnings={[]}
+      />
+    </MouseContext.Provider>,
   );
   const emit = (e: EngineEvent) => listener?.(e);
-  return { ui, calls, emit, click: (x: number, y: number) => click?.(x, y) };
+  return {
+    ui,
+    calls,
+    emit,
+    click: (x: number, y: number) => {
+      for (const l of clicks) l(x, y);
+    },
+  };
 }
 
 /** Opens a second tab through the dashboard. */
@@ -182,6 +191,33 @@ describe('the subagent view', () => {
     ui.stdin.write(ALT_UP);
     await tick();
     expect(await frameWith(ui, '◆ Switchback')).not.toContain('↳ viewing explore');
+  });
+
+  test('a click on a model in the picker switches to it; one on esc closes it', async () => {
+    const { ui, calls, click } = app();
+    await tick();
+    const at = (text: string) => {
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: strips the frame's colors
+      const lines = (ui.lastFrame() ?? '').replace(/\x1b\[[0-9;]*m/g, '').split('\n');
+      const y = lines.findIndex((l) => l.includes(text));
+      return [(lines[y] ?? '').indexOf(text) + 1, y + 1] as const;
+    };
+    ui.stdin.write('/model');
+    await tick();
+    ui.stdin.write(ENTER);
+    await frameWith(ui, 'Current model');
+    click(...at('esc close'));
+    await tick();
+    expect(ui.lastFrame()).not.toContain('Current model');
+    ui.stdin.write('/model');
+    await tick();
+    ui.stdin.write(ENTER);
+    await frameWith(ui, 'Current model');
+    click(...at('2. opus'));
+    await tick();
+    expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
+      current: ['opus', 'fast'],
+    });
   });
 
   test('Tab switches to the next model and says so', async () => {

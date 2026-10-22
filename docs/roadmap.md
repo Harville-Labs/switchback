@@ -71,7 +71,7 @@ Escalate less often and more precisely.
 ## v1.0 Product readiness (released)
 
 - Open-core licensing: Apache-2.0 for Switchback, paid company sites (ADR 0014)
-- Permission rules and modes (default, accept edits, plan, bypass), hooks, and an OS sandbox for `bash` (macOS Seatbelt, Linux bubblewrap)
+- Permission rules and modes (default, accept edits, auto-approve, plan, bypass), hooks, and an OS sandbox for `bash` (macOS Seatbelt, Linux bubblewrap)
 - Organization policy that members can't override, including deny rules
 - Checkpoints and rewind, queued and interrupting messages, resumable sessions, background shells, a checklist
 - Web fetch and search, custom commands and skills, MCP resources and prompts, image input

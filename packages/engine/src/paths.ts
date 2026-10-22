@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 /**
  * Everything of Switchback's lives in `~/.switchback`, laid out like a
@@ -26,6 +26,12 @@ export function switchbackPaths(env: Record<string, string | undefined> = proces
     sessionsDir: join(data, 'sessions'),
     usageFile: join(data, 'usage.jsonl'),
   };
+}
+
+/** A path under the home directory as `~/...`, the way the docs write it; others as they are. */
+export function tildify(path: string, home = homedir()): string {
+  if (path === home) return '~';
+  return path.startsWith(`${home}${sep}`) ? `~${sep}${path.slice(home.length + 1)}` : path;
 }
 
 export type SwitchbackPaths = ReturnType<typeof switchbackPaths>;

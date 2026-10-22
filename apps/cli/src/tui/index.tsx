@@ -8,8 +8,10 @@ import type {
 } from '@switchback/protocol';
 import { render } from 'ink';
 import { CLI_VERSION, type CommonFlags, checksForUpdates, connectShared } from '../bootstrap.ts';
+import { exitHint, resumeTarget } from '../commands/resume.ts';
 import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
+import { MouseContext } from './Clickable.tsx';
 import { mouseInput, savedMouse } from './mouse.ts';
 import type { Opening } from './SetupPanel.tsx';
 import { terminalTitles } from './terminal-title.ts';
@@ -46,10 +48,17 @@ export async function tui(
   let session: SessionSummary | undefined;
   let history: ViewState | undefined;
   if (opts.resume) {
-    const id =
-      opts.resume === 'latest' ? (await client.request('session.list', {}))[0]?.id : opts.resume;
-    if (id) {
-      const got = await client.request('session.get', { sessionId: id });
+    const { sessionId, error } = resumeTarget(
+      opts.resume,
+      await client.request('session.list', {}),
+    );
+    if (error) {
+      process.stderr.write(`switchback: ${error}\n`);
+      await client.request('shutdown', {}).catch(() => {});
+      return 2;
+    }
+    if (sessionId) {
+      const got = await client.request('session.get', { sessionId });
       session = got.session;
       history = fromTranscript(got.session, got.messages);
     } else {
@@ -79,21 +88,22 @@ export async function tui(
   const titles = terminalTitles(process.stdout);
   titles.set(session.title);
   const app = render(
-    <App
-      client={client}
-      init={init}
-      initialSession={session}
-      {...(history ? { initialView: history } : {})}
-      initialRoute={opts.route}
-      {...(opts.opening ? { opening: opts.opening } : {})}
-      warnings={warnings}
-      initialTheme={savedTheme()}
-      mouse={mouse}
-      onSession={(s) => {
-        open = s;
-        titles.set(s.title);
-      }}
-    />,
+    <MouseContext.Provider value={mouse}>
+      <App
+        client={client}
+        init={init}
+        initialSession={session}
+        {...(history ? { initialView: history } : {})}
+        initialRoute={opts.route}
+        {...(opts.opening ? { opening: opts.opening } : {})}
+        warnings={warnings}
+        initialTheme={savedTheme()}
+        onSession={(s) => {
+          open = s;
+          titles.set(s.title);
+        }}
+      />
+    </MouseContext.Provider>,
     {
       // Ctrl+C clears the prompt or cancels a turn; quitting takes a second press (App.tsx).
       exitOnCtrlC: false,
@@ -111,10 +121,13 @@ export async function tui(
     mouse.dispose();
     titles.restore();
   }
+  const messages = await client
+    .request('session.get', { sessionId: open.id })
+    .then((got) => got.messages.length)
+    .catch(() => 0);
   await client.request('shutdown', {}).catch(() => {});
   // The full-screen view is gone; say how to get back to it.
-  process.stdout.write(
-    `Session ${open.title ? `"${open.title}" ` : ''}saved · resume with switchback --resume ${open.id}\n`,
-  );
+  const hint = exitHint(open.id, messages);
+  if (hint) process.stdout.write(`${hint}\n`);
   return 0;
 }

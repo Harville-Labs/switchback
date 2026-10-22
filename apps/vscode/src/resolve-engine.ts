@@ -1,4 +1,4 @@
-/** Which engine binary the extension runs. */
+/** The engine binary the extension runs, from the user's settings or what's installed. */
 import * as vscode from 'vscode';
 import { chooseEngine, type EngineBinary, findCli, probeVersion } from './engine-binary.ts';
 import { VERSION } from './version.ts';

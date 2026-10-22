@@ -36,14 +36,14 @@ import type {
   SessionSummary,
 } from '@switchback/protocol';
 import { Box, Text, useApp, useBoxMetrics, useStdout, useWindowSize } from 'ink';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Header, StatusBar, SubagentHeader, Working } from './Chrome.tsx';
+import { MouseContext } from './Clickable.tsx';
 import { useEngineFeeds } from './feeds.ts';
 import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
 import { useAppKeys } from './keys.ts';
 import { ModelPicker } from './ModelPicker.tsx';
-import type { MouseInput } from './mouse.ts';
 import { Pinned } from './Pinned.tsx';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
@@ -66,8 +66,6 @@ interface Props {
   /** What to open over the prompt first. */
   opening?: Opening;
   initialTheme?: ThemeName;
-  /** Wheel events, when the terminal reports them. */
-  mouse?: MouseInput;
   /** Told which session was open when the app quits, for the resume hint. */
   onSession?: (session: SessionSummary) => void;
 }
@@ -84,9 +82,9 @@ export function App({
   warnings,
   opening,
   initialTheme = 'dark',
-  mouse,
   onSession,
 }: Props) {
+  const mouse = useContext(MouseContext);
   const { exit } = useApp();
   const { stdout } = useStdout();
   const size = useWindowSize();
@@ -419,10 +417,8 @@ export function App({
               role={choosingModel}
               choices={modelChoices(init.models, sessionRoles, choosingModel)}
               onCancel={() => setChoosingModel(undefined)}
-              onPick={(alias) => {
-                setChoosingModel(undefined);
-                void pickModel(slash, sessionRoles, choosingModel, alias);
-              }}
+              onCommand={(text) => void runSlashCommand(slash, text)}
+              onPick={(alias) => void pickModel(slash, sessionRoles, choosingModel, alias)}
             />
           ) : null}
           {setup.panel}
@@ -458,8 +454,10 @@ export function App({
                 )
               }
               onCancel={() => {
-                if (view.running)
-                  client.request('session.cancel', { sessionId: session.id }).catch(() => {});
+                if (!view.running) return;
+                // Esc with a prompt queued means "send it now", not "stop everything" (Ctrl+C is that).
+                const method = view.queue?.length ? 'session.sendQueued' : 'session.cancel';
+                client.request(method, { sessionId: session.id }).catch(() => {});
               }}
               recall={recall}
               onTab={() => void cycleModel(slash, sessionRoles)}

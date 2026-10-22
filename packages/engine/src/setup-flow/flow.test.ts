@@ -374,7 +374,7 @@ describe('which model does what', () => {
   test('with two models, the ladder can be changed', async () => {
     const s = scripted([
       ['Which model does what', 'escalate'],
-      ['When the current model struggles, escalate to:', ''],
+      ['When a turn is too hard for coder, hand it to:', ''],
       ['Which model does what', 'done'],
     ]);
     const roles = await chooseRoles(flags, s.p, [coder, sol]);

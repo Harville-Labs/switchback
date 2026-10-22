@@ -7,6 +7,7 @@ export * from './daemon.ts';
 export * from './format.ts';
 export * from './goal.ts';
 export * from './models.ts';
+export * from './modes.ts';
 export * from './session-scope.ts';
 export * from './setup.ts';
 export * from './spawn.ts';

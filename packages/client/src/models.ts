@@ -3,11 +3,13 @@
  * VS Code's model dropdown all list the same choices and make the same change.
  */
 import type {
+  ConfigReloadResult,
   InitializeResult,
   ModelsRefreshResult,
   SessionRoles,
   SessionSetRolesParams,
 } from '@switchback/protocol';
+import type { SwitchbackClient } from './client.ts';
 import { rolesOfModel } from './format.ts';
 
 type ModelSummary = InitializeResult['models'][number];
@@ -21,11 +23,16 @@ export interface ModelChoice {
   current: boolean;
   /** The other roles it fills (`step 1`, `reviews`, ...), for a hint beside it. */
   roles: string[];
+  /** An endpoint or plan lists it; no config names it. */
+  listed: boolean;
 }
 
 export type ChosenRole = 'current' | 'subagents';
 
-/** Every configured model, the one filling `role` first, then in config order. */
+/**
+ * Every model, the one filling `role` first, then the ones the config names,
+ * then the ones an endpoint or plan only lists.
+ */
 export function modelChoices(
   models: ModelSummary[],
   roles?: SessionRoles,
@@ -38,8 +45,10 @@ export function modelChoices(
     tier: m.tier,
     current: m.alias === first,
     roles: roles ? rolesOfModel(m.alias, roles).filter((r) => r !== role) : [],
+    listed: m.listed === true,
   }));
-  return [...choices.filter((c) => c.current), ...choices.filter((c) => !c.current)];
+  const rank = (c: ModelChoice) => (c.current ? 0 : c.listed ? 2 : 1);
+  return choices.sort((a, b) => rank(a) - rank(b));
 }
 
 /**
@@ -58,12 +67,17 @@ export function currentChange(
  * Tab in the TUI: the model after the current one, in config order and back
  * to the first after the last, with the change that makes it current. It takes
  * the current model's place, so going round doesn't pile every model into the
- * backups. Undefined when there's no other model to switch to.
+ * backups. Only models the user chose go round: the config names them or a
+ * role uses them. A model an endpoint merely lists waits in the pickers.
+ * Undefined when there's no other model to switch to.
  */
 export function nextModel(
-  models: ModelSummary[],
+  all: ModelSummary[],
   roles: SessionRoles | undefined,
 ): { alias: string; change: Pick<SessionSetRolesParams, 'current'> } | undefined {
+  const models = all.filter(
+    (m) => !m.listed || (roles !== undefined && rolesOfModel(m.alias, roles).length > 0),
+  );
   const at = models.findIndex((m) => m.alias === roles?.current[0]);
   const next = models[(at + 1) % models.length];
   if (!next || next.alias === roles?.current[0]) return undefined;
@@ -74,7 +88,7 @@ export function nextModel(
 /** One choice on one line: `qwen3-coder · local · step 1`. */
 export function choiceLabel(c: ModelChoice): string {
   const model = c.model === c.alias ? c.alias : `${c.alias} (${c.model})`;
-  return [model, c.tier, ...c.roles].join(' · ');
+  return [model, c.tier, ...c.roles, ...(c.listed ? ['listed'] : [])].join(' · ');
 }
 
 /** `/models refresh`: what each endpoint and plan lists now that it didn't, or why it couldn't say. */
@@ -90,4 +104,15 @@ export function formatRefresh(result: ModelsRefreshResult): string {
     return `  ${s.provider}: ${changes.length ? changes.join('; ') : 'no change'}`;
   });
   return [`${result.models.length} models available.`, ...lines].join('\n');
+}
+
+/** `/reload` in either client: ask the engine to read its config again, and say what came of it. */
+export function runReload(client: Pick<SwitchbackClient, 'request'>): Promise<string> {
+  return client.request('config.reload', {}).then(formatReload, (err: Error) => err.message);
+}
+
+/** Which parts of the config changed, if any. */
+export function formatReload(result: ConfigReloadResult): string {
+  if (!result.changed.length) return 'Config reloaded; nothing in it changed.';
+  return `Config reloaded. Changed: ${result.changed.join(', ')}. ${result.models.length} models available.`;
 }

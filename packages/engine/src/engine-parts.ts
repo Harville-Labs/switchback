@@ -22,6 +22,7 @@ import type { McpHub } from './mcp/hub.ts';
 import { ModelDirectory } from './model-directory.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
 import { PermissionGate } from './permissions/gate.ts';
+import { PermissionJudge } from './permissions/judge.ts';
 import { configRules } from './permissions/policy.ts';
 import { ReviewRunner } from './review-runner.ts';
 import { SessionControls } from './session-controls.ts';
@@ -45,7 +46,7 @@ export interface EngineIo {
   mcp(): McpHub | undefined;
 }
 
-export const newTurnId = () => `turn_${crypto.randomUUID().slice(0, 8)}`;
+const newTurnId = () => `turn_${crypto.randomUUID().slice(0, 8)}`;
 
 export function assembleEngine(options: EngineOptions, io: EngineIo) {
   const { config } = options;
@@ -55,6 +56,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     options.providers,
     (e) => io.emit(e),
     now,
+    options.listedModels,
   );
   const ledger: UsageLedger = new UsageLedger(
     options.ledgerFile,
@@ -123,6 +125,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     privatePaths: () => policy.privatePaths(),
   };
   const compactor: Compactor = new Compactor(host, models);
+  const judge = new PermissionJudge(host, models);
   const goals: Goals = new Goals(host, () => now().getTime());
   const controls: SessionControls = new SessionControls(host, {
     sessions: sessions,
@@ -172,6 +175,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
       denyRead: options.config.bash.sandbox.denyRead,
     }),
     saveTo: { project: configFiles.projectLocal, user: configFiles.user },
+    judge: (s, call, signal) => judge.judge(s, call, signal),
   });
   const tools: ToolRunner = new ToolRunner(host, gate, {
     commands: commands,

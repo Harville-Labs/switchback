@@ -66,6 +66,20 @@ test('upgrade and update dispatch to self-update', () => {
   }
 });
 
+test('resume takes at most one session id, from the command or -r', () => {
+  for (const args of [
+    ['resume', 'a', 'b'],
+    ['-r', 'a', 'b'],
+  ]) {
+    const proc = Bun.spawnSync([process.execPath, main, ...args], {
+      env: { ...process.env, SWITCHBACK_HOME: home },
+      stderr: 'pipe',
+    });
+    expect(proc.exitCode).toBe(2);
+    expect(proc.stderr.toString()).toContain('resume takes at most one session id');
+  }
+});
+
 test('agents new writes a valid file that a running engine picks up without a restart', async () => {
   const ws = mkdtempSync(join(tmpdir(), 'switchback-agents-'));
   const transport = spawnEngine({
@@ -143,7 +157,7 @@ test('agents new writes a valid file that a running engine picks up without a re
 describe('switchback run for scripts', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'switchback-run-'));
   afterAll(() => rmSync(workspace, { recursive: true, force: true }));
-  const bash = 'mock:tool {"name":"bash","input":{"command":"echo hi"}}';
+  const bash = 'mock:tool {"name":"bash","input":{"command":"printf hi"}}';
   const runCli = async (...args: string[]) => {
     const proc = Bun.spawn([process.execPath, main, 'run', '--mock', '--cwd', workspace, ...args], {
       env: { ...process.env, SWITCHBACK_HOME: home },
@@ -208,7 +222,8 @@ test('init gives a new user config the default permissions, once', () => {
     const config = () => parseJsonc(readFileSync(join(fresh, 'config.json'), 'utf8'));
     const { permissions } = config() as { permissions: { allow: string[]; ask: string[] } };
     expect(permissions.ask).toContain('bash(git commit:*)');
-    expect(permissions.allow).toContain('bash(git log:*)');
+    expect(permissions.allow).toContain('bash(pytest:*)');
+    expect(permissions.allow).not.toContain('bash(git log:*)');
     init();
     expect(config()).toMatchObject({ permissions });
   } finally {

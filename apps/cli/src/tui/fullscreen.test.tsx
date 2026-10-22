@@ -4,7 +4,7 @@ import { render } from 'ink-testing-library';
 import { diffLines } from './Diff.tsx';
 import { type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { quietRoutes } from './Rows.tsx';
-import { visibleLines } from './Transcript.tsx';
+import { Viewport, visibleLines } from './Transcript.tsx';
 
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
@@ -30,6 +30,13 @@ describe('the viewport', () => {
     expect(visibleLines(lines, 3, 0)).toEqual(['line 7', 'line 8', 'line 9']);
     expect(visibleLines(lines, 3, 2)).toEqual(['line 5', 'line 6', 'line 7']);
     expect(visibleLines(lines, 20, 0)).toHaveLength(10);
+  });
+
+  test('scrolled up, the bar has its own row and covers no line', () => {
+    const ui = render(<Viewport lines={lines} height={4} scroll={2} unseen={0} />);
+    const rows = ui.lastFrame()?.split('\n') ?? [];
+    expect(rows.slice(0, 3)).toEqual(['line 5', 'line 6', 'line 7']);
+    expect(rows[3]).toContain('2 lines up');
   });
 
   test('route rows show only when the model changes', () => {

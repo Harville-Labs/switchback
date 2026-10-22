@@ -14,7 +14,7 @@ export interface AgentSpec {
 }
 
 /** One tool-free call; returns the draft (possibly empty) and what it used. */
-export async function draftAgentPrompt(
+async function draftAgentPrompt(
   provider: Provider,
   model: string,
   spec: AgentSpec,

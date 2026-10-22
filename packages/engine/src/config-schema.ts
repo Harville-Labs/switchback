@@ -112,6 +112,11 @@ export const SwitchbackConfig = z.object({
       /** The mode new sessions start in (docs/permissions.md). */
       defaultMode: PermissionMode.default('default'),
       /**
+       * The model that judges calls in the `autoApprove` mode. Unset, it's the
+       * session's first reachable local model.
+       */
+      judge: z.string().optional(),
+      /**
        * Files outside the workspace: `ask` (reads follow `read`; edits ask
        * unless an allow rule names the place) or `deny` (file tools stay in
        * the workspace).

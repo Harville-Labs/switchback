@@ -2,7 +2,7 @@
  * What the engine knows about its models: the live providers, whether each is
  * up, and how much each model's context holds.
  */
-import type { EngineEvent, Message, Tier } from '@switchback/protocol';
+import type { EngineEvent, Message, ModelSummary, Tier } from '@switchback/protocol';
 import {
   catalogModel,
   createProvider,
@@ -41,6 +41,8 @@ export class ModelDirectory {
     private readonly injected: Map<string, Provider> | undefined,
     private readonly emit: (event: EngineEvent) => void,
     private readonly now: () => Date,
+    /** Aliases an endpoint or plan lists that the config doesn't name. */
+    private listed: string[] = [],
   ) {
     for (const [id, pc] of Object.entries(config.providers)) {
       this.providers.set(id, injected?.get(id) ?? createProvider(id, pc));
@@ -50,7 +52,7 @@ export class ModelDirectory {
   }
 
   /** Swap in a new config; providers whose settings didn't change keep their state. */
-  apply(next: SwitchbackConfig): void {
+  apply(next: SwitchbackConfig, listed: string[] = []): void {
     for (const id of [...this.providers.keys()]) {
       if (!next.providers[id] && !this.injected?.has(id)) {
         this.providers.delete(id);
@@ -67,6 +69,7 @@ export class ModelDirectory {
     }
     this.detectedContext.clear();
     this.config = next;
+    this.listed = listed;
   }
 
   provider(id: string): Provider | undefined {
@@ -84,11 +87,13 @@ export class ModelDirectory {
   }
 
   /** Every configured model, as `initialize` reports them. */
-  summaries(): { alias: string; ref: { provider: string; model: string }; tier: Tier }[] {
+  summaries(): ModelSummary[] {
+    const listed = new Set(this.listed);
     return Object.entries(this.config.models).map(([alias, m]) => ({
       alias,
       ref: { provider: m.provider, model: m.model },
       tier: this.tierOfProvider(m.provider),
+      ...(listed.has(alias) ? { listed: true as const } : {}),
     }));
   }
 

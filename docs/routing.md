@@ -84,7 +84,7 @@ Then five guards run on the target. They only ever act on remote models; a local
 The **current model** is where your prompts run: the first model in `current` that's up and fits. It's the one people change most, so both clients put it a step away:
 
 - **VS Code**: the **Model** dropdown under the input lists every configured model, the current one first, each with its tier and the other roles it fills. Pick one and the next prompt runs on it.
-- **TUI**: `/current` with no argument opens the same list (↑/↓ and Enter, or a number); `/current <model> [backup...]` sets it directly, and **Tab** switches to the next model in config order, going round them all. The welcome card and the status bar name it.
+- **TUI**: `/current` with no argument opens the same list (↑/↓ and Enter, or a number); `/current <model> [backup...]` sets it directly, and **Tab** switches to the next model you chose, in config order: the models your config names plus any a role uses. Models an endpoint or plan only lists stay out of the Tab rotation; the pickers offer them last, marked `listed`. The welcome card and the status bar name it.
 
 Picking a model doesn't drop your fallback: the models that were current stay behind it as backups, in order, so a down server or an oversized prompt still has somewhere to go. Escalation climbs the ladder from wherever you are, as before. The change applies to the session; **Make this my default** in the dropdown, or `--save`, writes it to your user config.
 

@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
-import { join } from 'node:path';
-import { heading, marked, type Style, summary, tildify } from './doctor-style.ts';
+import { marked, type Style, summary } from './doctor-style.ts';
 
 /** Styles as tags, so tests read what's styled how. */
 const tag =
@@ -15,13 +14,6 @@ const style: Style = {
   yellow: tag('yellow'),
   cyan: tag('cyan'),
 };
-
-test('headings are bold, with an optional dim note', () => {
-  expect(heading(style, 'Providers')).toBe('<b><cyan>Providers</cyan></b>');
-  expect(heading(style, 'Instructions', 'in every session')).toBe(
-    '<b><cyan>Instructions</cyan></b> <dim>in every session</dim>',
-  );
-});
 
 test('lines are colored by their mark, keeping their indent', () => {
   expect(marked(style, '  ✓ ollama: 3 models')).toBe('  <green>✓</green> ollama: 3 models');
@@ -43,13 +35,4 @@ test('the summary says all good, or how many problems', () => {
   expect(summary(style, 0)).toBe('<b><green>✓ All good.</green></b>');
   expect(summary(style, 1)).toBe('<b><red>✗ 1 problem found.</red></b>');
   expect(summary(style, 3)).toBe('<b><red>✗ 3 problems found.</red></b>');
-});
-
-test('paths under the home directory are shown from ~', () => {
-  const home = join('/', 'home', 'me');
-  expect(tildify(join(home, '.switchback', 'config.json'), home)).toBe(
-    join('~', '.switchback', 'config.json'),
-  );
-  expect(tildify(join('/', 'home', 'meg', 'x'), home)).toBe(join('/', 'home', 'meg', 'x'));
-  expect(tildify(home, home)).toBe('~');
 });

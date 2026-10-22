@@ -4,6 +4,7 @@
  * `plain` uses no color at all, for terminals and people who'd rather not.
  * The choice is saved with the TUI's other preferences (`prefs.ts`).
  */
+import type { PermissionMode } from '@switchback/protocol';
 import { createContext, useContext } from 'react';
 import { prefsFile, readPrefs, savePref } from './prefs.ts';
 
@@ -29,7 +30,7 @@ export interface Theme {
   addedBg?: string;
   removedBg?: string;
   /** Permission modes, as the status bar's badge shows them. */
-  modes: Record<'default' | 'acceptEdits' | 'plan' | 'bypassPermissions', string | undefined>;
+  modes: Record<PermissionMode, string | undefined>;
 }
 
 const DARK: Theme = {
@@ -49,6 +50,7 @@ const DARK: Theme = {
   modes: {
     default: undefined,
     acceptEdits: '#c084fc',
+    autoApprove: '#fbbf24',
     plan: '#38bdf8',
     bypassPermissions: '#f87171',
   },
@@ -71,6 +73,7 @@ const LIGHT: Theme = {
   modes: {
     default: undefined,
     acceptEdits: '#7e22ce',
+    autoApprove: '#a16207',
     plan: '#0369a1',
     bypassPermissions: '#b91c1c',
   },
@@ -81,6 +84,7 @@ const PLAIN: Theme = {
   modes: {
     default: undefined,
     acceptEdits: undefined,
+    autoApprove: undefined,
     plan: undefined,
     bypassPermissions: undefined,
   },

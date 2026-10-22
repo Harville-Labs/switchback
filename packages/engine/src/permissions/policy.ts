@@ -51,6 +51,11 @@ export class PermissionPolicy {
     return found ? { behavior: found.behavior, rule: found } : undefined;
   }
 
+  /** Whether any read rule denies or asks, so a search across a directory may reach its file. */
+  guardsReads(): boolean {
+    return this.rules.some((r) => r.behavior !== 'allow' && r.parsed.target.kind === 'read');
+  }
+
   /** Whether deny rules keep a file out of reads, so search results leave it out too. */
   hides(absolutePath: string, root: string): boolean {
     return this.rules.some(

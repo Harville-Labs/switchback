@@ -1,5 +1,4 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
-import { homedir } from 'node:os';
 import { formatMcpServers, formatPermissions, formatRoles, modeLabel } from '@switchback/client';
 import {
   configRoles,
@@ -10,11 +9,12 @@ import {
   roleAliases,
   switchbackHome,
   tierOfModel,
+  tildify,
 } from '@switchback/engine';
 import { createProvider, tierOf } from '@switchback/providers';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 import { bold, cyan, dim, green, red, yellow } from '../prompt.ts';
-import { heading, marked, summary, tildify } from './doctor-style.ts';
+import { heading, marked, summary } from './doctor-style.ts';
 
 const style = { bold, dim, green, red, yellow, cyan };
 
@@ -33,11 +33,11 @@ export async function doctor(flags: CommonFlags): Promise<number> {
 
   out(heading(style, 'Config files'));
   if (loaded.sources.length === 0) out(dim('  (none; using built-in defaults)'));
-  for (const s of loaded.sources) out(`  ${tildify(s, homedir())}`);
+  for (const s of loaded.sources) out(`  ${tildify(s)}`);
   for (const dir of legacyDirs())
     out(
       yellow(
-        `  ! ${tildify(dir, homedir())} is from before 1.1.0 and isn't read; move what you need into ${tildify(switchbackHome(), homedir())}, then delete it`,
+        `  ! ${tildify(dir)} is from before 1.1.0 and isn't read; move what you need into ${tildify(switchbackHome())}, then delete it`,
       ),
     );
 
@@ -121,7 +121,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   const usage = instructionsUsage(instructionFiles(flags.cwd), windows);
   if (!usage.files.length) out("  no AGENTS.md (yours or the project's)");
   for (const f of usage.files)
-    out(`  ${tildify(f.path, homedir())}: ${bold(f.tokens.toLocaleString('en-US'))} tokens`);
+    out(`  ${tildify(f.path)}: ${bold(f.tokens.toLocaleString('en-US'))} tokens`);
   if (usage.files.length > 1) out(`  total: ${usage.total.toLocaleString('en-US')} tokens`);
   if (usage.window && usage.total)
     out(

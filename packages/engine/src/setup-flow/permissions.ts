@@ -5,10 +5,9 @@
  * rules, not the project's.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { parseJsonc } from '../config.ts';
 import { readCachedPolicy } from '../org/store.ts';
-import { switchbackPaths } from '../paths.ts';
+import { switchbackPaths, tildify } from '../paths.ts';
 import { PERMISSION_PRESETS, setupPermissions } from '../permissions/defaults.ts';
 import { writeConfigLayer } from '../setup.ts';
 import type { ImportedPermissions } from './from-opencode.ts';
@@ -39,7 +38,7 @@ export async function setupUserPermissions(
   }
   writeConfigLayer(file, { permissions: next }, { references: false });
   const parts = [
-    ...(fresh ? ['read-only commands'] : []),
+    ...(fresh ? ['test and build commands'] : []),
     ...(imported?.allow.length ? ['what your previous agent allowed'] : []),
   ];
   const runs =
@@ -72,11 +71,6 @@ function withImported(
     ask: list('ask'),
     ...(deny.length ? { deny } : {}),
   };
-}
-
-function tildify(path: string): string {
-  const home = homedir();
-  return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 
 function existingRules(file: string): Rules {

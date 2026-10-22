@@ -41,13 +41,18 @@ test('an exact command name comes before longer names it begins', () => {
   expect(matchCommands('model', 'tui')[0]?.name).toBe('model');
 });
 
-test('formatCommands puts every description in one column', () => {
+test('formatCommands puts every description in one narrow column, long usages on their own line', () => {
   const commands = commandsFor('tui');
-  const lines = formatCommands('tui').split('\n');
-  expect(lines).toHaveLength(commands.length);
-  const columns = lines.map((l, i) => l.lastIndexOf(commands[i]?.description ?? '?'));
+  const text = formatCommands('tui');
+  const columns = commands.map((c) => {
+    const line = text.split('\n').find((l) => l.endsWith(c.description)) ?? '';
+    return line.length - c.description.length;
+  });
   expect(new Set(columns).size).toBe(1);
-  expect(lines[0]).toStartWith('  /auto ');
+  expect(columns[0]).toBeLessThanOrEqual(30);
+  expect(text).toStartWith('  /auto ');
+  expect(text).toContain('  /mode [default|accept-edits|auto-approve|plan|bypass]\n ');
+  expect(text).toContain('  /effort [none|low|medium|high|xhigh|max|default]\n ');
 });
 
 test('commandQuery follows only a bare command name', () => {

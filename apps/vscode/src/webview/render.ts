@@ -242,7 +242,7 @@ export function renderQueue(queue: readonly { id: string; text: string }[]): str
   return queue
     .map(
       (q) =>
-        `<div class="queued"><span class="text" title="${esc(q.text)}">⧗ ${esc(q.text)}</span><button class="link" data-dequeue="${esc(q.id)}">Withdraw</button></div>`,
+        `<div class="queued"><span class="text" title="${esc(q.text)}">⧗ ${esc(q.text)}</span><button class="link" data-send-queued>Send now</button><button class="link" data-dequeue="${esc(q.id)}">Withdraw</button></div>`,
     )
     .join('');
 }

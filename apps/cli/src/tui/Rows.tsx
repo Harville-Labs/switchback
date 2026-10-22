@@ -253,8 +253,9 @@ export function Item({
   if (item.kind === 'tool' && item.name === 'task' && item.status !== 'error') return null;
   switch (item.kind) {
     case 'user':
+      // A wider gap than between other rows, so each exchange starts visibly.
       return (
-        <Box marginTop={1}>
+        <Box marginTop={2}>
           <Text color={t.accent} bold>
             {'› '}
           </Text>
@@ -268,7 +269,7 @@ export function Item({
     case 'info':
       return (
         <Box marginTop={1}>
-          <Text dimColor>{item.text}</Text>
+          <Text>{item.text}</Text>
         </Box>
       );
     case 'route': {

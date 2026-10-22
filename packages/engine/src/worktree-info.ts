@@ -19,7 +19,7 @@ export interface BranchMeta {
   createdAt: string;
 }
 
-export const BRANCH_PREFIX = 'switchback/';
+const BRANCH_PREFIX = 'switchback/';
 
 const metaFile = (dir: string, branch: string) =>
   join(dir, 'meta', `${branch.slice(BRANCH_PREFIX.length)}.json`);

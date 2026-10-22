@@ -238,7 +238,7 @@ describe('setup', () => {
         models: object;
         routing: object;
         mcpServers: object;
-        permissions: { allow: string[] };
+        permissions: { allow: string[]; ask: string[] };
         agents?: object;
         compaction?: object;
       };
@@ -303,7 +303,7 @@ describe('setup', () => {
     expect(cfg.compaction).toEqual({ enabled: false });
     // Its rules are added to the ones every new config starts with.
     expect(cfg.permissions.allow).toContain('bash(make *)');
-    expect(cfg.permissions.allow).toContain('bash(git status:*)');
+    expect(cfg.permissions.ask).toContain('bash(git commit:*)');
   });
 
   test('starting fresh asks the usual questions', async () => {

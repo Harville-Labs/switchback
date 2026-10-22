@@ -16,7 +16,7 @@ Other editors take the same command and arguments; see their docs for where. Run
 
 ## How it works
 
-The ACP agent is a client of the engine, like the terminal UI. Each workspace the editor opens attaches to that workspace's [shared engine](../architecture.md#the-shared-daemon) (starting it if needed), so a session started in your editor shows up live in the TUI and VS Code, and `switchback --session <id>` resumes it. `--no-daemon` or `SWITCHBACK_NO_DAEMON=1` runs a private engine instead; `--mock` always does.
+The ACP agent is a client of the engine, like the terminal UI. Each workspace the editor opens attaches to that workspace's [shared engine](../architecture.md#the-shared-daemon) (starting it if needed), so a session started in your editor shows up live in the TUI and VS Code, and `switchback resume <id>` resumes it. `--no-daemon` or `SWITCHBACK_NO_DAEMON=1` runs a private engine instead; `--mock` always does.
 
 | In the editor | In Switchback |
 |---|---|

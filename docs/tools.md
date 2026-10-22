@@ -31,7 +31,7 @@ Every tool result, MCP tools' and subagents' reports included, is cut to fit the
 
 ## Asking about Switchback
 
-Because every session has `docs`, you can ask the model how Switchback works or to change its settings ("route turns over 50k tokens to the remote model", "allow `bun test` without asking") and it reads the documentation for the version you're running first, offline. It edits the project's `.switchback/config.json` or `.switchback/config.local.json`, or your user config (`~/.switchback/config.json`), and you're asked every time with the diff. An edit that would make the config invalid fails before you're asked ([permissions.md](permissions.md#outside-the-workspace)). The running engine reads its config when it starts, so a change takes effect after it restarts.
+Because every session has `docs`, you can ask the model how Switchback works or to change its settings ("route turns over 50k tokens to the remote model", "allow `bun test` without asking") and it reads the documentation for the version you're running first, offline. It edits the project's `.switchback/config.json` or `.switchback/config.local.json`, or your user config (`~/.switchback/config.json`), and you're asked every time with the diff. An edit that would make the config invalid fails before you're asked ([permissions.md](permissions.md#outside-the-workspace)). The running engine doesn't watch its config, so a change takes effect when you type `/reload` or with the next engine.
 
 ## The checklist
 

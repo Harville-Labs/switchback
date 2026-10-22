@@ -7,6 +7,7 @@
  * expands it.
  */
 import type { CustomCommandInfo } from '@switchback/protocol';
+import { ROUTES } from './modes.ts';
 
 export type ClientName = 'tui' | 'vscode';
 
@@ -31,13 +32,7 @@ export interface SlashCommand {
 }
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
-  {
-    name: 'auto',
-    group: 'Routing',
-    description: 'run on the current model; escalate when stuck',
-  },
-  { name: 'local', group: 'Routing', description: 'only local models for the next prompts' },
-  { name: 'remote', group: 'Routing', description: 'only hosted models for the next prompts' },
+  ...ROUTES.map((r) => ({ name: r.value, group: 'Routing' as const, description: r.description })),
   {
     name: 'up',
     group: 'Routing',
@@ -107,7 +102,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'mode',
-    args: '[default|accept-edits|plan|bypass]',
+    args: '[default|accept-edits|auto-approve|plan|bypass]',
     group: 'Permissions',
     description: 'how tool calls are approved in this session (Shift+Tab cycles)',
   },
@@ -185,6 +180,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     args: '[n|tool|all]',
     group: 'Tools',
     description: 'copy the last reply, its nth code block, the last tool output, or everything',
+  },
+  {
+    name: 'reload',
+    group: 'Tools',
+    description: 'read the config files again and apply them',
   },
   { name: 'help', group: 'Tools', description: 'list commands' },
   {
@@ -277,11 +277,23 @@ export function commandQuery(input: string): string | undefined {
 }
 
 /** The command list as aligned text, for /help. */
+/** Usages longer than this go on a line of their own in `/help`, and are cut in a command menu. */
+export const USAGE_COLUMN = 26;
+
 export function formatCommands(client: ClientName, custom: readonly SlashCommand[] = []): string {
   const rows = commandsFor(client, custom).map((c) => [
     `/${c.name}${c.args ? ` ${c.args}` : ''}`,
     c.description,
   ]);
-  const width = Math.max(...rows.map(([usage]) => usage?.length ?? 0)) + 2;
-  return rows.map(([usage, text]) => `  ${usage?.padEnd(width)}${text}`).join('\n');
+  // A few usages list every argument; sized to those, the column pushes most descriptions
+  // past a terminal's width. Those few get a line of their own instead.
+  const longest = Math.max(...rows.map(([usage]) => usage?.length ?? 0));
+  const width = Math.min(longest, USAGE_COLUMN) + 2;
+  return rows
+    .map(([usage = '', text]) =>
+      usage.length < width
+        ? `  ${usage.padEnd(width)}${text}`
+        : `  ${usage}\n  ${' '.repeat(width)}${text}`,
+    )
+    .join('\n');
 }

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readOpenCode } from './from-opencode.ts';
+import { fromOpenCode, readOpenCode } from './from-opencode.ts';
 
 // OpenCode's newer format, as people write it: comments, trailing commas,
 // `providers` with `package` and `settings`, `modelID`, a `permissions` list,
@@ -188,4 +188,84 @@ test("OpenCode's newer format: providers, models, agents, compaction, permission
     expect.stringContaining('plugins: Switchback has its own format'),
     expect.stringContaining('formatter: Switchback has its own format'),
   ]);
+});
+
+// The V2 shapes from OpenCode's migration guide (opencode.ai/v2/docs/migrate-v1).
+test('OpenCode V2 as its migration guide writes it', () => {
+  const got = fromOpenCode(
+    {
+      model: 'anthropic/claude-sonnet-5#high',
+      providers: {
+        anthropic: {
+          models: {
+            'claude-sonnet-5': {
+              variants: [{ id: 'high', settings: { reasoningEffort: 'high' } }],
+            },
+          },
+        },
+        'google-vertex': { settings: { project: 'p', location: 'global' } },
+      },
+      agents: {
+        reviewer: {
+          system: 'Review carefully.',
+          model: 'google-vertex/claude-opus-5@20260101',
+          disabled: true,
+          request: { body: { temperature: 0.2 } },
+        },
+      },
+      mcp: {
+        timeout: { startup: 45000, catalog: 30000, execution: 600000 },
+        servers: { docs: { type: 'remote', url: 'https://mcp.example.com/mcp' } },
+      },
+      commands: { ship: { template: 'ship it' } },
+      skills: ['./team-skills'],
+    },
+    {},
+  );
+  // A variant's `settings` make it a model of its own, with the effort it asks for.
+  expect(got.current).toEqual({
+    kind: 'anthropic',
+    model: 'claude-sonnet-5',
+    settings: { effort: 'high' },
+    variant: 'high',
+  });
+  expect(got.remotes).toContainEqual({
+    kind: 'vertex',
+    model: 'claude-opus-5',
+    projectId: 'p',
+    region: 'global',
+  });
+  expect(got.agents?.reviewer?.config).toMatchObject({
+    prompt: 'Review carefully.',
+    disable: true,
+  });
+  // `mcp.timeout` is a setting, not a server.
+  expect(got.mcpServers).toEqual({ docs: { url: 'https://mcp.example.com/mcp' } });
+  expect(got.skipped).toEqual([
+    expect.stringContaining("agent reviewer's temperature and top_p"),
+    expect.stringContaining('commands: Switchback has its own format'),
+    expect.stringContaining('skills: Switchback has its own format'),
+  ]);
+});
+
+test("OpenCode V1's `api` is a custom provider's base URL", () => {
+  const got = fromOpenCode(
+    {
+      model: 'acme/coder',
+      provider: {
+        acme: {
+          npm: '@ai-sdk/openai-compatible',
+          api: 'https://llm.example.com/v1',
+          options: { apiKey: '{env:ACME_API_KEY}' },
+          models: { coder: {} },
+        },
+      },
+    },
+    {},
+  );
+  expect(got.current).toMatchObject({
+    kind: 'openai-compatible',
+    baseUrl: 'https://llm.example.com/v1',
+    apiKeyEnv: 'ACME_API_KEY',
+  });
 });

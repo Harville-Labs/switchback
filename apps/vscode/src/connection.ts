@@ -5,6 +5,7 @@
 import {
   connectDaemon,
   formatLadder,
+  routeLabel,
   SessionScope,
   SwitchbackClient,
   spawnEngine,
@@ -341,7 +342,10 @@ export class EngineConnection implements vscode.Disposable {
         await c.request('session.dequeue', { sessionId: this.session.id, id: m.id });
         return;
       case 'cancel':
-        await c.request('session.cancel', { sessionId: this.session.id });
+      case 'sendQueued':
+        await c.request(m.type === 'cancel' ? 'session.cancel' : 'session.sendQueued', {
+          sessionId: this.session.id,
+        });
         return;
       case 'permission':
         await c.request('permission.respond', {
@@ -400,7 +404,7 @@ export class EngineConnection implements vscode.Disposable {
     const icon = this.lastTier === 'remote' ? '$(cloud)' : '$(home)';
     const ladder = formatLadder(this.ladder);
     this.setStatus(
-      `${icon} ${this.route}${ladder ? ` · ${ladder}` : ''} · $${this.lastCost.toFixed(3)}`,
+      `${icon} ${routeLabel(this.route)}${ladder ? ` · ${ladder}` : ''} · $${this.lastCost.toFixed(3)}`,
       'Switchback: click to change routing',
     );
   }

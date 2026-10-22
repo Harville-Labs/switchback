@@ -109,7 +109,7 @@ export function SetupQuestionPanel({
   );
 }
 
-/** A line of typing: text (masked when secret), or a number with an empty line for the default. */
+/** A line of typing: text (masked when secret) or a number; an empty line takes the default, shown dimmed. */
 function LineAnswer({
   question: q,
   onAnswer,
@@ -118,8 +118,8 @@ function LineAnswer({
   onAnswer: (value: Answer) => void;
 }) {
   const t = useTheme();
-  const start = q.default === undefined ? '' : String(q.default);
-  const [line, show] = useState(q.kind === 'text' ? start : '');
+  // The default isn't typed in for you: a suggestion you'd have to delete to replace is in the way.
+  const [line, show] = useState('');
   const [problem, setProblem] = useState<string>();
   // Keys can arrive faster than renders (a pasted key ending in Enter).
   const typed = useRef(line);
@@ -148,14 +148,17 @@ function LineAnswer({
         <Text color={t.accent}>› </Text>
         {shown}
         <Text inverse> </Text>
-        {q.kind === 'number' && q.default !== undefined && !line ? (
-          <Text dimColor> {q.default.toLocaleString()}</Text>
+        {q.default !== undefined && !line ? (
+          <Text dimColor>
+            {' '}
+            {q.kind === 'number' ? q.default.toLocaleString() : q.secret ? '' : q.default}
+          </Text>
         ) : null}
       </Text>
       {problem ? <Text color={t.warning}>{problem}</Text> : null}
       <Keys
         keys={[
-          ['enter', 'answer'],
+          ['enter', q.default !== undefined && !line ? 'use the default' : 'answer'],
           ['esc', 'cancel setup'],
         ]}
       />

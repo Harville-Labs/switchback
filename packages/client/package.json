@@ -10,6 +10,7 @@
     "./format": "./src/format.ts",
     "./goal": "./src/goal.ts",
     "./models": "./src/models.ts",
+    "./modes": "./src/modes.ts",
     "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts",
     "./subagent-format": "./src/subagent-format.ts",

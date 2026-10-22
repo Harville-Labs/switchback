@@ -54,8 +54,8 @@ export interface EngineOptions {
   /** Where engine-owned files live (worktrees). Defaults to the switchback data directory. */
   /**
    * Load the config again from disk, as the host loaded it at start (layers,
-   * organization policy). After setup writes a config, the engine applies it
-   * live, so every client of a shared engine sees the new models.
+   * organization policy), for `config.reload` and after setup writes a config.
+   * Unset, `config.reload` fails and the engine keeps the config it started with.
    */
   reloadConfig?: () => Parameters<Engine['applyConfig']>[0];
   /**
@@ -67,6 +67,8 @@ export interface EngineOptions {
   /** Network lookups and Switchback's home for setup over the protocol; tests set them. */
   setup?: SetupDeps;
   dataDir?: string;
+  /** Models an endpoint or plan lists that the config doesn't name (from `loadConfig`). */
+  listedModels?: string[];
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];
   /**

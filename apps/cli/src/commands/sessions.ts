@@ -1,4 +1,5 @@
 /** `switchback sessions`: this workspace's saved sessions, newest first, for people and scripts. */
+import { resumeCommand } from '@switchback/client';
 import { type CommonFlags, createEngine } from '../bootstrap.ts';
 import { ago } from '../tui/SessionPicker.tsx';
 
@@ -19,7 +20,7 @@ export async function sessions(flags: CommonFlags & { json: boolean }): Promise<
       `${s.id}  ${s.title || '(untitled)'}  ${s.agent} · ${ago(s.updatedAt)} · $${s.costUsd.toFixed(3)}\n`,
     );
   process.stdout.write(
-    '\nswitchback --session <id> resumes one; switchback --resume picks from a list.\n',
+    `\n${resumeCommand('<id>')} resumes one; switchback resume picks from a list.\n`,
   );
   return 0;
 }

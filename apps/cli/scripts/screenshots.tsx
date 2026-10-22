@@ -168,6 +168,7 @@ async function main() {
   const { render } = await import('ink');
   const { App } = await import('../src/tui/App.tsx');
   const { mouseInput } = await import('../src/tui/mouse.ts');
+  const { MouseContext } = await import('../src/tui/Clickable.tsx');
 
   const loaded = loadConfig(cwd, process.env);
   const providers = new Map([
@@ -189,15 +190,16 @@ async function main() {
   const { stdout, stdin } = fakeTerminal(term);
   const mouse = mouseInput(stdin, stdout);
   const app = render(
-    <App
-      client={client}
-      init={{ ...init, workspaceRoot: join(homedir(), 'code', 'shop') }}
-      initialSession={session}
-      initialRoute="auto"
-      warnings={[]}
-      initialTheme="dark"
-      mouse={mouse}
-    />,
+    <MouseContext.Provider value={mouse}>
+      <App
+        client={client}
+        init={{ ...init, workspaceRoot: join(homedir(), 'code', 'shop') }}
+        initialSession={session}
+        initialRoute="auto"
+        warnings={[]}
+        initialTheme="dark"
+      />
+    </MouseContext.Provider>,
     { stdout, stdin: mouse.stdin, exitOnCtrlC: false, alternateScreen: true, patchConsole: false },
   );
   const press = async (keys: string) => {
