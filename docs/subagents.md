@@ -14,9 +14,9 @@ Subagents are both a quality feature and a cost feature:
 
 | Agent | Mode | Tools | Routing | Use |
 |---|---|---|---|---|
-| `build` | primary | all | auto | Default primary agent for coding work |
+| `build` | primary | all | auto | The default agent for a session: coding work |
 | `explore` | subagent | read, glob, grep | **local**, effort `low` | Find files, symbols, and usages; returns a summary |
-| `plan` | all | read, glob, grep | auto | Produce an implementation plan without editing |
+| `plan` | all | read, glob, grep, bash, task, webfetch, websearch, exit_plan_mode; `edit: deny`, `bash: ask` | auto | Produce an implementation plan without editing, and present it for approval ([permissions.md](permissions.md#agents)) |
 | `review` | subagent | read, glob, grep, bash | auto | Read-only review of the whole change (uncommitted work and commits made for it), not only files it was pointed to; lists bugs and missed cases with file:line |
 | `general` | subagent | all | auto | Delegated multi-step tasks |
 
@@ -94,6 +94,52 @@ The `agents` key takes the same fields as the frontmatter, plus `prompt` for the
 ```
 
 `/agents` and `switchback agents` show `config` as the source of an agent the config changed last.
+
+### Your own primary agents
+
+A session works as one agent at a time: `build`, `plan`, or one of yours with `mode: "primary"` (sessions only) or `"all"` (sessions and the `task` tool). Shift+Tab goes build → plan → yours by name, and `/agent <name>`, `--agent`, and the **Agent** pill in VS Code pick one directly. Switching keeps the conversation; the model is told about the switch with the next prompt ([permissions.md](permissions.md#agents)).
+
+`build` and `plan` are built in, so they aren't written into your config file. Written as config entries, they would look like this, and make a good starting point for your own:
+
+```jsonc
+"agents": {
+  "build": {
+    "description": "Default agent for coding work.",
+    "prompt": "…",
+    "mode": "primary"
+  },
+  "plan": {
+    "description": "Plans a change without editing.",
+    "prompt": "…",
+    "mode": "all",
+    "tools": ["read", "glob", "grep", "bash", "task", "webfetch", "websearch", "exit_plan_mode"],
+    "permissions": { "edit": "deny", "bash": "ask" }
+  }
+}
+```
+
+A primary agent of your own takes the same fields. For example, one that writes docs and may edit only Markdown, and one that runs on the local model and asks before every command:
+
+```jsonc
+"agents": {
+  "docs": {
+    "description": "Writes and updates documentation.",
+    "prompt": "You write clear, short documentation. Change only docs; ask before touching code.",
+    "mode": "primary",
+    "tools": ["read", "glob", "grep", "edit", "write", "webfetch"],
+    "permissions": { "deny": ["edit(src/**)"] }
+  },
+  "offline": {
+    "description": "Works on the local model only.",
+    "prompt": "You are a careful coding agent. Keep changes small.",
+    "mode": "primary",
+    "route": "local",
+    "permissions": { "bash": "ask" }
+  }
+}
+```
+
+The same agent can be a Markdown file in `.switchback/agents/` with these fields in its frontmatter and the prompt as its body ([Defining agents](#defining-agents)). An agent's `permissions` only tighten yours: a level counts only when it's stricter than your config's, and its rules ask or deny, never allow. The permission level (`/permissions ask|auto|bypass`) stays the same when you switch agents.
 
 Files that fail to parse are skipped and reported by `switchback doctor` and at startup. They never prevent the engine from starting.
 

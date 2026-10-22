@@ -65,7 +65,7 @@ bun run dev -- init
 
 Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` (or `/init` inside Switchback) sets it up. Running `switchback` for the first time with no config opens on setup.
 
-In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/goal <objective>` keeps working across turns until the objective is met, `/rename` names the session, `/usage` shows spend and savings, and `esc` cancels. The status line shows how much of each prompt the provider served from its cache.
+In the TUI, `/local`, `/remote`, and `/auto` control routing, Shift+Tab or `/agent plan` switches the session's agent (build, plan, or your own), `/goal <objective>` keeps working across turns until the objective is met, `/rename` names the session, `/usage` shows spend and savings, and `esc` cancels. The status line shows how much of each prompt the provider served from its cache.
 
 The TUI shows a proposed edit before asking for permission:
 
