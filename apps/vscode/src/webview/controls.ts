@@ -68,10 +68,10 @@ export function renderControls({
       `<button class="${r.value === route ? 'on' : ''}" data-route="${r.value}" title="${esc(r.description)}">${r.label}</button>`,
   ).join('')}</span>`;
   // The model first: it's what people change most.
-  const parts = roles ? [renderModelSelect(roles, models), routes] : [routes];
-  parts.push(
+  const main = roles ? [renderModelSelect(roles, models), routes] : [routes];
+  const parts = [
     pill('data-mode', 'Mode', esc(modeLabel(mode)), `${MODE_DESCRIPTIONS[mode]} (click to change)`),
-  );
+  ];
   if (agent)
     parts.push(pill('data-agent', 'Agent', esc(agent), 'Start a new session with another agent'));
   if (roles) {
@@ -93,9 +93,10 @@ export function renderControls({
       pill('data-role="review"', 'Review', esc(formatReviewers(roles)), 'Who reviews edits'),
     );
     if (roles.escalate.length)
-      parts.push(
+      main.push(
         `<button class="pill up" data-escalate-now title="A stronger model takes over: the next step of this turn, or your next prompt (/up)">↑ Escalate now</button>`,
       );
   }
-  return parts.join('');
+  // What people change on one line, the session's settings quieter under it.
+  return `<div class="bar">${main.join('')}</div><div class="bar quiet">${parts.join('')}</div>`;
 }
