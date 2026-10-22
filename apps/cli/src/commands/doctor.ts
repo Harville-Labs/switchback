@@ -1,5 +1,5 @@
 /** `switchback doctor`: explain the effective configuration and check every provider. */
-import { formatMcpServers, formatPermissions, formatRoles, modeLabel } from '@switchback/client';
+import { formatMcpServers, formatPermissions, formatRoles, levelLabel } from '@switchback/client';
 import {
   configRoles,
   instructionFiles,
@@ -34,6 +34,7 @@ export async function doctor(flags: CommonFlags): Promise<number> {
   out(heading(style, 'Config files'));
   if (loaded.sources.length === 0) out(dim('  (none; using built-in defaults)'));
   for (const s of loaded.sources) out(`  ${tildify(s)}`);
+  for (const w of loaded.warnings) out(yellow(`  ! ${w}`));
   for (const dir of legacyDirs())
     out(
       yellow(
@@ -142,7 +143,9 @@ export async function doctor(flags: CommonFlags): Promise<number> {
       .map((l) => `  ${l}`)
       .join('\n'),
   );
-  out(`  new sessions start in ${modeLabel(config.permissions.defaultMode)} mode`);
+  out(
+    `  new sessions start with the ${config.defaultAgent} agent at the ${levelLabel(config.permissions.level)} level`,
+  );
   const hookCount = Object.values(config.hooks).reduce((n, m) => n + (m?.length ?? 0), 0);
   section('Hooks');
   out(`  ${hookCount} configured`);

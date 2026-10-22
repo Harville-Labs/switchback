@@ -5,6 +5,7 @@
 import { commandsFor } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
 import { compactingLabel, speedLabel } from '@switchback/client/format';
+import { sessionAgent, sessionLevel } from '@switchback/client/levels';
 import { formatSubagents } from '@switchback/client/subagent-format';
 import {
   activeTab,
@@ -29,12 +30,7 @@ import {
   resolvePermission,
   type ViewState,
 } from '@switchback/client/view';
-import type {
-  InitializeResult,
-  PermissionMode,
-  RoutePreference,
-  SessionRoles,
-} from '@switchback/protocol';
+import type { InitializeResult, RoutePreference, SessionRoles } from '@switchback/protocol';
 import type { EditorContextState } from '../context.ts';
 import type { HostToWebview, RoleName, WebviewToHost } from '../messages.ts';
 import { CHOOSE_MODELS, renderControls as renderControlsHtml, SAVE_DEFAULT } from './controls.ts';
@@ -84,10 +80,7 @@ function setTabs(next: TabsState) {
   if (next.active !== before) vscode.postMessage({ type: 'switchTab', sessionId: next.active });
 }
 
-const agentOf = () => (tabs ? activeTab(tabs).session.agent : '');
-/** The session's mode until a `mode.changed` event says otherwise. */
-const sessionModeOf = (): PermissionMode =>
-  (tabs ? activeTab(tabs).session.permissionMode : undefined) ?? 'default';
+const sessionOf = () => (tabs ? activeTab(tabs).session : undefined);
 
 const ICONS = {
   // The product mark: a path that doubles back on itself.
@@ -169,12 +162,13 @@ function render() {
     : 'disconnected';
 }
 
-/** Routing, mode, agent, and the models in each role, each one click from its picker. */
+/** Routing, agent, permissions, and the models in each role, each one click from its picker. */
 function renderControls() {
+  const session = sessionOf();
   const html = renderControlsHtml({
     route,
-    mode: view.mode ?? sessionModeOf(),
-    agent: agentOf(),
+    level: sessionLevel(view, session ?? {}),
+    agent: session ? sessionAgent(view, session) : '',
     roles: view.roles ?? rolesBy.get(view.sessionId),
     models,
     ladderStep: view.ladder?.step ?? 0,
@@ -283,7 +277,7 @@ controls.addEventListener('click', (e) => {
     setRoute(r);
     render();
   } else if (btn.hasAttribute('data-agent')) vscode.postMessage({ type: 'chooseAgent' });
-  else if (btn.hasAttribute('data-mode')) vscode.postMessage({ type: 'chooseMode' });
+  else if (btn.hasAttribute('data-permissions')) vscode.postMessage({ type: 'choosePermissions' });
   else if (btn.hasAttribute('data-escalate-now'))
     vscode.postMessage({ type: 'command', name: 'up', args: [] });
   else if (btn.dataset.role)

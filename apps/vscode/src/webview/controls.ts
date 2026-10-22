@@ -1,10 +1,10 @@
 /** The controls row under the composer, as HTML (pure, so it can be tested). */
 import { formatReviewers, formatSteps } from '@switchback/client/format';
+import { LEVEL_DESCRIPTIONS, levelLabel, ROUTES } from '@switchback/client/levels';
 import { choiceLabel, modelChoices } from '@switchback/client/models';
-import { MODE_DESCRIPTIONS, modeLabel, ROUTES } from '@switchback/client/modes';
 import type {
   InitializeResult,
-  PermissionMode,
+  PermissionLevel,
   RoutePreference,
   SessionRoles,
 } from '@switchback/protocol';
@@ -12,7 +12,7 @@ import { esc } from './render.ts';
 
 export interface ControlsState {
   route: RoutePreference;
-  mode: PermissionMode;
+  level: PermissionLevel;
   agent: string;
   roles: SessionRoles | undefined;
   /** Every configured model, for the current-model dropdown. */
@@ -52,10 +52,10 @@ export function renderModelSelect(roles: SessionRoles, models: InitializeResult[
   return `<label class="pill model" title="${esc(title)}"><span class="k">Model</span><select data-current aria-label="Current model">${options.join('')}<option disabled>──────────</option>${extra.join('')}</select></label>`;
 }
 
-/** Routing, mode, agent, and the models in each role, each one click from its picker. */
+/** Routing, agent, permissions, and the models in each role, each one click from its picker. */
 export function renderControls({
   route,
-  mode,
+  level,
   agent,
   roles,
   models,
@@ -70,10 +70,16 @@ export function renderControls({
   // The model first: it's what people change most.
   const main = roles ? [renderModelSelect(roles, models), routes] : [routes];
   const parts = [
-    pill('data-mode', 'Mode', esc(modeLabel(mode)), `${MODE_DESCRIPTIONS[mode]} (click to change)`),
+    ...(agent
+      ? [pill('data-agent', 'Agent', esc(agent), "Switch this session's agent (click to change)")]
+      : []),
+    pill(
+      'data-permissions',
+      'Permissions',
+      esc(levelLabel(level)),
+      `${LEVEL_DESCRIPTIONS[level]} (click to change)`,
+    ),
   ];
-  if (agent)
-    parts.push(pill('data-agent', 'Agent', esc(agent), 'Start a new session with another agent'));
   if (roles) {
     // The step the last call ran on is highlighted while the session is up the ladder.
     const here = ladderStep;

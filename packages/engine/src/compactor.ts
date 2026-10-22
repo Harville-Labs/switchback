@@ -31,7 +31,7 @@ import {
   staleCalls,
   withoutRecord,
 } from './compaction-digest.ts';
-import { type EngineHost, type LiveSession, scope } from './live-session.ts';
+import { agentNameOf, type EngineHost, type LiveSession, scope } from './live-session.ts';
 import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactSecrets } from './privacy.ts';
 import { writeConfigLayer } from './setup.ts';
@@ -286,7 +286,7 @@ export class Compactor {
     if (!done) throw new Error(`${provider.id} ended the summary without a result`);
     this.host.recordUsage(s, model.tier, model.ref, done.usage, {
       rule: 'compaction',
-      agent: s.header.agent,
+      agent: agentNameOf(s),
     });
     const summary = done.parts
       .flatMap((p) => (p.type === 'text' ? [p.text] : []))

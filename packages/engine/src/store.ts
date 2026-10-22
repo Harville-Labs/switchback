@@ -35,15 +35,25 @@ export interface SessionHeader {
   instructions?: { user?: string; project?: string };
 }
 
+/** The agent a session switched to (ADR 0029), and the one it switched from. */
+export interface StoredAgent {
+  agent: string;
+  previous?: string;
+}
+
 export interface StoredSession {
   header: SessionHeader;
   messages: Message[];
+  /** Set once the session switched agents; `header.agent` is the one it started with. */
+  agent?: StoredAgent;
 }
 
 export interface StoredSessionInfo {
   header: SessionHeader;
   /** ISO time of the last write. */
   updatedAt: string;
+  /** The agent it works as now, when it switched from `header.agent`. */
+  agent?: string;
 }
 
 export interface SessionStore {
@@ -51,6 +61,8 @@ export interface SessionStore {
   append(id: string, message: Message): void;
   /** Change the title without touching the transcript. */
   rename(id: string, title: string, source: TitleSource): void;
+  /** Record the agent a session works as now, without touching the transcript. */
+  setAgent(id: string, agent: StoredAgent): void;
   load(id: string): StoredSession | undefined;
   list(): StoredSessionInfo[];
 }
@@ -70,11 +82,19 @@ export class MemorySessionStore implements SessionStore {
     const s = this.sessions.get(id);
     if (s) s.header = { ...s.header, title, titleSource: source };
   }
+  setAgent(id: string, agent: StoredAgent) {
+    const s = this.sessions.get(id);
+    if (s) s.agent = agent;
+  }
   load(id: string) {
     return this.sessions.get(id);
   }
   list() {
-    return [...this.sessions.values()].map(({ header, updatedAt }) => ({ header, updatedAt }));
+    return [...this.sessions.values()].map(({ header, updatedAt, agent }) => ({
+      header,
+      updatedAt,
+      ...(agent ? { agent: agent.agent } : {}),
+    }));
   }
 }
 
@@ -82,10 +102,13 @@ export class FileSessionStore implements SessionStore {
   /**
    * Sessions are written on their first message, so the header carries the
    * title (set from the first prompt) and unused sessions leave no files.
-   * A later title goes in `<id>.title.json` beside the transcript: the header
-   * line is never rewritten, and listing reads only headers and these.
+   * A later title goes in `<id>.title.json` beside the transcript, and the
+   * agent it switched to in `<id>.agent.json`: the header line is never
+   * rewritten, and listing reads only headers and these.
    */
   private pending = new Map<string, SessionHeader>();
+  /** Agent switches in sessions not written yet. */
+  private pendingAgents = new Map<string, StoredAgent>();
 
   constructor(private readonly dir: string) {}
 
@@ -105,6 +128,8 @@ export class FileSessionStore implements SessionStore {
       mkdirSync(this.dir, { recursive: true });
       appendFileSync(this.file(id), `${JSON.stringify({ header })}\n`);
       this.pending.delete(id);
+      const agent = this.pendingAgents.get(id);
+      if (agent) this.setAgent(id, agent);
     }
     appendFileSync(this.file(id), `${JSON.stringify({ message })}\n`);
   }
@@ -117,6 +142,31 @@ export class FileSessionStore implements SessionStore {
     }
     mkdirSync(this.dir, { recursive: true });
     writeFileSync(this.file(id, 'title.json'), `${JSON.stringify({ title, source })}\n`);
+  }
+
+  setAgent(id: string, agent: StoredAgent) {
+    if (this.pending.has(id)) {
+      this.pendingAgents.set(id, agent);
+      return;
+    }
+    this.pendingAgents.delete(id);
+    mkdirSync(this.dir, { recursive: true });
+    writeFileSync(this.file(id, 'agent.json'), `${JSON.stringify(agent)}\n`);
+  }
+
+  private storedAgent(id: string): StoredAgent | undefined {
+    const file = this.file(id, 'agent.json');
+    if (!existsSync(file)) return undefined;
+    try {
+      const a = JSON.parse(readFileSync(file, 'utf8')) as { agent?: unknown; previous?: unknown };
+      if (typeof a.agent !== 'string') return undefined;
+      return {
+        agent: a.agent,
+        ...(typeof a.previous === 'string' ? { previous: a.previous } : {}),
+      };
+    } catch {
+      return undefined; // a torn write: the session goes on as the agent it started with
+    }
   }
 
   /** The header with any later title over the one it was written with. */
@@ -135,7 +185,10 @@ export class FileSessionStore implements SessionStore {
 
   load(id: string): StoredSession | undefined {
     const pending = this.pending.get(id);
-    if (pending) return { header: pending, messages: [] };
+    if (pending) {
+      const agent = this.pendingAgents.get(id);
+      return { header: pending, messages: [], ...(agent ? { agent } : {}) };
+    }
     const file = this.file(id);
     if (!existsSync(file)) return undefined;
     let header: SessionHeader | undefined;
@@ -150,7 +203,9 @@ export class FileSessionStore implements SessionStore {
         break; // torn write at the tail; everything before it is intact
       }
     }
-    return header ? { header: this.retitled(header), messages } : undefined;
+    if (!header) return undefined;
+    const agent = this.storedAgent(id);
+    return { header: this.retitled(header), messages, ...(agent ? { agent } : {}) };
   }
 
   list(): StoredSessionInfo[] {
@@ -160,8 +215,13 @@ export class FileSessionStore implements SessionStore {
       if (!f.endsWith('.jsonl')) continue;
       const file = join(this.dir, f);
       const header = readHeader(file);
-      if (header)
-        out.push({ header: this.retitled(header), updatedAt: statSync(file).mtime.toISOString() });
+      if (!header) continue;
+      const agent = this.storedAgent(header.id)?.agent;
+      out.push({
+        header: this.retitled(header),
+        updatedAt: statSync(file).mtime.toISOString(),
+        ...(agent ? { agent } : {}),
+      });
     }
     return out;
   }

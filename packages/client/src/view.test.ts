@@ -76,6 +76,16 @@ test('fromTranscript rebuilds prompts, routes, text, and tool outcomes', () => {
   expect(next.running).toBe(true);
 });
 
+test('the agent and permission level start from the summary and follow their events', () => {
+  const start = fromTranscript({ ...session, agent: 'plan', permissionLevel: 'ask' }, []);
+  expect(start).toMatchObject({ agent: 'plan', level: 'ask' });
+  const next = [
+    { type: 'agent.changed', sessionId: 'ses_1', agent: 'build' },
+    { type: 'permissions.changed', sessionId: 'ses_1', level: 'auto' },
+  ] as EngineEvent[];
+  expect(next.reduce(reduce, start)).toMatchObject({ agent: 'build', level: 'auto' });
+});
+
 describe('view rows for notices, reviews, and escalations', () => {
   test('privacy and redaction notices', () => {
     let v = reduce(initialView('s'), {

@@ -114,10 +114,10 @@ describe('outside the workspace', () => {
     expect(bare.asked).toHaveLength(1);
   });
 
-  test('edits ask even in acceptEdits, and a denied write changes nothing', async () => {
+  test('edits ask even with edits allowed, and a denied write changes nothing', async () => {
     const { asked, results, go } = run(
       [{ name: 'write', input: { path: join(away, 'c.md'), content: 'gamma\n' } }],
-      { permissions: { defaultMode: 'acceptEdits' } },
+      { permissions: { edit: 'allow' } },
       () => 'deny',
     );
     await go();
@@ -136,9 +136,9 @@ describe('outside the workspace', () => {
     expect(results()[0]?.content).toContain('permissions.outsideWorkspace is deny');
   });
 
-  test('credentials are refused in every mode, bypass included', async () => {
+  test('credentials are refused at every level, bypass included', async () => {
     const { asked, results, go } = run([{ name: 'read', input: { path: join(away, 'a.md') } }], {
-      permissions: { defaultMode: 'bypassPermissions' },
+      permissions: { level: 'bypass' },
       bash: { sandbox: { denyRead: [away] } },
     });
     await go();

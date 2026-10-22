@@ -55,7 +55,7 @@ function describeRestrictions(policy: OrgPolicy): string[] {
     lines.push(`allowed provider types: ${r.allowedProviderTypes.join(', ')}`);
   if (!r.allowUserProviders) lines.push('only organization-defined providers');
   if (!r.allowUserPermissions) lines.push('permissions set by the organization only');
-  if (!r.allowBypassPermissions) lines.push('bypassPermissions mode disabled');
+  if (!r.allowBypassPermissions) lines.push('bypass permission level disabled');
   if (r.maxDailyUsd) lines.push(`remote spend capped at $${r.maxDailyUsd}/day`);
   if (r.maxMonthlyUsd) lines.push(`remote spend capped at $${r.maxMonthlyUsd}/month`);
   const enforced = Object.keys(policy.enforced);

@@ -5,7 +5,7 @@
  */
 import {
   ErrorCode,
-  type PermissionMode,
+  type PermissionLevel,
   RpcError,
   type SessionSummary,
 } from '@switchback/protocol';
@@ -17,7 +17,7 @@ import type { UsageLedger } from './ledger.ts';
 import type { Library } from './library.ts';
 import type { LiveSession } from './live-session.ts';
 import type { OrgStatus } from './org/policy.ts';
-import { assertModeAllowed } from './permissions/modes.ts';
+import { assertLevelAllowed } from './permissions/levels.ts';
 import type { SessionRegistry } from './session-registry.ts';
 import { skillsSection } from './skills.ts';
 import type { SessionHeader } from './store.ts';
@@ -30,7 +30,7 @@ export interface NewSession {
   title?: string;
   parentId?: string;
   worktree?: Worktree;
-  permissionMode?: PermissionMode;
+  permissionLevel?: PermissionLevel;
   instructions?: string;
   effort?: Effort;
 }
@@ -68,7 +68,7 @@ export class SessionFactory {
         ErrorCode.InvalidParams,
         `agent "${agent.name}" is a subagent; it runs through the task tool. Start the session with a primary agent, or set mode: all in its definition`,
       );
-    if (params.permissionMode) assertModeAllowed(params.permissionMode, this.deps.org());
+    if (params.permissionLevel) assertLevelAllowed(params.permissionLevel, this.deps.org());
     const wt = params.worktree;
     const instructions = this.deps.instructions();
     const header: SessionHeader = {
@@ -97,7 +97,7 @@ export class SessionFactory {
       params.parentId
         ? {}
         : {
-            ...(params.permissionMode ? { mode: params.permissionMode } : {}),
+            ...(params.permissionLevel ? { level: params.permissionLevel } : {}),
             ...(params.effort ? { effort: params.effort } : {}),
           },
     );
@@ -109,20 +109,21 @@ export class SessionFactory {
       .stored()
       .filter(({ header }) => !header.parentId && header.workspaceRoot === this.deps.workspaceRoot)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map(({ header, updatedAt }) => this.summaryOf(header, updatedAt));
+      .map(({ header, updatedAt, agent }) => this.summaryOf(header, updatedAt, agent));
   }
 
   summary(s: LiveSession): SessionSummary {
-    return this.summaryOf(s.header, s.updatedAt);
+    return this.summaryOf(s.header, s.updatedAt, s.agent);
   }
 
-  summaryOf(header: SessionHeader, updatedAt: string): SessionSummary {
+  /** `agent`: the one it works as now, when it switched from `header.agent`. */
+  summaryOf(header: SessionHeader, updatedAt: string, agent?: string): SessionSummary {
     const cost = this.deps.ledger.sessionCost(header.id);
     const live = this.deps.sessions.get(header.id);
     return {
       id: header.id,
       title: header.title,
-      agent: header.agent,
+      agent: live?.agent ?? agent ?? header.agent,
       ...(header.parentId ? { parentId: header.parentId } : {}),
       createdAt: header.createdAt,
       updatedAt,
@@ -133,7 +134,7 @@ export class SessionFactory {
       ...(header.parentId
         ? {}
         : {
-            permissionMode: live?.mode ?? this.deps.config().permissions.defaultMode,
+            permissionLevel: live?.level ?? this.deps.config().permissions.level,
             ...(live?.effort ? { effort: live.effort } : {}),
             ...(live?.goal ? { goal: live.goal.info } : {}),
           }),

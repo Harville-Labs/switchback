@@ -2,7 +2,7 @@ import { fromTranscript, type ViewState } from '@switchback/client';
 import { switchbackPaths } from '@switchback/engine';
 import type {
   EffortLevel,
-  PermissionMode,
+  PermissionLevel,
   RoutePreference,
   SessionSummary,
 } from '@switchback/protocol';
@@ -30,7 +30,7 @@ export async function tui(
     resume?: string;
     /** Attach to (or start) the workspace's shared daemon. */
     daemon: boolean;
-    permissionMode?: PermissionMode;
+    permissionLevel?: PermissionLevel;
     effort?: EffortLevel;
     /** What to open over the prompt first. */
     opening?: Opening;
@@ -69,11 +69,14 @@ export async function tui(
   }
   session ??= await client.request('session.create', {
     ...(opts.agent ? { agent: opts.agent } : {}),
-    ...(opts.permissionMode ? { permissionMode: opts.permissionMode } : {}),
+    ...(opts.permissionLevel ? { permissionLevel: opts.permissionLevel } : {}),
     ...(opts.effort ? { effort: opts.effort } : {}),
   });
-  if (opts.permissionMode && session.permissionMode !== opts.permissionMode)
-    await client.request('session.setMode', { sessionId: session.id, mode: opts.permissionMode });
+  if (opts.permissionLevel && session.permissionLevel !== opts.permissionLevel)
+    await client.request('session.setPermissions', {
+      sessionId: session.id,
+      level: opts.permissionLevel,
+    });
   if (opts.effort && session.effort !== opts.effort)
     session = {
       ...session,

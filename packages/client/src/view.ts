@@ -13,7 +13,7 @@ import {
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
 import { goalNotice } from './goal.ts';
-import { judgedLabel } from './modes.ts';
+import { judgedLabel } from './levels.ts';
 import { renamedLabel } from './titles.ts';
 import {
   agentOf,
@@ -121,7 +121,8 @@ export function fromTranscript(session: SessionSummary, messages: Message[]): Vi
     // Joining a session mid-turn: the live events that follow will finish it.
     running: !!session.running,
     ...(todos ? { todos } : {}),
-    ...(session.permissionMode ? { mode: session.permissionMode } : {}),
+    ...(session.permissionLevel ? { level: session.permissionLevel } : {}),
+    ...(session.agent ? { agent: session.agent } : {}),
     costUsd: session.costUsd,
     savingsUsd: session.savingsUsd ?? 0,
     ...(lastRoute?.kind === 'route' ? { lastTier: lastRoute.tier } : {}),
@@ -288,8 +289,10 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       };
     case 'roles.updated':
       return { ...state, roles: event.roles };
-    case 'mode.changed':
-      return { ...state, mode: event.mode };
+    case 'permissions.changed':
+      return { ...state, level: event.level };
+    case 'agent.changed':
+      return { ...state, agent: event.agent };
     case 'effort.changed':
       return { ...state, effort: event.effort ?? null };
     case 'queue.updated':

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EngineEvent } from '@switchback/protocol';
+import type { EngineEvent, ToolResultPart } from '@switchback/protocol';
 import { type Provider, type Script, ScriptedProvider } from '@switchback/providers';
 import { parseAgentFile } from '../agents.ts';
 import { loadConfig, SwitchbackConfig } from '../config.ts';
@@ -237,27 +237,25 @@ describe('stdio server', () => {
     );
     expect(agent?.tools).toEqual(['read', 'mcp__test__add']);
     const { e, lp } = engine(
-      [{ text: 'hi' }],
-      { mcpServers: { test: server() } },
-      {
-        agents: new Map([[agent.name, agent]]),
-      },
+      [
+        {
+          toolCalls: [
+            { name: 'mcp__test__add', input: { a: 1, b: 2 } },
+            { name: 'mcp__test__note', input: { text: 'x' } },
+          ],
+        },
+        { text: 'done' },
+      ],
+      { mcpServers: { test: server({ permission: 'allow' }) } },
+      { agents: new Map([[agent.name, agent]]) },
     );
     await e.runTurn(e.createSession({ agent: 'notes' }).id, 'x');
-    // exit_plan_mode, todo, skill, docs, escalate, goal, models, config, and set_roles aren't agent capabilities; sessions always have them.
-    expect(lp.requests[0]?.tools.map((t) => t.name)).toEqual([
-      'read',
-      'exit_plan_mode',
-      'todo',
-      'skill',
-      'docs',
-      'escalate',
-      'goal',
-      'models',
-      'config',
-      'set_roles',
-      'mcp__test__add',
-    ]);
+    // A top-level session is offered every tool; the gate holds calls to the agent's list.
+    expect(lp.requests[0]?.tools.map((t) => t.name)).toContain('mcp__test__note');
+    const [added, noted] = (lp.requests[1]?.messages.at(-1)?.parts ?? []) as ToolResultPart[];
+    expect(added?.isError).toBeFalsy();
+    expect(noted?.content).toContain("The notes agent can't use mcp__test__note");
+    expect(existsSync(join(root, 'note.txt'))).toBe(false);
     await e.shutdown();
   }, 20_000);
 

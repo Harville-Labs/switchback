@@ -44,7 +44,7 @@ function app() {
   const client = {
     request: async (method: string, params: unknown) => {
       calls.push({ method, params });
-      if (method === 'permissions.list') return { modes: ['default'], levels: {}, rules: [] };
+      if (method === 'permissions.list') return { allowedLevels: ['ask'], levels: {}, rules: [] };
       if (method === 'usage.get') throw new Error('not needed');
       if (method === 'session.list') return [];
       if (method === 'commands.list') return [];
@@ -54,6 +54,7 @@ function app() {
       if (method === 'session.setRoles') return { ...roles, ...(params as object) };
       if (method === 'session.setEffort') return { effort: (params as { effort: string }).effort };
       if (method === 'session.create') return session('s2', '', 'docs');
+      if (method === 'session.setAgent') return { agent: (params as { agent: string }).agent };
       return {};
     },
     on: (l: (e: EngineEvent) => void) => {
@@ -154,7 +155,7 @@ describe('commands with no argument open a picker', () => {
     expect(sent('session.setEffort')).toEqual([{ sessionId: 's1', effort: 'medium' }]);
   });
 
-  test('/agent lists the agents that run sessions; a pick starts one', async () => {
+  test('/agent lists the agents that can lead a session; a pick switches to it', async () => {
     const { ui, sent } = app();
     await tick();
     await run(ui, '/agent');
@@ -163,7 +164,8 @@ describe('commands with no argument open a picker', () => {
     expect(frame).not.toContain('explore');
     ui.stdin.write('2');
     await tick();
-    expect(sent('session.create')).toEqual([{ agent: 'docs' }]);
+    expect(sent('session.setAgent')).toEqual([{ sessionId: 's1', agent: 'docs' }]);
+    expect(sent('session.create')).toEqual([]);
   });
 
   test('/subagent-model opens the subagent model picker', async () => {

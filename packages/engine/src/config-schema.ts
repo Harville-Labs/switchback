@@ -2,7 +2,7 @@
  * The configuration file format, validated with Zod (docs/configuration.md).
  * `bun run schema` writes the JSON Schema from it.
  */
-import { EffortLevel, PermissionMode } from '@switchback/protocol';
+import { EffortLevel, PermissionLevel } from '@switchback/protocol';
 import { ProviderConfig } from '@switchback/providers';
 import { ModelChain, RoutingConfig } from '@switchback/router';
 import { z } from 'zod';
@@ -13,8 +13,9 @@ import { DEFAULT_TELEMETRY_ENDPOINT } from './telemetry.ts';
 import { DEFAULT_DENY_READ } from './tools/sandbox.ts';
 import { SearchConfig } from './tools/search.ts';
 
-export const PermissionLevel = z.enum(['allow', 'ask', 'deny']);
-export type PermissionLevel = z.infer<typeof PermissionLevel>;
+/** What a permission category does when no rule decides: run, ask, or refuse. */
+export const CategoryLevel = z.enum(['allow', 'ask', 'deny']);
+export type CategoryLevel = z.infer<typeof CategoryLevel>;
 
 const PermissionRules = z
   .array(z.string())
@@ -63,6 +64,23 @@ export type ModelConfig = z.infer<typeof ModelConfig>;
 const NameList = z.union([z.string(), z.array(z.string())]);
 
 /**
+ * What an agent changes about permissions (ADR 0029). It can only tighten:
+ * a level here applies when it's stricter than the config's, and its rules
+ * ask or deny, never allow.
+ */
+export const AgentPermissions = z.object({
+  read: CategoryLevel.optional(),
+  edit: CategoryLevel.optional(),
+  bash: CategoryLevel.optional(),
+  /** webfetch and websearch. */
+  web: CategoryLevel.optional(),
+  mcp: CategoryLevel.optional(),
+  ask: PermissionRules.optional(),
+  deny: PermissionRules.optional(),
+});
+export type AgentPermissions = z.infer<typeof AgentPermissions>;
+
+/**
  * An agent's settings (docs/subagents.md). Agent file frontmatter uses the
  * same fields; in config every field is optional, so an entry can adjust an
  * agent defined elsewhere, or define a new one with a description and prompt.
@@ -88,6 +106,8 @@ export const AgentConfig = z.object({
   budgetUsd: z.number().nonnegative().optional(),
   isolation: z.literal('worktree').optional(),
   runtime: z.string().optional(),
+  /** Category levels and rules on top of the config's, which this agent can only tighten. */
+  permissions: AgentPermissions.optional(),
   /** Remove the agent, built-in or not. */
   disable: z.boolean().optional(),
 });
@@ -100,19 +120,19 @@ export const SwitchbackConfig = z.object({
   routing: RoutingConfig.prefault({}),
   permissions: z
     .object({
-      read: PermissionLevel.default('allow'),
-      edit: PermissionLevel.default('ask'),
-      bash: PermissionLevel.default('ask'),
+      read: CategoryLevel.default('allow'),
+      edit: CategoryLevel.default('ask'),
+      bash: CategoryLevel.default('ask'),
       /** webfetch, and websearch when set to deny. */
-      web: PermissionLevel.default('ask'),
+      web: CategoryLevel.default('ask'),
       /** websearch: the query goes to the search backend, and nowhere else. */
-      websearch: PermissionLevel.default('allow'),
+      websearch: CategoryLevel.default('allow'),
       /** Tools from MCP servers; each server can override it with `permission`. */
-      mcp: PermissionLevel.default('ask'),
-      /** The mode new sessions start in (docs/permissions.md). */
-      defaultMode: PermissionMode.default('default'),
+      mcp: CategoryLevel.default('ask'),
+      /** The permission level new sessions start at (docs/permissions.md). */
+      level: PermissionLevel.default('ask'),
       /**
-       * The model that judges calls in the `autoApprove` mode. Unset, it's the
+       * The model that judges calls at the `auto` level. Unset, it's the
        * session's first reachable local model.
        */
       judge: z.string().optional(),

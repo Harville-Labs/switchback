@@ -7,7 +7,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { type RoutePreference, type StopReason, textOf } from '@switchback/protocol';
 import type { ChatEvent } from '@switchback/providers';
 import type { ModelInfo } from '@switchback/router';
-import { type EngineHost, type LiveSession, scope } from './live-session.ts';
+import { agentNameOf, type EngineHost, type LiveSession, scope } from './live-session.ts';
 import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactSecrets } from './privacy.ts';
 import {
@@ -303,7 +303,7 @@ export class ReviewRunner {
     if (!done) return skip(`${model.alias} returned no review`);
     this.host.recordUsage(s, model.tier, model.ref, done.usage, {
       rule: 'review',
-      agent: s.header.agent,
+      agent: agentNameOf(s),
     });
     const answer = parseReview(
       done.parts.flatMap((p) => (p.type === 'text' ? [p.text] : [])).join(''),

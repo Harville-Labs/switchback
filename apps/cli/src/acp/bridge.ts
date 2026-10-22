@@ -7,10 +7,14 @@
  * resumed in the TUI and the other way round.
  */
 import * as acp from '@agentclientprotocol/sdk';
-import { estimateLabel, permissionWhy, type SwitchbackClient } from '@switchback/client';
+import {
+  estimateLabel,
+  permissionWhy,
+  type SwitchbackClient,
+  switchableAgents,
+} from '@switchback/client';
 import { type EngineEvent, isSessionEvent, type PermissionDecision } from '@switchback/protocol';
 import {
-  isMode,
   modeState,
   planOf,
   promptOf,
@@ -95,7 +99,7 @@ export class AcpBridge {
     const engine = await this.engine(params.cwd);
     const s = await engine.request('session.create', {});
     this.track(s.id, params.cwd, engine);
-    return { sessionId: s.id, modes: modeState(s.permissionMode) };
+    return { sessionId: s.id, modes: modeState(await engine.request('agents.list', {}), s.agent) };
   }
 
   async loadSession(params: acp.LoadSessionRequest): Promise<acp.LoadSessionResponse> {
@@ -105,7 +109,7 @@ export class AcpBridge {
     });
     this.track(session.id, params.cwd, engine);
     for (const update of replay(messages, params.cwd)) await this.update(session.id, update);
-    return { modes: modeState(session.permissionMode) };
+    return { modes: modeState(await engine.request('agents.list', {}), session.agent) };
   }
 
   async listSessions(params: acp.ListSessionsRequest): Promise<acp.ListSessionsResponse> {
@@ -140,11 +144,16 @@ export class AcpBridge {
   }
 
   async setMode(params: acp.SetSessionModeRequest): Promise<acp.SetSessionModeResponse> {
-    if (!isMode(params.modeId))
-      throw acp.RequestError.invalidParams(undefined, `unknown mode "${params.modeId}"`);
-    await this.session(params.sessionId).engine.request('session.setMode', {
+    const { engine } = this.session(params.sessionId);
+    const agents = switchableAgents(await engine.request('agents.list', {}));
+    if (!agents.some((a) => a.name === params.modeId))
+      throw acp.RequestError.invalidParams(
+        undefined,
+        `unknown mode "${params.modeId}"; the modes are ${agents.map((a) => a.name).join(', ')}`,
+      );
+    await engine.request('session.setAgent', {
       sessionId: params.sessionId,
-      mode: params.modeId,
+      agent: params.modeId,
     });
     return {};
   }
@@ -254,10 +263,10 @@ export class AcpBridge {
         return this.update(sessionId, toolCallCompleted(e));
       case 'session.renamed':
         return this.update(sessionId, { sessionUpdate: 'session_info_update', title: e.title });
-      case 'mode.changed':
+      case 'agent.changed':
         return this.update(sessionId, {
           sessionUpdate: 'current_mode_update',
-          currentModeId: e.mode,
+          currentModeId: e.agent,
         });
       case 'error': {
         const turn = e.turnId ? this.turn(sessionId, e.turnId) : undefined;
@@ -296,9 +305,9 @@ export class AcpBridge {
     const plan = e.plan;
     const shown = plan ?? (e.preview ? `\`\`\`diff\n${e.preview}\n\`\`\`` : undefined);
     const details = [permissionWhy(e), shown].filter(Boolean).join('\n\n') || undefined;
-    // A plan's "always" is approving it and accepting edits from then on (permissions/gate.ts).
+    // A plan's "always" approves it and sets the auto level (ADR 0029).
     const always = plan
-      ? 'Approve and accept edits'
+      ? 'Approve and auto-approve'
       : e.rules?.length
         ? `Always allow ${e.rules.join(', ')}`
         : undefined;

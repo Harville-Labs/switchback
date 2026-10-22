@@ -17,7 +17,7 @@ switchback run --yes --allow "bash(bun test:*)" --max-steps 30 "make the failing
 | `--output events` | Every [protocol event](../protocol.md) as a line of JSON, as it happens |
 | `--yes` | Approve tool calls the permission levels would ask about. Without it, they're refused |
 | `--allow <rule>`, `--deny <rule>` | [Permission rules](../permissions.md#rules) for this run only, added to the config's; repeatable. Deny rules refuse even with `--yes` |
-| `--permission-mode <mode>` | `default`, `acceptEdits`, `autoApprove`, `plan`, or `bypassPermissions` for this run |
+| `--permission-mode <level>` | `ask`, `auto`, or `bypass` for this run (the old mode names still work); `plan` starts the `plan` agent |
 | `--max-steps <n>` | At most `n` model calls (`maxStepsPerTurn`) |
 | `--instructions <text>` | Added to this run's system prompt |
 | `-c`, `--continue` / `--session <id>` | Continue the latest saved session, or a given one, instead of starting fresh |

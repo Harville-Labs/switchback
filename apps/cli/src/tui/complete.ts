@@ -48,6 +48,7 @@ const CHOICES: Record<
     return before.length === 1 && before[0] === 'new' ? s.agents : [];
   },
   effort: fixed(...EffortLevel.options, 'default'),
+  permissions: fixed('ask', 'auto', 'bypass'),
   usage: fixed('rule', 'agent', 'model'),
   theme: fixed(...THEME_NAMES),
   mouse: fixed('on', 'off'),

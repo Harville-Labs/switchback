@@ -8,7 +8,7 @@ import type {
   EngineEvent,
   Message,
   ModelRef,
-  PermissionMode,
+  PermissionLevel,
   QueuedPrompt,
   SessionRoles,
   StopReason,
@@ -78,14 +78,21 @@ export interface LiveSession {
   };
   /** Secrets redacted from the last remote request, to report only new ones. */
   redacted?: number;
-  /** Top-level sessions: the permission mode; subagents follow their top-level session's. */
-  mode?: PermissionMode;
+  /** Top-level sessions: the permission level; subagents follow their top-level session's. */
+  level?: PermissionLevel;
+  /**
+   * Top-level sessions: the agent it works as now, when it switched from
+   * `header.agent` (whose prompt the system prompt keeps, invariant 7).
+   */
+  agent?: string;
+  /** The agent before the last switch, which approving a plan returns to. */
+  previousAgent?: string;
   /** Top-level sessions: reasoning effort for every call, over the agent's and model's own. */
   effort?: Effort;
   /** Top-level sessions: `/autocompact`, over `compaction.enabled`. */
   autoCompact?: boolean;
-  /** The mode the model was last told about (plan mode reminders). */
-  toldMode?: PermissionMode;
+  /** The agent the model was last told it works as; unset, the one it started with. */
+  toldAgent?: string;
   /** The AGENTS.md hashes the model was last told about; worked out from the transcript when unset. */
   toldInstructions?: InstructionHashes;
   /** The running turn, so prompts sent meanwhile can join it or interrupt it. */
@@ -101,6 +108,11 @@ export interface LiveSession {
 export interface TurnResult {
   stopReason: StopReason;
   text: string;
+}
+
+/** The agent a session works as now. */
+export function agentNameOf(s: LiveSession): string {
+  return s.agent ?? s.header.agent;
 }
 
 /** The session fields every session-scoped event carries. */

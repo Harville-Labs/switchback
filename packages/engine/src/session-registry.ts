@@ -8,7 +8,7 @@ import { SignalTracker } from '@switchback/router';
 import type { SwitchbackConfig } from './config.ts';
 import type { LiveSession } from './live-session.ts';
 import { privateReason } from './privacy.ts';
-import type { SessionHeader, SessionStore } from './store.ts';
+import type { SessionHeader, SessionStore, StoredSessionInfo } from './store.ts';
 
 export class SessionRegistry {
   private sessions = new Map<string, LiveSession>();
@@ -45,6 +45,8 @@ export class SessionRegistry {
       title: `${source.header.title || 'session'} (rewound)`,
       createdAt: now,
     });
+    // The copy is told about the agent with its next prompt: the switch may be past `upTo`.
+    if (source.agent) this.setAgent(copy, source.agent, source.previousAgent);
     for (const m of source.messages.slice(0, upTo)) this.append(copy, m);
     return copy;
   }
@@ -55,7 +57,7 @@ export class SessionRegistry {
     if (existing) return existing;
     const stored = this.store.load(sessionId);
     if (!stored) throw new RpcError(ErrorCode.SessionNotFound, `session ${sessionId} not found`);
-    const { header, messages } = stored;
+    const { header, messages, agent } = stored;
     const parent = header.parentId ? this.sessions.get(header.parentId) : undefined;
     const priv = privateReason(messages);
     return this.track({
@@ -64,6 +66,14 @@ export class SessionRegistry {
       updatedAt: this.now().toISOString(),
       depth: parent ? parent.depth + 1 : header.parentId ? 1 : 0,
       ...(priv ? { private: priv } : {}),
+      // The transcript already holds the reminder the switch sent.
+      ...(agent
+        ? {
+            agent: agent.agent,
+            toldAgent: agent.agent,
+            ...(agent.previous ? { previousAgent: agent.previous } : {}),
+          }
+        : {}),
     });
   }
 
@@ -81,7 +91,7 @@ export class SessionRegistry {
   }
 
   /** Every stored session, with when it last changed. */
-  stored(): { header: SessionHeader; updatedAt: string }[] {
+  stored(): StoredSessionInfo[] {
     return this.store.list();
   }
 
@@ -97,6 +107,14 @@ export class SessionRegistry {
     s.header.title = title;
     s.header.titleSource = source;
     this.store.rename(s.header.id, title, source);
+  }
+
+  /** Switch the agent a session works as; the transcript is untouched. */
+  setAgent(s: LiveSession, agent: string, previous: string | undefined): void {
+    s.agent = agent;
+    if (previous) s.previousAgent = previous;
+    else delete s.previousAgent;
+    this.store.setAgent(s.header.id, { agent, ...(previous ? { previous } : {}) });
   }
 
   /** The top-level session of a subagent (or the session itself). */

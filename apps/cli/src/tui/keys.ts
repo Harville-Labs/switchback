@@ -1,4 +1,4 @@
-/** The app's own keys, whatever has focus: scrolling, tabs, the permission mode, and shortcuts. */
+/** The app's own keys, whatever has focus: scrolling, tabs, switching agents, and shortcuts. */
 import { cycleTab, switchTab, type TabsState, tabAt } from '@switchback/client';
 import { useInput } from 'ink';
 
@@ -16,7 +16,8 @@ export interface AppKeys {
   nextSubagent: () => void;
   /** alt+↑: show the session again. */
   showSession: () => void;
-  nextMode: () => void;
+  /** shift+tab: switch the session to the next agent. */
+  nextAgent: () => void;
 }
 
 export function useAppKeys(k: AppKeys): void {
@@ -43,6 +44,6 @@ export function useAppKeys(k: AppKeys): void {
     if (key.meta && key.upArrow) return k.showSession();
     if (k.prompting) return;
     if (key.ctrl && ch === 'o') return k.toggleExpanded();
-    if (key.tab && key.shift) k.nextMode();
+    if (key.tab && key.shift) k.nextAgent();
   });
 }

@@ -4,11 +4,13 @@ import {
   compactingLabel,
   formatLadder,
   formatTodos,
-  modeIcon,
-  modeLabel,
+  levelIcon,
+  levelLabel,
   routeLabel,
   runningShells,
+  sessionAgent,
   sessionEffort,
+  sessionLevel,
   speedLabel,
   type TodoItem,
   tierIcon,
@@ -18,7 +20,7 @@ import {
 import { tildify } from '@switchback/engine';
 import type {
   InitializeResult,
-  PermissionMode,
+  PermissionLevel,
   QueuedPrompt,
   RoutePreference,
   SessionRoles,
@@ -72,12 +74,14 @@ function describeAliases(aliases: string[], init: InitializeResult): string {
 export function Header({
   init,
   roles,
-  mode,
+  session,
+  view,
   width,
 }: {
   init: InitializeResult;
   roles?: SessionRoles;
-  mode: PermissionMode;
+  session: SessionSummary;
+  view: ViewState;
   width: number;
 }) {
   const t = useTheme();
@@ -88,7 +92,8 @@ export function Header({
   const rows: [string, string][] = [
     ...(current ? ([['current', current]] as [string, string][]) : []),
     ...(escalate ? ([['escalates to', escalate]] as [string, string][]) : []),
-    ['mode', modeLabel(mode)],
+    ['agent', sessionAgent(view, session)],
+    ['permissions', levelLabel(sessionLevel(view, session))],
     ['directory', tildify(init.workspaceRoot)],
   ];
   const label = Math.max(...rows.map(([k]) => k.length));
@@ -115,7 +120,7 @@ export function Header({
         ))}
       </Box>
       <Text dimColor>
-        {'  '}/ commands · @ files · tab model · alt+↓ subagents · shift+tab mode · ctrl+o expand ·
+        {'  '}/ commands · @ files · tab model · alt+↓ subagents · shift+tab agent · ctrl+o expand ·
         PgUp/PgDn scroll
       </Text>
     </Box>
@@ -258,14 +263,21 @@ export function Working({ view }: { view: ViewState }) {
   );
 }
 
-/** The permission mode as a badge; nothing for the default. */
-function ModeBadge({ mode }: { mode: PermissionMode }) {
+/** The agent (Shift+Tab switches it), then the permission level unless it's `ask`. */
+function AgentBadge({ agent, level }: { agent: string; level: PermissionLevel }) {
   const t = useTheme();
-  if (mode === 'default') return null;
   return (
-    <Text color={t.modes[mode]} bold>
-      {modeIcon(mode)} {modeLabel(mode)}
+    <Text>
+      <Text color={agent === 'build' ? undefined : t.agent} bold={agent !== 'build'}>
+        {agent}
+      </Text>
       <Text dimColor> (shift+tab)</Text>
+      {level === 'ask' ? null : (
+        <Text color={t.levels[level]} bold>
+          {' · '}
+          {levelIcon(level)} {levelLabel(level)}
+        </Text>
+      )}
     </Text>
   );
 }
@@ -276,7 +288,6 @@ export function StatusBar({
   review,
   view,
   usage,
-  mode,
   viewing,
   current,
 }: {
@@ -285,7 +296,6 @@ export function StatusBar({
   review: boolean | undefined;
   view: ViewState;
   usage?: UsageReport;
-  mode: PermissionMode;
   /** The agent of the subagent in view (Tab), if one is. */
   viewing?: string;
   /** The current model, shown while the session isn't up the ladder. */
@@ -315,10 +325,10 @@ export function StatusBar({
             {' · '}
           </Text>
         ) : null}
-        <ModeBadge mode={mode} />
-        {mode !== 'default' ? <Text dimColor> · </Text> : null}
+        <AgentBadge agent={sessionAgent(view, session)} level={sessionLevel(view, session)} />
         <Text dimColor>
-          {session.agent} · {routeLabel(route)}
+          {' · '}
+          {routeLabel(route)}
           {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
           {effort ? ` · effort ${effort}` : ''}
           {ladder ? ` · ${ladder}` : ''}

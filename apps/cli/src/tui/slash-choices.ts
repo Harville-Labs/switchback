@@ -1,5 +1,5 @@
 /** The lists commands open when run with no argument (`ChoicePicker`). */
-import { sessionEffort, subagentList } from '@switchback/client';
+import { sessionAgent, sessionEffort, subagentList, switchableAgents } from '@switchback/client';
 import { EffortLevel } from '@switchback/protocol';
 import type { ChoiceList } from './ChoicePicker.tsx';
 import { type SlashContext, say } from './slash-context.ts';
@@ -39,16 +39,15 @@ export const REVIEW_CHOICES: ChoiceList = {
 /** Agents that run sessions, asked for each time so ones created meanwhile show up. */
 export async function agentChoices(ctx: SlashContext): Promise<ChoiceList> {
   const agents = await ctx.client.request('agents.list', {}).catch(() => ctx.init.agents);
+  const current = sessionAgent(ctx.view, ctx.session);
   return {
     title: 'Agent',
     command: 'agent',
-    choices: agents
-      .filter((a) => a.mode !== 'subagent')
-      .map((a) => ({
-        value: a.name,
-        detail: a.description,
-        current: a.name === ctx.session.agent,
-      })),
+    choices: switchableAgents(agents).map((a) => ({
+      value: a.name,
+      detail: a.description,
+      current: a.name === current,
+    })),
   };
 }
 

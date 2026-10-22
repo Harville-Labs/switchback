@@ -12,7 +12,7 @@ import { App } from './App.tsx';
 import { MouseContext } from './Clickable.tsx';
 import type { ClickListener, MouseInput } from './mouse.ts';
 import { tabAtColumn, tabSpans } from './Tabs.tsx';
-import { frameWith, session, tick } from './test-support.ts';
+import { frameWith, frameWithout, session, tick, until } from './test-support.ts';
 
 const ENTER = '\r';
 const TAB = '\t';
@@ -99,7 +99,7 @@ async function secondTab(ui: ReturnType<typeof app>['ui']) {
   ui.stdin.write('\x14');
   await tick();
   ui.stdin.write('n');
-  await tick();
+  await frameWith(ui, '2 tab 2');
 }
 
 describe('the tab bar', () => {
@@ -154,9 +154,8 @@ describe('the tab bar', () => {
     await tick();
     expect(ui.lastFrame()).toContain('2 tab 2');
     ui.stdin.write(CTRL_W);
-    await tick();
-    expect(ui.lastFrame()).not.toContain('2 tab 2');
-  });
+    expect(await frameWithout(ui, '2 tab 2')).not.toContain('2 tab 2');
+  }, 20_000);
 });
 
 describe('the subagent view', () => {
@@ -178,7 +177,8 @@ describe('the subagent view', () => {
       turnId: 'c',
       text: 'looking in src/',
     });
-    await tick();
+    // alt+↓ acts on the view as last rendered, so wait for the subagent to be in it.
+    await frameWith(ui, 'looking in src/');
     ui.stdin.write(ALT_DOWN);
     // The status bar can show the subagent a frame before the transcript does.
     const frame = await frameWith(ui, '↳ explore · find the parser');
@@ -188,18 +188,17 @@ describe('the subagent view', () => {
     ui.stdin.write('/model');
     await tick();
     ui.stdin.write(ENTER);
-    await tick();
-    expect(ui.lastFrame()).toContain('Subagent model');
+    expect(await frameWith(ui, 'Subagent model')).toContain('Subagent model');
     ui.stdin.write('2');
-    await tick();
+    await until(() => calls.some((c) => c.method === 'session.setRoles'));
     expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
       subagents: 'opus',
     });
     // alt+↑ comes back to the session.
     ui.stdin.write(ALT_UP);
     await tick();
-    expect(await frameWith(ui, '◆ Switchback')).not.toContain('↳ viewing explore');
-  });
+    expect(await frameWithout(ui, '↳ viewing explore')).not.toContain('↳ viewing explore');
+  }, 20_000);
 
   test('a click on a model in the picker switches to it; one on esc closes it', async () => {
     const { ui, calls, click } = app();
@@ -215,18 +214,17 @@ describe('the subagent view', () => {
     ui.stdin.write(ENTER);
     await frameWith(ui, 'Current model');
     click(...at('esc close'));
-    await tick();
-    expect(ui.lastFrame()).not.toContain('Current model');
+    expect(await frameWithout(ui, 'Current model')).not.toContain('Current model');
     ui.stdin.write('/model');
     await tick();
     ui.stdin.write(ENTER);
     await frameWith(ui, 'Current model');
     click(...at('2. opus'));
-    await tick();
+    await until(() => calls.some((c) => c.method === 'session.setRoles'));
     expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
       current: ['opus', 'fast'],
     });
-  });
+  }, 20_000);
 
   test('Tab switches to the next model and says so', async () => {
     const { ui, calls } = app();

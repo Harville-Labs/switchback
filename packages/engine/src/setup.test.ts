@@ -456,6 +456,15 @@ describe('writeConfigLayer', () => {
     expect((parseJsonc(text) as { routing: unknown }).routing).toEqual({ current: ['a', 'b'] });
   });
 
+  test('writing a layer moves permissions.defaultMode to permissions.level and the plan agent', () => {
+    const file = join(dir, 'config.json');
+    writeFileSync(file, '{ "permissions": { "defaultMode": "plan", "bash": "ask" } }\n');
+    writeConfigLayer(file, { notifications: { mode: 'bell' } }, { references: false });
+    const written = parseJsonc(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    expect(written.permissions).toEqual({ level: 'ask', bash: 'ask' });
+    expect(written.defaultAgent).toBe('plan');
+  });
+
   test('keeps the user’s comments and formatting', () => {
     const file = join(dir, 'config.json');
     const original = `{

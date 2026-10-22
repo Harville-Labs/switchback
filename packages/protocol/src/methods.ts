@@ -11,26 +11,19 @@ import type { SessionRenameParams } from './titles.ts';
 import { MAX_IMAGE_BYTES, type Message, type Tier, type Usage } from './transcript.ts';
 import type { WorktreeDiff, WorktreeInfo, WorktreesDiffParams } from './worktrees.ts';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export const RoutePreference = z.enum(['auto', 'local', 'remote']);
 export type RoutePreference = z.infer<typeof RoutePreference>;
 
 /**
- * How a session treats tool calls the rules don't decide (docs/permissions.md):
- * `default` asks per the configured levels, `acceptEdits` allows edits in the
- * workspace, `plan` allows no edits until the user approves a plan, and
- * `bypassPermissions` allows everything but deny and ask rules.
+ * How much a session asks before a tool call runs (docs/permissions.md, ADR
+ * 0029): `ask` asks the user whenever the levels and rules say to, `auto` has
+ * a model judge those calls first (ADR 0025), and `bypass` runs everything but
+ * what deny rules and the always-off places stop.
  */
-// Listed in the order Shift+Tab cycles through them.
-export const PermissionMode = z.enum([
-  'default',
-  'acceptEdits',
-  'autoApprove',
-  'plan',
-  'bypassPermissions',
-]);
-export type PermissionMode = z.infer<typeof PermissionMode>;
+export const PermissionLevel = z.enum(['ask', 'auto', 'bypass']);
+export type PermissionLevel = z.infer<typeof PermissionLevel>;
 
 // ---------------------------------------------------------------------------
 // Client -> engine requests
@@ -127,8 +120,8 @@ export type EffortLevel = z.infer<typeof EffortLevel>;
 export const SessionCreateParams = z.object({
   agent: z.string().optional(),
   title: z.string().optional(),
-  /** Defaults to `permissions.defaultMode`. */
-  permissionMode: PermissionMode.optional(),
+  /** Defaults to `permissions.level`. */
+  permissionLevel: PermissionLevel.optional(),
   /** Added to the session's system prompt (headless runs' `--instructions`). */
   instructions: z.string().max(20_000).optional(),
   /** Reasoning effort for this session's model calls, over its agent's and models' own. */
@@ -139,6 +132,7 @@ export type SessionCreateParams = z.infer<typeof SessionCreateParams>;
 export interface SessionSummary {
   id: string;
   title: string;
+  /** The agent the session works as now; top-level sessions can switch (`session.setAgent`). */
   agent: string;
   parentId?: string;
   createdAt: string;
@@ -149,8 +143,8 @@ export interface SessionSummary {
   savingsUsd?: number;
   /** A turn is in progress (possibly driven by another client). */
   running?: boolean;
-  /** Top-level sessions: the permission mode in effect. */
-  permissionMode?: PermissionMode;
+  /** Top-level sessions: the permission level in effect. */
+  permissionLevel?: PermissionLevel;
   /** Top-level sessions: the reasoning effort the session set, if any. */
   effort?: EffortLevel;
   /** Top-level sessions: the goal it is working toward or last worked toward (`/goal`). */
@@ -301,8 +295,14 @@ export interface AutoCompactStatus {
   savedTo?: string;
 }
 
-export const SessionSetModeParams = z.object({ sessionId: z.string(), mode: PermissionMode });
-export type SessionSetModeParams = z.infer<typeof SessionSetModeParams>;
+export const SessionSetPermissionsParams = z.object({
+  sessionId: z.string(),
+  level: PermissionLevel,
+});
+export type SessionSetPermissionsParams = z.infer<typeof SessionSetPermissionsParams>;
+
+export const SessionSetAgentParams = z.object({ sessionId: z.string(), agent: z.string().min(1) });
+export type SessionSetAgentParams = z.infer<typeof SessionSetAgentParams>;
 
 /** `null` clears it: calls use the agent's or the model's effort again. */
 export const SessionSetEffortParams = z.object({
@@ -314,11 +314,11 @@ export type SessionSetEffortParams = z.infer<typeof SessionSetEffortParams>;
 export const PermissionsListParams = z.object({ sessionId: z.string().optional() });
 export type PermissionsListParams = z.infer<typeof PermissionsListParams>;
 
-/** The rules in effect, where each came from, and the session's mode. */
+/** The rules in effect, where each came from, and the session's permission level. */
 export interface PermissionsListResult {
-  mode?: PermissionMode;
-  /** Modes this session may switch to (an organization can rule out `bypassPermissions`). */
-  modes: PermissionMode[];
+  level?: PermissionLevel;
+  /** Levels this session may switch to (an organization can rule out `bypass`). */
+  allowedLevels: PermissionLevel[];
   levels: Record<'read' | 'edit' | 'bash' | 'web' | 'websearch' | 'mcp', 'allow' | 'ask' | 'deny'>;
   rules: { rule: string; behavior: 'allow' | 'ask' | 'deny'; source: string }[];
   /** Whether bash commands run in the OS sandbox, and if not, why. */
@@ -352,7 +352,10 @@ export interface AgentSummary {
   name: string;
   description: string;
   source: 'builtin' | 'user' | 'project' | 'config';
-  /** `primary`: runs sessions. `subagent`: runs through the task tool. `all`: both. */
+  /**
+   * `primary`: runs sessions. `subagent`: runs through the task tool. `all`:
+   * both. Shift+Tab cycles the agents that aren't `subagent`.
+   */
   mode: 'primary' | 'subagent' | 'all';
   route: RoutePreference;
   model?: string;
@@ -506,8 +509,13 @@ export interface Methods {
     params: SessionSetRolesParams;
     result: SessionRoles & { savedTo?: string };
   };
-  /** Switch a session's permission mode; refused for modes the organization rules out. */
-  'session.setMode': { params: SessionSetModeParams; result: { mode: PermissionMode } };
+  /** Switch a session's permission level; refused for levels the organization rules out. */
+  'session.setPermissions': {
+    params: SessionSetPermissionsParams;
+    result: { level: PermissionLevel };
+  };
+  /** Switch a top-level session to another agent that isn't subagent-only (ADR 0029). */
+  'session.setAgent': { params: SessionSetAgentParams; result: { agent: string } };
   /** Set or clear a top-level session's reasoning effort. */
   'session.setEffort': { params: SessionSetEffortParams; result: { effort?: EffortLevel } };
   /** Set a goal and start working toward it, or stop the current one (`/goal`). */

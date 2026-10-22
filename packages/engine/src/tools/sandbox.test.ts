@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
-import { type EngineEvent, PermissionMode } from '@switchback/protocol';
+import type { EngineEvent } from '@switchback/protocol';
 import { ScriptedProvider } from '@switchback/providers';
 import { SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
@@ -186,11 +186,11 @@ describe('asking to leave the sandbox', () => {
     });
   });
 
-  test("doesn't ask in bypass mode", async () => {
+  test("doesn't ask at the bypass level", async () => {
     const { e, events } = engine([
       { name: 'bash', input: { command: 'echo hi', unsandboxed: true } },
     ]);
-    const id = e.createSession({ permissionMode: PermissionMode.enum.bypassPermissions }).id;
+    const id = e.createSession({ permissionLevel: 'bypass' }).id;
     await e.runTurn(id, 'go');
     expect(events.some((ev) => ev.type === 'permission.requested')).toBe(false);
   });
@@ -204,14 +204,14 @@ describe('asking to leave the sandbox', () => {
     expect(result.content).toContain('bash.sandbox.allowUnsandboxed');
   });
 
-  test("editing the agent's own configuration asks, even in accept-edits mode", async () => {
+  test("editing the agent's own configuration asks, even with edits allowed", async () => {
     const { e, events } = engine([
       { name: 'write', input: { path: '.switchback/config.local.json', content: '{}' } },
     ]);
     e.subscribe((ev) => {
       if (ev.type === 'permission.requested') e.respondPermission(ev.requestId, 'deny');
     });
-    await e.runTurn(e.createSession({ permissionMode: 'acceptEdits' }).id, 'go');
+    await e.runTurn(e.createSession({}).id, 'go');
     expect(events.find((ev) => ev.type === 'permission.requested')).toMatchObject({
       reason: "Switchback's own configuration",
     });

@@ -7,7 +7,7 @@ import { ModelPicker } from './ModelPicker.tsx';
 import { PromptInput } from './PromptInput.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
 import { filterSessions, SessionPicker } from './SessionPicker.tsx';
-import { frameWith, session, tick } from './test-support.ts';
+import { frameWith, session, tick, until } from './test-support.ts';
 
 const CTRL_C = '\x03';
 const ENTER = '\r';
@@ -251,9 +251,8 @@ describe('Ctrl+C in the app', () => {
     ui.stdin.write('/resume');
     await tick();
     ui.stdin.write(ENTER);
-    await tick();
+    expect(await frameWith(ui, 'fix the parser')).toContain('Resume a session');
     expect(calls).toContain('session.list');
-    expect(ui.lastFrame()).toContain('Resume a session');
     expect(ui.lastFrame()).toContain('fix the parser');
   });
 });
@@ -314,12 +313,9 @@ describe('the current model and tabs in the app', () => {
     ui.stdin.write('/current');
     await tick();
     ui.stdin.write(ENTER);
-    await tick();
-    expect(ui.lastFrame()).toContain('Current model');
-    expect(ui.lastFrame()).toContain('● current');
+    expect(await frameWith(ui, '● current')).toContain('Current model');
     ui.stdin.write('2');
-    await tick();
-    await tick();
+    await until(() => calls.some((c) => c.method === 'session.setRoles'));
     expect(calls.find((c) => c.method === 'session.setRoles')?.params).toMatchObject({
       current: ['opus', 'fast'],
     });
@@ -330,14 +326,10 @@ describe('the current model and tabs in the app', () => {
     const { ui, calls } = app();
     await tick();
     ui.stdin.write('\x14');
-    await tick();
-    expect(ui.lastFrame()).toContain('Sessions');
-    expect(ui.lastFrame()).toContain('fix the parser');
+    expect(await frameWith(ui, 'fix the parser')).toContain('Sessions');
     ui.stdin.write('n');
-    await tick();
+    expect(await frameWith(ui, '2 new session')).toContain('1 fix the parser');
     expect(calls.some((c) => c.method === 'session.create')).toBe(true);
-    expect(ui.lastFrame()).toContain('1 fix the parser');
-    expect(ui.lastFrame()).toContain('2 new session');
     // alt+1 goes back to the first tab.
     ui.stdin.write('\x1b1');
     await tick();

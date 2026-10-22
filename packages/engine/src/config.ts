@@ -16,7 +16,7 @@ export { roleAliases } from '@switchback/router';
 
 import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'jsonc-parser';
 import { z } from 'zod';
-import { removedKeyProblem, withRenamedKeys } from './config-removed.ts';
+import { removedKeyProblem, renamedKeyWarnings, withRenamedKeys } from './config-removed.ts';
 import { SwitchbackConfig } from './config-schema.ts';
 import { readEndpointModels, withEndpointModels } from './endpoint-models.ts';
 import { HookLayers, type SourcedHook } from './hooks/layers.ts';
@@ -52,6 +52,8 @@ export interface LoadedConfig {
   untrustedHooks: SourcedHook[];
   /** Aliases an endpoint or plan lists that no config file names; Tab skips them. */
   listedModels: string[];
+  /** Old keys whose values don't carry over exactly, for startup and `switchback doctor`. */
+  warnings: string[];
 }
 
 /** How rules from an organization's policy are labeled. */
@@ -94,6 +96,7 @@ export function loadConfig(
       defaults: withRenamedKeys(org.defaults),
       enforced: withRenamedKeys(org.enforced),
     };
+  const warnings = extra.flatMap(renamedKeyWarnings);
   extra = extra.map(withRenamedKeys);
   const pp = projectPaths(workspaceRoot);
   const userFile = switchbackPaths(env).configFile;
@@ -144,10 +147,12 @@ export function loadConfig(
     if (!existsSync(file)) continue;
     let parsed: Record<string, unknown>;
     try {
-      parsed = withRenamedKeys(parseJsonc(readFileSync(file, 'utf8')) as Record<string, unknown>);
+      parsed = parseJsonc(readFileSync(file, 'utf8')) as Record<string, unknown>;
     } catch (err) {
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
+    warnings.push(...renamedKeyWarnings(parsed).map((w) => `${file}: ${w}`));
+    parsed = withRenamedKeys(parsed);
     const removed = removedKeyProblem(parsed);
     if (removed) throw new ConfigError(removed, file);
     // A repository may turn telemetry off for its contributors, never on.
@@ -250,6 +255,7 @@ export function loadConfig(
     rules: ruleSet.sourced,
     untrustedHooks: hookSet.untrusted,
     listedModels: Object.keys(config.models).filter((a) => !chosen.has(a)),
+    warnings,
     ...(orgStatus ? { org: orgStatus } : {}),
   };
 }

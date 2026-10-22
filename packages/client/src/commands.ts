@@ -7,7 +7,7 @@
  * expands it.
  */
 import type { CustomCommandInfo } from '@switchback/protocol';
-import { ROUTES } from './modes.ts';
+import { ROUTES } from './levels.ts';
 
 export type ClientName = 'tui' | 'vscode';
 
@@ -43,7 +43,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     name: 'agent',
     args: '[name]',
     group: 'Session',
-    description: 'start a new session with an agent',
+    description: 'switch this session to another agent (Shift+Tab cycles)',
   },
   { name: 'agents', group: 'Session', description: 'list agents' },
   {
@@ -107,15 +107,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: "how hard this session's models reason; default follows the agent and models",
   },
   {
-    name: 'mode',
-    args: '[default|accept-edits|auto-approve|plan|bypass]',
-    group: 'Permissions',
-    description: 'how tool calls are approved in this session (Shift+Tab cycles)',
-  },
-  {
     name: 'permissions',
+    args: '[ask|auto|bypass]',
     group: 'Permissions',
-    description: 'the mode, permission levels, and every rule with its source',
+    description:
+      'the permission level, category levels, and every rule; an argument sets the level',
   },
   {
     name: 'models',

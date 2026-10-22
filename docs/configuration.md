@@ -154,8 +154,8 @@ See [routing.md](routing.md#configuration-reference).
 | `web` | `ask` | `webfetch`; `deny` turns off `websearch` too |
 | `websearch` | `allow` | `websearch`: only the query leaves the machine, to the `web.search` backend ([ADR 0023](adr/0023-search-allowed-by-default.md)) |
 | `mcp` | `ask` | Tools from MCP servers (a server's own `permission` can change it, except that `deny` here always wins) |
-| `defaultMode` | `default` | The mode new sessions start in: `default`, `acceptEdits`, `autoApprove`, `plan`, or `bypassPermissions` |
-| `judge` | unset | The model alias that judges calls in `autoApprove`. Unset, it's the session's first local model. See [permissions.md](permissions.md#auto-approve) |
+| `level` | `ask` | The permission level new sessions start at: `ask`, `auto`, or `bypass`. The old `defaultMode` still loads: `plan` starts sessions in the `plan` agent, and `acceptEdits` becomes `ask` with a warning. See [permissions.md](permissions.md#permission-levels) |
+| `judge` | unset | The model alias that judges calls at the `auto` level. Unset, it's the session's first local model. See [permissions.md](permissions.md#auto-approve) |
 | `outsideWorkspace` | `ask` | Files outside the workspace: with `ask`, reads follow `read` and edits ask (allow rules that name a folder open it ahead of time); `deny` keeps file tools in the workspace, reads included. See [permissions.md](permissions.md#outside-the-workspace) |
 | `allow`, `ask`, `deny` | `[]` | Rules such as `bash(git status:*)`, `read(.env)`, `edit(src/**)`, `mcp__github`. Lists from every layer add up |
 

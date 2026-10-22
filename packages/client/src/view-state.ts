@@ -5,7 +5,7 @@
 import type {
   GoalInfo,
   ModelRef,
-  PermissionMode,
+  PermissionLevel,
   QueuedPrompt,
   ReviewIssue,
   SessionRoles,
@@ -155,8 +155,10 @@ export interface ViewState {
   roles?: SessionRoles;
   /** Why the session is pinned local for privacy; set once and never cleared. */
   private?: string;
-  /** The permission mode (top-level sessions). */
-  mode?: PermissionMode;
+  /** The permission level (top-level sessions), from the summary and then each change. */
+  level?: PermissionLevel;
+  /** The agent the session works as (top-level sessions), from the summary and then each change. */
+  agent?: string;
   /**
    * Reasoning effort the session set (top-level sessions), once it changes
    * while this view watches; null when it was cleared. Before that, the

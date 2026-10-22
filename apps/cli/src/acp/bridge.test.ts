@@ -63,7 +63,9 @@ const kinds = (updates: acp.SessionNotification['update'][]) => updates.map((u) 
 test('a prompt streams the answer, says which model answered, and ends the turn', async () => {
   const { agent, updates } = await editor([{ text: 'Hello from Switchback.' }]);
   const { sessionId, modes } = await agent.request('session/new', { cwd: root, mcpServers: [] });
-  expect(modes?.currentModeId).toBe('default');
+  // The modes are the agents that can lead a session; subagents aren't among them.
+  expect(modes?.currentModeId).toBe('build');
+  expect(modes?.availableModes.map((m) => m.id)).toEqual(['build', 'plan']);
   const done = await agent.request('session/prompt', {
     sessionId,
     prompt: [{ type: 'text', text: 'hi' }],
@@ -158,7 +160,7 @@ test("the checklist becomes the editor's plan", async () => {
   });
 });
 
-test('modes change through the engine, and a loaded session replays its conversation', async () => {
+test('a mode switches the agent through the engine, and a loaded session replays its conversation', async () => {
   const { agent, updates } = await editor([{ text: 'first answer' }]);
   const { sessionId } = await agent.request('session/new', { cwd: root, mcpServers: [] });
   await agent.request('session/set_mode', { sessionId, modeId: 'plan' });
@@ -167,8 +169,8 @@ test('modes change through the engine, and a loaded session replays its conversa
     prompt: [{ type: 'text', text: 'question' }],
   });
   expect(updates).toContainEqual({ sessionUpdate: 'current_mode_update', currentModeId: 'plan' });
-  await expect(agent.request('session/set_mode', { sessionId, modeId: 'yolo' })).rejects.toThrow(
-    'unknown mode "yolo"',
+  await expect(agent.request('session/set_mode', { sessionId, modeId: 'explore' })).rejects.toThrow(
+    'unknown mode "explore"; the modes are build, plan',
   );
 
   updates.length = 0;

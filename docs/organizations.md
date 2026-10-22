@@ -52,7 +52,7 @@ After signing in, the org's policy applies to the TUI, VS Code, and `switchback 
     "allowUserProviders": false,                    // only providers defined in this policy
     "allowUserMcpServers": false,                   // only MCP servers defined in this policy
     "allowUserPermissions": false,                  // members can't set their own permissions (their deny rules still apply)
-    "allowBypassPermissions": false,                // no bypassPermissions mode
+    "allowBypassPermissions": false,                // no bypass permission level
     "allowUserHooks": false,                        // only this policy's hooks run
     "maxDailyUsd": 10,                              // users may set lower budgets, never higher
     "maxMonthlyUsd": 150
@@ -95,7 +95,7 @@ Hooks in a policy's `defaults` or `enforced` run for every member, alongside the
 - `true` (the default): what login wrote is the member's to edit, and prompts offer **Always**.
 - `false`: the policy's permissions are the only ones that apply, whatever the member's files say. Members' and projects' levels (`permissions.bash`, ...) and allow and ask rules are ignored (`switchback whoami` lists what was left out), and prompts offer no **Always**. Their deny rules still apply, since they only tighten.
 
-Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "later layers replace arrays": every layer's rules add up. An organization's deny rules, in `defaults` or `enforced`, join every member's rules as soon as the policy arrives, appear in `/permissions` and `switchback doctor` with the source `organization`, and can't be removed by a member, a project, or an answer at a prompt (deny is checked before anything a session allows). With `allowBypassPermissions: false`, no session can switch to `bypassPermissions`, and a `defaultMode` of `bypassPermissions` becomes `default`. See [permissions.md](permissions.md#rules) for the syntax.
+Permission rules (`permissions.allow`, `ask`, and `deny`) are the exception to "later layers replace arrays": every layer's rules add up. An organization's deny rules, in `defaults` or `enforced`, join every member's rules as soon as the policy arrives, appear in `/permissions` and `switchback doctor` with the source `organization`, and can't be removed by a member, a project, or an answer at a prompt (deny is checked before anything a session allows). With `allowBypassPermissions: false`, no session can switch to the `bypass` level, and a `permissions.level` of `bypass` becomes `ask`. See [permissions.md](permissions.md#rules) for the syntax.
 
 ## Server API
 

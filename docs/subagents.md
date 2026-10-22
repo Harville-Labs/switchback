@@ -14,9 +14,9 @@ Subagents are both a quality feature and a cost feature:
 
 | Agent | Mode | Tools | Routing | Use |
 |---|---|---|---|---|
-| `build` | primary | all | auto | Default primary agent for coding work |
+| `build` | primary | all | auto | The default agent for a session: coding work |
 | `explore` | subagent | read, glob, grep | **local**, effort `low` | Find files, symbols, and usages; returns a summary |
-| `plan` | all | read, glob, grep | auto | Produce an implementation plan without editing |
+| `plan` | all | read, glob, grep, bash, task, webfetch, websearch, exit_plan_mode; `edit: deny`, `bash: ask` | auto | Produce an implementation plan without editing, and present it for approval ([permissions.md](permissions.md#agents)) |
 | `review` | subagent | read, glob, grep, bash | auto | Read-only review of the whole change (uncommitted work and commits made for it), not only files it was pointed to; lists bugs and missed cases with file:line |
 | `general` | subagent | all | auto | Delegated multi-step tasks |
 
@@ -43,7 +43,8 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `tools` | comma list or YAML list | Tool names (`read`, `grep`, `bash`, `task`, ...), case-insensitive. MCP tools: `mcp__github` allows every tool from that server, `mcp__github__create_issue` just one. Omit for all tools, including every MCP tool. |
 | `model` | `local`, `remote`, `inherit`, or a model alias (`small`, `medium`, `large`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Same effect as `model: local`/`remote` |
-| `mode` | `primary`, `subagent`, `all` | Where it can run: as a session's agent (`/agent`, `--agent`), through the `task` tool, or both. Defaults to `all` |
+| `mode` | `primary`, `subagent`, `all` | Where it can run: as a session's agent (Shift+Tab, `/agent`, `--agent`), through the `task` tool, or both. Defaults to `all` |
+| `permissions` | YAML map: `read`, `edit`, `bash`, `web`, `mcp` (`allow`, `ask`, `deny`), and `ask`, `deny` rule lists | Tightens your permissions while this agent works: a level applies only when it's stricter than your config's, and its rules ask or deny, never allow. `edit: deny` makes a read-only agent. See [permissions.md](permissions.md#agents) |
 | `effort` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Reasoning effort for its model calls, over the model's own `effort` (see [Reasoning effort](#reasoning-effort)) |
 | `maxSteps` | number | Model calls per turn, over `maxStepsPerTurn` |
 | `agents` | comma list or YAML list of names or globs | The subagents it may call with `task` (`explore, review-*`). Omit for every subagent; an empty list removes its `task` tool. No agent can call a `primary`-mode agent |
@@ -93,6 +94,52 @@ The `agents` key takes the same fields as the frontmatter, plus `prompt` for the
 ```
 
 `/agents` and `switchback agents` show `config` as the source of an agent the config changed last.
+
+### Your own primary agents
+
+A session works as one agent at a time: `build`, `plan`, or one of yours with `mode: "primary"` (sessions only) or `"all"` (sessions and the `task` tool). Shift+Tab goes build → plan → yours by name, and `/agent <name>`, `--agent`, and the **Agent** pill in VS Code pick one directly. Switching keeps the conversation; the model is told about the switch with the next prompt ([permissions.md](permissions.md#agents)).
+
+`build` and `plan` are built in, so they aren't written into your config file. Written as config entries, they would look like this, and make a good starting point for your own:
+
+```jsonc
+"agents": {
+  "build": {
+    "description": "Default agent for coding work.",
+    "prompt": "…",
+    "mode": "primary"
+  },
+  "plan": {
+    "description": "Plans a change without editing.",
+    "prompt": "…",
+    "mode": "all",
+    "tools": ["read", "glob", "grep", "bash", "task", "webfetch", "websearch", "exit_plan_mode"],
+    "permissions": { "edit": "deny", "bash": "ask" }
+  }
+}
+```
+
+A primary agent of your own takes the same fields. For example, one that writes docs and may edit only Markdown, and one that runs on the local model and asks before every command:
+
+```jsonc
+"agents": {
+  "docs": {
+    "description": "Writes and updates documentation.",
+    "prompt": "You write clear, short documentation. Change only docs; ask before touching code.",
+    "mode": "primary",
+    "tools": ["read", "glob", "grep", "edit", "write", "webfetch"],
+    "permissions": { "deny": ["edit(src/**)"] }
+  },
+  "offline": {
+    "description": "Works on the local model only.",
+    "prompt": "You are a careful coding agent. Keep changes small.",
+    "mode": "primary",
+    "route": "local",
+    "permissions": { "bash": "ask" }
+  }
+}
+```
+
+The same agent can be a Markdown file in `.switchback/agents/` with these fields in its frontmatter and the prompt as its body ([Defining agents](#defining-agents)). An agent's `permissions` only tighten yours: a level counts only when it's stricter than your config's, and its rules ask or deny, never allow. The permission level (`/permissions ask|auto|bypass`) stays the same when you switch agents.
 
 Files that fail to parse are skipped and reported by `switchback doctor` and at startup. They never prevent the engine from starting.
 
@@ -164,7 +211,7 @@ Credentials: Managed Agents uses `ANTHROPIC_API_KEY` (or `apiKey`); Codex uses i
 With `"isolation": "worktree"` on the task call (or `isolation: worktree` in the agent file), the subagent works in its own git worktree on a new branch, `switchback/<id>`, created from `HEAD`. Its file tools, shell, and `@` mentions operate there, so parallel editing subagents never touch each other or your working tree.
 
 - **On success**, whatever it changed is committed to its branch, the worktree is removed, and the parent gets the branch name, a `--stat` summary, and the diff. A subagent that changed nothing leaves no branch behind.
-- **Merging** is up to the parent and you. The parent can call `merge_worktree`, which always asks you first and shows the diff (in every mode but `bypassPermissions`; plan mode refuses it like any edit). It merges as its own merge commit into your checked-out branch, refuses while your working tree has uncommitted changes, and on a conflict aborts and names the files, leaving everything as it was. You can always merge by hand: `git merge switchback/<id>`. Rewind (`/rewind`) doesn't undo a merge; `git revert -m 1 <merge commit>` does.
+- **Merging** is up to the parent and you. The parent can call `merge_worktree`, which always asks you first and shows the diff (at every level but `bypass`; the `plan` agent refuses it like any edit). It merges as its own merge commit into your checked-out branch, refuses while your working tree has uncommitted changes, and on a conflict aborts and names the files, leaving everything as it was. You can always merge by hand: `git merge switchback/<id>`. Rewind (`/rewind`) doesn't undo a merge; `git revert -m 1 <merge commit>` does.
 - **On failure**, the worktree is kept for inspection and its path is in the report.
 - It needs a git repository with at least one commit. Uncommitted changes in your working tree aren't in the worktree, since it starts from `HEAD`.
 - Worktrees live in the Switchback data directory (`~/.switchback/data/worktrees/`), outside your repository, with a note of who made each branch and why. Commits use your git identity, or `Switchback <switchback@localhost>` when none is set.

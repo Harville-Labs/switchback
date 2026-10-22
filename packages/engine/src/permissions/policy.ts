@@ -1,7 +1,7 @@
 /**
  * What the permission rules say about one tool call. Deny beats ask beats
  * allow, whichever layer each rule came from; a call no rule mentions falls
- * through to the permission mode and the category's level (tool-runner.ts).
+ * through to the permission level and the category's level (tool-runner.ts).
  */
 import type { SwitchbackConfig } from '../config.ts';
 import type { PermissionCategory } from '../tools/tool.ts';

@@ -80,9 +80,10 @@ export type WebviewToHost =
   | { type: 'openHistory' }
   /** Open the picker for one role (the chat's role buttons). */
   | { type: 'chooseRole'; role: RoleName | 'reset' }
+  /** Open the agent picker: it switches the session's agent. */
   | { type: 'chooseAgent' }
-  /** Open the permission mode picker. */
-  | { type: 'chooseMode' }
+  /** Open the permission level picker. */
+  | { type: 'choosePermissions' }
   /** A slash command the webview can't run itself (`name` is from `SLASH_COMMANDS`). */
   | { type: 'command'; name: string; args: string[] };
 

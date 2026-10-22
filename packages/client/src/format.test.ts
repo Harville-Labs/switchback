@@ -5,34 +5,25 @@ import {
   effortNotice,
   estimateLabel,
   formatAgents,
-  modeIcon,
+  levelIcon,
   parseAutoCompact,
   parseEffort,
   permissionWhy,
   sessionEffort,
   tierIcon,
 } from './format.ts';
-import { formatModes, formatPermissions } from './modes.ts';
-
-test('/mode lines up descriptions after the longest mode name and marks the current one', () => {
-  const lines = formatModes(['default', 'plan', 'bypassPermissions'], 'plan').split('\n');
-  expect(lines.slice(0, 3)).toEqual([
-    '  default             ask before edits and commands, as the permission levels say',
-    '● plan                read and plan only; nothing changes until you approve the plan',
-    '  bypass permissions  everything goes ahead without asking; only deny rules stop a call',
-  ]);
-});
+import { formatPermissions } from './levels.ts';
 
 test('/permissions lines up its labels', () => {
   const text = formatPermissions({
-    mode: 'default',
-    modes: ['default'],
+    level: 'ask',
+    allowedLevels: ['ask'],
     levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', websearch: 'allow', mcp: 'ask' },
     sandbox: { active: true },
     rules: [],
   } as Parameters<typeof formatPermissions>[0]);
   expect(text.split('\n').map((l) => l.slice(0, 8))).toEqual([
-    'mode    ',
+    'level   ',
     'levels  ',
     'sandbox ',
     'rules   ',
@@ -41,14 +32,14 @@ test('/permissions lines up its labels', () => {
 
 test('/permissions lines up its labels', () => {
   const text = formatPermissions({
-    mode: 'default',
-    modes: ['default'],
+    level: 'ask',
+    allowedLevels: ['ask'],
     levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', websearch: 'allow', mcp: 'ask' },
     sandbox: { active: true },
     rules: [],
   } as Parameters<typeof formatPermissions>[0]);
   expect(text.split('\n').map((l) => l.slice(0, 8))).toEqual([
-    'mode    ',
+    'level   ',
     'levels  ',
     'sandbox ',
     'rules   ',
@@ -57,14 +48,14 @@ test('/permissions lines up its labels', () => {
 
 test('/permissions lines up its labels', () => {
   const text = formatPermissions({
-    mode: 'default',
-    modes: ['default'],
+    level: 'ask',
+    allowedLevels: ['ask'],
     levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', websearch: 'allow', mcp: 'ask' },
     sandbox: { active: true },
     rules: [],
   } as Parameters<typeof formatPermissions>[0]);
   expect(text.split('\n').map((l) => l.slice(0, 8))).toEqual([
-    'mode    ',
+    'level   ',
     'levels  ',
     'sandbox ',
     'rules   ',
@@ -74,8 +65,8 @@ test('/permissions lines up its labels', () => {
 test('/permissions groups rules by source and wraps long lists', () => {
   const allow = Array.from({ length: 12 }, (_, i) => `bash(tool${i}:*)`);
   const text = formatPermissions({
-    mode: 'default',
-    modes: ['default'],
+    level: 'ask',
+    allowedLevels: ['ask'],
     levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', mcp: 'ask' },
     sandbox: { active: true },
     rules: [
@@ -147,7 +138,7 @@ test('/agents shows mode, route, model, and effort only when they differ from th
 
 test('status marks take one cell in every terminal, so the space after them shows', () => {
   const marks = [
-    ...(['acceptEdits', 'autoApprove', 'plan', 'bypassPermissions'] as const).map(modeIcon),
+    ...(['auto', 'bypass'] as const).map(levelIcon),
     tierIcon('local'),
     tierIcon('remote'),
   ];
@@ -156,7 +147,7 @@ test('status marks take one cell in every terminal, so the space after them show
     // Emoji-capable symbols (☁ ⚠ ⏸) are drawn two cells wide by some terminals.
     expect(mark).not.toMatch(/\p{Emoji}/u);
   }
-  expect(modeIcon('default')).toBe('');
+  expect(levelIcon('ask')).toBe('');
 });
 
 test('cost estimates round to cents, with a floor for tiny ones', () => {
