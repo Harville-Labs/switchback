@@ -7,8 +7,12 @@
  *
  * Mouse reporting also captures clicks, so selecting text takes Shift (or
  * Option in macOS Terminal and iTerm2) while dragging; /copy copies replies.
+ * Windows users expect a plain drag to select and conhost has no modifier
+ * that gets past reporting, so there it starts off; `/mouse` switches it and
+ * the choice is saved.
  */
 import { PassThrough } from 'node:stream';
+import { prefsFile, readPrefs, savePref } from './prefs.ts';
 
 /** Button and motion events (1000) in SGR coordinates (1006). */
 const ENABLE = '\x1b[?1000h\x1b[?1006h';
@@ -51,9 +55,23 @@ export function takeMouse(chunk: string): {
   return { rest, deltas, clicks };
 }
 
+/** Whether the terminal reports the mouse: the saved choice, else on everywhere but Windows. */
+export function savedMouse(file = prefsFile(), platform = process.platform): boolean {
+  const saved = readPrefs(file).mouse;
+  return typeof saved === 'boolean' ? saved : platform !== 'win32';
+}
+
+export function saveMouse(on: boolean, file = prefsFile()): void {
+  savePref('mouse', on, file);
+}
+
 export interface MouseInput {
   /** The stream to give Ink as `stdin`. */
   stdin: NodeJS.ReadStream;
+  /** Whether the terminal is reporting the mouse (the wheel scrolls, clicks pick tabs). */
+  readonly reporting: boolean;
+  /** Turn reporting on, or off so a plain drag selects text. */
+  setReporting(on: boolean): void;
   onWheel(listener: WheelListener): () => void;
   onClick(listener: ClickListener): () => void;
   /** Turn mouse reporting off and stop reading; safe to call twice. */
@@ -63,6 +81,7 @@ export interface MouseInput {
 export function mouseInput(
   input: NodeJS.ReadStream = process.stdin,
   output: NodeJS.WriteStream = process.stdout,
+  report = true,
 ): MouseInput {
   const listeners = new Set<WheelListener>();
   const clickListeners = new Set<ClickListener>();
@@ -97,7 +116,7 @@ export function mouseInput(
   // A 'data' listener doesn't restart a stream that was paused on purpose, and
   // setup's prompts pause stdin when they close; without this, keys go nowhere.
   input.resume();
-  output.write(ENABLE);
+  if (report) output.write(ENABLE);
   let disposed = false;
   const dispose = () => {
     if (disposed) return;
@@ -110,6 +129,14 @@ export function mouseInput(
   process.once('exit', dispose);
   return {
     stdin: proxy as unknown as NodeJS.ReadStream,
+    get reporting() {
+      return report;
+    },
+    setReporting(on) {
+      if (disposed || on === report) return;
+      report = on;
+      output.write(on ? ENABLE : DISABLE);
+    },
     onWheel(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

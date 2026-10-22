@@ -61,7 +61,7 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 - **The welcome card** names the current model (where your prompts run), what it escalates to, the permission mode, and the directory. The status bar names the current model too, until an escalation moves the session up the ladder. `/current` picks another ([routing.md](../routing.md#picking-the-current-model)).
 - **Tool calls** are `●` rows: what the call does and to what (`Read src/x.ts`, `Bash bun test`, `Update a.ts`), with what came of it under `⎿`: lines read, files listed, matches found, the first lines a command printed (and its exit code when it failed), or an edit's size and diff with line numbers. The dot is yellow while it runs, green when it worked, red when it failed.
 - **Exploring** — two or more reads, listings, and searches in a row — folds into one **Explored** block listing each call and what it found.
-- **Routing** shows a `⌂` (local) or `☁` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
+- **Routing** shows a `⌂` (local) or `▲` (remote) line only when the model changes, with the reason; the welcome card covers the current model.
 - **Subagents** are rows of their own, with their tier, tool-call count, and current activity, and their latest steps indented under them while they run. Afterwards, `/subagents` lists them as a tree and `/subagent <n>` shows what one did.
 - **While a turn runs**, a line above the input says what's happening (thinking, writing, running a tool, waiting on a subagent), for how long, about how many tokens the model has written, and on which model.
 - **The status bar** shows the permission mode as a badge when it isn't `default`, the agent and route preference, how much of the model's context is left (in yellow below 15%), the session's cost once there is one, today's spend when you've set a daily budget, savings, the prompt-cache hit rate, and the last call's speed. The hit rate is cached input tokens over all input tokens for the session's calls (`cache 91%`), with the latest turn's after it when that differs (`cache 91% · turn 98%`). It counts remote calls, and local ones whose server reports caching; a rate that drops on a long remote session means something is changing the prompt prefix ([routing.md](../routing.md#prompt-caching-and-stickiness)).
@@ -93,7 +93,11 @@ While subagents run, **Alt+↓** shows the next one in place of the session: its
 
 Page Up and Page Down scroll the transcript, and so does the mouse wheel. Scrolled up, a bar says how far, and new output collects below without moving what you're reading; Page Down to the end follows the conversation again, and sending a prompt jumps there.
 
-The TUI turns on the terminal's mouse reporting for the wheel, which also captures clicks, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2. `/copy` copies replies, code blocks, and tool output without selecting anything.
+On macOS and Linux the TUI turns on the terminal's mouse reporting for the wheel and tab clicks, which also captures clicks, so selecting text takes a modifier while you drag: Shift in most terminals, Option in macOS Terminal and iTerm2.
+
+On Windows mouse reporting starts off, so dragging selects text as in any other console program and Ctrl+C or Enter copies it (Windows Terminal, conhost, and VS Code's terminal). The wheel doesn't scroll the transcript then; Page Up and Page Down do. `/mouse on` turns reporting on (Shift+drag then selects in Windows Terminal and VS Code), `/mouse off` turns it off on any platform, and the choice is remembered.
+
+`/copy` copies replies, code blocks, and tool output without selecting anything.
 
 ### Themes
 
@@ -141,6 +145,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/copy [n\|tool\|all]` | Copy to the clipboard as raw text (no wrapping, indentation, or colors from the terminal rendering): the last reply, its `n`th code block, the last tool's output, or the whole conversation as Markdown. Works over SSH in terminals that support OSC 52 (iTerm2, kitty, WezTerm, Ghostty, Windows Terminal, and tmux with `set-clipboard on`) |
 | `/receipt` | This session and its subagents: what it cost against running it all on the reference remote model |
 | `/theme [dark\|light\|plain]` | Show or switch the colors; the choice is remembered |
+| `/mouse [on\|off]` | Mouse reporting: on, the wheel scrolls and clicks pick tabs; off, a plain drag selects text. Off by default on Windows, on elsewhere; with no argument it switches, and the choice is remembered ([Scrolling and selecting](#scrolling-and-selecting)) |
 | `/help`, `/exit` | |
 | `@path` | Mention a file; a menu completes paths (Tab or Enter to insert). The file's contents are attached to the prompt. |
 | `↑` / `↓` | Move between lines, then browse this workspace's prompt history |
@@ -157,7 +162,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | Shift+Tab | Cycle the permission mode: default → accept edits → plan (→ bypass, unless your organization turns it off) |
 | ↑/↓ and Enter, or `1`–`5` | Answer a permission, plan, or escalation prompt. Permission: yes; yes and don't ask again this session (the rules it grants are shown); yes and always in this project (saved to `.switchback/config.local.json`); no; no, and tell it what to do instead |
 | `y` / `a` / `p` / `n` | The same answers by letter: once, always this session, always in this project, deny (plans: approve, approve and accept edits, keep planning) |
-| Page Up / Page Down, mouse wheel | Scroll the transcript |
+| Page Up / Page Down, mouse wheel | Scroll the transcript (the wheel only while `/mouse` is on) |
 | `ctrl+v` | Attach the image on the clipboard as an `[Image #n]` chip (deleting the chip drops it). On macOS it reads the clipboard with `osascript`, on Linux with `wl-paste` or `xclip`, and on Windows with PowerShell; over SSH, drag the file in or mention it with `@` instead. Dragged-in image files and `@image.png` mentions attach the image too |
 | `ctrl+o` | Expand or collapse the details: the model's thinking (one line, or its paragraphs), commands' full output, whole diffs, and every call in an Explored block. It applies to the whole transcript |
 | `ctrl+c` | With text in the prompt (a paste chip included), clear it. With an empty prompt, cancel the running turn; when idle, press it twice within 2 seconds to quit. In a permission or escalation prompt, it answers no |
@@ -170,6 +175,8 @@ Role commands change the current session; add `--save` to make the change your d
 
 - The TUI runs in the terminal's alternate screen (Ink's `alternateScreen`). Each transcript row is rendered to lines once (`renderToString`) and cached by the identity of its items, which the view reducer replaces only when they change, so a long session costs what's on screen. The viewport is a window onto those lines.
 - Ink reads keys from a stand-in for stdin that takes the wheel's mouse sequences out first (`tui/mouse.ts`), so they never reach the prompt as text.
+- Marks in the status bar and transcript (`⌂`, `▲`, the mode's `»`, `║`, `!`) come from `@switchback/client/format` and are one terminal cell everywhere. Emoji-capable symbols such as `☁`, `⚠`, and `⏸` are drawn two cells wide by Windows Terminal and others while Ink counts one, which covers the space after them.
+- Child processes the user doesn't look at (commands, hooks, git, ripgrep, clipboard helpers) start with `windowsHide` (`hideWindow` in the engine), so on Windows a detached engine doesn't open a console window for each one.
 - Assistant text is plain while it streams and is rendered as Markdown (with syntax-highlighted code) once the turn finishes, so half-written Markdown never flickers.
 - Colors come from roles in `tui/theme.ts` (brand, local, remote, added, removed, ...), never from color names in components.
 - All display state comes from `reduce()` in `@switchback/client/view`, and what a tool call says about itself from `@switchback/client/tool-display`. If something looks wrong in both clients, fix it there.

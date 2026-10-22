@@ -1,4 +1,5 @@
 /** Workspace file list for @-mention completion. git-aware, cached briefly. */
+import { hideWindow } from '@switchback/engine';
 import { Glob } from 'bun';
 
 const IGNORED = /(^|[\\/])(node_modules|\.git|dist|\.tsbuild|\.next|target|\.venv)([\\/]|$)/;
@@ -26,11 +27,10 @@ export async function workspaceFiles(root: string): Promise<string[]> {
 /** Tracked plus untracked-but-not-ignored files, or undefined outside a git repo. */
 function gitFiles(root: string): string[] | undefined {
   try {
-    const proc = Bun.spawnSync(['git', 'ls-files', '-co', '--exclude-standard'], {
-      cwd: root,
-      stdout: 'pipe',
-      stderr: 'ignore',
-    });
+    const proc = Bun.spawnSync(
+      ['git', 'ls-files', '-co', '--exclude-standard'],
+      hideWindow({ cwd: root, stdout: 'pipe', stderr: 'ignore' } as const),
+    );
     if (proc.exitCode !== 0) return undefined;
     return proc.stdout.toString().split('\n').filter(Boolean).slice(0, LIMIT);
   } catch {

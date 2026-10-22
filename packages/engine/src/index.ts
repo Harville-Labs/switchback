@@ -4,6 +4,7 @@ export * from './config.ts';
 export { refreshDiscoveredModels } from './endpoint-models.ts';
 export * from './engine.ts';
 export * from './estimate.ts';
+export { hideWindow } from './hide-window.ts';
 export { hookTrustKey, type SourcedHook } from './hooks/layers.ts';
 export * from './instructions.ts';
 export * from './ledger.ts';

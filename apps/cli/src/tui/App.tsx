@@ -238,6 +238,7 @@ export function App({
       setRewinding(checkpoints);
     },
     theme: themeName,
+    mouse,
     setTheme: (name) => {
       setThemeName(name);
       saveTheme(name);

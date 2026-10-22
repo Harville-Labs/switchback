@@ -1,4 +1,5 @@
 /** The chat's tab strip and sessions dashboard, as HTML (pure, so it can be tested). */
+import { tierIcon } from '@switchback/client/format';
 import { type DashboardRow, STATE_ICONS, STATE_LABELS } from '@switchback/client/tabs';
 import { esc } from './render.ts';
 
@@ -28,7 +29,7 @@ export function renderTabStrip(rows: DashboardRow[], dashboard: boolean): string
 export function renderDashboard(rows: DashboardRow[]): string {
   const card = (r: DashboardRow) => {
     const model = r.model
-      ? `<span class="${r.tier === 'local' ? 'local' : 'remote'}">${r.tier === 'local' ? '⌂' : '☁'} ${esc(r.model)}</span>`
+      ? `<span class="${r.tier === 'local' ? 'local' : 'remote'}">${tierIcon(r.tier)} ${esc(r.model)}</span>`
       : '';
     const facts = [
       `<span class="state ${r.state}">${STATE_ICONS[r.state]} ${STATE_LABELS[r.state]}</span>`,

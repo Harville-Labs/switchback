@@ -9,6 +9,7 @@
  * into the tab it belongs to and into a per-session summary for the dashboard.
  */
 import type { EngineEvent, SessionSummary, Tier } from '@switchback/protocol';
+import { tierIcon } from './format.ts';
 import { toolTitle } from './tool-display.ts';
 import { reduce } from './view.ts';
 import { initialView, owns, type ViewState } from './view-state.ts';
@@ -381,7 +382,7 @@ export function formatDashboard(rows: DashboardRow[]): string {
   const width = Math.min(40, Math.max(12, ...rows.map((r) => r.title.length)));
   const line = (r: DashboardRow) => {
     const where = r.tab ? `${String(r.tab).padStart(2)}${r.active ? '*' : ' '}` : '   ';
-    const model = r.model ? ` · ${r.tier === 'local' ? '⌂' : '☁'} ${r.model}` : '';
+    const model = r.model ? ` · ${tierIcon(r.tier)} ${r.model}` : '';
     const cost = r.costUsd >= 0.0005 ? ` · $${r.costUsd.toFixed(3)}` : '';
     const doing = r.doing ? ` · ${r.doing}` : '';
     return `${where} ${STATE_ICONS[r.state]} ${r.title.padEnd(width)}  ${STATE_LABELS[r.state]}${model}${doing}${cost}`;

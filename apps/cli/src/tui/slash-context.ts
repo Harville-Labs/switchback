@@ -13,6 +13,7 @@ import type {
   SessionSummary,
   UsageReport,
 } from '@switchback/protocol';
+import type { MouseInput } from './mouse.ts';
 import type { ThemeName } from './theme.ts';
 
 /** What a command can see and change in the app. */
@@ -54,6 +55,8 @@ export interface SlashContext {
   /** The color theme, and a way to change it (saved for next time). */
   theme: ThemeName;
   setTheme(name: ThemeName): void;
+  /** Mouse reporting, which `/mouse` switches; absent when the TUI doesn't read the mouse. */
+  mouse?: MouseInput;
   exit(): void;
 }
 

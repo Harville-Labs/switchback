@@ -1,11 +1,14 @@
 import { expect, test } from 'bun:test';
+import stringWidth from 'string-width';
 import {
   effortNotice,
   formatAgents,
   formatPermissions,
+  modeIcon,
   parseEffort,
   permissionWhy,
   sessionEffort,
+  tierIcon,
 } from './format.ts';
 
 test('/permissions groups rules by source and wraps long lists', () => {
@@ -80,4 +83,18 @@ test('/agents shows mode, route, model, and effort only when they differ from th
     'explore [config, subagent, local, effort low]: searches',
     'plan [builtin, big]: plans',
   ]);
+});
+
+test('status marks take one cell in every terminal, so the space after them shows', () => {
+  const marks = [
+    ...(['acceptEdits', 'plan', 'bypassPermissions'] as const).map(modeIcon),
+    tierIcon('local'),
+    tierIcon('remote'),
+  ];
+  for (const mark of marks) {
+    expect(stringWidth(mark)).toBe(1);
+    // Emoji-capable symbols (☁ ⚠ ⏸) are drawn two cells wide by some terminals.
+    expect(mark).not.toMatch(/\p{Emoji}/u);
+  }
+  expect(modeIcon('default')).toBe('');
 });

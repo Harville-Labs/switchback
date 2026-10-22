@@ -314,6 +314,30 @@ export function modeLabel(mode: PermissionMode): string {
   return MODE_LABELS[mode];
 }
 
+/*
+ * Marks in the status bar and the transcript are one terminal cell in every
+ * terminal. Emoji-capable symbols (☁ ⚠ ⏸) are not: Windows Terminal and
+ * others draw them two cells wide while Ink counts one, so they cover the
+ * space after them. These are all in code page 437, so conhost's fonts have
+ * them too.
+ */
+const MODE_ICONS: Record<PermissionMode, string> = {
+  default: '',
+  acceptEdits: '»',
+  plan: '║',
+  bypassPermissions: '!',
+};
+
+/** The mark before a mode's name in the status bar; empty for the default mode. */
+export function modeIcon(mode: PermissionMode): string {
+  return MODE_ICONS[mode];
+}
+
+/** The mark before a model's name: a house for local, an arrow up the ladder for remote. */
+export function tierIcon(tier: string | undefined): string {
+  return tier === 'local' ? '⌂' : '▲';
+}
+
 /** A mode as people type it: `plan`, `accept-edits`, `bypass`, or the config name. */
 export function parseMode(input: string): PermissionMode | undefined {
   const key = input.toLowerCase().replace(/[-_\s]/g, '');

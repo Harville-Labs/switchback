@@ -38,6 +38,7 @@ import {
 } from '@switchback/client';
 import type { RoutePreference, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
 import { copyText } from './clipboard.ts';
+import { saveMouse } from './mouse.ts';
 import { THEME_NAMES, type ThemeName } from './theme.ts';
 
 export const helpText = (custom: readonly SlashCommand[]) => `Commands
@@ -372,11 +373,26 @@ const HANDLERS: Record<string, Handler> = {
     ctx.setTheme(name as ThemeName);
     say(ctx, `theme: ${name}`);
   },
+  mouse: (ctx, args) => {
+    if (!ctx.mouse) return say(ctx, 'mouse: this terminal UI does not read the mouse');
+    const arg = args[0]?.toLowerCase();
+    if (arg && arg !== 'on' && arg !== 'off') return say(ctx, 'usage: /mouse [on|off]');
+    const on = arg ? arg === 'on' : !ctx.mouse.reporting;
+    ctx.mouse.setReporting(on);
+    saveMouse(on);
+    say(ctx, mouseNotice(on));
+  },
   init: (ctx) => ctx.openSetup(),
   setup: (ctx) => ctx.openSetup(),
   exit: (ctx) => ctx.exit(),
   quit: (ctx) => ctx.exit(),
 };
+
+function mouseNotice(on: boolean): string {
+  return on
+    ? 'mouse: on. The wheel scrolls and clicks pick tabs; hold Shift (Option on macOS) while dragging to select text.'
+    : 'mouse: off. Drag to select text as usual; Page Up and Page Down scroll.';
+}
 
 /** Run `/cmd args...`. */
 export function runSlashCommand(ctx: SlashContext, text: string): Promise<void> | void {

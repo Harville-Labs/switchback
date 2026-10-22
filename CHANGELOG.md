@@ -20,6 +20,9 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
 
 ### Fixed
+- **Copying text works on Windows.** The TUI no longer turns on mouse reporting there, so dragging selects text and Ctrl+C or Enter copies it in Windows Terminal, conhost, and VS Code's terminal. `/mouse on` brings back wheel scrolling and tab clicks, and `/mouse off` gives plain selection on macOS and Linux; the choice is remembered
+- **PowerShell commands don't flash a console window on Windows.** Commands run outside the sandbox, hooks, git, ripgrep, the clipboard helpers, and the engine VS Code starts now run with their window hidden
+- **Status bar marks have their space back.** The permission mode's mark (`»` accept edits, `║` plan, `!` bypass) and the remote model's (`▲`, was `☁`) are one cell wide in every terminal; the emoji-capable ones they replace (`⚠`, `⏸`, `☁`) were drawn two cells wide on Windows and covered the space after them
 - **Setup with one model doesn't ask which model does what.** It used to offer an escalation ladder, reviewers, and a subagent model that a single model can't have
 
 ## [2.3.0] - 2026-10-21

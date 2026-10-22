@@ -4,11 +4,13 @@ import {
   cacheLabel,
   formatLadder,
   formatTodos,
+  modeIcon,
   modeLabel,
   runningShells,
   sessionEffort,
   speedLabel,
   type TodoItem,
+  tierIcon,
   type ViewItem,
   type ViewState,
 } from '@switchback/client';
@@ -240,7 +242,7 @@ export function Working({ view }: { view: ViewState }) {
         </Text>
         {model ? (
           <Text color={tier === 'local' ? t.local : t.remote} dimColor>
-            {tier === 'local' ? '⌂' : '☁'} {model}
+            {tierIcon(tier)} {model}
           </Text>
         ) : null}
         <Text dimColor> · esc to interrupt)</Text>
@@ -253,10 +255,9 @@ export function Working({ view }: { view: ViewState }) {
 function ModeBadge({ mode }: { mode: PermissionMode }) {
   const t = useTheme();
   if (mode === 'default') return null;
-  const icon = { acceptEdits: '⏵⏵', plan: '⏸', bypassPermissions: '⚠' }[mode];
   return (
     <Text color={t.modes[mode]} bold>
-      {icon} {modeLabel(mode)}
+      {modeIcon(mode)} {modeLabel(mode)}
       <Text dimColor> (shift+tab)</Text>
     </Text>
   );
@@ -318,7 +319,7 @@ export function StatusBar({
         {current && !ladder ? (
           <Text color={current.tier === 'local' ? t.local : t.remote} dimColor>
             {' · '}
-            {current.tier === 'local' ? '⌂' : '☁'} {current.model}
+            {tierIcon(current.tier)} {current.model}
           </Text>
         ) : null}
         {view.private ? <Text color={t.accent}> · 🔒 local only</Text> : null}

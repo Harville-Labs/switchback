@@ -10,7 +10,7 @@ import { render } from 'ink';
 import { CLI_VERSION, type CommonFlags, checksForUpdates, connectShared } from '../bootstrap.ts';
 import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
-import { mouseInput } from './mouse.ts';
+import { mouseInput, savedMouse } from './mouse.ts';
 import type { Opening } from './SetupPanel.tsx';
 import { terminalTitles } from './terminal-title.ts';
 import { savedTheme } from './theme.ts';
@@ -74,7 +74,7 @@ export async function tui(
   // The lookup runs while the engine starts; one still out by now never holds up the launch.
   const latest = await Promise.race([update, Bun.sleep(UPDATE_WAIT_MS)]);
   if (latest) warnings.push(updateNotice(latest, CLI_VERSION));
-  const mouse = mouseInput();
+  const mouse = mouseInput(process.stdin, process.stdout, savedMouse());
   let open = session;
   const titles = terminalTitles(process.stdout);
   titles.set(session.title);

@@ -103,3 +103,21 @@ describe('bash', () => {
 });
 
 process.on('exit', () => rmSync(root, { recursive: true, force: true }));
+
+describe('spawning', () => {
+  test('commands start with no console window of their own on Windows', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const spawn = ((_argv: string[], options: Record<string, unknown>) => {
+      seen.push(options);
+      return { pid: 1 };
+    }) as unknown as typeof Bun.spawn;
+    const hidden = new CommandRunner(
+      () => ({ timeoutMs: 1_000, env: {}, sandbox: SwitchbackConfig.parse({}).bash.sandbox }),
+      () => {},
+      undefined,
+      spawn,
+    );
+    await hidden.spawn('powershell -NoProfile -Command Get-Date', root, true);
+    expect(seen).toEqual([expect.objectContaining({ windowsHide: true, cwd: root })]);
+  });
+});

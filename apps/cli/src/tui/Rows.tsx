@@ -10,6 +10,7 @@ import {
   subagentDetail,
   subagentIcon,
   tailLines,
+  tierIcon,
   toolResult,
   toolTitle,
   type ViewItem,
@@ -276,7 +277,7 @@ export function Item({
         <Box marginTop={1}>
           <Text dimColor wrap="truncate-end">
             <Text color={color}>
-              {item.tier === 'local' ? '⌂' : '☁'} {item.model.model}
+              {tierIcon(item.tier)} {item.model.model}
             </Text>{' '}
             · {item.reason}
             {item.tokensPerSecond !== undefined ? ` · ${speedLabel(item.tokensPerSecond)}` : ''}

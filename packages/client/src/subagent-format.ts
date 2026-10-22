@@ -2,7 +2,7 @@
  * Text for subagent rows: their status, the detail line both clients show,
  * the `/subagents` listing, and the `/subagent` drill-down.
  */
-import { toolLabel } from './format.ts';
+import { tierIcon, toolLabel } from './format.ts';
 import type { ViewItem, ViewState } from './view.ts';
 
 type SubagentRow = Extract<ViewItem, { kind: 'subagent' }>;
@@ -73,7 +73,7 @@ export function describeSession(state: ViewState, indent = ''): string {
         lines.push(`${indent}task: ${it.text}`);
         break;
       case 'route':
-        lines.push(`${indent}${it.tier === 'local' ? '⌂' : '☁'} ${it.model.model} · ${it.reason}`);
+        lines.push(`${indent}${tierIcon(it.tier)} ${it.model.model} · ${it.reason}`);
         break;
       case 'tool': {
         // A delegation is shown by its subagent row below.

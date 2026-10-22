@@ -189,6 +189,13 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     clients: ['tui'],
   },
   {
+    name: 'mouse',
+    args: '[on|off]',
+    group: 'Extension',
+    description: 'mouse wheel and tab clicks, or plain drag to select text (off)',
+    clients: ['tui'],
+  },
+  {
     name: 'init',
     group: 'Models',
     description: 'set up models and providers, as switchback init does',

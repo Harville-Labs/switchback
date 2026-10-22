@@ -3,6 +3,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { Glob } from 'bun';
 import { z } from 'zod';
+import { hideWindow } from '../hide-window.ts';
 import { looksLikeImage, readImage } from '../images.ts';
 import {
   defineTool,
@@ -234,7 +235,10 @@ export async function grepRipgrep(
     args.push('--glob', `!${dir}`);
   if (input.glob) args.push('--glob', input.glob);
   args.push('-e', input.pattern);
-  const proc = Bun.spawn([rg, ...args], { cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' });
+  const proc = Bun.spawn(
+    [rg, ...args],
+    hideWindow({ cwd, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' } as const),
+  );
   const out: string[] = [];
   let buffer = '';
   const decoder = new TextDecoder();

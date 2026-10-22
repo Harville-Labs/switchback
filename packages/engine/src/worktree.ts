@@ -8,6 +8,7 @@
  */
 import { mkdirSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
+import { hideWindow } from './hide-window.ts';
 
 export interface Worktree {
   /** The repository's top-level directory. */
@@ -23,7 +24,10 @@ export interface Worktree {
 
 export async function git(cwd: string, args: string[]): Promise<string> {
   // An argument array, never a shell string: branch names and paths are not interpreted.
-  const proc = Bun.spawn(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' });
+  const proc = Bun.spawn(
+    ['git', ...args],
+    hideWindow({ cwd, stdout: 'pipe', stderr: 'pipe' } as const),
+  );
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),

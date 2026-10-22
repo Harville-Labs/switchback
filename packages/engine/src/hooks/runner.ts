@@ -15,6 +15,7 @@
  */
 import type { EngineEvent } from '@switchback/protocol';
 
+import { hideWindow } from '../hide-window.ts';
 import { readUntilExit, terminate } from '../tools/process.ts';
 import type { HookEvent, HookMatcher, HooksConfig } from './schema.ts';
 
@@ -86,16 +87,19 @@ export class HookRunner {
     hook: HookMatcher['hooks'][number],
     input: string,
   ): Promise<Partial<HookOutcome>> {
-    const proc = Bun.spawn(this.deps.argv(hook.command), {
-      cwd: this.deps.workspaceRoot,
-      stdin: new Blob([input]),
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env: {
-        ...process.env,
-        SWITCHBACK_PROJECT_DIR: this.deps.workspaceRoot,
-      },
-    });
+    const proc = Bun.spawn(
+      this.deps.argv(hook.command),
+      hideWindow({
+        cwd: this.deps.workspaceRoot,
+        stdin: new Blob([input]),
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {
+          ...process.env,
+          SWITCHBACK_PROJECT_DIR: this.deps.workspaceRoot,
+        },
+      } as const),
+    );
     const seconds = hook.timeout ?? DEFAULT_TIMEOUT_S;
     let timedOut = false;
     const timer = setTimeout(() => {
