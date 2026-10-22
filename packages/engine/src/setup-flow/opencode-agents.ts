@@ -72,7 +72,8 @@ export function translateAgents(
     const description = str(a.description);
     if (description) config.description = description;
     else if (!builtin) config.description = `The "${name}" agent from OpenCode.`;
-    const prompt = str(a.prompt);
+    // V2 calls the prompt `system`.
+    const prompt = str(a.prompt) ?? str(a.system);
     if (prompt?.startsWith('{file:'))
       skipped.push(
         `agent ${name}'s prompt is a file reference; copy the file's text into its prompt`,
@@ -81,10 +82,16 @@ export function translateAgents(
     if (a.mode === 'primary' || a.mode === 'subagent' || a.mode === 'all') config.mode = a.mode;
     const steps = a.steps ?? a.maxSteps;
     if (typeof steps === 'number' && Number.isInteger(steps) && steps > 0) config.maxSteps = steps;
-    if (a.disable === true) config.disable = true;
+    if (a.disable === true || a.disabled === true) config.disable = true;
     const tools = narrowedTools(name, a, builtin?.tools, mcpServers, skipped);
     if (tools) config.tools = tools;
-    if (a.temperature !== undefined || a.top_p !== undefined)
+    const body = obj(obj(a.request).body);
+    if (
+      a.temperature !== undefined ||
+      a.top_p !== undefined ||
+      body.temperature !== undefined ||
+      body.top_p !== undefined
+    )
       skipped.push(
         `agent ${name}'s temperature and top_p: Switchback sets these per model; give its model the settings`,
       );
