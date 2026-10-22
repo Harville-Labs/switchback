@@ -6,7 +6,6 @@ import {
   parseEffort,
   permissionWhy,
   sessionEffort,
-  subagentDetail,
 } from './format.ts';
 
 test('/permissions groups rules by source and wraps long lists', () => {
@@ -81,16 +80,4 @@ test('/agents shows mode, route, model, and effort only when they differ from th
     'explore [config, subagent, local, effort low]: searches',
     'plan [builtin, big]: plans',
   ]);
-});
-
-test('a subagent row names the model and effort its parent chose', () => {
-  const row = {
-    kind: 'subagent',
-    status: 'done',
-    model: 'remote',
-    effort: 'max',
-    tier: 'remote',
-    toolCalls: 3,
-  } as unknown as Parameters<typeof subagentDetail>[0];
-  expect(subagentDetail(row)).toBe('remote · effort max · remote · 3 tool calls');
 });

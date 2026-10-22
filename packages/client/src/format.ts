@@ -155,22 +155,6 @@ export function toolLabel(name: string, input: unknown): string {
   }
 }
 
-type SubagentRow = Extract<ViewItem, { kind: 'subagent' }>;
-
-/** The detail after a subagent row's task: `background · large · effort high · remote · 3 tool calls`. */
-export function subagentDetail(row: SubagentRow): string {
-  return [
-    row.background ? 'background' : undefined,
-    row.model,
-    row.effort ? `effort ${row.effort}` : undefined,
-    row.tier,
-    `${row.toolCalls} tool calls`,
-    row.status === 'running' ? row.activity : undefined,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
 /** `/agents`: one line per agent with where it runs and how it's tuned. */
 export function formatAgents(agents: AgentSummary[]): string {
   return agents
@@ -212,77 +196,6 @@ export function effortNotice(effort: string | undefined): string {
   return effort
     ? `effort: ${effort} for this session's model calls; /effort default follows the agent and models again`
     : "effort: following the agent's and each model's setting";
-}
-
-/** Every subagent in the tree, depth-first, for numbered listings. */
-export function subagentList(
-  state: ViewState,
-  depth = 0,
-): { id: string; depth: number; row: SubagentRow }[] {
-  return state.items.flatMap((it) =>
-    it.kind === 'subagent'
-      ? [
-          { id: it.id, depth, row: it },
-          ...(state.children[it.id]
-            ? subagentList(state.children[it.id] as ViewState, depth + 1)
-            : []),
-        ]
-      : [],
-  );
-}
-
-/** The subagent tree as numbered lines, for `/subagents`; `hint` follows a non-empty list. */
-export function formatSubagents(state: ViewState, hint = ''): string {
-  const all = subagentList(state);
-  if (!all.length) return 'no subagents in this session yet';
-  const rows = all.map(
-    (x, i) =>
-      `${String(i + 1).padStart(2)}. ${'  '.repeat(x.depth)}${x.row.status === 'running' ? '◌' : x.row.status === 'ok' ? '✓' : '✗'} ${x.row.agent}: ${x.row.task} · ${x.row.toolCalls} tool calls`,
-  );
-  return [...rows, ...(hint ? [hint] : [])].join('\n');
-}
-
-/**
- * Plain-text drill-down of one session: its routes, tool calls, and report,
- * with nested subagents indented. Used by the TUI's `/subagent`.
- */
-export function describeSession(state: ViewState, indent = ''): string {
-  const lines: string[] = [];
-  for (const it of state.items) {
-    switch (it.kind) {
-      case 'user':
-        lines.push(`${indent}task: ${it.text}`);
-        break;
-      case 'route':
-        lines.push(`${indent}${it.tier === 'local' ? '⌂' : '☁'} ${it.model.model} · ${it.reason}`);
-        break;
-      case 'tool': {
-        // A delegation is shown by its subagent row below.
-        if (it.name === 'task' && it.status !== 'error') break;
-        const icon = it.status === 'running' ? '●' : it.status === 'ok' ? '✓' : '✗';
-        lines.push(`${indent}${icon} ${toolLabel(it.name, it.input)}`);
-        const first = it.output?.split('\n').find((l) => l.trim());
-        if (first) lines.push(`${indent}    ${first.slice(0, 160)}`);
-        break;
-      }
-      case 'assistant':
-        if (it.text) lines.push(...it.text.split('\n').map((l) => `${indent}${l}`));
-        break;
-      case 'subagent': {
-        const icon = it.status === 'running' ? '◌' : it.status === 'ok' ? '✓' : '✗';
-        lines.push(`${indent}↳ ${icon} ${it.agent}: ${it.task}`);
-        const child = state.children[it.id];
-        if (child) lines.push(describeSession(child, `${indent}    `));
-        break;
-      }
-      case 'error':
-        lines.push(`${indent}error: ${it.message}`);
-        break;
-      case 'info':
-        break;
-    }
-  }
-  return lines.join('\n');
 }
 
 /** `switchback mcp`, doctor, and the TUI's `/mcp`. */

@@ -89,6 +89,7 @@ export class SessionFactory {
         ...(instructions.project ? { project: instructions.project } : {}),
         ...(params.instructions ? { session: params.instructions } : {}),
         skills: skillsSection(this.deps.library.skills().values()),
+        ...(params.parentId ? { subagent: true } : {}),
       }),
     };
     return this.deps.sessions.create(

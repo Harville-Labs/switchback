@@ -348,8 +348,20 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
       }
       return { ...state, items };
     }
-    case 'subagent.started':
+    case 'subagent.queued':
       items.push({
+        kind: 'subagent',
+        id: event.childSessionId,
+        agent: event.agent,
+        task: event.task,
+        status: 'queued',
+        toolCalls: 0,
+        ...(event.background ? { background: true } : {}),
+        ...(event.model ? { model: event.model } : {}),
+      });
+      return { ...state, items };
+    case 'subagent.started': {
+      const row: ViewItem = {
         kind: 'subagent',
         id: event.childSessionId,
         agent: event.agent,
@@ -360,7 +372,11 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         ...(event.model ? { model: event.model } : {}),
         ...(event.effort ? { effort: event.effort } : {}),
         ...(event.worktree ? { worktree: { branch: event.worktree.branch } } : {}),
-      });
+      };
+      // A queued row starts in place, so parallel subagents keep the order they were asked in.
+      const queued = items.findIndex((it) => it.kind === 'subagent' && it.id === row.id);
+      if (queued >= 0) items[queued] = row;
+      else items.push(row);
       return {
         ...state,
         items,
@@ -373,6 +389,7 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
           },
         },
       };
+    }
     case 'subagent.completed': {
       const i = items.findIndex((it) => it.kind === 'subagent' && it.id === event.childSessionId);
       if (i >= 0)
@@ -464,8 +481,10 @@ function updateSubagentRow(state: ViewState, event: SessionEvent): ViewState {
   const i = state.items.findIndex((it) => it.kind === 'subagent' && it.id === event.sessionId);
   if (i < 0) return state;
   const row = { ...(state.items[i] as Extract<ViewItem, { kind: 'subagent' }>) };
-  if (event.type === 'route.decided') row.tier = event.tier;
-  else if (event.type === 'tool.started') {
+  if (event.type === 'route.decided') {
+    row.tier = event.tier;
+    row.routed = event.model.model;
+  } else if (event.type === 'tool.started') {
     row.toolCalls++;
     row.activity = event.name;
   } else return state;

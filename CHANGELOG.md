@@ -5,11 +5,17 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 ## [Unreleased]
 
 ### Added
+- **Asking for subagents gets you subagents.** "Use 4 subagents to…" starts four, in parallel, each with its own brief and files; with no number the model uses as few as the work needs, and when a number looks wrong for the work it says so and you agree on one. Two subagents never edit the same file: each gets its own files or its own worktree
+- **Big fan-outs don't flood the parent's context.** The subagents started in one step share 60,000 characters of report, and each is told its share, so 150 of them cost the parent about what two do. Subagents get a short note on reporting instead of the whole Switchback guide
+- **A built-in `review` agent.** "Have a reviewer check it" sends a read-only reviewer over the change, which lists bugs and missed cases with file and line
+- **Subagents waiting for a slot show as waiting.** Past `subagents.maxConcurrent`, a subagent's row says `waiting for a free slot` until it starts (`subagent.queued` in the protocol), and a running row shows the model it's on
+- **The mock provider fans out `use 3 subagents to <goal>`,** so `--mock` demos orchestration without a model
 - **The prompt-cache hit rate is in the status bar.** The TUI's status bar and VS Code's composer show how much of the session's input came from the provider's cache (`cache 91%`), with the latest turn's when it differs. `call.stats` events carry each call's usage. `--mock` simulates a prefix cache, so the rate shows there too
 - **`/rename` names a session.** Up to 60 characters, in the TUI and VS Code (`session.rename` in the protocol). The title shows in `/sessions`, `--resume`, the VS Code view, the terminal's title (restored on exit), and ACP editors. `/rename` alone shows the current title
 - **Sessions are retitled at compaction.** The summary that compaction already makes suggests a title, so it costs no extra model call; a title you set is never replaced
 
 ### Changed
+- **16 subagents run at once by default,** up from 4 (`subagents.maxConcurrent`), so a large fan-out finishes sooner. Local servers queue what they can't run at once
 - **More of each request hits the cache.** Claude requests add a cache breakpoint on the system prompt, so tools and system stay cached after compaction or past the 20-block lookback. OpenAI and Azure OpenAI requests send the session ID as `prompt_cache_key`, so a session's calls reach the same cache
 
 ### Fixed

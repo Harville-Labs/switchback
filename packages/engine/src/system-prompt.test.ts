@@ -22,3 +22,10 @@ test('an agent without the task tool is not told about subagents', () => {
   expect(prompt).toContain('(escalate)');
   expect(prompt).not.toContain('(task)');
 });
+
+test('a subagent is told how to report, and not given the Switchback guide', () => {
+  const sub = systemPrompt({ ...parts, agent: agent('general'), subagent: true });
+  expect(sub).toContain('# Reporting back');
+  expect(sub).not.toContain('# Working in Switchback');
+  expect(systemPrompt({ ...parts, agent: agent('build') })).not.toContain('# Reporting back');
+});

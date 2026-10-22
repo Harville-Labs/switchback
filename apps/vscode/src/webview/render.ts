@@ -11,9 +11,9 @@ import {
   isQuietTool,
   permissionWhy,
   speedLabel,
-  subagentDetail,
   tailLines,
 } from '@switchback/client/format';
+import { subagentDetail, subagentIcon } from '@switchback/client/subagent-format';
 import {
   type DisplayRow,
   displayRows,
@@ -111,7 +111,7 @@ export function renderItem(item: ViewItem, ctx: ViewState, expanded: ReadonlySet
       return `<div class="tool"><span class="${item.status}">${icon}</span> <b>${esc(title.verb)}</b> ${esc(title.target)}${lock}</div>${summary}${output}${diff}`;
     }
     case 'subagent': {
-      const icon = item.status === 'running' ? '◌' : item.status === 'ok' ? '✓' : '✗';
+      const icon = subagentIcon(item.status);
       const meta = subagentDetail(item);
       const branch = item.worktree
         ? ` <span class="detail worktree">${esc(worktreeLabel(item.worktree))}</span>`

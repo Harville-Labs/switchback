@@ -276,7 +276,7 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | Key | Default | |
 |---|---|---|
 | `defaultAgent` | `build` | Agent for new sessions |
-| `subagents.maxConcurrent` | 4 | Concurrent subagents per depth |
+| `subagents.maxConcurrent` | 16 | Concurrent subagents per depth |
 | `subagents.maxDepth` | 2 | Maximum nesting |
 | `runtimes.<name>` | none | External agent runtimes agents can use with `runtime: <name>`: `claude-agent-sdk` (`model`, `maxTurns`, `executable`), `claude-managed-agents` (`agent`, `environment`, `model`, `apiKey`), `codex` (`model`, `sandbox`, `network`, `effort`, `executable`, `apiKey`), or `bedrock-agentcore` (`arn`, `qualifier`, `region`, `model`). See [subagents.md](subagents.md#external-runtimes) |
 | `subagents.budgetUsd` | none | Default remote spend per subagent invocation; an agent's `budgetUsd` overrides it |

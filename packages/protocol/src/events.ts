@@ -129,6 +129,18 @@ export type EngineEvent =
       estimatedCostUsd?: number;
     } & SessionScoped)
   | ({
+      /**
+       * Every slot at its depth is taken (`subagents.maxConcurrent`), so it
+       * waits; `subagent.started` follows when it gets one.
+       */
+      type: 'subagent.queued';
+      childSessionId: string;
+      agent: string;
+      task: string;
+      background?: boolean;
+      model?: string;
+    } & SessionScoped)
+  | ({
       type: 'subagent.started';
       childSessionId: string;
       agent: string;

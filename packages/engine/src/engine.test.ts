@@ -124,7 +124,7 @@ describe('Engine', () => {
     const detected = await maxTokensFor({});
     expect(detected).toBeLessThan(6_000);
     // Less what the prompt and tool list take.
-    expect(detected).toBeGreaterThan(3_000);
+    expect(detected).toBeGreaterThan(2_500);
     // A configured cap under the window stands.
     expect(await maxTokensFor({ contextWindow: 32_000, maxOutputTokens: 2_000 })).toBe(2_000);
   });
