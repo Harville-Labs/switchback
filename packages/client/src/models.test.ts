@@ -54,6 +54,28 @@ test("the next model takes the current one's place, in config order, wrapping ar
   expect(nextModel(models, undefined)?.alias).toBe('fast');
 });
 
+test('tab goes round the chosen models only, not every model an endpoint lists', () => {
+  const served: InitializeResult['models'] = [
+    ...models,
+    {
+      alias: 'llama-70b',
+      ref: { provider: 'gpu', model: 'llama-70b' },
+      tier: 'local',
+      listed: true,
+    },
+    { alias: 'mistral', ref: { provider: 'gpu', model: 'mistral' }, tier: 'local', listed: true },
+  ];
+  const last = { ...roles, current: ['opus'] };
+  expect(nextModel(served, last)?.alias).toBe('fast');
+  // Once a role uses a listed model, it's chosen.
+  expect(nextModel(served, { ...last, current: ['mistral'] })?.alias).toBe('fast');
+  expect(nextModel(served, { ...last, escalate: [['mistral']] })?.alias).toBe('mistral');
+  // Pickers still offer listed models, after the chosen ones.
+  const choices = modelChoices(served, roles);
+  expect(choices.map((c) => c.alias)).toEqual(['large', 'fast', 'opus', 'llama-70b', 'mistral']);
+  expect(choiceLabel(choices[4] as (typeof choices)[number])).toBe('mistral · local · listed');
+});
+
 test('there is no next model when only one is set up', () => {
   expect(nextModel(models.slice(0, 1), { ...roles, current: ['fast'] })).toBeUndefined();
 });

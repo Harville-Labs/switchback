@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { SwitchbackConfig } from './config.ts';
+import { dirname, join } from 'node:path';
+import { loadConfig, SwitchbackConfig } from './config.ts';
 import {
   readEndpointModels,
   refreshDiscoveredModels,
   refreshEndpointModels,
   withEndpointModels,
 } from './endpoint-models.ts';
+import { switchbackPaths } from './paths.ts';
 
 let env: Record<string, string>;
 beforeEach(() => {
@@ -98,6 +99,26 @@ describe('refreshEndpointModels', () => {
     expect(down.endpoints[0]).toMatchObject({ provider: 'vllm', error: 'connection refused' });
     expect(readEndpointModels(env).vllm?.models).toEqual([{ id: 'a' }]);
   });
+});
+
+test('the models an endpoint lists are marked apart from the ones config names', async () => {
+  const file = switchbackPaths(env).configFile;
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(
+    file,
+    JSON.stringify({
+      providers: { vllm: { type: 'openai-compatible', baseUrl: BASE, tier: 'local' } },
+      models: { big: { provider: 'vllm', model: 'acme/Big-1.5' } },
+    }),
+  );
+  await refreshEndpointModels(
+    loadConfig(env.SWITCHBACK_HOME as string, env, [], null).config,
+    env,
+    serving(['acme/Big-1.5', 'tiny']),
+  );
+  const loaded = loadConfig(env.SWITCHBACK_HOME as string, env, [], null);
+  expect(Object.keys(loaded.config.models)).toEqual(['big', 'tiny']);
+  expect(loaded.listedModels).toEqual(['tiny']);
 });
 
 test('refreshDiscoveredModels reports plans and endpoints together', async () => {

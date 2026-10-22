@@ -306,8 +306,9 @@ export class Engine {
     org?: OrgStatus;
     untrustedMcp?: { name: string; source: string }[];
     rules?: SourcedRule[];
+    listedModels?: string[];
   }): void {
-    this.p.models.apply(next.config);
+    this.p.models.apply(next.config, next.listedModels);
     this.p.gate.revokeGrants();
     this.options.rules = next.rules;
     if (JSON.stringify(next.config.mcpServers) !== JSON.stringify(this.options.config.mcpServers)) {

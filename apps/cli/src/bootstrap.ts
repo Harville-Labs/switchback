@@ -83,6 +83,7 @@ export function createEngine(
     const { engine, agentErrors } = engineFromWorkspace(flags.cwd, loaded.config, {
       prices: loaded.prices,
       untrustedMcp: loaded.untrustedMcp,
+      listedModels: loaded.listedModels,
       rules: loaded.rules,
       // Setup run by a client writes a config; the engine applies it without a restart.
       reloadConfig: () => load(flags),

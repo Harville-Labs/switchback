@@ -54,6 +54,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     options.providers,
     (e) => io.emit(e),
     now,
+    options.listedModels,
   );
   const ledger: UsageLedger = new UsageLedger(
     options.ledgerFile,

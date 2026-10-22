@@ -144,13 +144,17 @@ async function changeRoles(
   }
 }
 
-/** Tab: the next model in config order becomes the current one, for this session. */
+/** Tab: the next model the user chose becomes the current one, for this session. */
 export async function cycleModel(
   ctx: SlashContext,
   roles: SessionRoles | undefined,
 ): Promise<void> {
   const next = nextModel(ctx.init.models, roles);
-  if (!next) return say(ctx, 'No other model to switch to. `switchback init` sets more up.');
+  if (!next)
+    return say(
+      ctx,
+      'No other chosen model to switch to. /current picks from every model, listed ones too; `switchback init` sets more up.',
+    );
   try {
     const r = await ctx.client.request('session.setRoles', {
       sessionId: ctx.session.id,

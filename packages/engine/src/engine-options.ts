@@ -67,6 +67,8 @@ export interface EngineOptions {
   /** Network lookups and Switchback's home for setup over the protocol; tests set them. */
   setup?: SetupDeps;
   dataDir?: string;
+  /** Models an endpoint or plan lists that the config doesn't name (from `loadConfig`). */
+  listedModels?: string[];
   /** Project MCP servers held back until trusted (from `loadConfig`). */
   untrustedMcp?: { name: string; source: string }[];
   /**
