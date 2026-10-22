@@ -12,6 +12,22 @@ import {
   tierIcon,
 } from './format.ts';
 
+test('/permissions lines up its labels', () => {
+  const text = formatPermissions({
+    mode: 'default',
+    modes: ['default'],
+    levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', websearch: 'allow', mcp: 'ask' },
+    sandbox: { active: true },
+    rules: [],
+  } as Parameters<typeof formatPermissions>[0]);
+  expect(text.split('\n').map((l) => l.slice(0, 8))).toEqual([
+    'mode    ',
+    'levels  ',
+    'sandbox ',
+    'rules   ',
+  ]);
+});
+
 test('/permissions groups rules by source and wraps long lists', () => {
   const allow = Array.from({ length: 12 }, (_, i) => `bash(tool${i}:*)`);
   const text = formatPermissions({
