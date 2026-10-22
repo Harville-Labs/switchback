@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   effortNotice,
+  estimateLabel,
   formatAgents,
   parseEffort,
   permissionWhy,
@@ -93,4 +94,11 @@ test('a subagent row names the model and effort its parent chose', () => {
     toolCalls: 3,
   } as unknown as Parameters<typeof subagentDetail>[0];
   expect(subagentDetail(row)).toBe('remote · effort max · remote · 3 tool calls');
+});
+
+test('cost estimates round to cents, with a floor for tiny ones', () => {
+  expect(estimateLabel(undefined)).toBe('');
+  expect(estimateLabel(0.004)).toBe('≈ <$0.01');
+  expect(estimateLabel(0.0412)).toBe('≈ $0.04');
+  expect(estimateLabel(1.5)).toBe('≈ $1.50');
 });
