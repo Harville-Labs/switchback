@@ -5,13 +5,13 @@
 A local-first coding agent from Harville Labs. (Formerly Harness.) Most of the work runs on a model on your own machine; Switchback escalates the hard parts to the hosted model of your choice (OpenAI, Anthropic, DeepSeek, or any OpenAI-compatible API) and shows you exactly when and why it did.
 
 - **Local by default, remote when it matters.** A transparent router sends each model call to your local model (Ollama, llama.cpp, LM Studio, vLLM, SGLang, KoboldCpp, Jan, TGI) and escalates to your remote provider (OpenAI, Azure OpenAI, Anthropic, DeepSeek, Gemini, Bedrock, Vertex, Claude Platform on AWS, Microsoft Foundry, OpenRouter, OpenCode, or any OpenAI-compatible API) when the local model is struggling, the context won't fit, or you ask. No vendor is a default, and every provider gets the same features. Budgets cap remote spend. With several local servers, escalation can climb through a bigger local model first (fast local → large local → remote), so only the last step costs money.
-- **Subagents that save money.** Delegate searches and side tasks to parallel subagents, each with its own context and routing. The built-in `explore` agent always runs locally. Agents are Markdown files in `.switchback/agents/`, and `model: large|medium|small` means your provider's models of that size.
+- **Subagents that save money.** Say "use 4 subagents to…" and Switchback starts four in parallel, each with its own brief, files, context, and routing; two never edit the same file. The model can also delegate searches and side tasks on its own. The built-in `explore` agent always runs locally. Agents are Markdown files in `.switchback/agents/`, and `model: large|medium|small` means your provider's models of that size.
 - **Review with a stronger model.** Optionally, a ladder of reviewers checks every change, and the writing model fixes what they find. A free local reviewer can check everything, with a remote one stepping in only when its findings don't get fixed: a remote review costs a few cents, while having the remote model write the change would cost many times more. See [docs/review.md](docs/review.md).
 - **Private files stay private.** List paths that must never reach a remote model (`secrets/`, `*.pem`, customer data); once a session touches one, it stays on local models for good, even if you ask for remote. Credentials in anything sent remotely are redacted first. See [docs/privacy.md](docs/privacy.md).
 - **Managed by your organization.** Sign in with `switchback login` and your org's server pushes approved models (including company GPU servers), spend caps, provider restrictions, or an outright remote-off switch, live. See [docs/organizations.md](docs/organizations.md).
 - **Terminal and VS Code, same engine.** The TUI and the VS Code extension are thin clients of one engine and one protocol, and they render from the same view model, so they can't drift apart.
 
-> Status: 1.0. Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/switchback/issues) and the [roadmap](docs/roadmap.md).
+> Status: 2.4. Progress is tracked in [GitHub issues](https://github.com/Harville-Labs/switchback/issues) and the [roadmap](docs/roadmap.md).
 
 ## Install
 
@@ -56,7 +56,7 @@ bun run dev -- init
 
 Switchback ships with no default local model. Which server and model your machine runs is your choice, and `switchback init` (or `/init` inside Switchback) sets it up. Running `switchback` for the first time with no config opens on setup.
 
-In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/usage` shows spend and savings, and `esc` cancels.
+In the TUI, `/local`, `/remote`, and `/auto` control routing, `/agent explore` switches agents, `/goal <objective>` keeps working across turns until the objective is met, `/rename` names the session, `/usage` shows spend and savings, and `esc` cancels. The status line shows how much of each prompt the provider served from its cache.
 
 The TUI shows a proposed edit before asking for permission:
 
