@@ -4,7 +4,8 @@
  */
 import { commandsFor } from '@switchback/client/commands';
 import { pickCopy } from '@switchback/client/copy';
-import { formatSubagents, speedLabel } from '@switchback/client/format';
+import { speedLabel } from '@switchback/client/format';
+import { formatSubagents } from '@switchback/client/subagent-format';
 import {
   activeTab,
   closeTab,

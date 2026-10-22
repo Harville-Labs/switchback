@@ -4,6 +4,12 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **Asking for subagents gets you subagents.** "Use 4 subagents to…" starts four, in parallel, each with its own brief and files; with no number the model uses as few as the work needs. Two subagents never edit the same file: each gets its own files or its own worktree. Subagents end with a short report the parent can combine, cut to 30,000 characters
+- **A built-in `review` agent.** "Have a reviewer check it" sends a read-only reviewer over the change, which lists bugs and missed cases with file and line
+- **Subagents waiting for a slot show as waiting.** Past `subagents.maxConcurrent`, a subagent's row says `waiting for a free slot` until it starts (`subagent.queued` in the protocol), and a running row shows the model it's on
+- **The mock provider fans out `use 3 subagents to <goal>`,** so `--mock` demos orchestration without a model
+
 ## [2.3.0] - 2026-10-21
 
 ### Added

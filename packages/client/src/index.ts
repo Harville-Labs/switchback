@@ -9,6 +9,7 @@ export * from './models.ts';
 export * from './session-scope.ts';
 export * from './setup.ts';
 export * from './spawn.ts';
+export * from './subagent-format.ts';
 export * from './tabs.ts';
 export * from './tool-display.ts';
 export * from './usage.ts';

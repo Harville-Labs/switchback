@@ -102,7 +102,31 @@ export class Subagents {
     const runSignal = background ? parent.bgController.signal : signal;
 
     const run = async (): Promise<SubagentResult> => {
-      await slots.acquire(runSignal);
+      if (!slots.tryAcquire()) {
+        this.host.emit({
+          type: 'subagent.queued',
+          ...scope(parent),
+          childSessionId: child.header.id,
+          agent,
+          task: description,
+          ...(background ? { background } : {}),
+          ...(model ? { model } : {}),
+        });
+        try {
+          await slots.acquire(runSignal);
+        } catch (err) {
+          // Cancelled before it started: close its row.
+          this.host.emit({
+            type: 'subagent.completed',
+            ...scope(parent),
+            childSessionId: child.header.id,
+            agent,
+            ok: false,
+            ...(background ? { background } : {}),
+          });
+          throw err;
+        }
+      }
       try {
         this.host.emit({
           type: 'subagent.started',

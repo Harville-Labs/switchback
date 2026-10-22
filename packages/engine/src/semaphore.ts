@@ -3,6 +3,13 @@ export class Semaphore {
 
   constructor(private available: number) {}
 
+  /** Take a slot only if one is free now. */
+  tryAcquire(): boolean {
+    if (this.available <= 0) return false;
+    this.available--;
+    return true;
+  }
+
   async acquire(signal?: AbortSignal): Promise<void> {
     if (this.available > 0) {
       this.available--;

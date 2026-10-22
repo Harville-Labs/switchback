@@ -169,6 +169,13 @@ describe('switchback run for scripts', () => {
     });
   });
 
+  test('the mock fans "use 3 subagents to" out and combines the reports', async () => {
+    const r = await runCli('--output', 'json', 'use 3 subagents to map the auth flow');
+    expect(r.code).toBe(0);
+    const { result } = JSON.parse(r.stdout) as { result: string };
+    for (const n of [1, 2, 3]) expect(result).toContain(`Part ${n} of 3: map the auth flow`);
+  });
+
   test('a refused tool call exits 3; --deny refuses even with --yes', async () => {
     expect((await runCli(bash)).code).toBe(3);
     const r = await runCli('--yes', '--deny', 'bash', '--output', 'events', bash);

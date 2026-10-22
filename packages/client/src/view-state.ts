@@ -47,8 +47,11 @@ export type ViewItem =
       id: string;
       agent: string;
       task: string;
-      status: 'running' | 'ok' | 'error';
+      /** `queued`: waiting for a free slot (`subagents.maxConcurrent`). */
+      status: 'queued' | 'running' | 'ok' | 'error';
       tier?: Tier;
+      /** The model the router picked for its latest step. */
+      routed?: string;
       activity?: string;
       toolCalls: number;
       /** The parent didn't wait; the report arrives later as a message. */

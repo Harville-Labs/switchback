@@ -11,6 +11,7 @@
     "./models": "./src/models.ts",
     "./copy": "./src/copy.ts",
     "./commands": "./src/commands.ts",
+    "./subagent-format": "./src/subagent-format.ts",
     "./tabs": "./src/tabs.ts",
     "./tool-display": "./src/tool-display.ts",
     "./usage": "./src/usage.ts",

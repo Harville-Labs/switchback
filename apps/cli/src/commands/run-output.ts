@@ -41,6 +41,8 @@ export function eventPrinter(output: RunOutput, sessionId: string): (e: EngineEv
         return err(reviewLines({ ...e, kind: 'review', id: e.turnId }).join('\n'));
       case 'secrets.redacted':
         return err(redactedLabel(e.kinds, e.model));
+      case 'subagent.queued':
+        return err(`↳ ${e.agent}: ${e.task} (waiting for a free slot)`);
       case 'subagent.started':
         return err(`↳ ${e.agent}: ${e.task}`);
       case 'error':

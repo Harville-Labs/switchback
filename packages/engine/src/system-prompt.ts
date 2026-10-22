@@ -20,7 +20,7 @@ export function switchbackGuide(delegates: boolean): string {
   ];
   if (delegates)
     lines.push(
-      '- **Subagents (task).** Delegate a self-contained piece of work, such as a broad search, an independent change, or a review, to one of Switchback\'s agents. Each runs on its own model with a fresh context and shows up as its own tab, which the user can open to watch it. Give a complete brief: it can\'t see this conversation. Start several in one response to run them in parallel; with background: true, its report arrives later as a message while you keep working. For parallel edits, use isolation: "worktree" and bring the branch back with merge_worktree. When the user asks for a subagent, use this tool rather than any subagent feature of your own.',
+      '- **Subagents (task).** Delegate self-contained work, such as a broad search, an independent change, or a review, to one of Switchback\'s agents. Each gets a fresh context, its own model, and a tab the user can open to watch it. When the user asks for subagents, use this tool rather than any subagent feature of your own, and start exactly as many as they ask for; otherwise use as few as the work needs. Split the work into independent pieces and start them all in one response so they run in parallel. Give each a complete brief, since it can\'t see this conversation, and never let two edit the same file: give each its own files, or use isolation: "worktree" and bring the branch back with merge_worktree. Combine their reports into one answer. With background: true, a report arrives later as a message while you keep working.',
     );
   lines.push(
     "- **Escalation (escalate).** You are one of several models the user has set up; some are stronger, and may cost money. When the task is beyond you (you keep failing at it, it needs deeper reasoning than you can give, or you are unsure of a change that matters), call escalate with a short reason. The work then moves to the next model up, if there is one and the user's settings allow it; the user may be asked first. Don't escalate for routine work or before trying.",
@@ -28,6 +28,10 @@ export function switchbackGuide(delegates: boolean): string {
   );
   return lines.join('\n');
 }
+
+/** A subagent's parent sees only its last message, and combines it with others'. */
+const REPORTING =
+  "# Reporting back\nYou are a subagent: another agent gave you this task and will see only your final message. Stay within the files and scope your brief gives you. End with a short report: what you found or changed (with file paths and line numbers), anything you couldn't do, and anything the caller should check. Leave out the steps you took.";
 
 export interface SystemPromptParts {
   agent: AgentDefinition;
@@ -44,6 +48,8 @@ export interface SystemPromptParts {
   session?: string;
   /** The skills section (names and descriptions; the skill tool loads the rest). */
   skills?: string;
+  /** Set for a subagent's session: it is told that its last message is its report. */
+  subagent?: boolean;
 }
 
 /**
@@ -61,6 +67,7 @@ export function systemPrompt({
   project,
   session,
   skills,
+  subagent,
 }: SystemPromptParts): string {
   const isolated =
     root !== workspaceRoot
@@ -71,6 +78,7 @@ export function systemPrompt({
     `# Environment\nWorkspace root: ${root}${isolated}\nPlatform: ${process.platform}\nShell for the bash tool: ${shell}\nFile paths in tool calls are relative to the workspace root.`,
     switchbackGuide(!agent.tools || agent.tools.includes('task')),
   ];
+  if (subagent) sections.push(REPORTING);
   if (user) sections.push(`# ${INSTRUCTION_HEADINGS.user}\n${user.trim()}`);
   if (project) sections.push(`# ${INSTRUCTION_HEADINGS.project}\n${project.trim()}`);
   if (session) sections.push(`# Instructions for this session\n${session.trim()}`);

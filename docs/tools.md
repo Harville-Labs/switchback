@@ -10,7 +10,7 @@ What the model can call, in the fixed order it sees them (the order is part of t
 | `edit` | edit | Replace exact text in a file; the prompt shows a diff |
 | `write` | edit | Create or overwrite a file; the prompt shows a diff |
 | `bash` | bash | Run a shell command in the [sandbox](permissions.md#sandbox); `background: true` for long-running ones |
-| `task` | none | Delegate to a subagent ([subagents.md](subagents.md)) |
+| `task` | none | Delegate to a subagent ([subagents.md](subagents.md)). Several calls in one response run in parallel, up to `subagents.maxConcurrent` |
 | `exit_plan_mode` | none | Present a plan for approval in [plan mode](permissions.md#modes) (top-level sessions only) |
 | `bash_output` | none | Read new output from a background shell |
 | `kill_shell` | none | Stop a background shell |
