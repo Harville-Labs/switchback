@@ -164,7 +164,7 @@ export async function mergeWorktree(repo: string, branch: string): Promise<strin
   if (blocked) throw new Error(blocked);
   if (!Number(await git(repo, ['rev-list', '--count', `HEAD..${branch}`])))
     return `${branch} is already merged; nothing to do.`;
-  const stat = await git(repo, ['diff', '--shortstat', 'HEAD...' + branch]);
+  const stat = await git(repo, ['diff', '--shortstat', `HEAD...${branch}`]);
   return serialized(repo, async () => {
     const named = await git(repo, ['config', 'user.email']).catch(() => '');
     const identity = named

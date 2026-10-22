@@ -13,8 +13,8 @@ import {
   speedLabel,
   tailLines,
 } from '@switchback/client/format';
-import { subagentDetail, subagentIcon } from '@switchback/client/subagent-format';
 import { goalLine } from '@switchback/client/goal';
+import { subagentDetail, subagentIcon } from '@switchback/client/subagent-format';
 import {
   type DisplayRow,
   displayRows,

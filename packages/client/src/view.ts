@@ -12,8 +12,8 @@ import {
   type SessionSummary,
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
-import { renamedLabel } from './titles.ts';
 import { goalNotice } from './goal.ts';
+import { renamedLabel } from './titles.ts';
 import {
   agentOf,
   foldCache,
