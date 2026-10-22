@@ -1,4 +1,7 @@
-/** The configured models, and asking providers what they serve now (`models.refresh`). */
+/**
+ * The configured models, asking providers what they serve now
+ * (`models.refresh`), and reading the config again (`config.reload`).
+ */
 import type { ModelRef, Tier } from './transcript.ts';
 
 export interface ModelSummary {
@@ -18,5 +21,12 @@ export interface ModelsRefreshSource {
 export interface ModelsRefreshResult {
   sources: ModelsRefreshSource[];
   /** Every configured model after the refresh. */
+  models: ModelSummary[];
+}
+
+export interface ConfigReloadResult {
+  /** Top-level config keys that changed (`routing`, `models`, ...); empty when nothing did. */
+  changed: string[];
+  /** Every configured model after the reload. */
   models: ModelSummary[];
 }

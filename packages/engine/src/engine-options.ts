@@ -54,8 +54,8 @@ export interface EngineOptions {
   /** Where engine-owned files live (worktrees). Defaults to the switchback data directory. */
   /**
    * Load the config again from disk, as the host loaded it at start (layers,
-   * organization policy). After setup writes a config, the engine applies it
-   * live, so every client of a shared engine sees the new models.
+   * organization policy), for `config.reload` and after setup writes a config.
+   * Unset, `config.reload` fails and the engine keeps the config it started with.
    */
   reloadConfig?: () => Parameters<Engine['applyConfig']>[0];
   /**
