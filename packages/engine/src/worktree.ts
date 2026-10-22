@@ -22,11 +22,21 @@ export interface Worktree {
   base: string;
 }
 
-export async function git(cwd: string, args: string[]): Promise<string> {
+/** `raw` keeps the output byte for byte (file contents); otherwise it's trimmed. */
+export async function git(
+  cwd: string,
+  args: string[],
+  options: { env?: Record<string, string>; raw?: boolean } = {},
+): Promise<string> {
   // An argument array, never a shell string: branch names and paths are not interpreted.
   const proc = Bun.spawn(
     ['git', ...args],
-    hideWindow({ cwd, stdout: 'pipe', stderr: 'pipe' } as const),
+    hideWindow({
+      cwd,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      ...(options.env ? { env: { ...process.env, ...options.env } } : {}),
+    } as const),
   );
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -34,7 +44,7 @@ export async function git(cwd: string, args: string[]): Promise<string> {
     proc.exited,
   ]);
   if (code !== 0) throw new Error(`git ${args[0]} failed: ${err.trim() || out.trim()}`);
-  return out.trim();
+  return options.raw ? out : out.trim();
 }
 
 /**

@@ -183,6 +183,7 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
       reviews.noteEdit(s, path, writer);
       controls.noteCheckpoint(s, path);
     },
+    noteWriter: (s, writer) => reviews.noteWriter(s, writer),
     skills: () => library.skills(),
     configFiles,
     validate: (file, content) =>

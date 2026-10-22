@@ -201,7 +201,8 @@ export class TurnRunner {
         ? await this.appendPrompt(session, text, extra, options.private)
         : undefined;
       session.signals.startUserTurn();
-      if (session.depth === 0) session.turnEdits = new Map();
+      const review = options.review ?? this.host.rolesOf(session).review.mode === 'auto';
+      if (session.depth === 0) await this.deps.reviews.beginTurn(session, review && !!text);
       // A blocked prompt never reaches the model; the turn ends the usual way.
       if (blocked) throw new Error(`A UserPromptSubmit hook blocked the prompt: ${blocked}`);
       stopReason = await this.deps.loop.run(session, route, turnId, controller.signal);
@@ -233,7 +234,6 @@ export class TurnRunner {
         });
         stopReason = await this.deps.loop.run(session, route, turnId, controller.signal);
       }
-      const review = options.review ?? this.host.rolesOf(session).review.mode === 'auto';
       if (review && session.depth === 0 && stopReason === 'end_turn' && text)
         stopReason = await this.deps.reviews.reviewTurn(
           session,

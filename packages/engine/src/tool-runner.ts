@@ -36,6 +36,7 @@ export interface ToolRunnerDeps {
   ): Promise<SubagentResult>;
   /** An edit or write is about to run; review remembers the file's content first. */
   noteEdit(s: LiveSession, path: string, writer: string): void;
+  noteWriter(s: LiveSession, writer: string): void;
   skills(): Map<string, Skill>;
   configFiles: NonNullable<ToolContext['configFiles']>;
   validate: NonNullable<ToolContext['validate']>;
@@ -196,6 +197,7 @@ export class ToolRunner {
       ran = true;
       if (tool.name === 'edit' || tool.name === 'write')
         this.deps.noteEdit(s, (parsed.data as { path: string }).path, writer);
+      else if (tool.mutating) this.deps.noteWriter(s, writer);
       try {
         const result = await tool.run(parsed.data, callCtx);
         if (typeof result === 'string') output = result;

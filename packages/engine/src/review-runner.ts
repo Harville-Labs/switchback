@@ -1,7 +1,7 @@
 /**
- * Review of edits by another model (docs/review.md): remember what each file
- * held before a turn changed it, ask a reviewer about the diff, and hand
- * `revise` findings back to the model.
+ * Review of edits by another model (docs/review.md): remember what the
+ * workspace held before a turn changed it, ask a reviewer about the diff of
+ * every file the turn changed, and hand `revise` findings back to the model.
  */
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { type RoutePreference, type StopReason, textOf } from '@switchback/protocol';
@@ -11,6 +11,7 @@ import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactSecrets } from './privacy.ts';
 import {
+  type FileChange,
   feedbackText,
   parseReview,
   REVIEWER_PROMPT,
@@ -19,6 +20,7 @@ import {
   turnDiff,
 } from './review.ts';
 import { resolveInWorkspace, toWorkspacePath } from './tools/index.ts';
+import { changesSince, snapshotWorkspace } from './turn-changes.ts';
 
 type Loop = (
   s: LiveSession,
@@ -35,24 +37,70 @@ export class ReviewRunner {
     private readonly loop: Loop,
   ) {}
 
+  /**
+   * Start recording a top-level turn's changes. With review on, the workspace
+   * is snapshotted first, so changes made any way at all (shell commands,
+   * commits) are reviewed, not only edit and write.
+   */
+  async beginTurn(s: LiveSession, review: boolean): Promise<void> {
+    const base = review ? await snapshotWorkspace(this.host.rootOf(s)) : undefined;
+    s.turnChanges = { edits: new Map(), writers: new Set(), ...(base ? { base } : {}) };
+  }
+
+  /** The top-level turn's change record, when `s` works in the same checkout. */
+  private changesOf(s: LiveSession) {
+    const top = this.host.top(s);
+    // An isolated subagent's edits are on its own branch, reported with their own diff.
+    if (this.host.rootOf(s) !== this.host.rootOf(top)) return undefined;
+    return top.turnChanges;
+  }
+
+  /** A model ran a tool that can change files other than through edit and write. */
+  noteWriter(s: LiveSession, writer: string): void {
+    this.changesOf(s)?.writers.add(writer);
+  }
+
   /** Remember a file's content before its first edit this turn, on the top-level session. */
   noteEdit(s: LiveSession, path: string, writer: string): void {
     const top = this.host.top(s);
-    // An isolated subagent's edits are on its own branch, reported with their own diff.
-    if (!top.turnEdits || this.host.rootOf(s) !== this.host.rootOf(top)) return;
+    const changes = this.changesOf(s);
+    if (!changes) return;
     let file: string;
     try {
       file = resolveInWorkspace(this.host.rootOf(s), path);
     } catch {
       return; // the tool will report the bad path
     }
-    const entry = top.turnEdits.get(file) ?? {
+    const entry = changes.edits.get(file) ?? {
       path: toWorkspacePath(realpathSync(this.host.rootOf(top)), file) ?? file,
       before: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
       writers: new Set<string>(),
     };
     entry.writers.add(writer);
-    top.turnEdits.set(file, entry);
+    changes.edits.set(file, entry);
+  }
+
+  /**
+   * Every file the turn changed: the snapshot comparison where there is one,
+   * and edit and write's own record, which also covers files git ignores.
+   */
+  private async turnFiles(s: LiveSession): Promise<{ files: FileChange[]; more: number }> {
+    const changes = s.turnChanges;
+    if (!changes) return { files: [], more: 0 };
+    const found = changes.base
+      ? await changesSince(this.host.rootOf(s), changes.base)
+      : { files: [], more: 0 };
+    const byPath = new Map(found.files.map((f) => [f.path, f]));
+    for (const [file, e] of changes.edits)
+      byPath.set(e.path, {
+        path: e.path,
+        before: e.before,
+        after: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
+      });
+    return {
+      files: [...byPath.values()].filter((f) => f.binary || f.before !== f.after),
+      more: found.more,
+    };
   }
 
   /**
@@ -74,16 +122,13 @@ export class ReviewRunner {
     let at = 0;
     let revisedBy = -1;
     for (let round = 1; round <= rounds && !signal.aborted; round++) {
-      const edits = [...(s.turnEdits?.entries() ?? [])];
-      if (!edits.length) return stopReason;
-      const writers = new Set(edits.flatMap(([, e]) => [...e.writers]));
-      const diff = turnDiff(
-        edits.map(([file, e]) => ({
-          path: e.path,
-          before: e.before,
-          after: existsSync(file) ? readFileSync(file, 'utf8') : undefined,
-        })),
-      );
+      const { files, more } = await this.turnFiles(s);
+      if (!files.length) return stopReason;
+      const writers = new Set([
+        ...(s.turnChanges?.writers ?? []),
+        ...[...(s.turnChanges?.edits.values() ?? [])].flatMap((e) => [...e.writers]),
+      ]);
+      const diff = turnDiff(files, undefined, more);
       if (!diff) return stopReason;
       const pick = this.pickReviewer(s, ladder, at, writers);
       if ('skip' in pick) {
@@ -104,7 +149,7 @@ export class ReviewRunner {
         pick.model,
         request,
         diff,
-        edits.length,
+        files.length + more,
         round,
         turnId,
         signal,
