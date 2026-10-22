@@ -17,7 +17,7 @@ Next to each config file, `agents/`, `commands/`, and `skills/` folders hold [ag
 
 `SWITCHBACK_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/AGENTS.md`, `<dir>/agents/`, `<dir>/commands/`, `<dir>/skills/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
-Config files aren't watched. An edit made with `switchback config edit`, `switchback init` in another terminal, or your editor takes effect when you type `/reload` in the TUI or VS Code, or with the next engine. `/reload` reads the user, project, and organization config again, applies it to the running engine (every client attached to it, every session), and says which settings changed; a file that doesn't parse is reported with its path and the config in effect stays. Organization-enforced settings still win after a reload. Setup run from a client (`/init`) applies what it writes right away. Versions before 1.1.0 kept files in `~/.config/switchback` and `~/.local/share/switchback`; nothing reads those now, and `switchback doctor` points them out.
+Config files aren't watched. An edit made with `switchback config edit`, `switchback init` in another terminal, or your editor takes effect when you type `/reload` in the TUI or VS Code, or with the next engine. `/reload` reads the user, project, and organization config again, applies it to the running engine (every client attached to it, every session), and says which settings changed; a file that doesn't parse is reported with its path and the config in effect stays. Organization-enforced settings still win after a reload. Setup run from a client (`/init`) applies what it writes right away, and so does a change the model makes with its `set_config` or `set_roles` tool, which you approve first ([tools.md](tools.md#asking-about-switchback)). The model reads the settings in effect with `config`, which hides API keys, tokens, and `headers` and `env` values. Versions before 1.1.0 kept files in `~/.config/switchback` and `~/.local/share/switchback`; nothing reads those now, and `switchback doctor` points them out.
 
 ## Setting up
 
@@ -290,7 +290,7 @@ VS Code notifies only when you can't see the chat: its window isn't focused, or 
 | `retry.attempts` | 5 | Retries of a model call that failed with a retryable error (connection, 429, 5xx) before any output streamed. After the last one, the provider is marked down and the router falls back. 0 falls back at once |
 | `retry.initialDelayMs` | 1000 | Delay before the first retry; each later retry doubles it, with jitter |
 | `retry.maxDelayMs` | 30000 | Longest delay between retries |
-| `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md)) |
+| `compaction.enabled` | `true` | Summarize older history automatically when the prompt gets large ([ADR 0008](adr/0008-append-only-compaction.md), [ADR 0027](adr/0027-map-reduce-compaction.md)). `/autocompact` overrides it for one session |
 | `compaction.threshold` | 0.7 | Fraction of the largest local context window (the remote window when there's no local model) that triggers it |
 | `compaction.keepRecent` | 0.25 | Fraction of that window kept verbatim at the end of the conversation |
 

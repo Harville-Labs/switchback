@@ -76,6 +76,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'summarize earlier messages now (also automatic)',
   },
   {
+    name: 'autocompact',
+    args: '[on|off] [--save]',
+    group: 'Session',
+    description: 'turn automatic compaction on or off; --save keeps it for new sessions',
+  },
+  {
     name: 'rewind',
     group: 'Session',
     description: 'go back to before a prompt: files, the conversation, or both',
@@ -138,10 +144,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     clients: ['tui'],
   },
   {
-    name: 'escalate',
-    args: '<step...>|none',
+    name: 'ladder',
+    args: '[<step...>|none]',
     group: 'Models',
-    description: 'the escalation ladder; a step is a model, or a,b alternatives',
+    description:
+      'the escalation ladder (no argument: edit it); a step is a model, or a,b alternatives',
   },
   {
     name: 'review',

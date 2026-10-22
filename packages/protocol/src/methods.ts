@@ -284,6 +284,23 @@ export interface SessionEscalateResult {
 export const SessionCompactParams = z.object({ sessionId: z.string() });
 export type SessionCompactParams = z.infer<typeof SessionCompactParams>;
 
+/** Without `enabled`, only reports; `save` makes the choice the default for new sessions. */
+export const SessionSetAutoCompactParams = z.object({
+  sessionId: z.string(),
+  enabled: z.boolean().optional(),
+  save: z.boolean().optional(),
+});
+export type SessionSetAutoCompactParams = z.infer<typeof SessionSetAutoCompactParams>;
+
+export interface AutoCompactStatus {
+  enabled: boolean;
+  /** Fraction of `window` at which a turn compacts first. */
+  threshold: number;
+  /** The context window compaction keeps the session inside; absent with no usable model. */
+  window?: number;
+  savedTo?: string;
+}
+
 export const SessionSetModeParams = z.object({ sessionId: z.string(), mode: PermissionMode });
 export type SessionSetModeParams = z.infer<typeof SessionSetModeParams>;
 
@@ -468,6 +485,8 @@ export interface Methods {
   'session.escalate': { params: SessionEscalateParams; result: SessionEscalateResult };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
   'session.compact': { params: SessionCompactParams; result: { compacted: boolean } };
+  /** Whether this session compacts on its own before a turn outgrows the window (`/autocompact`). */
+  'session.setAutoCompact': { params: SessionSetAutoCompactParams; result: AutoCompactStatus };
   /** Set the session's title; automatic retitling leaves it alone from then on. */
   'session.rename': { params: SessionRenameParams; result: SessionSummary };
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };

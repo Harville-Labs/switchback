@@ -15,6 +15,7 @@ import { ladderSteps, type ModelInfo, type Router, stepOf } from '@switchback/ro
 import pRetry from 'p-retry';
 import { isAgentCli, runAgentCliTurn } from './agent-cli-turn.ts';
 import { type AgentDefinition, reasoningEffort } from './agents.ts';
+import { callSpeed } from './call-speed.ts';
 import { contextOf } from './compaction.ts';
 import type { Compactor } from './compactor.ts';
 import { estimateEscalationCost } from './estimate.ts';
@@ -22,13 +23,15 @@ import type { ExternalRuntimes } from './external-runtime.ts';
 import { hasImages, withoutImages } from './images.ts';
 import type { UsageLedger } from './ledger.ts';
 import { type EngineHost, type LiveSession, scope } from './live-session.ts';
-import { allowsMcpTool, type McpHub } from './mcp/hub.ts';
+import type { McpHub } from './mcp/hub.ts';
 import { type ModelDirectory, withSampling } from './model-directory.ts';
 import { redactOutbound } from './privacy.ts';
 import { PendingPrompts } from './prompts.ts';
+import { sessionTools } from './session-tools.ts';
 import type { Subagents } from './subagents.ts';
+import { countTokens } from './tokens.ts';
 import type { Interaction, ToolCall, ToolRunner } from './tool-runner.ts';
-import { toolSpec, toolsFor } from './tools/index.ts';
+import { forContext } from './tools/index.ts';
 
 export interface AgentLoopDeps {
   /** Runs turns on coding agent CLI models (Claude Code, Codex). */
@@ -84,7 +87,7 @@ export class AgentLoop {
       if (signal.aborted) return 'cancelled';
       await models.refreshHealth(signal);
       await this.deps.beforeStep(s, turnId);
-      if (config().compaction.enabled) {
+      if (this.deps.compactor.autoEnabled(s)) {
         // A failed summary costs context, not the turn: routing still has
         // overflow escalation to fall back on.
         await this.deps.compactor.compact(s, specsJson, signal, false, turnId).catch((err) => {
@@ -146,6 +149,13 @@ export class AgentLoop {
       refusalRetry = false;
       s.escalateNow = false;
       const { model, rule, reason, escalated } = decision;
+      // A small model gets fewer tools, which leaves it more room to answer.
+      const offered = forContext(tools, model.contextWindow);
+      const offeredSpecs = forContext(specs, model.contextWindow);
+      const promptSize =
+        offeredSpecs === specs
+          ? inputTokens
+          : inputTokens - countTokens(specsJson) + countTokens(JSON.stringify(offeredSpecs));
       this.host.emit({
         type: 'route.decided',
         ...scope(s),
@@ -168,12 +178,12 @@ export class AgentLoop {
       if (isAgentCli(provider)) {
         s.signals.recordTurn(decision.step, escalated);
         const session = {
-          tools,
+          tools: offered,
           catalog,
           run: async (call: ToolCall) => {
             const [result] = await this.deps.tools.run(
               s,
-              tools,
+              offered,
               catalog,
               [call],
               turnId,
@@ -203,8 +213,8 @@ export class AgentLoop {
           s,
           provider,
           model,
-          specs,
-          inputTokens,
+          offeredSpecs,
+          promptSize,
           reasoningEffort(this.host.config(), agent, model.alias, s),
           turnId,
           signal,
@@ -273,7 +283,7 @@ export class AgentLoop {
 
       const results = await this.deps.tools.run(
         s,
-        tools,
+        offered,
         catalog,
         toolCalls,
         turnId,
@@ -296,22 +306,7 @@ export class AgentLoop {
   toolSetup(s: LiveSession) {
     const agent = this.deps.agent(s.header.agent);
     if (!agent) throw new Error(`agent "${s.header.agent}" no longer exists`);
-    const config = this.host.config();
-    const canDelegate = s.depth < config.subagents.maxDepth;
-    const mcpTools = (this.deps.mcp()?.tools() ?? []).filter(
-      (t) => !agent.tools || allowsMcpTool(agent.tools, t.name),
-    );
-    // Built-ins first in their fixed order, then MCP tools by name: a stable cache prefix.
-    const catalog = this.deps
-      .subagentsOf(agent)
-      .filter((a) => a.name !== s.header.agent || s.depth === 0)
-      .map((a) => ({ name: a.name, description: a.description }));
-    // No task tool when there's no one to delegate to (`agents: []`, or depth).
-    const tools = [...toolsFor(agent.tools, s.depth === 0), ...mcpTools].filter(
-      (t) => t.name !== 'task' || (canDelegate && catalog.length > 0),
-    );
-    const specs = tools.map((t) => toolSpec(t, { agentCatalog: catalog }));
-    return { agent, tools, catalog, specs, specsJson: JSON.stringify(specs) };
+    return { agent, ...sessionTools(s, agent, this.host.config().subagents.maxDepth, this.deps) };
   }
 
   /**
@@ -491,33 +486,4 @@ export class AgentLoop {
     s.redacted = r.found.length;
     return r;
   }
-}
-
-/** Below this many output tokens, a rate mostly measures latency; it isn't reported. */
-const MIN_TOKENS_FOR_SPEED = 16;
-/**
- * Below this much decoding time, a rate measures timer noise: an answer that arrives in one
- * chunk (a mock, a cached reply) decodes in a millisecond or two and reads as 500k tok/s.
- */
-const MIN_MS_FOR_SPEED = 50;
-
-/** A call's output and speed, from when it started, first streamed, and ended (ms). */
-export function callSpeed(
-  outputTokens: number,
-  started: number,
-  firstToken: number | undefined,
-  ended: number,
-): { outputTokens: number; tokensPerSecond?: number; firstTokenMs?: number; decodeMs?: number } {
-  // Decoding speed: from the first token, so the prompt's processing time doesn't count.
-  const ms = ended - (firstToken ?? started);
-  return {
-    outputTokens,
-    ...(outputTokens >= MIN_TOKENS_FOR_SPEED && ms >= MIN_MS_FOR_SPEED
-      ? {
-          tokensPerSecond: Math.round((outputTokens / ms) * 10_000) / 10,
-          decodeMs: Math.round(ms),
-        }
-      : {}),
-    ...(firstToken !== undefined ? { firstTokenMs: Math.round(firstToken - started) } : {}),
-  };
 }

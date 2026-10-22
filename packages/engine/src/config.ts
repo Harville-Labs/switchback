@@ -444,14 +444,21 @@ export function configJsonSchema(): Record<string, unknown> {
 /** Config keys whose values are treated as secrets. */
 export const SECRET_KEY = /key|token|secret|password/i;
 
-/** Copy of a config with secret-looking values replaced, for display. */
-export function redactConfig(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactConfig);
+/**
+ * Copy of a config with secret-looking values replaced, for display and for
+ * the config tool. Every value under `headers` or `env` counts, whatever its
+ * name: `Authorization`, `Cookie`, and `GITHUB_PAT` all carry credentials.
+ */
+export function redactConfig(value: unknown, parent?: string): unknown {
+  if (Array.isArray(value)) return value.map((v) => redactConfig(v));
   if (isPlainObject(value)) {
+    const all = parent === 'headers' || parent === 'env';
     return Object.fromEntries(
       Object.entries(value).map(([k, v]) => [
         k,
-        SECRET_KEY.test(k) && typeof v === 'string' && v ? '<redacted>' : redactConfig(v),
+        (all || SECRET_KEY.test(k)) && typeof v === 'string' && v
+          ? '<redacted>'
+          : redactConfig(v, k),
       ]),
     );
   }

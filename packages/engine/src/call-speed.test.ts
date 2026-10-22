@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import type { EngineEvent } from '@switchback/protocol';
 import { ScriptedProvider } from '@switchback/providers';
-import { callSpeed } from './agent-loop.ts';
+import { callSpeed } from './call-speed.ts';
 import { SwitchbackConfig } from './config.ts';
 import { Engine } from './engine.ts';
 import { groupUsage, type LedgerEntry } from './ledger.ts';

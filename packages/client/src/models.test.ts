@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { InitializeResult, SessionRoles } from '@switchback/protocol';
 import { formatModels, MODELS_HINT } from './format.ts';
 import {
@@ -6,8 +6,11 @@ import {
   currentChange,
   formatRefresh,
   formatReload,
+  joinRung,
   modelChoices,
+  moveRung,
   nextModel,
+  toggleRung,
 } from './models.ts';
 
 const models: InitializeResult['models'] = [
@@ -131,4 +134,33 @@ test('a reload names what changed, or says nothing did', () => {
   expect(formatReload({ changed: ['routing', 'models'], models })).toBe(
     'Config reloaded. Changed: routing, models. 1 models available.',
   );
+});
+
+describe('the ladder editor', () => {
+  test('space adds a model as the last step, or takes it off wherever it is', () => {
+    expect(toggleRung([['a']], 'b')).toEqual([['a'], ['b']]);
+    expect(toggleRung([['a', 'b'], ['c']], 'b')).toEqual([['a'], ['c']]);
+    expect(toggleRung([['a'], ['b']], 'a')).toEqual([['b']]);
+  });
+
+  test('a step moves one place at a time and stops at the ends', () => {
+    expect(moveRung([['a'], ['b'], ['c']], 'c', -1)).toEqual([['a'], ['c'], ['b']]);
+    expect(moveRung([['a'], ['b']], 'a', -1)).toEqual([['a'], ['b']]);
+    expect(moveRung([['a'], ['b']], 'b', 1)).toEqual([['a'], ['b']]);
+    expect(moveRung([['a']], 'x', 1)).toEqual([['a']]);
+  });
+
+  test('comma joins a model to the step before it, and splits it back out', () => {
+    const joined = joinRung([['a'], ['b'], ['c']], 'b');
+    expect(joined).toEqual([['a', 'b'], ['c']]);
+    expect(joinRung(joined, 'b')).toEqual([['a'], ['b'], ['c']]);
+    expect(joinRung([['a'], ['b']], 'a')).toEqual([['a'], ['b']]);
+  });
+
+  test('the editor lists models without their step labels; it shows steps itself', () => {
+    const choices = modelChoices(models, roles, 'escalate');
+    expect(choices.find((c) => c.alias === 'opus')?.roles).toEqual([]);
+    expect(choices.find((c) => c.alias === 'large')?.roles).toEqual(['current']);
+    expect(choices.some((c) => c.current)).toBe(false);
+  });
 });

@@ -1,10 +1,12 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import stringWidth from 'string-width';
 import {
+  autoCompactLabel,
   effortNotice,
   estimateLabel,
   formatAgents,
   modeIcon,
+  parseAutoCompact,
   parseEffort,
   permissionWhy,
   sessionEffort,
@@ -162,4 +164,23 @@ test('cost estimates round to cents, with a floor for tiny ones', () => {
   expect(estimateLabel(0.004)).toBe('≈ <$0.01');
   expect(estimateLabel(0.0412)).toBe('≈ $0.04');
   expect(estimateLabel(1.5)).toBe('≈ $1.50');
+});
+
+describe('/autocompact', () => {
+  test('takes on, off, or nothing, with --save anywhere', () => {
+    expect(parseAutoCompact([])).toEqual({ save: false });
+    expect(parseAutoCompact(['OFF'])).toEqual({ enabled: false, save: false });
+    expect(parseAutoCompact(['--save', 'on'])).toEqual({ enabled: true, save: true });
+    expect(parseAutoCompact(['maybe'])).toBeUndefined();
+    expect(parseAutoCompact(['on', 'off'])).toBeUndefined();
+  });
+
+  test('says when compaction starts and where the choice was saved', () => {
+    expect(autoCompactLabel({ enabled: true, threshold: 0.7, window: 100_000 })).toBe(
+      'Auto-compact is on: older messages are summarized at ~70k tokens (70% of the window).',
+    );
+    expect(autoCompactLabel({ enabled: false, threshold: 0.7, savedTo: '/c.json' })).toBe(
+      'Auto-compact is off: /compact summarizes on demand. Saved to /c.json.',
+    );
+  });
 });

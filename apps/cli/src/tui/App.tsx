@@ -1,7 +1,6 @@
 /**
- * The terminal UI, full screen: the transcript fills the window above a dock
- * (prompts, the working line, the input, the status bar) that stays put at
- * the bottom. The transcript scrolls with Page Up/Down and the mouse wheel.
+ * The terminal UI, full screen: the transcript (Page Up/Down, mouse wheel) fills the
+ * window above a dock that stays put: prompts, the working line, input, status bar.
  */
 import {
   activeTab,
@@ -14,7 +13,6 @@ import {
   initialTabs,
   initialView,
   isCustomCommand,
-  modelChoices,
   nextMode,
   openTab,
   replaceActive,
@@ -44,13 +42,15 @@ import { useSubagentFocus } from './focus.ts';
 import { PromptHistory } from './history.ts';
 import { useAppKeys } from './keys.ts';
 import { ModelPicker } from './ModelPicker.tsx';
+import type { MouseInput } from './mouse.ts';
 import { Pinned } from './Pinned.tsx';
 import { type PastedImage, PromptInput } from './PromptInput.tsx';
 import { EscalationPrompt, type PermissionAnswer, PermissionPrompt } from './Prompts.tsx';
 import { RewindPicker } from './RewindPicker.tsx';
+import { RolePicker } from './RolePicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
 import { type Opening, useSetup } from './SetupPanel.tsx';
-import { cycleModel, pickModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
+import { cycleModel, resume, runSlashCommand, type SlashContext } from './slash.ts';
 import { Dashboard, TabBar, useTabBar } from './Tabs.tsx';
 import { useScroll, useTranscriptLines, Viewport } from './Transcript.tsx';
 import { saveTheme, THEMES, ThemeContext, type ThemeName } from './theme.ts';
@@ -413,12 +413,12 @@ export function App({
             />
           ) : null}
           {choosingModel ? (
-            <ModelPicker
+            <RolePicker
               role={choosingModel}
-              choices={modelChoices(init.models, sessionRoles, choosingModel)}
-              onCancel={() => setChoosingModel(undefined)}
-              onCommand={(text) => void runSlashCommand(slash, text)}
-              onPick={(alias) => void pickModel(slash, sessionRoles, choosingModel, alias)}
+              models={init.models}
+              roles={sessionRoles}
+              slash={slash}
+              onClose={() => setChoosingModel(undefined)}
             />
           ) : null}
           {setup.panel}
@@ -437,7 +437,9 @@ export function App({
               }}
             />
           ) : null}
-          {view.running && !permission && !escalation ? <Working view={view} /> : null}
+          {(view.running || view.compacting) && !permission && !escalation ? (
+            <Working view={view} />
+          ) : null}
           <Box borderStyle="round" borderColor={view.running ? 'gray' : theme.brand} paddingX={1}>
             <PromptInput
               focus={!permission && !escalation && !modal}

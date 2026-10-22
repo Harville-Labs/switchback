@@ -83,6 +83,8 @@ describe('bash', () => {
       'skill',
       'docs',
       'escalate',
+      'models',
+      'config',
     ]);
     expect(toolsFor(['read'], false).map((t) => t.name)).toEqual([
       'read',
@@ -90,6 +92,8 @@ describe('bash', () => {
       'skill',
       'docs',
       'escalate',
+      'models',
+      'config',
     ]);
   });
 

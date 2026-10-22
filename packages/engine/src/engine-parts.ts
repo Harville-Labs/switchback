@@ -3,7 +3,7 @@
  * `Engine`. Collaborators reach each other only through the closures here,
  * called after everything is built, and the engine through `EngineHost`.
  */
-import type { EngineEvent } from '@switchback/protocol';
+import type { EngineEvent, SessionRoles, SessionSetRolesParams } from '@switchback/protocol';
 import { AgentCatalog } from './agent-catalog.ts';
 import { AgentLoop } from './agent-loop.ts';
 import { Checkpoints, MemoryCheckpointStore } from './checkpoints.ts';
@@ -32,6 +32,7 @@ import { SessionRegistry } from './session-registry.ts';
 import { skillsSection } from './skills.ts';
 import { MemorySessionStore } from './store.ts';
 import { Subagents } from './subagents.ts';
+import { switchbackControls } from './switchback-controls.ts';
 import { ToolRunner } from './tool-runner.ts';
 import { type CommandRunner, createCommandRunner, shellOf } from './tools/process.ts';
 import { resolveFile } from './tools/tool.ts';
@@ -44,6 +45,10 @@ export interface EngineIo {
   notify(level: 'debug' | 'info' | 'warn' | 'error', message: string): void;
   /** The MCP servers, which the engine restarts when their config changes. */
   mcp(): McpHub | undefined;
+  /** Apply the config files again (`config.reload`); the top-level keys that changed. */
+  reload(): string[];
+  /** `session.setRoles`, which also tells the clients. */
+  setRoles(params: SessionSetRolesParams): SessionRoles & { savedTo?: string };
 }
 
 const newTurnId = () => `turn_${crypto.randomUUID().slice(0, 8)}`;
@@ -193,6 +198,15 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     validate: (file, content) =>
       canonicalConfigFiles.has(file) ? configTextProblem(content) : undefined,
     goals,
+    switchback: (s) =>
+      switchbackControls(s, {
+        models,
+        config: () => options.config,
+        org: () => options.org,
+        roles: (s) => policy.rolesOf(s),
+        reload: () => io.reload(),
+        setRoles: (params) => io.setRoles(params),
+      }),
   });
   const external: ExternalRuntimes = new ExternalRuntimes(host, {
     injected: options.runtimes,

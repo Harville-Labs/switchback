@@ -93,4 +93,11 @@ describe('claudeModels', () => {
       }) as unknown as Query;
     expect(await claudeModels({ query })).toBeUndefined();
   });
+
+  test("can't tell when no Claude Code binary is found", async () => {
+    const query = () => {
+      throw new Error('Native CLI binary for darwin-arm64 not found.');
+    };
+    expect(await claudeModels({ query })).toBeUndefined();
+  });
 });

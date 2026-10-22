@@ -4,6 +4,7 @@
  * as the command palette, since a picker beats typing model names.
  */
 import {
+  autoCompactLabel,
   effortNotice,
   escalateNotice,
   formatAgents,
@@ -16,6 +17,7 @@ import {
   formatUsage,
   formatWorktreeDiff,
   formatWorktrees,
+  parseAutoCompact,
   parseEffort,
   parseMode,
   runGoalCommand,
@@ -71,8 +73,19 @@ export async function runChatCommand(
     case 'roles':
       return args[0] === 'reset' ? chooseRole(engine, 'reset') : chooseModels(engine);
     case 'current':
+      return chooseRole(engine, 'current');
+    case 'ladder':
     case 'escalate':
-      return chooseRole(engine, name);
+      return chooseRole(engine, 'escalate');
+    case 'autocompact': {
+      const change = parseAutoCompact(args);
+      if (!change) return info('usage: /autocompact [on|off] [--save]');
+      const status = await c.request('session.setAutoCompact', {
+        sessionId: session.id,
+        ...change,
+      });
+      return info(autoCompactLabel(status));
+    }
     case 'subagent-model':
       return chooseRole(engine, 'subagents');
     case 'review': {

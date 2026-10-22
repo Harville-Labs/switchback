@@ -127,6 +127,18 @@ export type EngineEvent =
     } & SessionScoped)
   | ({ type: 'escalation.resolved'; requestId: string; approved: boolean } & SessionScoped)
   | ({
+      /**
+       * Compaction is under way, which can take a while on a local model.
+       * `summarize` covers parts of the history, `merge` joins their
+       * summaries, and `end` follows success, failure, or cancellation.
+       */
+      type: 'context.compacting';
+      phase: 'summarize' | 'merge' | 'end';
+      /** Summarizer calls finished, of `total` planned. */
+      done: number;
+      total: number;
+    } & SessionScoped)
+  | ({
       type: 'context.compacted';
       /** Messages now represented by the summary. */
       messages: number;

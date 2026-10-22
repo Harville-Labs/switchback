@@ -66,6 +66,6 @@ function whereConfigLives(ctx: ToolContext): string {
     `- Project config (shared with the team): ${files.project}`,
     `- Your settings for this project only, never committed: ${files.projectLocal}`,
     `- User config (every project): ${files.user}. Editing it asks the user every time, with the diff.`,
-    "Edit these files with the edit tool so comments and formatting survive; an edit that would make a config invalid fails with the reason, so fix it and try again. Settings an organization enforces can't be overridden. The running engine picks up a saved change on its own, without a restart.",
+    "Change a setting with set_config, which keeps comments and applies it at once. Without set_config, edit these files with the edit tool: the running engine doesn't watch them, so tell the user to type /reload to apply the change. Either way, a change that would make a config invalid fails with the reason, so fix it and try again. Settings an organization enforces can't be overridden.",
   ].join('\n');
 }

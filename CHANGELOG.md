@@ -4,6 +4,20 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **The model can read and change Switchback's settings.** `models` lists each model with its tier, context, price, and role in the session, so the model can pick one for a subagent. `config` reads the configuration in effect with secrets hidden. `set_config` changes one setting in a config file and keeps its comments. `set_roles` changes the session's models and escalation ladder. Changes always ask, even in `acceptEdits` or auto-approve, and apply at once ([ADR 0028](docs/adr/0028-agents-change-their-settings.md))
+- **`/autocompact [on|off] [--save]`** turns automatic compaction on or off for a session (`session.setAutoCompact` in the protocol)
+- **`/ladder` edits the escalation ladder.** With no argument it opens an editor in the TUI. `/escalate` still works as an alias
+
+### Changed
+- **Compaction summarizes in parts and merges them.** It leaves out tool output that a later call superseded, summarizes the history in parts, and merges the summaries. Each summary ends with a word-for-word record of your requests, the files changed and read, and the commands that failed. Both clients show its progress as the working status ([ADR 0027](docs/adr/0027-map-reduce-compaction.md))
+- **Models with less than 32k of context get fewer tools,** which leaves them more room to answer. They keep the core tools plus `webfetch`, `websearch`, and `docs`
+- **Exploring takes fewer calls.** `read` on a directory lists its entries, folders first. `grep` can show lines around each match (`context`) or list only the matching files (`filesOnly`)
+
+### Fixed
+- **`/models refresh` finds the `claude` CLI for subscription providers.** The compiled binary failed with "native CLI binary not found"; it now uses the `claude` on your PATH
+- **The model no longer thinks config files reload on their own.** Its instructions say to use `set_config`, or to ask you to type `/reload` after editing a file directly
+
 ## [2.5.0] - 2026-10-22
 
 ### Added

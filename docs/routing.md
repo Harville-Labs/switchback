@@ -90,7 +90,7 @@ Picking a model doesn't drop your fallback: the models that were current stay be
 
 ### Every role
 
-A session can change its own roles without touching any file: `/current`, `/escalate`, `/review with`, and `/subagent-model` in the TUI ([clients/tui.md](clients/tui.md)), or **Choose Models for This Session** in VS Code. Changes apply to that session and its subagents, show as `(this session)` in `/roles`, and are shared with every client attached to the session. Add `--save` (or **Save as Default**) to write them to your user config as the default for new sessions. Keys an organization enforces through its policy can't be changed. The protocol methods are `session.roles` and `session.setRoles` ([protocol.md](protocol.md)).
+A session can change its own roles without touching any file: `/current`, `/ladder`, `/review with`, and `/subagent-model` in the TUI ([clients/tui.md](clients/tui.md)), or **Choose Models for This Session** in VS Code. Changes apply to that session and its subagents, show as `(this session)` in `/roles`, and are shared with every client attached to the session. Add `--save` (or **Save as Default**) to write them to your user config as the default for new sessions. Keys an organization enforces through its policy can't be changed. The protocol methods are `session.roles` and `session.setRoles` ([protocol.md](protocol.md)).
 
 ## Escalating yourself
 

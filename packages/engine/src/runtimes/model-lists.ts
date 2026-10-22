@@ -141,15 +141,19 @@ export async function claudeModels(
       release = r;
     });
   })();
-  const q = query({
-    prompt: idle,
-    options: {
-      settingSources: [],
-      ...(options.executable ? { pathToClaudeCodeExecutable: options.executable } : {}),
-    },
-  });
+  // The SDK's own binary isn't in a compiled Switchback, so look on PATH as the runtime does.
+  const executable = options.executable ?? Bun.which('claude') ?? undefined;
+  let q: Query | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
+    // Throws at once when no Claude Code binary can be found.
+    q = query({
+      prompt: idle,
+      options: {
+        settingSources: [],
+        ...(executable ? { pathToClaudeCodeExecutable: executable } : {}),
+      },
+    });
     const listed = await Promise.race([
       q.supportedModels(),
       new Promise<undefined>((r) => {
@@ -170,6 +174,6 @@ export async function claudeModels(
   } finally {
     clearTimeout(timer);
     release();
-    q.close();
+    q?.close();
   }
 }

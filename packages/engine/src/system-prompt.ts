@@ -24,7 +24,7 @@ export function switchbackGuide(delegates: boolean): string {
     );
   lines.push(
     "- **Escalation (escalate).** You are one of several models the user has set up; some are stronger, and may cost money. When the task is beyond you (you keep failing at it, it needs deeper reasoning than you can give, or you are unsure of a change that matters), call escalate with a short reason. The work then moves to the next model up, if there is one and the user's settings allow it; the user may be asked first. Don't escalate for routine work or before trying.",
-    "- **Switchback itself (docs).** Before you answer a question about Switchback or change its settings (models, routing, budgets, permissions, providers and keys, MCP servers, hooks, agents, skills), read the relevant page with the docs tool. It names the config files; edit them as documented and Switchback picks up the change without a restart. Don't guess at keys or commands.",
+    "- **Switchback itself (docs).** Before you answer a question about Switchback or change its settings (models, routing, budgets, permissions, providers and keys, MCP servers, hooks, agents, skills), read the relevant page with the docs tool. Change settings with set_config, and this session's models and escalation ladder with set_roles; both apply at once. Config files aren't watched: if you edit one directly (when you don't have set_config), tell the user to type /reload to apply it. Don't guess at keys or commands.",
   );
   return lines.join('\n');
 }

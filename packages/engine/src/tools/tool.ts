@@ -1,10 +1,11 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import type { ImagePart } from '@switchback/protocol';
-import type { Effort, ToolSpec } from '@switchback/providers';
+import type { ImagePart, SessionRoles, SessionSetRolesParams, Tier } from '@switchback/protocol';
+import type { Effort, Price, ToolSpec } from '@switchback/providers';
 import { createTwoFilesPatch } from 'diff';
 import { z } from 'zod';
+import type { SwitchbackConfig } from '../config.ts';
 import type { Skill } from '../skills.ts';
 import type { CommandRunner } from './process.ts';
 import type { WebSettings } from './web.ts';
@@ -72,6 +73,42 @@ export interface ToolContext {
   requestEscalation?: (reason: string) => void;
   /** End the session's goal; false when none is active. Only top-level sessions have it (the goal tool). */
   reportGoal?: (status: 'done' | 'blocked', summary: string) => boolean;
+  /** Switchback's own models, settings, and this session's roles (tools/switchback.ts). */
+  switchback?: SwitchbackControls;
+}
+
+/** A configured model as the model tools describe it. */
+export interface ModelListing {
+  alias: string;
+  provider: string;
+  model: string;
+  tier: Tier;
+  contextWindow: number;
+  /** False while its provider is failing health checks. */
+  available: boolean;
+  vision: boolean;
+  /** An endpoint lists it, but no config file names it. */
+  listed: boolean;
+  /** Undefined when the price isn't known; local models are free. */
+  price?: Price;
+}
+
+export interface SwitchbackControls {
+  models(): ModelListing[];
+  /** The session's roles: its own changes over the config. */
+  roles(): SessionRoles;
+  /** The configuration in effect. */
+  config(): SwitchbackConfig;
+  /** Who enforces settings, and their dotted paths; undefined without an organization. */
+  org(): { name: string; enforcedKeys: string[] } | undefined;
+  /**
+   * Write a config file's new text and apply it. Throws, leaving the file as
+   * it was, when the configuration won't load with it. Returns the top-level
+   * keys that changed.
+   */
+  saveConfig(file: string, text: string): string[];
+  /** Change the session's roles, as `session.setRoles` does. */
+  setRoles(params: Omit<SessionSetRolesParams, 'sessionId'>): SessionRoles & { savedTo?: string };
 }
 
 export type PlanAnswer = 'approved' | 'approved-accept-edits' | 'rejected' | 'not-planning';

@@ -91,8 +91,11 @@ export function chooseBoundary(
 
 const TOOL_RESULT_CHARS = 1_500;
 
-/** Plain-text rendering of messages for the summarizer (tool output trimmed). */
-export function renderForSummary(messages: Message[]): string[] {
+/**
+ * Plain-text rendering of messages for the summarizer: tool output trimmed,
+ * and left out for the calls in `stale` (`staleCalls`).
+ */
+export function renderForSummary(messages: Message[], stale?: Set<string>): string[] {
   return messages
     .filter((m) => !markerOf(m))
     .map((m) =>
@@ -105,6 +108,7 @@ export function renderForSummary(messages: Message[]): string[] {
           if (p.type === 'tool_call')
             return `[tool call] ${p.name} ${JSON.stringify(p.input ?? {})}`;
           if (p.type === 'tool_result') {
+            if (stale?.has(p.callId)) return '[tool result] (superseded by a later call)';
             const body =
               p.content.length > TOOL_RESULT_CHARS
                 ? `${p.content.slice(0, TOOL_RESULT_CHARS)}\n... (${p.content.length - TOOL_RESULT_CHARS} more characters)`

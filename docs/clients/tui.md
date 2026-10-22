@@ -135,7 +135,8 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/worktrees` · `/worktrees <branch>` | Branches isolated subagents made (running, ready to merge, merged, or kept), or one branch's diff ([subagents.md](../subagents.md#seeing-what-they-did)) |
 | `/rewind` | Go back to before a prompt: pick it, then `b` (files and conversation), `f` (files only), or `c` (conversation only). Files changed since then by edit or write go back and files created since are removed; changes made by shell commands aren't tracked. The conversation continues in a new session, and this one is kept |
 | `/goal <objective>` · `/goal` · `/goal stop` | Keep working toward an objective across turns until the model says it's done or blocked ([Goals](#goals)). Bare `/goal` shows progress; `/goal stop` ends it after the running turn, and Esc ends it now |
-| `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept |
+| `/compact` | Summarize earlier messages now. It also happens automatically as a session grows; the full history is kept. While it runs, the working line shows `Compacting (2/5)` |
+| `/autocompact [on\|off] [--save]` | Show or switch automatic compaction for this session; `--save` makes it the default (`compaction.enabled`) |
 | `/usage [rule\|agent\|model]` | The last 7 days: spend, budget, savings, cache hits, and a breakdown (by rule unless you pick another) |
 | `/review on\|off\|default` | Review of edits for the next prompts ([review.md](../review.md)); `default` follows `review.mode` |
 | `/review ladder` · `/review with <model...>` | Who reviews in this session: the escalation ladder, or models in order |
@@ -144,7 +145,7 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 | `/roles` · `/roles reset` | Which model does what in this session; `reset` follows your config again |
 | `/current [model...]` | The current model, where your prompts run. With no argument, a picker: ↑/↓ and Enter, or its number; the models that were current stay as backups. In the picker, **r** asks your endpoints for their models again and **e** opens setup to add or edit models. With models, the first is current and the rest are backups for when it's down or too small. `/start` still works |
 | `/model [model]` | The model for what's in front: `/current` in the session's view, the subagent model in a subagent's ([Subagents](#subagents)) |
-| `/escalate <step...>` · `/escalate none` | The escalation ladder; a step is a model, or `a,b` alternatives |
+| `/ladder` · `/ladder <step...>` · `/ladder none` | The escalation ladder; a step is a model, or `a,b` alternatives. With no argument, an editor: ↑/↓ choose, space adds or removes, `,` makes an alternative to the step before, `[` `]` move, Enter applies, `s` applies and saves. `/escalate` still works |
 | `/subagent-model <model>\|none` | Default model for subagents |
 | `/effort [none\|low\|medium\|high\|xhigh\|max\|default]` | Show or set reasoning effort for this session's own model calls (`switchback --effort` at startup). Subagents keep theirs; `default` goes back to the agent's or model's ([subagents.md](../subagents.md#reasoning-effort)) |
 | `/mode [default\|accept-edits\|plan\|bypass]` | Show or switch the permission mode ([permissions.md](../permissions.md#modes)) |

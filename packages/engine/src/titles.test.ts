@@ -137,7 +137,9 @@ describe('session titles', () => {
     expect(renames(events).at(-1)).toEqual(['Parser refactor', 'compaction']);
     expect(remote.requests).toHaveLength(0);
     const marker = latestMarker(e.getSession(s.id).messages as Message[]);
-    expect(marker?.part.summary).toBe('- the user wants the parser refactored');
+    // The model's summary, then the record kept word for word from the transcript.
+    expect(marker?.part.summary).toStartWith('- the user wants the parser refactored\n\n## Record');
+    expect(marker?.part.summary).toContain('- step 0');
     // The transcript wasn't rewritten: the first prompt is still the first message.
     expect(e.getSession(s.id).messages[0]).toMatchObject({ parts: [{ text: 'step 0' }] });
   });

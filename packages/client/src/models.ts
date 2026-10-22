@@ -27,7 +27,8 @@ export interface ModelChoice {
   listed: boolean;
 }
 
-export type ChosenRole = 'current' | 'subagents';
+/** What a TUI picker chooses: a role's model, or (`escalate`) the whole ladder. */
+export type ChosenRole = 'current' | 'subagents' | 'escalate';
 
 /**
  * Every model, the one filling `role` first, then the ones the config names,
@@ -38,17 +39,63 @@ export function modelChoices(
   roles?: SessionRoles,
   role: ChosenRole = 'current',
 ): ModelChoice[] {
-  const first = role === 'current' ? roles?.current[0] : roles?.subagents;
+  const first =
+    role === 'current' ? roles?.current[0] : role === 'subagents' ? roles?.subagents : undefined;
   const choices = models.map((m) => ({
     alias: m.alias,
     model: m.ref.model,
     tier: m.tier,
     current: m.alias === first,
-    roles: roles ? rolesOfModel(m.alias, roles).filter((r) => r !== role) : [],
+    // The ladder editor shows the steps itself.
+    roles: roles
+      ? rolesOfModel(m.alias, roles).filter((r) =>
+          role === 'escalate' ? !r.startsWith('step ') : r !== role,
+        )
+      : [],
     listed: m.listed === true,
   }));
   const rank = (c: ModelChoice) => (c.current ? 0 : c.listed ? 2 : 1);
   return choices.sort((a, b) => rank(a) - rank(b));
+}
+
+/** The escalation ladder: steps in order, each one model or alternatives. */
+export type Ladder = string[][];
+
+/** `/ladder`'s editor: `alias` leaves the ladder if it's on it, else joins as the last step. */
+export function toggleRung(ladder: Ladder, alias: string): Ladder {
+  return ladder.some((step) => step.includes(alias))
+    ? ladder.map((step) => step.filter((a) => a !== alias)).filter((step) => step.length)
+    : [...ladder, [alias]];
+}
+
+/** The step holding `alias`, moved one place earlier (-1) or later (1). */
+export function moveRung(ladder: Ladder, alias: string, by: -1 | 1): Ladder {
+  const from = ladder.findIndex((step) => step.includes(alias));
+  const to = from + by;
+  if (from < 0 || to < 0 || to >= ladder.length) return ladder;
+  const next = [...ladder];
+  [next[from], next[to]] = [next[to] as string[], next[from] as string[]];
+  return next;
+}
+
+/**
+ * `alias` becomes an alternative in the step before its own or, when it
+ * already shares a step, gets a step of its own right after.
+ */
+export function joinRung(ladder: Ladder, alias: string): Ladder {
+  const at = ladder.findIndex((step) => step.includes(alias));
+  const step = ladder[at];
+  if (!step) return ladder;
+  if (step.length > 1)
+    return [
+      ...ladder.slice(0, at),
+      step.filter((a) => a !== alias),
+      [alias],
+      ...ladder.slice(at + 1),
+    ];
+  const before = ladder[at - 1];
+  if (!before) return ladder;
+  return [...ladder.slice(0, at - 1), [...before, alias], ...ladder.slice(at + 1)];
 }
 
 /**

@@ -257,6 +257,7 @@ describe('Engine', () => {
     // Explore is read-only: its tool list must not include write or task.
     const exploreReq = lp.requests.find((q) => q.system.includes('read-only search agent'));
     // The checklist, skills, docs, and escalate come with every agent; they aren't capabilities.
+    // (models and config do too, but not for an 8k-context model like this one.)
     expect(exploreReq?.tools.map((t) => t.name).sort()).toEqual([
       'docs',
       'escalate',

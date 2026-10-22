@@ -64,13 +64,7 @@ export function writeConfigLayer(
     replace?: string[];
   } = {},
 ): WriteResult {
-  let text = '{}';
-  let backup: string | undefined;
-  if (existsSync(file)) {
-    text = readFileSync(file, 'utf8');
-    backup = `${file}.bak`;
-    copyFileSync(file, backup);
-  }
+  let text = existsSync(file) ? readFileSync(file, 'utf8') : '{}';
   // Keys role-based routing removed (ADR 0015) under a section this layer
   // writes are deleted, so re-running setup migrates an old file instead of
   // failing on it.
@@ -92,16 +86,36 @@ export function writeConfigLayer(
   const merged = deepMerge(existing, layer);
   const problem = layerProblem(merged, { references: options.references !== false });
   if (problem) throw new Error(`setup produced an invalid config: ${problem}`);
-  for (const [path, value] of leaves(layer)) {
-    text = applyEdits(
-      text,
-      modify(text, path, value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
-    );
+  for (const [path, value] of leaves(layer)) text = setConfigText(text, path, value);
+  const backup = replaceConfigText(file, text);
+  return { file, ...(backup ? { backup } : {}), config: merged };
+}
+
+/**
+ * Replace a config file's text, keeping the previous file as `.bak`.
+ * Returns the backup's path, when there was a file to back up.
+ */
+export function replaceConfigText(file: string, text: string): string | undefined {
+  let backup: string | undefined;
+  if (existsSync(file)) {
+    backup = `${file}.bak`;
+    copyFileSync(file, backup);
   }
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, text.endsWith('\n') ? text : `${text}\n`);
   // A pasted API key makes the file (and its backup, which may hold the same
   // key) readable by its owner alone.
-  if (holdsSecret(merged)) for (const f of [file, backup]) if (f) chmodSync(f, 0o600);
-  return { file, ...(backup ? { backup } : {}), config: merged };
+  if (holdsSecret(parseJsonc(text))) for (const f of [file, backup]) if (f) chmodSync(f, 0o600);
+  return backup;
+}
+
+/**
+ * A config file's text with the value at `path` set, or removed when `value`
+ * is undefined, keeping comments and formatting.
+ */
+export function setConfigText(text: string, path: JSONPath, value: unknown): string {
+  return applyEdits(
+    text,
+    modify(text, path, value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }),
+  );
 }

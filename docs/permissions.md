@@ -24,7 +24,7 @@ Every call that passes validation and confinement is decided in this order:
 2. **Deny rules,** and `permissions.outsideWorkspace: "deny"` for paths outside the workspace. The call is refused, and the model is told why.
 3. **Plan mode.** Edits are refused until the user approves a plan.
 4. **Bypass.** In `bypassPermissions`, everything else runs without a prompt.
-5. **Ask rules,** a command that asks to run outside the sandbox, and edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`): the user is asked, including in `acceptEdits`. A path **outside the workspace** asks too, unless an allow rule names it; `read: allow`, a bare `read` rule, a hook, and `acceptEdits` don't count.
+5. **Ask rules,** a command that asks to run outside the sandbox, edits to Switchback's own configuration (`.switchback/` and `~/.switchback/`), and the `set_config` and `set_roles` tools: the user is asked, including in `acceptEdits`. A path **outside the workspace** asks too, unless an allow rule names it; `read: allow`, a bare `read` rule, a hook, and `acceptEdits` don't count.
 6. **Allow rules,** including what the user allowed earlier in the session.
 7. **The mode.** `acceptEdits` allows edits.
 8. **The category's level:** `allow`, or ask. A `bash` command that only [explores the workspace](#exploring-with-bash) runs under the `read` level instead. In `autoApprove`, a call that would ask goes to a model first, and asks only if the model doesn't approve it.
@@ -56,11 +56,11 @@ These rules govern the file tools. `bash` stays in its [sandbox](#sandbox), whos
 | Category | Tools | Default |
 |---|---|---|
 | `read` | read, glob, grep | `allow` |
-| `edit` | write, edit | `ask` |
+| `edit` | write, edit, set_config, set_roles | `ask` (the last two always ask) |
 | `bash` | bash | `ask` |
 | `web` | webfetch, websearch | `ask` for webfetch; websearch has its own level, `permissions.websearch`, which is `allow` ([ADR 0023](adr/0023-search-allowed-by-default.md)). `web: deny` turns both off |
 | `mcp` | tools from MCP servers (`mcp__<server>__<tool>`) | `ask`; a server's `permission` setting overrides it, except that a category-level `deny` always wins |
-| (none) | task, exit_plan_mode, bash_output, kill_shell, todo | always allowed: a subagent's own tools are checked individually, and a background shell's command was checked when it started |
+| (none) | task, exit_plan_mode, bash_output, kill_shell, todo, models, config | always allowed: a subagent's own tools are checked individually, and a background shell's command was checked when it started |
 
 ### Rules
 
