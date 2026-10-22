@@ -28,7 +28,7 @@ export interface LoginFlags {
 }
 
 /** Where Harville Labs hosts sites; `SWITCHBACK_SITES_URL` points elsewhere (staging, tests). */
-export function siteServer(site: string, env = process.env): string {
+function siteServer(site: string, env = process.env): string {
   const base = (env.SWITCHBACK_SITES_URL ?? 'https://app.switchback.sh').replace(/\/+$/, '');
   return `${base}/sites/${encodeURIComponent(site)}`;
 }
@@ -47,7 +47,7 @@ function openBrowser(url: string) {
   }
 }
 
-export function describeRestrictions(policy: OrgPolicy): string[] {
+function describeRestrictions(policy: OrgPolicy): string[] {
   const r = policy.restrictions;
   const lines: string[] = [];
   if (!r.allowRemote) lines.push('remote models disabled: everything runs locally');

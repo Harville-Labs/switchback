@@ -145,7 +145,7 @@ async function manualLocal(baseUrl: string, p: SetupPrompter): Promise<LocalAnsw
   };
 }
 
-export function normalizeUrl(url: string): string {
+function normalizeUrl(url: string): string {
   const trimmed = url.trim().replace(/\/+$/, '');
   return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`;
 }

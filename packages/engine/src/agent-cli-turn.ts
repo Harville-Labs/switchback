@@ -74,7 +74,7 @@ export interface SessionTools {
  * What the CLI is told beside its own instructions: how to use Switchback,
  * and the skills it can load.
  */
-export function cliInstructions(names: string[], skills: string | undefined): string {
+function cliInstructions(names: string[], skills: string | undefined): string {
   return [switchbackGuide(names.includes('task')), skills].filter(Boolean).join('\n\n');
 }
 

@@ -112,7 +112,7 @@ function textOf(content: unknown): string {
 }
 
 /** Exa's results are text blocks of `Title:`, `URL:`, then the page's text, split by `---`. */
-export function parseExa(text: string): SearchResult[] {
+function parseExa(text: string): SearchResult[] {
   return text.split(/\n\n---\n\n/).flatMap((block) => {
     const url = block.match(/^URL:\s*(.+)$/m)?.[1]?.trim();
     if (!url) return [];

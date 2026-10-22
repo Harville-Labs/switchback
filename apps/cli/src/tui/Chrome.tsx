@@ -174,7 +174,7 @@ function compact(n: number): string {
 }
 
 /** About how many tokens the model has written since the prompt: the text it streamed, at ~4 characters a token. */
-export function streamedTokens(view: ViewState): number {
+function streamedTokens(view: ViewState): number {
   const from = view.items.findLastIndex((i) => i.kind === 'user');
   let chars = 0;
   for (const item of view.items.slice(from + 1))
