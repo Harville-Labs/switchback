@@ -5,6 +5,7 @@
 import {
   connectDaemon,
   formatLadder,
+  routeLabel,
   SessionScope,
   SwitchbackClient,
   spawnEngine,
@@ -394,7 +395,7 @@ export class EngineConnection implements vscode.Disposable {
     const icon = this.lastTier === 'remote' ? '$(cloud)' : '$(home)';
     const ladder = formatLadder(this.ladder);
     this.setStatus(
-      `${icon} ${this.route}${ladder ? ` · ${ladder}` : ''} · $${this.lastCost.toFixed(3)}`,
+      `${icon} ${routeLabel(this.route)}${ladder ? ` · ${ladder}` : ''} · $${this.lastCost.toFixed(3)}`,
       'Switchback: click to change routing',
     );
   }

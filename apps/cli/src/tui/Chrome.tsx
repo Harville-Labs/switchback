@@ -5,6 +5,7 @@ import {
   formatLadder,
   formatTodos,
   modeLabel,
+  routeLabel,
   runningShells,
   sessionEffort,
   speedLabel,
@@ -310,7 +311,7 @@ export function StatusBar({
         <ModeBadge mode={mode} />
         {mode !== 'default' ? <Text dimColor> · </Text> : null}
         <Text dimColor>
-          {session.agent} · {route}
+          {session.agent} · {routeLabel(route)}
           {review !== undefined ? ` · review ${review ? 'on' : 'off'}` : ''}
           {effort ? ` · effort ${effort}` : ''}
           {ladder ? ` · ${ladder}` : ''}

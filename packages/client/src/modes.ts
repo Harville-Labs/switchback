@@ -1,5 +1,35 @@
-/** Permission modes and rules, in words: the mode pickers, `/mode`, and `/permissions`. */
-import type { EngineEvent, PermissionMode, PermissionsListResult } from '@switchback/protocol';
+/**
+ * Permission modes, rules, and routing, in words: the mode pickers, `/mode`,
+ * `/permissions`, and the routing control.
+ */
+import type {
+  EngineEvent,
+  PermissionMode,
+  PermissionsListResult,
+  RoutePreference,
+} from '@switchback/protocol';
+
+/**
+ * Routing preferences as people see them. `auto` reads as auto-escalate:
+ * a bare "auto" next to the permission mode was taken for auto-approval.
+ */
+export const ROUTES: readonly { value: RoutePreference; label: string; description: string }[] = [
+  {
+    value: 'auto',
+    label: 'auto-escalate',
+    description: 'run on the current model; escalate when stuck',
+  },
+  { value: 'local', label: 'local only', description: 'only local models for the next prompts' },
+  {
+    value: 'remote',
+    label: 'remote only',
+    description: 'only hosted models for the next prompts',
+  },
+];
+
+export function routeLabel(route: RoutePreference): string {
+  return ROUTES.find((r) => r.value === route)?.label ?? route;
+}
 
 const MODE_LABELS: Record<PermissionMode, string> = {
   default: 'default',
