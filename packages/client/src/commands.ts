@@ -181,6 +181,11 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: 'Tools',
     description: 'copy the last reply, its nth code block, the last tool output, or everything',
   },
+  {
+    name: 'reload',
+    group: 'Tools',
+    description: 'read the config files again and apply them',
+  },
   { name: 'help', group: 'Tools', description: 'list commands' },
   {
     name: 'theme',

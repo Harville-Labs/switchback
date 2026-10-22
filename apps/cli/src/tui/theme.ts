@@ -4,9 +4,6 @@
  * `plain` uses no color at all, for terminals and people who'd rather not.
  * The choice is saved with the TUI's other preferences (`prefs.ts`).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { switchbackPaths } from '@switchback/engine';
 import type { PermissionMode } from '@switchback/protocol';
 import { createContext, useContext } from 'react';
 import { prefsFile, readPrefs, savePref } from './prefs.ts';

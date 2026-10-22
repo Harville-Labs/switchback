@@ -52,6 +52,7 @@ test('formatCommands puts every description in one narrow column, long usages on
   expect(columns[0]).toBeLessThanOrEqual(30);
   expect(text).toStartWith('  /auto ');
   expect(text).toContain('  /mode [default|accept-edits|auto-approve|plan|bypass]\n ');
+  expect(text).toContain('  /effort [none|low|medium|high|xhigh|max|default]\n ');
 });
 
 test('commandQuery follows only a bare command name', () => {

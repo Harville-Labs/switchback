@@ -53,6 +53,22 @@ test('/permissions lines up its labels', () => {
   ]);
 });
 
+test('/permissions lines up its labels', () => {
+  const text = formatPermissions({
+    mode: 'default',
+    modes: ['default'],
+    levels: { read: 'allow', edit: 'ask', bash: 'ask', web: 'ask', websearch: 'allow', mcp: 'ask' },
+    sandbox: { active: true },
+    rules: [],
+  } as Parameters<typeof formatPermissions>[0]);
+  expect(text.split('\n').map((l) => l.slice(0, 8))).toEqual([
+    'mode    ',
+    'levels  ',
+    'sandbox ',
+    'rules   ',
+  ]);
+});
+
 test('/permissions groups rules by source and wraps long lists', () => {
   const allow = Array.from({ length: 12 }, (_, i) => `bash(tool${i}:*)`);
   const text = formatPermissions({
@@ -139,13 +155,6 @@ test('status marks take one cell in every terminal, so the space after them show
     expect(mark).not.toMatch(/\p{Emoji}/u);
   }
   expect(modeIcon('default')).toBe('');
-});
-
-test('cost estimates round to cents, with a floor for tiny ones', () => {
-  expect(estimateLabel(undefined)).toBe('');
-  expect(estimateLabel(0.004)).toBe('≈ <$0.01');
-  expect(estimateLabel(0.0412)).toBe('≈ $0.04');
-  expect(estimateLabel(1.5)).toBe('≈ $1.50');
 });
 
 test('cost estimates round to cents, with a floor for tiny ones', () => {

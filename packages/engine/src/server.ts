@@ -173,6 +173,8 @@ export function serve(
         return { ok: true };
       case 'models.refresh':
         return engine.refreshModels();
+      case 'config.reload':
+        return engine.reload();
       case 'worktrees.list':
         return engine.listWorktrees();
       case 'worktrees.diff':

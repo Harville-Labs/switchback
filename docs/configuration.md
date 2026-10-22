@@ -17,7 +17,7 @@ Next to each config file, `agents/`, `commands/`, and `skills/` folders hold [ag
 
 `SWITCHBACK_HOME=<dir>` relocates config and data (`<dir>/config.json`, `<dir>/AGENTS.md`, `<dir>/agents/`, `<dir>/commands/`, `<dir>/skills/`, `<dir>/data/`). It's useful for tests and for isolating experiments.
 
-Running engines follow edits to these files: `switchback init` or `/init`, `switchback config edit`, or your editor. The shared engine that the TUI and VS Code attach to reloads the config when a file changes, without a restart; a file that doesn't parse is reported and the config in effect stays. Versions before 1.1.0 kept files in `~/.config/switchback` and `~/.local/share/switchback`; nothing reads those now, and `switchback doctor` points them out.
+Config files aren't watched. An edit made with `switchback config edit`, `switchback init` in another terminal, or your editor takes effect when you type `/reload` in the TUI or VS Code, or with the next engine. `/reload` reads the user, project, and organization config again, applies it to the running engine (every client attached to it, every session), and says which settings changed; a file that doesn't parse is reported with its path and the config in effect stays. Organization-enforced settings still win after a reload. Setup run from a client (`/init`) applies what it writes right away. Versions before 1.1.0 kept files in `~/.config/switchback` and `~/.local/share/switchback`; nothing reads those now, and `switchback doctor` points them out.
 
 ## Setting up
 

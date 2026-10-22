@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 import type { GoalInfo, SessionSetGoalParams, SessionSetGoalResult } from './goals.ts';
-import type { ModelSummary, ModelsRefreshResult } from './models.ts';
+import type { ConfigReloadResult, ModelSummary, ModelsRefreshResult } from './models.ts';
 import type { SetupAnswerParams, SetupCancelParams, SetupStartParams } from './setup.ts';
 import type { SessionRenameParams } from './titles.ts';
 import { MAX_IMAGE_BYTES, type Message, type Tier, type Usage } from './transcript.ts';
@@ -507,6 +507,8 @@ export interface Methods {
   'worktrees.diff': { params: WorktreesDiffParams; result: WorktreeDiff };
   /** Ask plan CLIs and OpenAI-compatible endpoints what they serve now, and apply it. */
   'models.refresh': { params: Record<string, never>; result: ModelsRefreshResult };
+  /** Read the user, project, and organization config again, and apply it. */
+  'config.reload': { params: Record<string, never>; result: ConfigReloadResult };
 }
 
 export type MethodName = keyof Methods;

@@ -33,6 +33,7 @@ import {
   parseMode,
   pickCopy,
   runGoalCommand,
+  runReload,
   type SlashCommand,
   sessionEffort,
   subagentList,
@@ -304,6 +305,7 @@ const HANDLERS: Record<string, Handler> = {
   },
   copy,
   rewind: (ctx) => ctx.openRewind(),
+  reload: async (ctx) => say(ctx, await runReload(ctx.client)),
   shells: async (ctx, args) => {
     if (args[0] === 'kill') {
       if (!args[1]) return say(ctx, 'usage: /shells kill <id>');
