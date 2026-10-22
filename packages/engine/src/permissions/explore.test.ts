@@ -32,6 +32,18 @@ describe('exploration', () => {
       'git branch --show-current',
       'git stash list',
       'grep foo src/a.ts 2>/dev/null',
+      'grep -rn foo src 2>/dev/null || true',
+      'tree -L 2 src',
+      'ls src | sort | uniq -c',
+      'sort -u src/a.ts',
+      'cut -d: -f1 src/a.ts | sort -n | uniq',
+      'nl src/a.ts',
+      "tr -d '\\r' < src/a.ts",
+      "cat src/a.ts | tr 'a-z' 'A-Z'",
+      'wc -l < src/a.ts',
+      'test -f src/a.ts && echo yes',
+      'readlink src/a.ts',
+      'shasum -a 256 src/a.ts',
     ])
       expect({ line, explores: explores(line) }).toEqual({ line, explores: true });
   });
@@ -49,6 +61,9 @@ describe('exploration', () => {
       'cat $HOME/.ssh/config',
       'git -C /tmp status',
       'find / -name x',
+      'cat < /etc/hosts',
+      'tr a b < /etc/hosts',
+      'ls && wc -l < ../x',
     ])
       expect({ line, explores: explores(line) }).toEqual({ line, explores: false });
   });
@@ -72,6 +87,13 @@ describe('exploration', () => {
       'ls | xargs rm',
       'ls | sh',
       'FOO=1 ls',
+      'sort -o out.txt src/a.ts',
+      'sort -uo out.txt src/a.ts',
+      'sort --output=out.txt src/a.ts',
+      'sort --compress-program=sh src/a.ts',
+      'uniq src/a.ts out.txt',
+      'tree -o out.txt',
+      'awk 1 src/a.ts',
     ])
       expect({ line, explores: explores(line) }).toEqual({ line, explores: false });
   });

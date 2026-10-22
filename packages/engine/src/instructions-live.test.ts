@@ -124,10 +124,14 @@ describe('an AGENTS.md change reaches running sessions', () => {
     });
     const a = one.e.createSession({}).id;
     const b = two.e.createSession({}).id;
-    writeFileSync(join(root, 'AGENTS.md'), 'Use spaces.\n');
-    // macOS delivers file events with up to a second or two of latency; Linux and Windows are faster.
-    for (const deadline = Date.now() + 5_000; !notes.length && Date.now() < deadline; )
-      await Bun.sleep(20);
+    // macOS starts its file event stream a moment after watch() returns, and delivers events a
+    // second or two late, so on a busy machine the first write can land before anyone listens.
+    // Writing the same text again is another event; it changes nothing, so it adds no note.
+    for (let i = 0; i < 12 && !notes.length; i++) {
+      writeFileSync(join(root, 'AGENTS.md'), 'Use spaces.\n');
+      for (const until = Date.now() + 1_000; !notes.length && Date.now() < until; )
+        await Bun.sleep(20);
+    }
     expect(notes).toEqual([
       "The project's AGENTS.md changed; sessions get it with their next message",
     ]);
@@ -137,7 +141,7 @@ describe('an AGENTS.md change reaches running sessions', () => {
     expect(reminders(two.lp.requests[0]?.messages.at(-1))).toHaveLength(1);
     await one.e.shutdown();
     await two.e.shutdown();
-  }, 10_000);
+  }, 20_000);
 });
 
 test('compaction carries the latest instructions past its summary', () => {

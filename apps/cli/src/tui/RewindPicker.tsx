@@ -4,6 +4,7 @@ import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Keys } from './Chrome.tsx';
 import { Clickable } from './Clickable.tsx';
+import { windowStart } from './list.ts';
 import { ago } from './SessionPicker.tsx';
 
 const ROWS = 8;
@@ -65,7 +66,7 @@ export function RewindPicker({
       </Box>
     );
 
-  const start = Math.min(Math.max(0, selected - ROWS + 1), Math.max(0, newest.length - ROWS));
+  const start = windowStart(selected, newest.length, ROWS);
   return (
     <Box borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
       <Text bold>Rewind to before…</Text>

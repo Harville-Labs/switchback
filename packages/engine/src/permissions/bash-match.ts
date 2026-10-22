@@ -28,6 +28,8 @@ export interface ParsedCommand {
   bare: string[];
   /** Something no rule can vouch for: substitution or a write redirection. */
   opaque: boolean;
+  /** The files each command reads through `<`, in the same order as `commands`. */
+  inputs: string[][];
 }
 
 export function parseCommand(line: string): ParsedCommand {
@@ -35,12 +37,18 @@ export function parseCommand(line: string): ParsedCommand {
   // like plain text; check the raw line.
   let opaque = /\$\(|`|<\(|>\(/.test(line);
   const commands: string[] = [];
+  const inputs: string[][] = [];
   // shell-quote reads a newline as a space; each line is its own command.
   for (const text of line.split(/\r?\n/)) {
     let words: string[] = [];
+    let reads: string[] = [];
     const flush = () => {
-      if (words.length) commands.push(words.join(' '));
+      if (words.length) {
+        commands.push(words.join(' '));
+        inputs.push(reads);
+      }
       words = [];
+      reads = [];
     };
     const tokens = parse(text, (name) => `$${name}`);
     for (let i = 0; i < tokens.length; i++) {
@@ -55,12 +63,13 @@ export function parseCommand(line: string): ParsedCommand {
         const target = typeof next === 'string' ? next : '';
         if (WRITES.has(t.op) && target !== '/dev/null') opaque = true;
         if (t.op === '>&' && !/^\d+$/.test(target)) opaque = true;
+        if (t.op === '<') reads.push(target);
         i++; // the redirection's target is not a word of the command
       } else if ('comment' in t) break;
     }
     flush();
   }
-  return { commands, bare: commands.map(unwrap), opaque };
+  return { commands, bare: commands.map(unwrap), opaque, inputs };
 }
 
 /** Commands that run the rest of their arguments as another command. */

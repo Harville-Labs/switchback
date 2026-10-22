@@ -38,7 +38,7 @@ async function listDirectory(dir: string, ctx: ToolContext): Promise<string> {
 export const readTool = defineTool({
   name: 'read',
   description:
-    'Read a file from the workspace. Text comes back as lines prefixed with 1-based line numbers (use offset/limit for large files); a PNG, JPEG, GIF, or WebP image comes back as the image; a directory comes back as its entries, folders ending in /.',
+    'Read a file from the workspace. Text comes back as lines prefixed with 1-based line numbers (use offset/limit for large files); a PNG, JPEG, GIF, or WebP image comes back as the image; a directory comes back as its entries, folders ending in /. Use this rather than cat, head, or ls in bash.',
   schema: z.object({
     path: z.string().describe(PATH_HELP),
     offset: z.number().int().min(1).optional().describe('First line to return (1-based)'),
@@ -173,7 +173,7 @@ export const editTool = defineTool({
 export const globTool = defineTool({
   name: 'glob',
   description:
-    'Find files by glob pattern (e.g. "src/**/*.ts"). Ignores node_modules, .git, and build output.',
+    'Find files by glob pattern (e.g. "src/**/*.ts"). Ignores node_modules, .git, and build output. Use this rather than find or ls in bash.',
   schema: z.object({
     pattern: z.string(),
     path: z
@@ -329,7 +329,7 @@ let ripgrep: string | null | undefined;
 export const grepTool = defineTool({
   name: 'grep',
   description:
-    'Search file contents with a regular expression. Returns path:line: text for matches (path-line- text for context lines), or only the matching files with filesOnly. Optionally filter files with a glob. Respects .gitignore when ripgrep is installed.',
+    'Search file contents with a regular expression. Returns path:line: text for matches (path-line- text for context lines), or only the matching files with filesOnly. Optionally filter files with a glob. Respects .gitignore when ripgrep is installed. Use this rather than grep or rg in bash.',
   schema: z.object({
     pattern: z.string(),
     path: z.string().optional(),

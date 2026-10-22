@@ -3,6 +3,7 @@ import type { SessionSummary } from '@switchback/protocol';
 import { Box, Text, useInput } from 'ink';
 import { useState } from 'react';
 import { Clickable } from './Clickable.tsx';
+import { windowStart } from './list.ts';
 
 const ROWS = 10;
 
@@ -57,7 +58,7 @@ export function SessionPicker({
     }
   });
 
-  const start = Math.min(Math.max(0, selected - ROWS + 1), Math.max(0, shown.length - ROWS));
+  const start = windowStart(selected, shown.length, ROWS);
   return (
     <Box borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
       <Text>

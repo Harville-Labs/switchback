@@ -433,3 +433,33 @@ test('the model picker lines up models whose aliases differ in length', () => {
   expect(frame).toContain('1. local   local-model · local');
   expect(frame).toContain('2. remote  remote-model · remote');
 });
+
+test('the model picker scrolls past nine models and wraps from the top to the bottom', async () => {
+  const choices = Array.from({ length: 12 }, (_, i) => ({
+    alias: `m${i + 1}`,
+    model: `m${i + 1}`,
+    tier: 'local' as const,
+    roles: [],
+    current: false,
+    listed: false,
+  }));
+  const picked: string[] = [];
+  const ui = render(
+    <ModelPicker
+      choices={choices}
+      onPick={(alias) => picked.push(alias)}
+      onCancel={() => {}}
+      onCommand={() => {}}
+    />,
+  );
+  expect(ui.lastFrame()).toContain('↓ 3 more');
+  expect(ui.lastFrame()).not.toContain('m10');
+  ui.stdin.write('\x1b[A');
+  await tick();
+  const frame = ui.lastFrame() ?? '';
+  expect(frame).toContain('› 9. m12');
+  expect(frame).toContain('↑ 3 more');
+  ui.stdin.write('1');
+  await tick();
+  expect(picked).toEqual(['m4']);
+});

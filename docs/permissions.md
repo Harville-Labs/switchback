@@ -106,12 +106,12 @@ Setup also allows the common test, build, and lint commands (Bun, npm, pnpm, Car
 
 ### Exploring with bash
 
-Looking around the workspace with the shell doesn't ask, as long as `permissions.read` is `allow` (the default) ([ADR 0026](adr/0026-explore-without-asking.md)). That covers `ls`, `pwd`, `cd`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `du`, `diff`, `cut`, `echo`, `which`, `basename`, `dirname`, `realpath`, `find`, `grep`, `egrep`, `fgrep`, `rg`, and `sed` with a script that only prints (`sed -n '1,20p'`, `sed 's/a/b/g' file`), chained with `&&`, `;`, or pipes. Read-only git counts too: `status`, `diff`, `log`, `show`, `blame`, `grep`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, `tag -l`, and `branch` with only listing flags.
+Looking around the workspace with the shell doesn't ask, as long as `permissions.read` is `allow` (the default) ([ADR 0026](adr/0026-explore-without-asking.md)). That covers `ls`, `pwd`, `cd`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `du`, `diff`, `cut`, `echo`, `which`, `basename`, `dirname`, `realpath`, `find`, `grep`, `egrep`, `fgrep`, `rg`, `tree`, `sort`, `uniq`, `nl`, `tac`, `rev`, `fold`, `paste`, `column`, `comm`, `tr`, `readlink`, `od`, `hexdump`, the checksum tools (`shasum`, `sha256sum`, `md5sum`, and the like), `test`, `true`, `false`, and `sed` with a script that only prints (`sed -n '1,20p'`, `sed 's/a/b/g' file`), chained with `&&`, `;`, or pipes. Read-only git counts too: `status`, `diff`, `log`, `show`, `blame`, `grep`, `ls-files`, `rev-parse`, `describe`, `shortlog`, `stash list`, `remote -v`, `tag -l`, and `branch` with only listing flags.
 
 A command line asks as before, under `permissions.bash`, when any part of it:
 
-- names a path outside the folder Switchback was started in, including through `cd ..`, `~`, or an option value (`grep -f/etc/passwd`);
-- writes or runs something: an output redirection, `$` variables or substitution, a wrapper (`sudo`, `xargs`, `env`), `find -exec` or `-delete`, `rg --pre`, `git --output`, `sed -i`, or a sed script with `w`, `r`, or `e`;
+- names a path outside the folder Switchback was started in, including through `cd ..`, `~`, an option value (`grep -f/etc/passwd`), or an input redirection (`cat < /etc/hosts`);
+- writes or runs something: an output redirection, `$` variables or substitution, a wrapper (`sudo`, `xargs`, `env`), `find -exec` or `-delete`, `rg --pre`, `git --output`, `sort -o`, `tree -o`, `uniq` with a second file, `sed -i`, or a sed script with `w`, `r`, or `e`;
 - runs any other program or git subcommand, or passes git a global option other than `--no-pager`.
 
 Your rules still apply first: a `deny` or `ask` rule on a command wins, and so does `permissions.bash: "deny"`. A `read(...)` rule that denies or asks about a path covers commands that name it, and while any such rule exists, a recursive search (`grep -r`, `rg`, `git grep`) asks, since it could read that file without naming it.
