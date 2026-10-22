@@ -16,6 +16,11 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 - **Permission modes became three levels: `ask`, `auto`, and `bypass`.** `/permissions ask|auto|bypass` switches them, and `/mode` is gone. `permissions.level` replaces `permissions.defaultMode`; the old value still loads, with `plan` starting the plan agent and `acceptEdits` becoming `ask` with a warning. `--permission-mode` takes the levels and the old names
 - **Protocol 3.** `session.setPermissions` and `permissions.changed` carry the level, and `session.setAgent` and `agent.changed` are new. `session.setMode` and `mode.changed` are gone ([protocol.md](docs/protocol.md))
 
+### Fixed
+- **`/model` and the other pickers scroll past nine rows and wrap** from the last row to the first and back
+- **More read-only commands run without asking:** `tree`, `sort`, `uniq`, `nl`, `tr`, `readlink`, `od`, the checksum tools, `test`, and others, unless a flag writes a file (`sort -o`). The tools' descriptions point the model at `read`, `glob`, and `grep` first
+- **An input redirection from outside the workspace asks.** `cat < /etc/hosts` counted as exploring the workspace
+
 ## [2.6.0] - 2026-10-22
 
 ### Added
