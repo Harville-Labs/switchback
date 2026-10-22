@@ -210,13 +210,17 @@ export function reduceTabs(state: TabsState, event: EngineEvent): TabsState {
   const next = { ...state, roots };
   const root = rootOf(next, event.sessionId);
 
-  const tabs = state.tabs.map((t) =>
-    owns(t.view, event.sessionId) ||
-    (event.parentSessionId && owns(t.view, event.parentSessionId)) ||
-    t.session.id === root
-      ? { ...t, view: reduce(t.view, event) }
-      : t,
-  );
+  const tabs = state.tabs.map((t) => {
+    const tab =
+      event.type === 'session.renamed' && t.session.id === event.sessionId
+        ? { ...t, session: { ...t.session, title: event.title } }
+        : t;
+    return owns(t.view, event.sessionId) ||
+      (event.parentSessionId && owns(t.view, event.parentSessionId)) ||
+      t.session.id === root
+      ? { ...tab, view: reduce(t.view, event) }
+      : tab;
+  });
   const before = state.sessions[root];
   const after = activity(before ?? blankActivity(root), event, root, root === state.active);
   return {
@@ -274,6 +278,8 @@ function activity(
       return own && a.doing !== 'Thinking' ? { ...a, doing: 'Thinking' } : a;
     case 'subagent.started':
       return own ? { ...a, doing: `Waiting on ${event.agent}` } : a;
+    case 'session.renamed':
+      return own ? { ...a, title: event.title } : a;
     default:
       return a;
   }

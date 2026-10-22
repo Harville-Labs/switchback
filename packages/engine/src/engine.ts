@@ -188,6 +188,13 @@ export class Engine {
     return { session: this.p.factory.summary(s), messages: s.messages };
   }
 
+  /** `session.rename`: a title the user chose, which automatic retitling keeps. */
+  renameSession(sessionId: string, title: string): SessionSummary {
+    const s = this.p.sessions.live(sessionId);
+    this.p.host.rename(s, title, 'user');
+    return this.p.factory.summary(s);
+  }
+
   /** A session's effective roles: its own changes over the config. */
   roles(sessionId: string): SessionRoles {
     return this.p.policy.rolesOf(this.p.sessions.live(sessionId));

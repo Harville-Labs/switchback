@@ -128,7 +128,21 @@ Keep:
 - Errors seen and how they were resolved, or that they are still open.
 - The current state of the task and the concrete next steps.
 
-Drop small talk, redundant tool output, and anything superseded. Use short sections and bullet points. Do not invent details.`;
+Drop small talk, redundant tool output, and anything superseded. Use short sections and bullet points. Do not invent details.
+
+End with one line of the form \`Title: <the task, in at most 8 words>\`.`;
+
+/**
+ * The summary without its `Title:` line, and that title. The title names the
+ * session (it isn't fed back to the summarizer or the agent).
+ */
+export function splitTitle(text: string): { summary: string; title?: string } {
+  const m = /(?:^|\n)[ \t]*\**Title:\**[ \t]*(.+?)[ \t]*\s*$/i.exec(text);
+  if (!m?.[1]) return { summary: text };
+  const title = m[1].replace(/^[*_`"']+|[*_`"'.]+$/g, '').trim();
+  const summary = text.slice(0, m.index).trimEnd();
+  return title && summary ? { summary, title } : { summary: text };
+}
 
 export function summaryRequest(previous: string | undefined, chunk: string): string {
   return previous

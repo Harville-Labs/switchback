@@ -10,6 +10,7 @@ import type {
   SessionRoles,
   ShellInfo,
   Tier,
+  Usage,
   WorktreeOutcome,
 } from '@switchback/protocol';
 
@@ -118,6 +119,12 @@ export interface PendingEscalation {
   estimatedCostUsd?: number;
 }
 
+/** Input tokens read from a prompt cache, out of all input tokens (cached, written, and uncached). */
+export interface CacheTally {
+  readTokens: number;
+  inputTokens: number;
+}
+
 export interface ViewState {
   sessionId: string;
   items: ViewItem[];
@@ -130,6 +137,13 @@ export interface ViewState {
   lastTier?: Tier;
   /** How full the last call's context was, when the engine knew the window. */
   context?: { tokens: number; window: number };
+  /**
+   * Prompt-cache reads against total input tokens, for this session's calls
+   * and for the latest turn's. Counts remote calls and any call that reported
+   * cache activity, so a local server that doesn't report caching doesn't
+   * dilute the rate.
+   */
+  cache?: { session: CacheTally; turn: CacheTally };
   /** The last call's speed, for status lines. */
   speed?: { model: string; tokensPerSecond: number };
   /** Where the last call ran on the escalation ladder (`step` 0 is the current model). */
@@ -215,4 +229,23 @@ export function childView(state: ViewState, sessionId: string): ViewState | unde
     if (found) return found;
   }
   return undefined;
+}
+
+/** Adds one call's usage to the cache tallies, or undefined when the call doesn't count. */
+export function foldCache(
+  cache: ViewState['cache'],
+  tier: Tier,
+  usage: Usage | undefined,
+): ViewState['cache'] {
+  if (!usage) return undefined;
+  const read = usage.cacheReadTokens ?? 0;
+  const write = usage.cacheWriteTokens ?? 0;
+  if (tier !== 'remote' && read === 0 && write === 0) return undefined;
+  const input = usage.inputTokens + read + write;
+  const add = (t: CacheTally): CacheTally => ({
+    readTokens: t.readTokens + read,
+    inputTokens: t.inputTokens + input,
+  });
+  const zero = { readTokens: 0, inputTokens: 0 };
+  return { session: add(cache?.session ?? zero), turn: add(cache?.turn ?? zero) };
 }

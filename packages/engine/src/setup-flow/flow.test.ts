@@ -4,6 +4,7 @@ import type { SetupFlags } from './flags.ts';
 import { chooseLocals } from './local.ts';
 import type { SetupChoice as Option, SetupPrompter as Prompter } from './prompter.ts';
 import { chooseRemotes } from './remote.ts';
+import { chooseRoles } from './roles.ts';
 
 /** One expected question and the answer to give: `default` takes the prompt's default. */
 type Step = [question: string, answer: unknown];
@@ -351,5 +352,33 @@ describe('subscriptions', () => {
       {},
     );
     expect(answers).toEqual([{ kind: 'codex', model: 'gpt-6-sol' }]);
+  });
+});
+
+describe('which model does what', () => {
+  const coder = {
+    alias: 'coder',
+    tier: 'local',
+    model: 'qwen3-coder:30b',
+    where: 'ollama',
+  } as const;
+  const sol = { alias: 'sol', tier: 'remote', model: 'gpt-6-sol', where: 'openai' } as const;
+
+  test('one model does everything, so nothing is asked', async () => {
+    const s = scripted([]);
+    const roles = await chooseRoles(flags, s.p, [coder]);
+    expect(roles).toMatchObject({ current: ['coder'], escalate: [], review: 'off' });
+    expect(s.said).toContain('Which model does what');
+  });
+
+  test('with two models, the ladder can be changed', async () => {
+    const s = scripted([
+      ['Which model does what', 'escalate'],
+      ['When the current model struggles, escalate to:', ''],
+      ['Which model does what', 'done'],
+    ]);
+    const roles = await chooseRoles(flags, s.p, [coder, sol]);
+    expect(roles.escalate).toEqual([]);
+    expect(s.left()).toEqual([]);
   });
 });

@@ -381,6 +381,7 @@ export class AgentLoop {
       maxTokens: this.deps.models.outputBudget(model.alias, inputTokens),
       ...(effort ? { effort } : {}),
       ...withSampling(this.deps.models.sampling(model.alias)),
+      cacheKey: s.header.id,
       signal,
     })) {
       if (ev.type !== 'done' && firstToken === undefined) {
@@ -406,6 +407,7 @@ export class AgentLoop {
       turnId,
       model: model.ref,
       tier: model.tier,
+      usage: done.usage,
       ...speed,
     });
     return { done, ...(decodeMs ? { decodeMs } : {}) };

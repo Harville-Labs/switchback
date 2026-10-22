@@ -232,7 +232,12 @@ export class AnthropicProvider implements Provider {
       model: request.model,
       max_tokens: request.maxTokens,
       // Frozen system prompt + deterministic tool order keep the cached prefix stable.
-      system: request.system,
+      // The explicit breakpoint on the system block keeps tools + system cached even
+      // when the automatic breakpoint at the tail misses (after compaction, or once a
+      // turn grows past the 20-block lookback).
+      system: request.system
+        ? [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }]
+        : request.system,
       cache_control: { type: 'ephemeral' },
       messages: toAnthropicMessages(this.id, request.model, request.messages),
       ...(request.tools.length

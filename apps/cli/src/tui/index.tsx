@@ -12,6 +12,7 @@ import { newerRelease, runFromSource, updateNotice } from '../update-check.ts';
 import { App } from './App.tsx';
 import { mouseInput } from './mouse.ts';
 import type { Opening } from './SetupPanel.tsx';
+import { terminalTitles } from './terminal-title.ts';
 import { savedTheme } from './theme.ts';
 
 /** How long launch waits on a release lookup still running once the session is ready. */
@@ -75,6 +76,8 @@ export async function tui(
   if (latest) warnings.push(updateNotice(latest, CLI_VERSION));
   const mouse = mouseInput();
   let open = session;
+  const titles = terminalTitles(process.stdout);
+  titles.set(session.title);
   const app = render(
     <App
       client={client}
@@ -88,6 +91,7 @@ export async function tui(
       mouse={mouse}
       onSession={(s) => {
         open = s;
+        titles.set(s.title);
       }}
     />,
     {
@@ -105,6 +109,7 @@ export async function tui(
     await app.waitUntilExit();
   } finally {
     mouse.dispose();
+    titles.restore();
   }
   await client.request('shutdown', {}).catch(() => {});
   // The full-screen view is gone; say how to get back to it.

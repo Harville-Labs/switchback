@@ -18,48 +18,12 @@ import type {
 import * as vscode from 'vscode';
 import { runChatCommand } from './chat-commands.ts';
 import type { EditorContext } from './context.ts';
-import { chooseEngine, type EngineBinary, findCli, probeVersion } from './engine-binary.ts';
+import type { EngineBinary } from './engine-binary.ts';
 import type { HostToWebview, WebviewToHost } from './messages.ts';
 import { chooseAgent, chooseMode, chooseRole, setCurrentModel } from './pickers.ts';
+import { resolveEngine } from './resolve-engine.ts';
 import type { EditReview } from './review.ts';
 import { VERSION } from './version.ts';
-
-// biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code variable syntax, not a JS template.
-const WORKSPACE_FOLDER_VAR = '${workspaceFolder}';
-
-/** No engine to run: nothing bundled for this platform and no CLI installed. */
-export class NoEngineError extends Error {}
-
-/**
- * The engine to run: the user's setting if set, else the newer of the CLI and
- * the bundled binary (see engine-binary.ts). `${workspaceFolder}` is expanded.
- */
-export async function resolveEngine(
-  root: string,
-  bundled: string | undefined,
-): Promise<EngineBinary> {
-  const cfg = vscode.workspace.getConfiguration('switchback');
-  // VS Code does not expand variables in extension settings; support the common one.
-  const expand = (v: string) => v.replaceAll(WORKSPACE_FOLDER_VAR, root);
-  const args = cfg.get<string[]>('executableArgs', []).map(expand);
-  const configured = cfg.get<string>('executablePath', '').trim();
-  if (configured) {
-    const command = expand(configured);
-    return { command, args, version: await probeVersion(command, args), source: 'setting' };
-  }
-  const cli = await findCli();
-  const chosen = chooseEngine({
-    cli,
-    bundled: bundled
-      ? { command: bundled, args: [], version: VERSION, source: 'bundled' }
-      : undefined,
-  });
-  if (!chosen)
-    throw new NoEngineError(
-      'no switchback engine found: this platform has no bundled engine and the switchback CLI is not installed',
-    );
-  return { ...chosen, args: [...chosen.args, ...args] };
-}
 
 export class EngineConnection implements vscode.Disposable {
   client: SwitchbackClient | undefined;
@@ -162,6 +126,7 @@ export class EngineConnection implements vscode.Disposable {
     });
     client.on((event) => {
       const mine = this.scope.observe(event);
+      if (event.type === 'session.renamed') this.retitle(event.sessionId, event.title);
       this.broadcast({ type: 'event', event });
       if (event.type === 'usage.updated' && event.sessionId === this.session?.id)
         this.updateStatus(event.costUsd, event.tier);
@@ -276,7 +241,15 @@ export class EngineConnection implements vscode.Disposable {
     const sessions = await this.client?.request('session.list', {}).catch(() => undefined);
     if (!sessions) return;
     for (const s of sessions) this.remember(s);
+    if (this.session) this.session = this.known.get(this.session.id) ?? this.session;
     this.broadcast({ type: 'sessions', sessions });
+  }
+
+  /** Keep a renamed session's title, for the chat's title and the next tab switch. */
+  private retitle(sessionId: string, title: string) {
+    const known = this.known.get(sessionId);
+    if (known) this.known.set(sessionId, { ...known, title });
+    if (this.session?.id === sessionId) this.session = { ...this.session, title };
   }
 
   /** Show the dashboard in the chat (Switchback: Show Sessions). */

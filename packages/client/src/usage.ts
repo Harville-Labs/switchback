@@ -5,6 +5,7 @@
  */
 import type { Usage, UsageRange, UsageReport, UsageRow } from '@switchback/protocol';
 import { speedLabel } from './format.ts';
+import type { CacheTally, ViewState } from './view-state.ts';
 
 /** Dollars to the cent, with `<$0.01` for amounts too small to round to one. */
 export function usd(n: number): string {
@@ -15,6 +16,20 @@ export function usd(n: number): string {
 export function compactTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+}
+
+/**
+ * `cache 87%` for the session's prompt-cache hit rate, with the latest turn's
+ * when it differs (`cache 87% · turn 95%`). Undefined before any call counted.
+ */
+export function cacheLabel(cache: ViewState['cache']): string | undefined {
+  if (!cache?.session.inputTokens) return undefined;
+  const pct = (t: CacheTally) => Math.round((100 * t.readTokens) / t.inputTokens);
+  const session = pct(cache.session);
+  const turn = cache.turn.inputTokens ? pct(cache.turn) : undefined;
+  return turn === undefined || turn === session
+    ? `cache ${session}%`
+    : `cache ${session}% · turn ${turn}%`;
 }
 
 /** Every token a call moved: input (cached or not) and output. */

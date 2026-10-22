@@ -6,7 +6,7 @@ import { GeminiProvider } from './gemini.ts';
 import { flavorForUrl, OpenAICompatibleProvider } from './openai-compatible.ts';
 import { OpenAIResponsesProvider } from './openai-responses.ts';
 import { OPENCODE_KEY_ENV, OpenCodeProvider } from './opencode.ts';
-import { ScriptedProvider, type ScriptedTurn } from './scripted.ts';
+import { prefixCache, ScriptedProvider, type ScriptedTurn } from './scripted.ts';
 import type { ApiKeySource, ChatRequest, Provider } from './types.ts';
 
 /** `{env:NAME}` references are resolved at load time so secrets stay out of config files. */
@@ -343,8 +343,13 @@ export function createProvider(id: string, config: ProviderConfig): Provider {
         platform: { kind: 'vertex', projectId: config.projectId, region: config.region },
         noThinkingModels: NO_THINKING,
       });
-    case 'mock':
-      return new ScriptedProvider(id, config.tier, (req) => mockTurn(id, req.messages));
+    case 'mock': {
+      const usage = prefixCache();
+      return new ScriptedProvider(id, config.tier, (req) => ({
+        ...mockTurn(id, req.messages),
+        usage: usage(req),
+      }));
+    }
   }
 }
 

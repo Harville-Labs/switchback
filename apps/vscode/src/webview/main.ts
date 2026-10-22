@@ -19,7 +19,7 @@ import {
   trackSessions,
   updateActiveView,
 } from '@switchback/client/tabs';
-import { formatUsage } from '@switchback/client/usage';
+import { cacheLabel, formatUsage } from '@switchback/client/usage';
 import {
   addInfo,
   addUserPrompt,
@@ -162,8 +162,9 @@ function render() {
   queueEl.innerHTML = renderQueue(view.queue ?? []);
   syncSend();
   renderControls();
+  const cacheText = cacheLabel(view.cache);
   statusEl.textContent = connected
-    ? `${view.private ? '🔒 local only · ' : ''}${view.speed ? `${speedLabel(view.speed.tokensPerSecond)} · ` : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}`
+    ? `${view.private ? '🔒 local only · ' : ''}${view.speed ? `${speedLabel(view.speed.tokensPerSecond)} · ` : ''}$${view.costUsd.toFixed(4)}${view.savingsUsd > 0.005 ? ` · saved ~$${view.savingsUsd.toFixed(2)}` : ''}${cacheText ? ` · ${cacheText}` : ''}`
     : 'disconnected';
 }
 

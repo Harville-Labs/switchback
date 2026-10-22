@@ -242,3 +242,25 @@ describe('Claude platforms', () => {
     }
   });
 });
+
+describe('prompt caching', () => {
+  test('breakpoints on the system block and the tail, and cache usage comes back', async () => {
+    const { client, calls } = fakeClient(() => ({
+      model: 'claude-opus-5',
+      content: [{ type: 'text', text: 'ok' }],
+      stop_reason: 'end_turn',
+      usage: { ...usage, cache_read_input_tokens: 900, cache_creation_input_tokens: 50 },
+    }));
+    const done = await run(provider(client, 'bedrock'));
+    expect(calls[0]?.params).toMatchObject({
+      system: [{ type: 'text', text: 's', cache_control: { type: 'ephemeral' } }],
+      cache_control: { type: 'ephemeral' },
+    });
+    expect(done.usage).toEqual({
+      inputTokens: 100,
+      outputTokens: 20,
+      cacheReadTokens: 900,
+      cacheWriteTokens: 50,
+    });
+  });
+});

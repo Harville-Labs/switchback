@@ -252,6 +252,8 @@ export class AcpBridge {
       case 'tool.completed':
         s.running.delete(e.callId);
         return this.update(sessionId, toolCallCompleted(e));
+      case 'session.renamed':
+        return this.update(sessionId, { sessionUpdate: 'session_info_update', title: e.title });
       case 'mode.changed':
         return this.update(sessionId, {
           sessionUpdate: 'current_mode_update',

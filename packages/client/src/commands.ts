@@ -70,6 +70,12 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     description: 'switch to a saved session (no argument: pick from a list)',
   },
   {
+    name: 'rename',
+    args: '[title]',
+    group: 'Session',
+    description: 'rename this session (no argument: show its title)',
+  },
+  {
     name: 'compact',
     group: 'Session',
     description: 'summarize earlier messages now (also automatic)',

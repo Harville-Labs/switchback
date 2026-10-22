@@ -28,6 +28,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /** The session's title, beside the view's name. */
+  describe(title: string | undefined) {
+    if (this.view && this.view.description !== (title || undefined))
+      this.view.description = title || undefined;
+  }
+
   post(m: HostToWebview) {
     void this.view?.webview.postMessage(m);
   }

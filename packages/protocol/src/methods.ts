@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { ModelSummary, ModelsRefreshResult } from './models.ts';
 import type { SetupAnswerParams, SetupCancelParams, SetupStartParams } from './setup.ts';
+import type { SessionRenameParams } from './titles.ts';
 import { MAX_IMAGE_BYTES, type Message, type Tier, type Usage } from './transcript.ts';
 import type { WorktreeDiff, WorktreeInfo, WorktreesDiffParams } from './worktrees.ts';
 
@@ -448,6 +449,8 @@ export interface Methods {
   'session.escalate': { params: SessionEscalateParams; result: SessionEscalateResult };
   /** Compact now (the engine also compacts automatically). Fails while a turn runs. */
   'session.compact': { params: SessionCompactParams; result: { compacted: boolean } };
+  /** Set the session's title; automatic retitling leaves it alone from then on. */
+  'session.rename': { params: SessionRenameParams; result: SessionSummary };
   'permission.respond': { params: PermissionRespondParams; result: { ok: true } };
   'escalation.respond': { params: EscalationRespondParams; result: { ok: true } };
   'agents.list': { params: Record<string, never>; result: AgentSummary[] };

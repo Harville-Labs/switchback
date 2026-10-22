@@ -32,6 +32,11 @@ export interface ChatRequest {
   maxTokens: number;
   effort?: Effort;
   sampling?: Sampling;
+  /**
+   * Stable per-session key. Adapters whose API routes prompt caches by key
+   * (OpenAI's `prompt_cache_key`) send it so a session's calls hit the same cache.
+   */
+  cacheKey?: string;
   signal?: AbortSignal;
 }
 

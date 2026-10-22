@@ -339,6 +339,8 @@ export class OpenAICompatibleProvider implements Provider {
       ...(flavor === 'openai'
         ? { max_completion_tokens: request.maxTokens }
         : { max_tokens: request.maxTokens }),
+      // Routes a session's calls to the same cache; other servers may reject the field.
+      ...(flavor === 'openai' && request.cacheKey ? { prompt_cache_key: request.cacheKey } : {}),
       ...effortParams(flavor, effort),
       ...samplingParams(flavor, request.sampling),
       messages: toWireMessages(request.system, request.messages, origin, flavor === 'deepseek'),

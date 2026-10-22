@@ -27,6 +27,7 @@ import {
   SessionEscalateParams,
   SessionGetParams,
   SessionPromptParams,
+  SessionRenameParams,
   SessionRewindParams,
   SessionRolesParams,
   SessionSetEffortParams,
@@ -113,6 +114,10 @@ export function serve(
         return engine.listSessions();
       case 'session.get':
         return engine.getSession(parse(SessionGetParams, req.params).sessionId);
+      case 'session.rename': {
+        const p = parse(SessionRenameParams, req.params);
+        return engine.renameSession(p.sessionId, p.title);
+      }
       case 'session.prompt':
         return engine.prompt(parse(SessionPromptParams, req.params));
       case 'session.roles':

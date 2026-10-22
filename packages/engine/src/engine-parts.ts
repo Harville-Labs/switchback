@@ -16,7 +16,7 @@ import { TurnHooks } from './hooks/turn-hooks.ts';
 import { fixedInstructions } from './instructions-live.ts';
 import { UsageLedger } from './ledger.ts';
 import { Library } from './library.ts';
-import type { EngineHost, LiveSession } from './live-session.ts';
+import { type EngineHost, type LiveSession, scope } from './live-session.ts';
 import type { McpHub } from './mcp/hub.ts';
 import { ModelDirectory } from './model-directory.ts';
 import { projectPaths, switchbackPaths } from './paths.ts';
@@ -109,6 +109,10 @@ export function assembleEngine(options: EngineOptions, io: EngineIo) {
     emit: (e) => io.emit(e),
     notify: (level, message) => io.notify(level, message),
     append: (s, m) => sessions.append(s, m),
+    rename: (s, title, source) => {
+      sessions.rename(s, title, source);
+      io.emit({ type: 'session.renamed', ...scope(s), title, source });
+    },
     rolesOf: (s) => policy.rolesOf(s),
     remoteBlocked: (s) => policy.remoteBlocked(s),
     recordUsage: (s, tier, model, usage, meta) => recorder.record(s, tier, model, usage, meta),

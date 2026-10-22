@@ -110,6 +110,28 @@ describe('openai-compatible', () => {
     });
   });
 
+  test('only OpenAI itself gets the session cache key', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchStub = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response('data: [DONE]\n\n', { status: 200 });
+    }) as unknown as typeof fetch;
+    for (const flavor of ['openai', 'generic'] as const) {
+      const p = new OpenAICompatibleProvider({
+        id: flavor,
+        baseUrl: 'http://x/v1',
+        tier: 'remote',
+        flavor,
+        fetch: fetchStub,
+      });
+      const req = { model: 'm', system: '', messages: [], tools: [], maxTokens: 10 };
+      for await (const _ of p.stream({ ...req, cacheKey: 'ses_1' })) {
+      }
+    }
+    expect(bodies[0]?.prompt_cache_key).toBe('ses_1');
+    expect(bodies[1]).not.toHaveProperty('prompt_cache_key');
+  });
+
   test('flags malformed tool arguments instead of throwing', async () => {
     const chunk = {
       choices: [

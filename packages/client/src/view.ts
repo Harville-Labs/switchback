@@ -12,8 +12,10 @@ import {
   type SessionSummary,
 } from '@switchback/protocol';
 import { compactedLabel, privateLabel, redactedLabel } from './format.ts';
+import { renamedLabel } from './titles.ts';
 import {
   agentOf,
+  foldCache,
   initialView,
   owns,
   type TodoItem,
@@ -248,7 +250,13 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
   const last = items.at(-1);
   switch (event.type) {
     case 'turn.started':
-      return { ...state, running: true };
+      return {
+        ...state,
+        running: true,
+        ...(state.cache
+          ? { cache: { ...state.cache, turn: { readTokens: 0, inputTokens: 0 } } }
+          : {}),
+      };
     case 'route.decided':
       items.push({
         kind: 'route',
@@ -438,14 +446,22 @@ function reduceSession(state: ViewState, event: SessionEvent): ViewState {
         text: compactedLabel(event.messages, event.tokensBefore, event.tokensAfter),
       });
       return { ...state, items };
+    case 'session.renamed': {
+      const text = renamedLabel(event.title, event.source);
+      if (!text) return state;
+      items.push({ kind: 'info', id: `c${items.length}`, text });
+      return { ...state, items };
+    }
     case 'call.stats': {
-      if (event.tokensPerSecond === undefined) return state;
+      const cache = foldCache(state.cache, event.tier, event.usage);
+      const withCache = cache ? { ...state, cache } : state;
+      if (event.tokensPerSecond === undefined) return withCache;
       // The route row for this call is the latest one: calls in a session run one at a time.
       const at = items.findLastIndex((i) => i.kind === 'route');
       const row = items[at];
       if (row?.kind === 'route') items[at] = { ...row, tokensPerSecond: event.tokensPerSecond };
       return {
-        ...state,
+        ...withCache,
         items,
         speed: { model: event.model.model, tokensPerSecond: event.tokensPerSecond },
       };

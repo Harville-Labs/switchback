@@ -14,6 +14,7 @@ import type {
 } from './methods.ts';
 import type { ModelSummary } from './models.ts';
 import type { SetupNote, SetupOutcome, SetupQuestion } from './setup.ts';
+import type { TitleSource } from './titles.ts';
 import type { ModelRef, StopReason, Tier, Usage } from './transcript.ts';
 import type { WorktreeOutcome, WorktreeStart } from './worktrees.ts';
 
@@ -42,6 +43,11 @@ export type EngineEvent =
       /** Calls left before routing returns to `current` after an escalation. */
       stickyTurns?: number;
     } & SessionScoped)
+  /**
+   * The session's title changed: `user` by `session.rename`, `prompt` from
+   * the first prompt, `compaction` summarized from the conversation so far.
+   */
+  | ({ type: 'session.renamed'; title: string; source: TitleSource } & SessionScoped)
   | ({ type: 'roles.updated'; roles: SessionRoles } & SessionScoped)
   | ({ type: 'mode.changed'; mode: PermissionMode } & SessionScoped)
   /** The session's reasoning effort; none means the agent's or model's own. */
@@ -183,13 +189,15 @@ export type EngineEvent =
       savingsUsd?: number;
       tier: Tier;
     } & SessionScoped)
-  /** A model call finished: how fast the model answered. */
+  /** A model call finished: how fast the model answered and what it read from cache. */
   | ({
       type: 'call.stats';
       turnId: string;
       model: ModelRef;
       tier: Tier;
       outputTokens: number;
+      /** This call's token usage, cache reads and writes included. */
+      usage?: Usage;
       /**
        * Output tokens per second, from the first streamed token to the last
        * (the whole call when nothing streamed). Absent for very short answers,
