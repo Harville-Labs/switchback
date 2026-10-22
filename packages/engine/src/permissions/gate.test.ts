@@ -207,13 +207,44 @@ describe('permission modes', () => {
   });
 });
 
+describe('exploring with bash', () => {
+  const run = (command: string) => ({ toolCalls: [{ name: 'bash', input: { command } }] });
+
+  test('read-only commands in the workspace run without asking', async () => {
+    const { engine, lp, events } = setup(
+      [run('cd . && ls && grep -n alpha a.txt && git status'), { text: 'done' }],
+      { bash: 'ask' },
+    );
+    await engine.runTurn(session(engine), 'look around');
+    expect(events.some((e) => e.type === 'permission.requested')).toBe(false);
+    expect(results(lp)[0]?.content).toContain('alpha');
+  });
+
+  test('reaching outside the workspace, a guarded file, or permissions.read ask still asks', async () => {
+    const cases: [string, object][] = [
+      ['cat ../outside.txt', { bash: 'ask' }],
+      ['cat .env', { bash: 'ask', deny: ['read(.env)'] }],
+      ['grep -rn TOKEN .', { bash: 'ask', ask: ['read(.env)'] }],
+      ['ls', { bash: 'ask', read: 'ask' }],
+    ];
+    for (const [command, permissions] of cases) {
+      // With prompts denied, a call that asks comes back refused.
+      const { engine, lp } = setup([run(command), { text: 'ok' }], permissions, {
+        interaction: 'deny',
+      });
+      await engine.runTurn(session(engine), 'go');
+      expect({ command, refused: results(lp)[0]?.isError }).toEqual({ command, refused: true });
+    }
+  });
+});
+
 describe('rules at the prompt', () => {
   test('always grants the rule shown, not the whole category', async () => {
     const { engine, events } = setup(
       [
-        { toolCalls: [{ name: 'bash', input: { command: 'git status' } }] },
-        { toolCalls: [{ name: 'bash', input: { command: 'git status -s' } }] },
-        { toolCalls: [{ name: 'bash', input: { command: 'ls' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'git add a.txt' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'git add -A' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'printf x' } }] },
         { text: 'done' },
       ],
       { bash: 'ask' },
@@ -226,11 +257,11 @@ describe('rules at the prompt', () => {
     });
     await engine.runTurn(session(engine), 'go');
     expect(events.find((e) => e.type === 'permission.requested')).toMatchObject({
-      rules: ['bash(git status:*)'],
+      rules: ['bash(git add:*)'],
     });
-    expect(asked).toEqual(['$ git status', '$ ls']);
+    expect(asked).toEqual(['$ git add a.txt', '$ printf x']);
     expect((await engine.permissions()).rules).toContainEqual({
-      rule: 'bash(git status:*)',
+      rule: 'bash(git add:*)',
       behavior: 'allow',
       source: 'this session',
     });
@@ -262,12 +293,12 @@ describe('rules at the prompt', () => {
       bypassDisabled: false,
       userPermissionsDisabled: true,
     };
-    // `echo`, not a build tool: on macOS `/usr/bin/make` is an xcrun shim that can take
+    // `printf`, not a build tool: on macOS `/usr/bin/make` is an xcrun shim that can take
     // seconds on a cold machine, and only the asking matters here.
     const { engine, events } = setup(
       [
-        { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] },
-        { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'printf hi' } }] },
+        { toolCalls: [{ name: 'bash', input: { command: 'printf hi' } }] },
         { text: 'done' },
       ],
       { bash: 'ask' },

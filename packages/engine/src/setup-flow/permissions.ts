@@ -38,7 +38,7 @@ export async function setupUserPermissions(
   }
   writeConfigLayer(file, { permissions: next }, { references: false });
   const parts = [
-    ...(fresh ? ['read-only commands'] : []),
+    ...(fresh ? ['test and build commands'] : []),
     ...(imported?.allow.length ? ['what your previous agent allowed'] : []),
   ];
   const runs =

@@ -96,7 +96,7 @@ test('a client runs the whole setup over the protocol, and the config is written
     expect(statSync(join(home, 'config.json')).mode & 0o777).toBe(0o600);
   expect(JSON.stringify(events)).not.toContain('sk-test');
   expect(config.routing.budget.monthlyUsd).toBe(5);
-  expect(config.permissions.allow).toContain('bash(git status:*)');
+  expect(config.permissions.allow).toContain('bash(pytest:*)');
   // Applied live, so every client of a shared engine sees the new models.
   expect(events.some((e) => e.type === 'config.updated')).toBe(true);
   expect((await c.request('session.create', {})).id).toBeTruthy();

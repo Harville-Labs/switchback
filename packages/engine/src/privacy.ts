@@ -57,8 +57,9 @@ function commandWords(command: string): string[] {
 /**
  * Why a tool call brought private content into the session, or undefined.
  * Paths come from the call's input; for grep, from the files its output
- * quotes. bash commands are checked by the paths they name: a script that
- * reads a private file indirectly isn't detected (see docs/privacy.md).
+ * quotes. bash commands are checked by the paths they name and the files their
+ * output quotes the way grep does; a script that reads a private file without
+ * printing its name isn't detected (see docs/privacy.md).
  */
 export function privateToolUse(
   matches: PrivatePathMatcher,
@@ -94,6 +95,13 @@ export function privateToolUse(
     for (const word of commandWords(command)) {
       const p = check(word);
       if (p) return `a command named ${p}`;
+    }
+    // `grep -rn` and `rg` run without asking (permissions/explore.ts) and quote
+    // files they were never told about: `path:line:` or `path:` at line start.
+    for (const line of output.split('\n')) {
+      const m = /^([^:\s][^:]*):/.exec(line);
+      const p = m && check(m[1]);
+      if (p) return `a command printed ${p}`;
     }
   }
   return undefined;

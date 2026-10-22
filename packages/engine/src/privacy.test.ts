@@ -59,7 +59,7 @@ describe('privatePathMatcher', () => {
 describe('privateToolUse', () => {
   const m = privatePathMatcher(['secrets/']) as PrivatePathMatcher;
   const root = '/repo';
-  test('file tools by path, grep by the files its output quotes, bash by named paths', () => {
+  test('file tools by path, grep by the files its output quotes, bash by named and printed paths', () => {
     expect(privateToolUse(m, root, 'read', { path: 'secrets/a.env' }, '')).toBe(
       'read secrets/a.env',
     );
@@ -78,6 +78,12 @@ describe('privateToolUse', () => {
       'a command named secrets/x',
     );
     expect(privateToolUse(m, root, 'bash', { command: 'bun test' }, '')).toBeUndefined();
+    expect(
+      privateToolUse(m, root, 'bash', { command: 'grep -rn TOKEN .' }, './secrets/b.yml:2:TOKEN=x'),
+    ).toBe('a command printed secrets/b.yml');
+    expect(
+      privateToolUse(m, root, 'bash', { command: 'bun test' }, 'error: src/a.ts:3: failed'),
+    ).toBeUndefined();
     expect(privateToolUse(m, root, 'glob', { pattern: 'secrets/**' }, 'secrets/a')).toBeUndefined();
   });
 });

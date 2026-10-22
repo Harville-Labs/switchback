@@ -43,7 +43,7 @@ const lastUserText = (lp: ScriptedProvider, i: number) => {
   return m ? textOf(m) : '';
 };
 
-const askFirst = { toolCalls: [{ name: 'bash', input: { command: 'echo hi' } }] };
+const askFirst = { toolCalls: [{ name: 'bash', input: { command: 'printf hi' } }] };
 
 describe('queued prompts', () => {
   test('reach the model at the next step of the running turn', async () => {
