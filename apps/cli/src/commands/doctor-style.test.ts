@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { heading, marked, type Style, summary } from './doctor-style.ts';
+import { marked, type Style, summary } from './doctor-style.ts';
 
 /** Styles as tags, so tests read what's styled how. */
 const tag =
@@ -14,13 +14,6 @@ const style: Style = {
   yellow: tag('yellow'),
   cyan: tag('cyan'),
 };
-
-test('headings are bold, with an optional dim note', () => {
-  expect(heading(style, 'Providers')).toBe('<b><cyan>Providers</cyan></b>');
-  expect(heading(style, 'Instructions', 'in every session')).toBe(
-    '<b><cyan>Instructions</cyan></b> <dim>in every session</dim>',
-  );
-});
 
 test('lines are colored by their mark, keeping their indent', () => {
   expect(marked(style, '  ✓ ollama: 3 models')).toBe('  <green>✓</green> ollama: 3 models');

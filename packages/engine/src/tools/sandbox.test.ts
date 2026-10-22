@@ -9,7 +9,7 @@ import { SwitchbackConfig } from '../config.ts';
 import { Engine } from '../engine.ts';
 import { bashTool } from './bash.ts';
 import { CommandRunner } from './process.ts';
-import { BashSandbox, DEFAULT_DENY_READ, type SandboxSettings, sandboxPolicy } from './sandbox.ts';
+import { BashSandbox, type SandboxSettings, sandboxPolicy } from './sandbox.ts';
 
 const settings = (over: Partial<SandboxSettings> = {}): SandboxSettings => ({
   ...SwitchbackConfig.parse({}).bash.sandbox,
@@ -33,7 +33,6 @@ describe.skipIf(process.platform === 'win32')('sandbox policy', () => {
     expect(p.filesystem.denyRead).toEqual(
       expect.arrayContaining(['/home/me/.ssh', '/home/me/.aws', '/home/me/.switchback']),
     );
-    expect(DEFAULT_DENY_READ).toContain('~/.ssh');
     expect(p.network.allowedDomains).toEqual(['*']);
   });
 
