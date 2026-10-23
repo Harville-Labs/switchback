@@ -58,7 +58,7 @@ When several hooks answer, a block from any of them wins, and deny beats ask bea
 
 Hooks add up across every config layer: your user config, the project's `.switchback/config.json` and `.switchback/config.local.json`, and an organization's policy. All of them run.
 
-A project's hooks run commands from a checked-out repository, so they wait for your trust, like a project's MCP servers. `switchback hooks` lists the hooks in effect and the ones waiting; read them, then `switchback hooks trust`. Trust covers the exact definition, so a changed hook waits again. `switchback doctor` reports hooks waiting for trust.
+A project's hooks run commands from a checked-out repository, so they wait for your trust (as a project's MCP servers do with `requireMcpTrust`). `switchback hooks` lists the hooks in effect and the ones waiting; read them, then `switchback hooks trust`. Trust covers the exact definition, so a changed hook waits again. `switchback doctor` reports hooks waiting for trust.
 
 An organization can run only its own hooks (`restrictions.allowUserHooks: false`); see [organizations.md](organizations.md).
 

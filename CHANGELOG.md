@@ -4,6 +4,12 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added
+- **A project's `.mcp.json` is read.** Its `mcpServers` load below `.switchback/config.json`, which can adjust or turn off its servers. `${NAME}` references read the environment. Servers Switchback can't run are skipped with a warning ([ADR 0030](docs/adr/0030-read-mcp-json.md))
+
+### Changed
+- **Project MCP servers start without `switchback mcp trust`.** Set `requireMcpTrust: true` in your user config to keep the check, for `.mcp.json` and `.switchback/` servers alike
+
 ## [3.0.0] - 2026-10-22
 
 ### Added

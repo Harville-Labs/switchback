@@ -195,7 +195,7 @@ Commands to run on session events. Hooks from every layer add up; a project's wa
 
 ### `mcpServers.<name>`
 
-Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. Servers use the `mcpServers` shape most MCP clients share, so a definition can be copied from another tool's config. Switchback reads them only from its own config files, not from `.mcp.json` or another tool's settings.
+Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents as `mcp__<name>__<tool>`. Servers use the `mcpServers` shape most MCP clients share, so a definition can be copied from another tool's config. Switchback reads them from its config files and from a `.mcp.json` at the workspace root, described below.
 
 ```jsonc
 "mcpServers": {
@@ -227,7 +227,13 @@ Tools from [MCP](https://modelcontextprotocol.io) servers, available to agents a
 
 `/mcp` lists each server's resources and prompts. A server's tool results can include images, which reach models with vision.
 
-**Project servers need trust.** A server defined in a project's `.switchback/config.json` runs a command from the repository, so it doesn't start until you approve it with `switchback mcp trust` (or `switchback mcp trust <name>`). Approval is per workspace and per definition: if the repository changes the server's command, it needs approval again. The same applies when a project redefines a server from your user config. `switchback mcp` and `switchback doctor` show every server's state and tool count.
+**A project's `.mcp.json`.** Many repositories commit a `.mcp.json` so every contributor's MCP client gets the same servers. Switchback reads its `mcpServers` as a project layer just below `.switchback/config.json`, which can adjust one of its servers (`"files": { "permission": "allow" }`) or turn it off (`"enabled": false`). `${NAME}` in the file reads the environment variable, like `{env:NAME}`, and `${NAME:-default}` uses the default when the variable is unset. Nothing else in the file is read. A server Switchback can't run, or a file it can't parse, is skipped with a warning that `switchback doctor` shows ([ADR 0030](adr/0030-read-mcp-json.md)).
+
+**Project servers start without asking**, as in other MCP clients: opening a repository runs the commands its `.mcp.json` and `.switchback/config.json` name. Calls to their tools still follow `permissions.mcp`. To review a repository's servers before they run, set `requireMcpTrust` (below). `switchback mcp` and `switchback doctor` show every server's state and tool count.
+
+### `requireMcpTrust`
+
+Default `false`. When `true`, MCP servers a project defines (in `.mcp.json` or `.switchback/`) don't start until you approve them with `switchback mcp trust` (or `switchback mcp trust <name>`). Approval is per workspace and per definition: if the repository changes a server's command, it needs approval again, and the same applies when a project redefines a server from your user config. Set it in your user config, or an organization can enforce it. A project's config can turn it on but not off.
 
 ### `privacy`
 

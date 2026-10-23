@@ -33,3 +33,4 @@ Short records of decisions that shape the codebase. Add one when you change an i
 | [0027](0027-map-reduce-compaction.md) | Compaction prunes stale tool output, summarizes the history in parts and merges them, and appends a word-for-word record | Accepted |
 | [0028](0028-agents-change-their-settings.md) | The model reads Switchback's settings and models with tools, and changes them with tools that always ask and apply at once | Accepted |
 | [0029](0029-agents-and-permission-levels.md) | Shift+Tab switches the session's agent (build, plan, your own); agents only tighten permissions; the permission level is `ask`, `auto`, or `bypass`, set with `/permissions` | Accepted |
+| [0030](0030-read-mcp-json.md) | A project's `.mcp.json` is read, and project MCP servers start without trust unless `requireMcpTrust` is set | Accepted |
