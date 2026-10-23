@@ -20,6 +20,7 @@ import { removedKeyProblem, renamedKeyWarnings, withRenamedKeys } from './config
 import { SwitchbackConfig } from './config-schema.ts';
 import { readEndpointModels, withEndpointModels } from './endpoint-models.ts';
 import { HookLayers, type SourcedHook } from './hooks/layers.ts';
+import { McpSources, mcpJsonFile, readMcpJson, type UntrustedMcp } from './mcp/project.ts';
 import {
   applyRestrictions,
   dropMissingPolicyAliases,
@@ -32,7 +33,6 @@ import { projectPaths, switchbackPaths } from './paths.ts';
 import { RuleLayers } from './permissions/layers.ts';
 import type { SourcedRule } from './permissions/policy.ts';
 import { readDiscovered, withSubscriptionModels } from './subscription-models.ts';
-import { isTrusted } from './trust.ts';
 
 export * from './config-removed.ts';
 export * from './config-schema.ts';
@@ -44,8 +44,8 @@ export interface LoadedConfig {
   prices: Record<string, Price>;
   /** Present when an organization policy applied. */
   org?: OrgStatus;
-  /** Project-defined MCP servers left out until trusted (`switchback mcp trust`). */
-  untrustedMcp: { name: string; source: string; definition: unknown }[];
+  /** With `requireMcpTrust`, project-defined MCP servers left out until trusted (`switchback mcp trust`). */
+  untrustedMcp: UntrustedMcp[];
   /** Every permission rule in effect, with the layer it came from. */
   rules: SourcedRule[];
   /** Project hooks left out until trusted (`switchback hooks trust`). */
@@ -102,11 +102,14 @@ export function loadConfig(
   const userFile = switchbackPaths(env).configFile;
   // In the home directory, the project's `.switchback/` is the user's own.
   const atHome = resolve(pp.configFile) === resolve(userFile);
+  const mcpJson = mcpJsonFile(workspaceRoot);
   const files: { file: string; project: boolean }[] = [
     { file: userFile, project: false },
     ...(atHome
       ? []
       : [
+          // Below `.switchback/`, so Switchback's own files can adjust or turn off its servers.
+          { file: mcpJson, project: true },
           { file: pp.configFile, project: true },
           { file: pp.localConfigFile, project: true },
         ]),
@@ -125,13 +128,8 @@ export function loadConfig(
       orgPermissionsOnly && !where.org ? withoutLevels(layer, source, ignoredLevels) : layer;
     return hookLayers.take(rules.take(own, source, where.org), source, where);
   };
-  /** Where each MCP server's effective definition came from. */
-  const mcpSource = new Map<string, { project: boolean; file: string }>();
-  const noteMcp = (layer: unknown, project: boolean, file: string) => {
-    const servers = (layer as { mcpServers?: unknown } | undefined)?.mcpServers;
-    if (servers && typeof servers === 'object')
-      for (const name of Object.keys(servers)) mcpSource.set(name, { project, file });
-  };
+  const mcpSources = new McpSources();
+  const noteMcp = mcpSources.note.bind(mcpSources);
   let merged: Record<string, unknown> = defaultConfig();
   if (org) {
     const removed = removedKeyProblem(org.defaults) ?? removedKeyProblem(org.enforced);
@@ -144,6 +142,15 @@ export function loadConfig(
   }
   const sources: string[] = [];
   for (const { file, project } of files) {
+    if (file === mcpJson) {
+      const read = readMcpJson(file, env);
+      if (!read) continue;
+      warnings.push(...read.warnings);
+      noteMcp(read.layer, project, file);
+      merged = deepMerge(merged, read.layer);
+      // Not in `sources`: those are Switchback's own files, and having none means first run.
+      continue;
+    }
     if (!existsSync(file)) continue;
     let parsed: Record<string, unknown>;
     try {
@@ -160,6 +167,11 @@ export function loadConfig(
     if (project && t?.enabled === true) {
       const { enabled: _ignored, ...rest } = t;
       parsed = { ...parsed, telemetry: rest };
+    }
+    // Likewise it may require trust for its MCP servers, never waive it.
+    if (project && 'requireMcpTrust' in parsed && parsed.requireMcpTrust !== true) {
+      const { requireMcpTrust: _ignored, ...rest } = parsed;
+      parsed = rest;
     }
     noteMcp(parsed, project, file);
     merged = deepMerge(merged, additive(parsed, sourceLabel(file, workspaceRoot), { project }));
@@ -187,16 +199,7 @@ export function loadConfig(
     hooks: hookSet.hooks,
   };
 
-  // A repository can't run commands on this machine until the user trusts it.
-  const untrustedMcp: LoadedConfig['untrustedMcp'] = [];
-  const servers = { ...((merged.mcpServers as Record<string, unknown> | undefined) ?? {}) };
-  for (const [name, def] of Object.entries(servers)) {
-    const source = mcpSource.get(name);
-    if (source?.project && !isTrusted(workspaceRoot, `mcp:${name}`, def, env)) {
-      delete servers[name];
-      untrustedMcp.push({ name, source: source.file, definition: def });
-    }
-  }
+  const { servers, untrusted: untrustedMcp } = mcpSources.holdUntrusted(merged, workspaceRoot, env);
   merged = { ...merged, mcpServers: servers };
 
   const result = SwitchbackConfig.safeParse(resolveEnv(merged, env));

@@ -96,4 +96,4 @@ These hold the product together. A change that breaks one needs an ADR in `docs/
 - Don't read `process.env` outside config loading and provider credential resolution.
 - Don't log prompts, file contents, or credentials at `info` level or above.
 - Don't commit secrets, `.env` files, or real usage ledgers.
-- Don't read or follow another agent's setup (`CLAUDE.md`, `.claude/`, `.mcp.json`, and the like). Use open conventions (`AGENTS.md`) and Switchback's own `.switchback/` ([ADR 0016](docs/adr/0016-open-conventions.md)).
+- Don't read or follow another agent's setup (`CLAUDE.md`, `.claude/`, and the like). Use open conventions (`AGENTS.md`, a project's `.mcp.json`) and Switchback's own `.switchback/` ([ADR 0016](docs/adr/0016-open-conventions.md), [ADR 0030](docs/adr/0030-read-mcp-json.md)).

@@ -1,13 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EngineEvent, ToolResultPart } from '@switchback/protocol';
 import { type Provider, type Script, ScriptedProvider } from '@switchback/providers';
 import { parseAgentFile } from '../agents.ts';
-import { loadConfig, SwitchbackConfig } from '../config.ts';
+import { SwitchbackConfig } from '../config.ts';
 import { Engine, type EngineOptions } from '../engine.ts';
-import { trust } from '../trust.ts';
 import { fromContent } from './content.ts';
 import { allowsMcpTool, McpHub, mcpToolName } from './hub.ts';
 
@@ -268,51 +267,4 @@ describe('stdio server', () => {
     expect(status.servers.find((s) => s.name === 'broken')).toMatchObject({ state: 'failed' });
     await e.shutdown();
   }, 20_000);
-});
-
-describe('project servers need trust', () => {
-  test("a project's servers are held back until trusted; another tool's .mcp.json is never read", () => {
-    const home = join(root, 'home');
-    const env = { SWITCHBACK_HOME: home };
-    const project = (servers: Record<string, unknown>) =>
-      writeFileSync(
-        join(root, '.switchback', 'config.json'),
-        JSON.stringify({ mcpServers: servers }),
-      );
-    mkdirSync(join(root, '.switchback'), { recursive: true });
-    project({ repo: { command: 'evil' } });
-    writeFileSync(
-      join(root, '.mcp.json'),
-      JSON.stringify({ mcpServers: { other: { command: 'x' } } }),
-    );
-    mkdirSync(home, { recursive: true });
-    writeFileSync(
-      join(home, 'config.json'),
-      JSON.stringify({ mcpServers: { mine: { command: 'ok' } } }),
-    );
-
-    const before = loadConfig(root, env, [], null);
-    expect(Object.keys(before.config.mcpServers)).toEqual(['mine']);
-    expect(before.untrustedMcp).toEqual([
-      {
-        name: 'repo',
-        source: join(root, '.switchback', 'config.json'),
-        definition: { command: 'evil' },
-      },
-    ]);
-
-    trust(root, { 'mcp:repo': { command: 'evil' } }, env);
-    expect(Object.keys(loadConfig(root, env, [], null).config.mcpServers).sort()).toEqual([
-      'mine',
-      'repo',
-    ]);
-
-    // Changing the definition revokes trust.
-    project({ repo: { command: 'worse' } });
-    expect(loadConfig(root, env, [], null).untrustedMcp.map((u) => u.name)).toEqual(['repo']);
-
-    // A project can't silently replace a user server's command either.
-    project({ repo: { command: 'evil' }, mine: { command: 'swap' } });
-    expect(loadConfig(root, env, [], null).untrustedMcp.map((u) => u.name)).toEqual(['mine']);
-  });
 });

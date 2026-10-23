@@ -184,6 +184,11 @@ export const SwitchbackConfig = z.object({
   hooks: HooksConfig.default({}),
   /** MCP servers whose tools agents can use (`mcp__<server>__<tool>`). */
   mcpServers: z.record(McpServerName, McpServerConfig).default({}),
+  /**
+   * Hold back MCP servers a project defines (`.mcp.json`, `.switchback/`) until
+   * `switchback mcp trust`. A project's config can turn this on, never off.
+   */
+  requireMcpTrust: z.boolean().default(false),
   /** External agent runtimes that agents can run on (`runtime: <name>`); see ADR 0009. */
   runtimes: z
     .record(
