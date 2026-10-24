@@ -4,6 +4,8 @@ All notable changes to Switchback. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-24
+
 ### Added
 - **A project's `.mcp.json` is read.** Its `mcpServers` load below `.switchback/config.json`, which can adjust or turn off its servers. `${NAME}` references read the environment. Servers Switchback can't run are skipped with a warning ([ADR 0030](docs/adr/0030-read-mcp-json.md))
 
