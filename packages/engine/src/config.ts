@@ -18,6 +18,7 @@ import { type ParseError, parse as parseJsoncText, printParseErrorCode } from 'j
 import { z } from 'zod';
 import { removedKeyProblem, renamedKeyWarnings, withRenamedKeys } from './config-removed.ts';
 import { SwitchbackConfig } from './config-schema.ts';
+import { applyDialect } from './dialects/index.ts';
 import { readEndpointModels, withEndpointModels } from './endpoint-models.ts';
 import { HookLayers, type SourcedHook } from './hooks/layers.ts';
 import { McpSources, mcpJsonFile, readMcpJson, type UntrustedMcp } from './mcp/project.ts';
@@ -52,7 +53,10 @@ export interface LoadedConfig {
   untrustedHooks: SourcedHook[];
   /** Aliases an endpoint or plan lists that no config file names; Tab skips them. */
   listedModels: string[];
-  /** Old keys whose values don't carry over exactly, for startup and `switchback doctor`. */
+  /**
+   * Old keys whose values don't carry over exactly, and what a file in another
+   * tool's format (its `$schema`) left out, for startup and `switchback doctor`.
+   */
   warnings: string[];
 }
 
@@ -158,6 +162,10 @@ export function loadConfig(
     } catch (err) {
       throw new ConfigError(`invalid JSON at ${(err as Error).message}`, file);
     }
+    const translated = applyDialect(parsed);
+    for (const n of translated.notes)
+      warnings.push(`${sourceLabel(file, workspaceRoot)} (${translated.dialect} format): ${n}`);
+    parsed = translated.config;
     warnings.push(...renamedKeyWarnings(parsed).map((w) => `${file}: ${w}`));
     parsed = withRenamedKeys(parsed);
     const removed = removedKeyProblem(parsed);

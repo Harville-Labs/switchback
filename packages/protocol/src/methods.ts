@@ -363,16 +363,18 @@ export interface AgentSummary {
   effort?: string;
   /** Remote spend allowed per invocation as a subagent. */
   budgetUsd?: number;
+  /** `#rrggbb`: how clients mark the agent. */
+  color?: string;
 }
 
-/** A slash command defined in a Markdown file (`.switchback/commands/`, `~/.switchback/commands/`). */
+/** A slash command defined in a Markdown file (`.switchback/commands/`, `~/.switchback/commands/`) or in config. */
 export interface CustomCommandInfo {
   name: string;
   description: string;
   /** What to type after the name, as shown in menus (`<file> [focus]`). */
   args?: string;
   /** `mcp`: an MCP server's prompt, named `<server>:<prompt>`. */
-  source: 'user' | 'project' | 'mcp';
+  source: 'user' | 'project' | 'config' | 'mcp';
 }
 
 export const UsagePeriod = z.enum(['today', 'week', 'month']);

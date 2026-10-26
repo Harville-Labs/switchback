@@ -3,10 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ScriptedProvider } from '@switchback/providers';
+import { applyAgentConfig } from './agents.ts';
 import { SwitchbackConfig } from './config.ts';
 import { expandCommand, loadCustomCommands } from './custom-commands.ts';
 import { Engine } from './engine.ts';
-import type { LibraryDirs } from './library.ts';
+import { Library, type LibraryDirs } from './library.ts';
 import { loadSkills, skillsSection } from './skills.ts';
 import { skillTool } from './tools/skill.ts';
 import type { ToolContext } from './tools/tool.ts';
@@ -144,5 +145,83 @@ describe('the engine', () => {
     await engine.runTurn(s.id, 'hi');
     expect(lp.requests[0]?.system).toContain('- pdf: Fill PDF forms');
     expect(lp.requests[0]?.tools?.map((t) => t.name)).toContain('skill');
+  });
+});
+
+describe('commands in config', () => {
+  const config = SwitchbackConfig.parse({
+    commands: {
+      'team-issue': {
+        description: 'Open an issue',
+        template: 'Create an issue for: $ARGUMENTS',
+        args: '<title>',
+      },
+      review: { template: 'Review from config.' },
+      'Bad Name': { template: 'x' },
+    },
+  });
+
+  test('expand like files, win over a file of the same name, and report a bad name once', () => {
+    put('project/commands/review.md', 'Review from a file.');
+    const warnings: string[] = [];
+    const library = new Library(
+      dirs,
+      (m) => warnings.push(m),
+      () => config.commands,
+    );
+    expect(library.expand('/team-issue fix retries')).toBe('Create an issue for: fix retries');
+    expect(library.expand('/review')).toBe('Review from config.');
+    expect(library.listCommands().find((c) => c.name === 'team-issue')).toEqual({
+      name: 'team-issue',
+      description: 'Open an issue',
+      args: '<title>',
+      source: 'config',
+    });
+    library.commands();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('Bad Name');
+  });
+
+  test('an OpenCode-style agent entry works as written: system is the prompt, steps the limit', () => {
+    const parsed = SwitchbackConfig.parse({
+      agents: {
+        researcher: { description: 'Research', mode: 'subagent', system: 'Be brief.', steps: 12 },
+      },
+    });
+    const agent = applyAgentConfig(
+      undefined,
+      'researcher',
+      parsed.agents.researcher ?? {},
+      'config',
+    );
+    expect(agent).toMatchObject({ prompt: 'Be brief.', maxSteps: 12, mode: 'subagent' });
+  });
+});
+
+describe('commands that hand off to a subagent', () => {
+  test('subagent: true wraps the prompt so the model delegates it, to the named agent or general', () => {
+    const config = SwitchbackConfig.parse({
+      commands: {
+        triage: { template: 'Triage $1', subagent: true, agent: 'researcher' },
+        plain: { template: 'Do $1', subagent: true },
+        here: { template: 'Do $1', subagent: false },
+      },
+    });
+    const library = new Library(
+      dirs,
+      () => {},
+      () => config.commands,
+    );
+    expect(library.expand('/triage bug-12')).toBe(
+      'Use the task tool to hand the following to the researcher subagent, then tell me what it found or did.\n\nTriage bug-12',
+    );
+    expect(library.expand('/plain x')).toContain('the general subagent');
+    expect(library.expand('/here x')).toBe('Do x');
+  });
+
+  test('a command file can say so in its frontmatter', () => {
+    put('project/commands/dig.md', '---\nsubagent: true\nagent: explore\n---\nFind $1');
+    const library = new Library(dirs, () => {});
+    expect(library.expand('/dig parser')).toContain('the explore subagent');
   });
 });

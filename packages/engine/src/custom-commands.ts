@@ -4,17 +4,29 @@
  * command; the body is a prompt template. `$ARGUMENTS` is everything after
  * the name, `$1` to `$9` its words. Frontmatter is optional: `description`
  * and `args` (a hint shown in menus). A project's command overrides yours of
- * the same name.
+ * the same name. `subagent: true` (with an optional `agent`) hands the prompt to
+ * a subagent. The config's `commands` entries define the same thing and
+ * win over files.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { CustomCommandInfo } from '@switchback/protocol';
 import { parse as parseYaml } from 'yaml';
+import type { CommandConfig } from './config-schema.ts';
 
 export interface CustomCommand extends CustomCommandInfo {
   template: string;
   file: string;
+  /** Hand the prompt to this subagent (`agent`, default `general`) through the task tool. */
+  subagent?: boolean;
+  agent?: string;
 }
+
+/** The prompt a command makes: its template with the arguments filled in. */
+const delegated = (command: CustomCommand, prompt: string) =>
+  command.subagent
+    ? `Use the task tool to hand the following to the ${command.agent ?? 'general'} subagent, then tell me what it found or did.\n\n${prompt}`
+    : prompt;
 
 export interface CommandDir {
   dir: string;
@@ -50,6 +62,39 @@ export function loadCustomCommands(dirs: CommandDir[]): {
   return { commands, errors };
 }
 
+/** Commands defined in config, which win over files of the same name; a bad name is reported and skipped. */
+export function configCommands(entries: Record<string, CommandConfig>): {
+  commands: Map<string, CustomCommand>;
+  errors: string[];
+} {
+  const commands = new Map<string, CustomCommand>();
+  const errors: string[] = [];
+  for (const [name, entry] of Object.entries(entries)) {
+    if (!NAME.test(name)) {
+      errors.push(
+        `config commands.${name}: command names are lowercase letters, digits, and dashes`,
+      );
+      continue;
+    }
+    const template = entry.template.trim();
+    if (!template) {
+      errors.push(`config commands.${name}: the command has no prompt`);
+      continue;
+    }
+    commands.set(name, {
+      name,
+      description: entry.description ?? (template.split('\n')[0] ?? '').slice(0, 80),
+      ...(entry.args ? { args: entry.args } : {}),
+      ...(entry.subagent !== undefined ? { subagent: entry.subagent } : {}),
+      ...(entry.agent ? { agent: entry.agent } : {}),
+      source: 'config',
+      template,
+      file: 'config',
+    });
+  }
+  return { commands, errors };
+}
+
 function parseCommand(
   text: string,
   name: string,
@@ -68,6 +113,8 @@ function parseCommand(
     name,
     description,
     ...(typeof meta.args === 'string' ? { args: meta.args } : {}),
+    ...(typeof meta.subagent === 'boolean' ? { subagent: meta.subagent } : {}),
+    ...(typeof meta.agent === 'string' ? { agent: meta.agent } : {}),
     source,
     template,
     file,
@@ -84,7 +131,10 @@ export function expandCommand(
   if (!command) return undefined;
   const args = (m?.[2] ?? '').trim();
   const words = args ? args.split(/\s+/) : [];
-  return command.template
-    .replaceAll('$ARGUMENTS', args)
-    .replace(/\$([1-9])/g, (_, n: string) => words[Number(n) - 1] ?? '');
+  return delegated(
+    command,
+    command.template
+      .replaceAll('$ARGUMENTS', args)
+      .replace(/\$([1-9])/g, (_, n: string) => words[Number(n) - 1] ?? ''),
+  );
 }

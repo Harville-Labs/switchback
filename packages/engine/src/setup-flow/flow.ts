@@ -138,6 +138,7 @@ export async function runSetup(
       }),
     );
   }
+  if (imported?.commands) layer.commands = imported.commands;
   if (imported?.compaction) layer.compaction = imported.compaction;
   const result = writeConfigLayer(file, layer);
   say(

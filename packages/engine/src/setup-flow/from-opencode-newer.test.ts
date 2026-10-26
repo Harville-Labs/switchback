@@ -135,7 +135,7 @@ test("OpenCode's newer format: providers, models, agents, compaction, permission
     flux: { url: 'https://flux-mcp.example.com/mcp' },
     playwright: { command: 'npx', args: ['-y', '@playwright/mcp@latest'], enabled: false },
   });
-  // Denied tools become a tool list without them; finer rules stay with the global ones.
+  // Denied tools become a tool list without them, and the agent's rules its own `permissions`.
   expect(got.agents).toEqual({
     build: { config: { maxSteps: 60 }, model: got.locals[0] },
     explore: { config: { maxSteps: 15 }, model: got.remotes[1] },
@@ -157,6 +157,7 @@ test("OpenCode's newer format: providers, models, agents, compaction, permission
           'mcp__flux',
           'mcp__playwright',
         ],
+        permissions: { edit: 'deny' },
       },
     },
     pls: {
@@ -182,7 +183,6 @@ test("OpenCode's newer format: providers, models, agents, compaction, permission
   // Token counts as fractions of the current model's 262,144-token window.
   expect(got.compaction).toEqual({ enabled: true, threshold: 0.8, keepRecent: 0.1 });
   expect(got.skipped).toEqual([
-    expect.stringContaining("agent reviewer's rules for shell"),
     expect.stringContaining("agent pls's temperature and top_p"),
     expect.stringContaining("OpenCode's own title agent settings"),
     expect.stringContaining('plugins: Switchback has its own format'),
@@ -241,9 +241,9 @@ test('OpenCode V2 as its migration guide writes it', () => {
   });
   // `mcp.timeout` is a setting, not a server.
   expect(got.mcpServers).toEqual({ docs: { url: 'https://mcp.example.com/mcp' } });
+  expect(got.commands).toEqual({ ship: { template: 'ship it' } });
   expect(got.skipped).toEqual([
     expect.stringContaining("agent reviewer's temperature and top_p"),
-    expect.stringContaining('commands: Switchback has its own format'),
     expect.stringContaining('skills: Switchback has its own format'),
   ]);
 });

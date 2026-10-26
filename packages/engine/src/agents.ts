@@ -13,6 +13,7 @@ import type { AgentSummary, RoutePreference } from '@switchback/protocol';
 import type { Effort } from '@switchback/providers';
 import { Glob } from 'bun';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { permissionsFromList } from './agent-permissions.ts';
 import { AgentConfig, type AgentPermissions, type SwitchbackConfig } from './config-schema.ts';
 
 export type AgentMode = 'primary' | 'subagent' | 'all';
@@ -42,6 +43,8 @@ export interface AgentDefinition {
   runtime?: string;
   /** Levels and rules that tighten the config's while this agent works (ADR 0029). */
   permissions?: AgentPermissions;
+  /** `#rrggbb`, for clients to tell agents apart. */
+  color?: string;
   source: AgentSummary['source'];
   file?: string;
 }
@@ -145,7 +148,8 @@ export function applyAgentConfig(
     // The last layer that changed it, which is where to look to change it again.
     source,
   };
-  if (cfg.prompt !== undefined) agent.prompt = cfg.prompt.trim();
+  const prompt = cfg.prompt ?? cfg.system;
+  if (prompt !== undefined) agent.prompt = prompt.trim();
   if (cfg.mode) agent.mode = cfg.mode;
   if (cfg.tools !== undefined)
     // MCP tool names (`mcp__server__tool`) are case-sensitive; built-in names aren't.
@@ -159,13 +163,22 @@ export function applyAgentConfig(
   } else if (model) agent.model = model;
   if (cfg.route) agent.route = cfg.route;
   if (cfg.effort) agent.effort = cfg.effort;
-  if (cfg.maxSteps !== undefined) agent.maxSteps = cfg.maxSteps;
+  const steps = cfg.maxSteps ?? cfg.steps;
+  if (steps !== undefined) agent.maxSteps = steps;
   if (cfg.agents !== undefined) agent.agents = names(cfg.agents);
   if (cfg.budgetUsd !== undefined) agent.budgetUsd = cfg.budgetUsd;
   if (cfg.isolation) agent.isolation = cfg.isolation;
   if (cfg.runtime) agent.runtime = cfg.runtime;
-  // A layer adds to what the agent already restricts, so it can't loosen a built-in's.
-  if (cfg.permissions) agent.permissions = combinePermissions(agent.permissions, cfg.permissions);
+  if (cfg.color) agent.color = cfg.color.startsWith('#') ? cfg.color : `#${cfg.color}`;
+  if (cfg.permissions) {
+    // OpenCode's list form becomes the table; a layer adds to what the agent already
+    // restricts, so it can't loosen a built-in's.
+    const { permissions, noDelegation } = Array.isArray(cfg.permissions)
+      ? permissionsFromList(cfg.permissions)
+      : { permissions: cfg.permissions, noDelegation: false };
+    agent.permissions = combinePermissions(agent.permissions, permissions);
+    if (noDelegation && cfg.agents === undefined) agent.agents = [];
+  }
   return agent;
 }
 
@@ -258,6 +271,7 @@ export function summarize(agent: AgentDefinition): AgentSummary {
     ...(agent.model ? { model: agent.model } : {}),
     ...(agent.effort ? { effort: agent.effort } : {}),
     ...(agent.budgetUsd !== undefined ? { budgetUsd: agent.budgetUsd } : {}),
+    ...(agent.color ? { color: agent.color } : {}),
   };
 }
 

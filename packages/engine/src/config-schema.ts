@@ -80,6 +80,15 @@ export const AgentPermissions = z.object({
 });
 export type AgentPermissions = z.infer<typeof AgentPermissions>;
 
+/** OpenCode's list form of an agent's permissions: `{ action: "bash", resource: "git push *", effect: "deny" }`. */
+const AgentPermissionList = z.array(
+  z.object({
+    action: z.string(),
+    resource: z.string().optional(),
+    effect: CategoryLevel,
+  }),
+);
+
 /**
  * An agent's settings (docs/subagents.md). Agent file frontmatter uses the
  * same fields; in config every field is optional, so an entry can adjust an
@@ -106,12 +115,36 @@ export const AgentConfig = z.object({
   budgetUsd: z.number().nonnegative().optional(),
   isolation: z.literal('worktree').optional(),
   runtime: z.string().optional(),
-  /** Category levels and rules on top of the config's, which this agent can only tighten. */
-  permissions: AgentPermissions.optional(),
   /** Remove the agent, built-in or not. */
   disable: z.boolean().optional(),
+  /** Other agents' names for `prompt` and `maxSteps`; the plain names win when both are set. */
+  system: z.string().optional(),
+  steps: z.number().int().positive().optional(),
+  /** Category levels and rules on top of the config's, which this agent can only tighten: a table, or OpenCode's list. */
+  permissions: z.union([AgentPermissions, AgentPermissionList]).optional(),
+  /** Its color in clients: `#rrggbb`, or `rrggbb`. */
+  color: z
+    .string()
+    .regex(/^#?[0-9a-fA-F]{6}$/, 'a color is six hex digits, like 4C8BF5')
+    .optional(),
 });
 export type AgentConfig = z.infer<typeof AgentConfig>;
+
+/**
+ * A custom command defined in config (docs/commands-and-skills.md), as a
+ * Markdown file in `commands/` defines one: the prompt template, with
+ * `$ARGUMENTS` and `$1`..`$9`, plus the hint shown in menus.
+ */
+export const CommandConfig = z.object({
+  template: z.string().min(1),
+  description: z.string().optional(),
+  /** What to type after the name, as shown in menus. */
+  args: z.string().optional(),
+  /** Hand the prompt to a subagent (`agent`, default `general`) instead of running it here. */
+  subagent: z.boolean().optional(),
+  agent: z.string().optional(),
+});
+export type CommandConfig = z.infer<typeof CommandConfig>;
 
 export const SwitchbackConfig = z.object({
   $schema: z.string().optional(),
@@ -246,6 +279,8 @@ export const SwitchbackConfig = z.object({
   defaultAgent: z.string().default('build'),
   /** Agents defined or adjusted in config, by name; they win over agent files. */
   agents: z.record(z.string(), AgentConfig).default({}),
+  /** Custom commands defined in config, by name; they win over command files of the same name. */
+  commands: z.record(z.string(), CommandConfig).default({}),
   subagents: z
     .object({
       // Local servers queue what they can't run at once (Ollama) or batch it (vLLM),

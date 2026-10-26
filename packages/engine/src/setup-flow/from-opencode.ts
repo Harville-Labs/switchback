@@ -13,9 +13,17 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { deepMerge, parseJsonc } from '../config.ts';
+import { translateCommands } from '../dialects/opencode-commands.ts';
+import {
+  type ImportedPermissions,
+  olderFormat,
+  translatePermissions,
+} from '../dialects/opencode-format.ts';
 import { McpServerName } from '../mcp/config.ts';
-import { ruleProblem } from '../permissions/rules.ts';
 import type { LocalAnswer, RemoteAnswer } from '../setup.ts';
+
+export type { ImportedPermissions };
+
 import {
   type ImportedAgent,
   OPENCODE_INTERNAL_AGENTS,
@@ -33,16 +41,6 @@ import {
 } from './opencode-models.ts';
 
 type Env = Record<string, string | undefined>;
-type Level = 'allow' | 'ask' | 'deny';
-
-/** Permissions from another agent, in Switchback's terms. */
-export interface ImportedPermissions {
-  levels: Partial<Record<'read' | 'edit' | 'bash' | 'web' | 'websearch' | 'mcp', Level>>;
-  outsideWorkspace?: 'ask' | 'deny';
-  allow: string[];
-  ask: string[];
-  deny: string[];
-}
 
 /** What another agent's setup becomes. */
 export interface Imported {
@@ -56,6 +54,8 @@ export interface Imported {
   permissions?: ImportedPermissions;
   /** Agent entries, by name; models are setup answers until setup plans aliases. */
   agents?: Record<string, ImportedAgent>;
+  /** Custom commands, as `commands` config entries. */
+  commands?: Obj;
   /** A `compaction` config entry. */
   compaction?: Obj;
   /** What didn't come over, and why. */
@@ -96,66 +96,6 @@ export function readOpenCode(files: string[], env: Env = process.env): Imported 
     }
   }
   return { files, ...fromOpenCode(merged, env) };
-}
-
-/**
- * OpenCode's newer format in the older one's terms, so one translation reads
- * both: `providers` (`package`, `settings`) as `provider` (`npm`, `options`),
- * `agents` as `agent`, the `permissions` list as a `permission` table, and
- * `mcp.servers` as `mcp`. Where a file has both, the older key wins.
- * V2's provider IDs (`google-vertex`) and V1's `api` (the base URL) are read too.
- */
-function olderFormat(cfg: Obj): Obj {
-  const provider: Obj = {};
-  for (const [pid, raw] of Object.entries(obj(cfg.providers))) {
-    const p = obj(raw);
-    provider[pid] = {
-      ...p,
-      ...(str(p.package) ? { npm: p.package } : {}),
-      options: { ...obj(p.settings), ...obj(p.options) },
-    };
-  }
-  const apiFixed: Obj = {};
-  for (const [pid, raw] of Object.entries(obj(cfg.provider))) {
-    const p = obj(raw);
-    const options = obj(p.options);
-    if (str(p.api) && !str(options.baseURL))
-      apiFixed[pid] = { ...p, options: { ...options, baseURL: p.api } };
-  }
-  const permission = cfg.permission ?? permissionTable(cfg.permissions);
-  const agent: Obj = {};
-  for (const [name, raw] of Object.entries({ ...obj(cfg.agents), ...obj(cfg.agent) })) {
-    const a = obj(raw);
-    const table = a.permission ?? permissionTable(a.permissions);
-    agent[name] = table === undefined ? a : { ...a, permission: table };
-  }
-  // V2's `mcp.timeout` sits beside `servers`; it isn't a server.
-  const { servers, ...mcp } = obj(cfg.mcp);
-  if (servers !== undefined && !obj(mcp.timeout).type) delete mcp.timeout;
-  for (const [name, raw] of Object.entries(obj(servers))) {
-    const { disabled, ...s } = obj(raw);
-    mcp[name] ??= { ...s, ...(disabled === true ? { enabled: false } : {}) };
-  }
-  return {
-    ...cfg,
-    provider: { ...provider, ...obj(cfg.provider), ...apiFixed },
-    agent,
-    ...(permission !== undefined ? { permission } : {}),
-    mcp,
-  };
-}
-
-/** The newer `permissions` list as a `permission` table; read in order, so a later entry for the same pattern wins, as in OpenCode. */
-function permissionTable(list: unknown): Obj | undefined {
-  if (!Array.isArray(list)) return undefined;
-  const table: Record<string, Obj> = {};
-  for (const raw of list) {
-    const r = obj(raw);
-    const action = str(r.action);
-    if (!action || !isLevel(r.effect)) continue;
-    table[action] = { ...table[action], [str(r.resource) ?? '*']: r.effect };
-  }
-  return table;
 }
 
 /** Translate a merged OpenCode config, in either format. */
@@ -276,7 +216,8 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     current && 'contextWindow' in current ? current.contextWindow : undefined,
     skipped,
   );
-  for (const k of ['command', 'commands', 'skills', 'plugin', 'plugins', 'formatter', 'lsp'])
+  const commands = translateCommands({ ...obj(cfg.commands), ...obj(cfg.command) }, skipped);
+  for (const k of ['skills', 'plugin', 'plugins', 'formatter', 'lsp'])
     if (
       Object.keys(obj(cfg[k])).length ||
       (Array.isArray(cfg[k]) && cfg[k].length) ||
@@ -291,6 +232,7 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
     mcpServers,
     ...(permissions ? { permissions } : {}),
     ...(Object.keys(agents).length ? { agents } : {}),
+    ...(Object.keys(commands).length ? { commands } : {}),
     ...(compaction ? { compaction } : {}),
     skipped,
   };
@@ -298,101 +240,3 @@ export function fromOpenCode(raw: Obj, env: Env = process.env): Omit<Imported, '
 
 /** Whether a variant's settings change anything about its model's. */
 const settingsDiffer = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
-
-const LEVELS = new Set(['allow', 'ask', 'deny']);
-const isLevel = (v: unknown): v is Level => typeof v === 'string' && LEVELS.has(v);
-
-/** A path pattern as Switchback writes one: `~/` for home, `//` for the filesystem root. */
-function pathSpec(pattern: string): string {
-  const p = pattern.replace(/^\$HOME(?=\/|$)/, '~');
-  return p.startsWith('/') ? `/${p}` : p;
-}
-
-/**
- * OpenCode's `permission` (and the older `tools` switches). Its catch-all and
- * per-tool actions become levels, its patterns rules. OpenCode lets the last
- * matching pattern win; Switchback lets deny beat ask beat allow, so where the
- * two differ the result is stricter, never looser.
- */
-function translatePermissions(cfg: Obj, skipped: string[]): ImportedPermissions | undefined {
-  const out: ImportedPermissions = { levels: {}, allow: [], ask: [], deny: [] };
-  const rule = (level: Level, text: string) => {
-    if (ruleProblem([text])) skipped.push(`permission pattern ${text}: not a Switchback rule`);
-    else if (!out[level].includes(text)) out[level].push(text);
-  };
-
-  // Legacy switches: `false` turns a tool off.
-  for (const [tool, on] of Object.entries(obj(cfg.tools))) {
-    if (on !== false) continue;
-    if (tool === 'bash') out.levels.bash = 'deny';
-    else if (['edit', 'write', 'patch'].includes(tool)) out.levels.edit = 'deny';
-    else if (tool === 'webfetch') out.levels.web = 'deny';
-    else if (tool === 'websearch') out.levels.websearch = 'deny';
-  }
-
-  const perm = cfg.permission;
-  if (isLevel(perm))
-    for (const k of ['read', 'edit', 'bash', 'web', 'websearch', 'mcp'] as const)
-      out.levels[k] = perm;
-  const table = obj(perm);
-  const all = table['*'];
-  if (isLevel(all))
-    for (const k of ['read', 'edit', 'bash', 'web', 'websearch', 'mcp'] as const)
-      out.levels[k] ??= all;
-
-  const ignored: string[] = [];
-  for (const [tool, value] of Object.entries(table)) {
-    if (tool === '*') continue;
-    const target =
-      tool === 'shell' || tool === 'bash'
-        ? 'bash'
-        : tool === 'read' || tool === 'edit'
-          ? tool
-          : tool === 'webfetch'
-            ? 'web'
-            : tool === 'websearch'
-              ? 'websearch'
-              : tool === 'external_directory'
-                ? 'outside'
-                : undefined;
-    if (!target) {
-      ignored.push(tool);
-      continue;
-    }
-    const entries: [string, unknown][] = isLevel(value)
-      ? [['*', value]]
-      : Object.entries(obj(value));
-    for (const [pattern, level] of entries) {
-      if (!isLevel(level)) continue;
-      if (target === 'outside') {
-        // Switchback asks before edits outside the workspace; it can't let everything through.
-        if (pattern === '*') {
-          if (level === 'deny') out.outsideWorkspace = 'deny';
-        } else for (const t of ['read', 'edit']) rule(level, `${t}(${pathSpec(pattern)})`);
-        continue;
-      }
-      if (pattern === '*') {
-        out.levels[target] = level;
-        continue;
-      }
-      if (target === 'bash') rule(level, `bash(${pattern})`);
-      else if (target === 'read' || target === 'edit')
-        rule(level, `${target}(${pathSpec(pattern)})`);
-      else if (tool === 'webfetch') {
-        const host = /^(?:[a-z]+:\/\/)?([^/*]+)(?:\/.*)?$/i.exec(pattern)?.[1];
-        if (host) rule(level, `webfetch(domain:${host})`);
-        else skipped.push(`webfetch pattern "${pattern}": Switchback's web rules name domains`);
-      }
-    }
-  }
-  if (ignored.length)
-    skipped.push(`permission for ${ignored.join(', ')}: Switchback has no such setting`);
-
-  const any =
-    Object.keys(out.levels).length ||
-    out.outsideWorkspace ||
-    out.allow.length ||
-    out.ask.length ||
-    out.deny.length;
-  return any ? out : undefined;
-}

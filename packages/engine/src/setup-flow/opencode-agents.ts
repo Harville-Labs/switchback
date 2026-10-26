@@ -4,6 +4,7 @@
  * tool list without it; anything finer stays with the global rules.
  */
 import { BUILTIN_AGENTS } from '../agents.ts';
+import { translatePermissions } from '../dialects/opencode-format.ts';
 import type { LocalAnswer, RemoteAnswer } from '../setup.ts';
 import { type Obj, obj, str } from './opencode-models.ts';
 
@@ -85,6 +86,14 @@ export function translateAgents(
     if (a.disable === true || a.disabled === true) config.disable = true;
     const tools = narrowedTools(name, a, builtin?.tools, mcpServers, skipped);
     if (tools) config.tools = tools;
+    const permissions = agentPermissionsOf(a, skipped);
+    if (permissions) config.permissions = permissions;
+    const color = str(a.color);
+    if (color && /^#?[0-9a-fA-F]{6}$/.test(color)) config.color = color;
+    else if (color)
+      skipped.push(
+        `agent ${name}'s color ${color}: Switchback colors are six hex digits, like 4C8BF5`,
+      );
     const body = obj(obj(a.request).body);
     if (
       a.temperature !== undefined ||
@@ -109,6 +118,31 @@ export function translateAgents(
 }
 
 /**
+ * An agent's `permission` as the stricter-only `permissions` config entry:
+ * levels of `ask` or `deny`, and ask and deny rules. `allow` has no effect on
+ * an agent (it can't loosen the config), so it isn't carried.
+ */
+function agentPermissionsOf(a: Obj, skipped: string[]): Obj | undefined {
+  if (a.permission === undefined) return undefined;
+  // Delegation is the agent's tool list (`task`), handled with the denied tools.
+  const { subagent: _s, task: _t, ...rest } = obj(a.permission);
+  const imported = translatePermissions(
+    { permission: typeof a.permission === 'string' ? a.permission : rest },
+    skipped,
+  );
+  if (!imported) return undefined;
+  const levels = Object.fromEntries(
+    Object.entries(imported.levels).filter(([, level]) => level === 'ask' || level === 'deny'),
+  );
+  const out: Obj = {
+    ...levels,
+    ...(imported.ask.length ? { ask: imported.ask } : {}),
+    ...(imported.deny.length ? { deny: imported.deny } : {}),
+  };
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
  * The tools left after the agent's denials, or undefined when it denies none.
  * A built-in agent that already has fewer keeps only those.
  */
@@ -126,13 +160,10 @@ function narrowedTools(
       if (COVERS[tool]) for (const t of COVERS[tool]) denied.add(t);
       else finer.push(tool);
     }
+  // Other levels and patterns come over as the agent's own `permissions`.
   for (const [action, rule] of Object.entries(obj(a.permission))) {
     const level = typeof rule === 'string' ? rule : obj(rule)['*'];
-    const patterns =
-      typeof rule === 'string' ? [] : Object.keys(obj(rule)).filter((p) => p !== '*');
     if (level === 'deny' && COVERS[action]) for (const t of COVERS[action]) denied.add(t);
-    else if (level !== undefined && level !== 'allow') finer.push(action);
-    if (patterns.length) finer.push(action);
   }
   if (finer.length)
     skipped.push(
