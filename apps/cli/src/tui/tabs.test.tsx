@@ -138,7 +138,7 @@ describe('the tab bar', () => {
     );
     await tick();
     expect(calls.some((c) => c.method === 'session.create')).toBe(true);
-    expect(ui.lastFrame()).toContain('2 tab 2');
+    expect(await frameWith(ui, /2 tab 2/)).toContain('2 tab 2');
   });
 
   test('ctrl+tab and ctrl+shift+tab cycle tabs, a click picks one, ctrl+w closes it', async () => {
