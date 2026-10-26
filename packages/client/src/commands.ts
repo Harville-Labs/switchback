@@ -29,6 +29,8 @@ export interface SlashCommand {
   group: CommandGroup;
   /** Clients that implement it; omitted means both. */
   clients?: readonly ClientName[];
+  /** Other names it answers to: what other coding agents call it (`/mcps` in OpenCode). */
+  aliases?: readonly string[];
 }
 
 export const SLASH_COMMANDS: readonly SlashCommand[] = [
@@ -38,7 +40,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     group: 'Routing',
     description: 'escalate: a stronger model takes over now, or from the next prompt',
   },
-  { name: 'new', group: 'Session', description: 'start a new session' },
+  { name: 'new', aliases: ['clear'], group: 'Session', description: 'start a new session' },
   {
     name: 'agent',
     args: '[name]',
@@ -60,6 +62,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'sessions', group: 'Session', description: 'list saved sessions in this workspace' },
   {
     name: 'resume',
+    aliases: ['continue'],
     args: '[n|id]',
     group: 'Session',
     description: 'switch to a saved session (no argument: pick from a list)',
@@ -72,6 +75,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'compact',
+    aliases: ['summarize'],
     group: 'Session',
     description: 'summarize earlier messages now (also automatic)',
   },
@@ -83,6 +87,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'rewind',
+    aliases: ['undo'],
     group: 'Session',
     description: 'go back to before a prompt: files, the conversation, or both',
   },
@@ -160,12 +165,13 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   {
     name: 'usage',
+    aliases: ['cost'],
     args: '[rule|agent|model]',
     group: 'Usage',
     description: "this week's spend, savings, and why",
   },
   { name: 'receipt', group: 'Usage', description: "this session's cost vs. running it all-remote" },
-  { name: 'mcp', group: 'Tools', description: 'MCP servers and their tools' },
+  { name: 'mcp', aliases: ['mcps'], group: 'Tools', description: 'MCP servers and their tools' },
   {
     name: 'worktrees',
     args: '[branch]',
@@ -192,6 +198,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   { name: 'help', group: 'Tools', description: 'list commands' },
   {
     name: 'theme',
+    aliases: ['themes'],
     args: '[dark|light|plain]',
     group: 'Extension',
     description: 'colors for the terminal UI',
@@ -211,7 +218,13 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
   },
   { name: 'logs', group: 'Extension', description: 'show engine logs', clients: ['vscode'] },
   { name: 'restart', group: 'Extension', description: 'restart the engine', clients: ['vscode'] },
-  { name: 'exit', group: 'Extension', description: 'quit', clients: ['tui'] },
+  {
+    name: 'exit',
+    aliases: ['quit', 'q'],
+    group: 'Extension',
+    description: 'quit',
+    clients: ['tui'],
+  },
 ];
 
 /**
@@ -259,13 +272,15 @@ export function matchCommands(
   const q = query.trim().toLowerCase();
   const all = commandsFor(client, custom);
   if (!q) return all;
+  const names = (c: SlashCommand) => [c.name, ...(c.aliases ?? [])];
   const prefix = all
-    .filter((c) => c.name.startsWith(q))
-    .sort((a, b) => Number(b.name === q) - Number(a.name === q));
+    .filter((c) => names(c).some((n) => n.startsWith(q)))
+    .sort((a, b) => Number(names(b).includes(q)) - Number(names(a).includes(q)));
   const contains = all.filter(
     (c) =>
       !prefix.includes(c) &&
-      (c.name.includes(q) || (q.length >= 3 && c.description.toLowerCase().includes(q))),
+      (names(c).some((n) => n.includes(q)) ||
+        (q.length >= 3 && c.description.toLowerCase().includes(q))),
   );
   return [...prefix, ...contains];
 }
@@ -279,6 +294,11 @@ export function commandQuery(input: string): string | undefined {
   return /^\/(\S*)$/.exec(input)?.[1];
 }
 
+/** The command a typed name refers to, by its own name or an alias. */
+export function resolveCommand(name: string): SlashCommand | undefined {
+  return SLASH_COMMANDS.find((c) => c.name === name || c.aliases?.includes(name));
+}
+
 /** The command list as aligned text, for /help. */
 /** Usages longer than this go on a line of their own in `/help`, and are cut in a command menu. */
 export const USAGE_COLUMN = 26;
@@ -286,7 +306,9 @@ export const USAGE_COLUMN = 26;
 export function formatCommands(client: ClientName, custom: readonly SlashCommand[] = []): string {
   const rows = commandsFor(client, custom).map((c) => [
     `/${c.name}${c.args ? ` ${c.args}` : ''}`,
-    c.description,
+    c.aliases?.length
+      ? `${c.description} (also ${c.aliases.map((a) => `/${a}`).join(' ')})`
+      : c.description,
   ]);
   // A few usages list every argument; sized to those, the column pushes most descriptions
   // past a terminal's width. Those few get a line of their own instead.

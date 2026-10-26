@@ -13,9 +13,14 @@ import {
   type TabsState,
   trackSessions,
 } from '@switchback/client';
-import type { InitializeResult, SessionRoles, UsageReport } from '@switchback/protocol';
+import type {
+  InitializeResult,
+  McpServerInfo,
+  SessionRoles,
+  UsageReport,
+} from '@switchback/protocol';
 import { useStdout } from 'ink';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { terminalNotification } from './notify.ts';
 
 export function useEngineFeeds(
@@ -32,15 +37,19 @@ export function useEngineFeeds(
   const [custom, setCustom] = useState<SlashCommand[]>([]);
   /** Configured models; a config reload or `/models refresh` can change them. */
   const [models, setModels] = useState(init.models);
-  /** MCP resources, as `server:uri`, for @ completion. */
-  const [resources, setResources] = useState<string[]>([]);
-  useEffect(() => {
+  /** MCP servers and their state, for the side pane and @ completion of their resources. */
+  const [servers, setServers] = useState<McpServerInfo[]>([]);
+  const resources = useMemo(
+    () => servers.flatMap((s) => (s.resources ?? []).map((r) => `${s.name}:${r.uri}`)),
+    [servers],
+  );
+  const refreshServers = useCallback(() => {
     client.request('mcp.list', {}).then(
-      ({ servers }) =>
-        setResources(servers.flatMap((s) => (s.resources ?? []).map((r) => `${s.name}:${r.uri}`))),
+      (r) => setServers(r.servers),
       () => {},
     );
   }, [client]);
+  useEffect(refreshServers, [refreshServers]);
 
   useEffect(() => {
     client.request('session.roles', { sessionId }).then(setRoles, () => {});
@@ -77,6 +86,7 @@ export function useEngineFeeds(
     return client.on((event) => {
       // Every session's events: each tab's view stays live, in front or not.
       setTabs((t) => reduceTabs(t, event));
+      if (event.type === 'config.updated') refreshServers();
       if (event.type === 'config.updated' && event.models) setModels(event.models);
       const a = attention.observe(event);
       if (a) stdout.write(terminalNotification(a.message, init.notifications?.mode ?? 'system'));
@@ -94,10 +104,11 @@ export function useEngineFeeds(
     setTabs,
     refreshUsage,
     refreshSessions,
+    refreshServers,
     attention,
     init.notifications,
     stdout,
   ]);
 
-  return { usage, setUsage, roles, custom, resources, models, refreshSessions };
+  return { usage, setUsage, roles, custom, resources, servers, models, refreshSessions };
 }

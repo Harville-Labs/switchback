@@ -19,6 +19,7 @@ import {
 } from '@switchback/client';
 import { Box, Text } from 'ink';
 import { DiffView } from './Diff.tsx';
+import { InfoText } from './info.tsx';
 import { renderMarkdown } from './markdown.ts';
 import { useTheme } from './theme.ts';
 
@@ -269,7 +270,7 @@ export function Item({
     case 'info':
       return (
         <Box marginTop={1}>
-          <Text>{item.text}</Text>
+          <InfoText text={item.text} />
         </Box>
       );
     case 'route': {

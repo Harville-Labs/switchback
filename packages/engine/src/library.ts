@@ -4,9 +4,11 @@
  * restart; a file that can't be used is reported once.
  */
 import type { CustomCommandInfo } from '@switchback/protocol';
+import type { CommandConfig } from './config-schema.ts';
 import {
   type CommandDir,
   type CustomCommand,
+  configCommands,
   expandCommand,
   loadCustomCommands,
 } from './custom-commands.ts';
@@ -23,11 +25,15 @@ export class Library {
   constructor(
     private readonly dirs: LibraryDirs,
     private readonly warn: (message: string) => void,
+    /** The config's `commands`, read each time so a reload applies. */
+    private readonly config: () => Record<string, CommandConfig> = () => ({}),
   ) {}
 
   commands(): Map<string, CustomCommand> {
     const { commands, errors } = loadCustomCommands(this.dirs.commands);
-    this.report('custom command skipped', errors);
+    const fromConfig = configCommands(this.config());
+    this.report('custom command skipped', [...errors, ...fromConfig.errors]);
+    for (const [name, command] of fromConfig.commands) commands.set(name, command);
     return commands;
   }
 

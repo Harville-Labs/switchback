@@ -74,10 +74,10 @@ The TUI takes over the whole terminal, like an editor: the transcript fills the 
 
 ### Tabs
 
-Several sessions can be open at once, each in its own tab, and they all keep working: a turn in a tab you're not looking at runs to the end, and a permission or escalation prompt waits in its tab until you go there. With more than one tab open, a line above the transcript lists them by number, with a mark for what each needs: `?` waiting for you, `●` working, `✓` finished since you last looked, `✗` stopped with an error.
+Several sessions can be open at once, each in its own tab, and they all keep working: a turn in a tab you're not looking at runs to the end, and a permission or escalation prompt waits in its tab until you go there. A line above the transcript always lists them by number, followed by a **+** that opens a new tab when you click it, with a mark for what each needs: `?` waiting for you, `●` working, `✓` finished since you last looked, `✗` stopped with an error.
 
 ```
- ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session   click a tab · ctrl+t all
+ ? 1 fix retry logic  │ ● 2 docs pass  │  3 new session  │ +   new tab · ctrl+t all
 ```
 
 - **Ctrl+T** opens the sessions dashboard: every open tab with what it's doing (`Bash bun test`, `Writing`, `Waiting on explore`), on which model, and what it has cost, then the sessions working or waiting in other windows on the same engine (another terminal, VS Code). ↑/↓ and Enter switch, a tab's number jumps to it, `n` opens a new tab, `x` closes the selected one, Esc goes back. Choosing a session from another window opens it here in a new tab, live.
@@ -89,6 +89,10 @@ Several sessions can be open at once, each in its own tab, and they all keep wor
 - Closing a tab doesn't stop its session: a running turn finishes in the background and stays on the dashboard until it's done. `/new` and `/resume` change the session in the tab in front, and `/agent` switches its agent, as before; `/resume` of a session that's open in another tab switches to it.
 
 Tabs are the clients' own; the engine sends every session's events to every client, and both clients fold them with the same functions (`@switchback/client/tabs`), so the TUI and VS Code show the same states with the same words ([protocol.md](../protocol.md#several-sessions-at-once)).
+
+### Side pane
+
+In a window 110 columns wide or more, a pane on the right shows how full the context window is, the MCP servers with their state (connected, failed, disabled, or waiting for trust), and the subagents with what each is doing, running ones first. It goes away when you narrow the window; `/mcp` and `/subagents` print the same information, in full.
 
 ### Subagents
 
@@ -118,6 +122,8 @@ Permission, plan, and escalation prompts list their choices: ↑/↓ and Enter, 
 
 ## Commands and keys
 
+Commands that other coding agents also have answer to their names too: `/mcps`, `/clear` (`/new`), `/continue` (`/resume`), `/summarize` (`/compact`), `/undo` (`/rewind`), `/cost` (`/usage`), `/themes`, and `/quit` or `/q`. `/help` lists each command's aliases. What commands print is colored: titles, ✓ and ✗ markers, states like `connected` and `failed`, and the `/commands` and `@mentions` you can type.
+
 A command whose argument comes from a known list (models, agents, themes, effort levels, subagents) opens that list when you run it with no argument: ↑/↓ and Enter, the row's number, or a click. While you type a command's arguments, Tab completes them.
 
 | Input | Effect |
@@ -136,7 +142,7 @@ A command whose argument comes from a known list (models, agents, themes, effort
 | `/subagent [n]` | Drill into one subagent: routes, tool calls, nested subagents, and its report. With no argument, a list of this session's subagents |
 | `/shells` · `/shells kill <id>` | Background shells the model started (dev servers, watchers), and stopping one. The status bar counts the running ones |
 | `/reload` | Read the config files again and apply them, saying which settings changed. Config files aren't watched, so edits made outside Switchback wait for this or the next engine ([configuration.md](../configuration.md)) |
-| `/mcp` | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
+| `/mcp` (also `/mcps`) | MCP servers: connected, failed, or waiting for `switchback mcp trust`, with tool counts |
 | `/worktrees` · `/worktrees <branch>` | Branches isolated subagents made (running, ready to merge, merged, or kept), or one branch's diff ([subagents.md](../subagents.md#seeing-what-they-did)) |
 | `/rewind` | Go back to before a prompt: pick it, then `b` (files and conversation), `f` (files only), or `c` (conversation only). Files changed since then by edit or write go back and files created since are removed; changes made by shell commands aren't tracked. The conversation continues in a new session, and this one is kept |
 | `/goal <objective>` · `/goal` · `/goal stop` | Keep working toward an objective across turns until the model says it's done or blocked ([Goals](#goals)). Bare `/goal` shows progress; `/goal stop` ends it after the running turn, and Esc ends it now |

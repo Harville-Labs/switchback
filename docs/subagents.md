@@ -44,10 +44,11 @@ You are a code reviewer. Look for bugs that would cause incorrect behavior...
 | `model` | `local`, `remote`, `inherit`, or a model alias (`small`, `medium`, `large`, or any key under `models` in config) | `local`/`remote` pin a tier; an alias pins a model; `inherit` or omitted defers to routing |
 | `route` | `auto`, `local`, `remote` | Same effect as `model: local`/`remote` |
 | `mode` | `primary`, `subagent`, `all` | Where it can run: as a session's agent (Shift+Tab, `/agent`, `--agent`), through the `task` tool, or both. Defaults to `all` |
-| `permissions` | YAML map: `read`, `edit`, `bash`, `web`, `mcp` (`allow`, `ask`, `deny`), and `ask`, `deny` rule lists | Tightens your permissions while this agent works: a level applies only when it's stricter than your config's, and its rules ask or deny, never allow. `edit: deny` makes a read-only agent. See [permissions.md](permissions.md#agents) |
+| `permissions` | YAML map: `read`, `edit`, `bash`, `web`, `mcp` (`allow`, `ask`, `deny`), and `ask`, `deny` rule lists; in config also OpenCode's list of `{ action, resource, effect }` | Tightens your permissions while this agent works: a level applies only when it's stricter than your config's, and its rules ask or deny, never allow. `edit: deny` makes a read-only agent. See [permissions.md](permissions.md#agents) |
 | `effort` | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Reasoning effort for its model calls, over the model's own `effort` (see [Reasoning effort](#reasoning-effort)) |
 | `maxSteps` | number | Model calls per turn, over `maxStepsPerTurn` |
 | `agents` | comma list or YAML list of names or globs | The subagents it may call with `task` (`explore, review-*`). Omit for every subagent; an empty list removes its `task` tool. No agent can call a `primary`-mode agent |
+| `color` | `#rrggbb` or `rrggbb` | Marks the agent in the TUI's side pane |
 | `runtime` | name under `runtimes` | Run on an external agent runtime such as Claude Code (see below) |
 | `isolation` | `worktree` | Always run this agent in its own git worktree (see below) |
 | `budgetUsd` | dollars | Remote spend allowed per invocation, counting the subagent's own subagents. Once spent, its remote calls continue on the local model (`rule: agent-budget`); with no local model it stops and the parent gets the reason as the task result. Defaults to `subagents.budgetUsd` |

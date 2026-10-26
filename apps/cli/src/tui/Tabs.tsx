@@ -32,12 +32,14 @@ export interface TabSpan {
   to: number;
 }
 
-/** Where each tab sits on the tab bar; empty when the bar is hidden. */
+const NEW_TAB = ' + ';
+
+/** Where each tab sits on the tab bar. */
 export function tabSpans(rows: DashboardRow[], width: number): TabSpan[] {
   const tabs = rows.filter((r) => r.tab);
-  if (tabs.length < 2) return [];
-  // Share the line; the tab in front keeps more of its title.
-  const room = Math.max(8, Math.floor((width - 4) / tabs.length) - 6);
+  if (!tabs.length) return [];
+  // Share the line, leaving room for the + button.
+  const room = Math.max(8, Math.floor((width - 4 - NEW_TAB.length) / tabs.length) - 6);
   // The bar's padding puts the first tab in column 2.
   let x = 2;
   return tabs.map((row, i) => {
@@ -50,34 +52,43 @@ export function tabSpans(rows: DashboardRow[], width: number): TabSpan[] {
   });
 }
 
+/** The columns of the + button that opens a new tab, after the last tab. */
+export function newTabSpan(spans: TabSpan[]): { from: number; to: number } {
+  const from = (spans.at(-1)?.to ?? 1) + SEPARATOR.length + 1;
+  return { from, to: from + NEW_TAB.length - 1 };
+}
+
 /** The tab under a click on the tab bar's line. */
 export function tabAtColumn(spans: TabSpan[], x: number): string | undefined {
   return spans.find((s) => x >= s.from && x <= s.to)?.row.sessionId;
 }
 
-/** Where each tab sits on the top line; a click there brings that tab forward. */
+/** Where each tab sits on the top line; a click brings that tab forward, or on + opens a new one. */
 export function useTabBar(
   rows: DashboardRow[],
   width: number,
   mouse: MouseInput | undefined,
   setTabs: (update: (t: TabsState) => TabsState) => void,
+  onNew: () => void,
 ): TabSpan[] {
   const spans = useMemo(() => tabSpans(rows, width), [rows, width]);
   useEffect(
     () =>
       mouse?.onClick((x, y) => {
-        const id = y === 1 ? tabAtColumn(spans, x) : undefined;
-        if (id) setTabs((t) => switchTab(t, id));
+        if (y !== 1) return;
+        const id = tabAtColumn(spans, x);
+        if (id) return setTabs((t) => switchTab(t, id));
+        const plus = newTabSpan(spans);
+        if (x >= plus.from && x <= plus.to) onNew();
       }),
-    [mouse, spans, setTabs],
+    [mouse, spans, setTabs, onNew],
   );
   return spans;
 }
 
-/** One line of tabs over the transcript, shown once there's more than one. */
+/** One line of tabs over the transcript, with a + that opens another. */
 export function TabBar({ spans }: { spans: TabSpan[] }) {
   const t = useTheme();
-  if (!spans.length) return null;
   return (
     <Box paddingX={1}>
       <Text wrap="truncate-end">
@@ -90,7 +101,11 @@ export function TabBar({ spans }: { spans: TabSpan[] }) {
             </Text>
           </Text>
         ))}
-        <Text dimColor>{'  '}click a tab · ctrl+t all</Text>
+        {spans.length ? <Text dimColor>{SEPARATOR}</Text> : null}
+        <Text bold color={t.accent}>
+          {NEW_TAB}
+        </Text>
+        <Text dimColor>{'  '}new tab · ctrl+t all</Text>
       </Text>
     </Box>
   );

@@ -11,7 +11,7 @@ import { render } from 'ink-testing-library';
 import { App } from './App.tsx';
 import { MouseContext } from './Clickable.tsx';
 import type { ClickListener, MouseInput } from './mouse.ts';
-import { tabAtColumn, tabSpans } from './Tabs.tsx';
+import { newTabSpan, tabAtColumn, tabSpans } from './Tabs.tsx';
 import { frameWith, frameWithout, session, tick, until } from './test-support.ts';
 
 const ENTER = '\r';
@@ -115,6 +115,30 @@ describe('the tab bar', () => {
     expect(tabAtColumn(spans, 5)).toBe('a');
     expect(tabAtColumn(spans, 11)).toBeUndefined();
     expect(tabAtColumn(spans, 18)).toBe('b');
+  });
+
+  test('the bar shows for a single tab, with the + button right after it', () => {
+    const spans = tabSpans(dashboardRows(initialTabs(session('a', 'one'), initialView('a'))), 80);
+    expect(spans.map((s) => s.label)).toEqual([' 1 one ']);
+    expect(newTabSpan(spans)).toEqual({ from: 13, to: 15 });
+  });
+
+  test('clicking + opens a new tab', async () => {
+    const { ui, click, calls } = app();
+    await tick();
+    expect(ui.lastFrame()).toContain('1 fix the parser');
+    click(
+      newTabSpan(
+        tabSpans(
+          dashboardRows(initialTabs(session('s1', 'fix the parser'), initialView('s1'))),
+          80,
+        ),
+      ).from + 1,
+      1,
+    );
+    await tick();
+    expect(calls.some((c) => c.method === 'session.create')).toBe(true);
+    expect(await frameWith(ui, /2 tab 2/)).toContain('2 tab 2');
   });
 
   test('ctrl+tab and ctrl+shift+tab cycle tabs, a click picks one, ctrl+w closes it', async () => {

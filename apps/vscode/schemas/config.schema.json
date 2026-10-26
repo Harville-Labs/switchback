@@ -1099,49 +1099,113 @@
           "runtime": {
             "type": "string"
           },
-          "permissions": {
-            "type": "object",
-            "properties": {
-              "read": {
-                "type": "string",
-                "enum": ["allow", "ask", "deny"]
-              },
-              "edit": {
-                "type": "string",
-                "enum": ["allow", "ask", "deny"]
-              },
-              "bash": {
-                "type": "string",
-                "enum": ["allow", "ask", "deny"]
-              },
-              "web": {
-                "type": "string",
-                "enum": ["allow", "ask", "deny"]
-              },
-              "mcp": {
-                "type": "string",
-                "enum": ["allow", "ask", "deny"]
-              },
-              "ask": {
-                "default": [],
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "deny": {
-                "default": [],
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "disable": {
             "type": "boolean"
+          },
+          "system": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "permissions": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "read": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"]
+                  },
+                  "edit": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"]
+                  },
+                  "bash": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"]
+                  },
+                  "web": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"]
+                  },
+                  "mcp": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"]
+                  },
+                  "ask": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "deny": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    },
+                    "effect": {
+                      "type": "string",
+                      "enum": ["allow", "ask", "deny"]
+                    }
+                  },
+                  "required": ["action", "effect"]
+                }
+              }
+            ]
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#?[0-9a-fA-F]{6}$"
           }
         }
+      }
+    },
+    "commands": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "args": {
+            "type": "string"
+          },
+          "subagent": {
+            "type": "boolean"
+          },
+          "agent": {
+            "type": "string"
+          }
+        },
+        "required": ["template"]
       }
     },
     "subagents": {

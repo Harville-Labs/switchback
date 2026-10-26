@@ -45,6 +45,24 @@ Type `/` in the TUI or the VS Code chat to see your commands under **Custom**, a
 
 The engine expands the command, so the transcript (and the model) sees the prompt it makes. Clients list commands with `commands.list` ([protocol.md](protocol.md)).
 
+### Commands in config
+
+A command can also live in a config file, which suits a team that keeps its setup in `.switchback/config.json`:
+
+```json
+{
+  "commands": {
+    "team-issue": {
+      "description": "Open a tracker issue",
+      "args": "<title>",
+      "template": "Create an issue for: $ARGUMENTS. Put the priority in a label, not the title."
+    }
+  }
+}
+```
+
+`template` is the prompt, with the same `$ARGUMENTS` and `$1` to `$9`; `description` and `args` work as in frontmatter. `subagent: true` hands the prompt to a subagent through the `task` tool, `agent` names which one (default `general`), and a file's frontmatter takes both too. A command in config wins over a file of the same name, whichever config layer it came from, and shows as `(config)` in menus. Changes apply with `/reload`.
+
 ## MCP prompts
 
 Prompts from [MCP servers](configuration.md#mcpserversname) are commands too, named `<server>:<prompt>` (`/github:review-pr 123`), and listed under **Custom** with `(mcp)` after their description. Words after the name fill the prompt's arguments in order; the last argument takes the rest of the line. A prompt missing a required argument says which it needs.
