@@ -48,6 +48,7 @@ import { RewindPicker } from './RewindPicker.tsx';
 import { RolePicker } from './RolePicker.tsx';
 import { SessionPicker } from './SessionPicker.tsx';
 import { type Opening, useSetup } from './SetupPanel.tsx';
+import { SIDE_PANE_MIN_COLUMNS, SIDE_PANE_WIDTH, SidePane } from './SidePane.tsx';
 import {
   cycleAgent,
   cycleModel,
@@ -120,7 +121,6 @@ export function App({
     [],
   );
   const dashRows = useMemo(() => dashboardRows(tabs), [tabs]);
-  const spans = useTabBar(dashRows, columns, mouse, setTabs);
   const { focused, row: focusedRow, shown, next, unfocus } = useSubagentFocus(view, session.id);
   const [listed, setListed] = useState<SessionSummary[]>([]);
   // Items before this index are finished: their Markdown is rendered and cached.
@@ -129,13 +129,8 @@ export function App({
   /** Review of local edits; undefined follows `review.mode` in config. */
   const [review, setReview] = useState<boolean | undefined>(undefined);
   const [history] = useState(() => new PromptHistory(launched.workspaceRoot));
-  const { usage, setUsage, roles, custom, resources, models, refreshSessions } = useEngineFeeds(
-    client,
-    launched,
-    session.id,
-    tabs,
-    setTabs,
-  );
+  const { usage, setUsage, roles, custom, resources, servers, models, refreshSessions } =
+    useEngineFeeds(client, launched, session.id, tabs, setTabs);
   const init = useMemo(() => ({ ...launched, models }), [launched, models]);
   const sessionRoles = view.roles ?? roles;
   /** Saved sessions while the picker is open. */
@@ -181,7 +176,13 @@ export function App({
     if (!view.running) setCommitted(view.items.length);
   }, [view.running, view.items.length]);
 
-  const width = Math.max(40, columns - 2);
+  const agentColors = useMemo(
+    () => Object.fromEntries(launched.agents.flatMap((a) => (a.color ? [[a.name, a.color]] : []))),
+    [launched.agents],
+  );
+  const sidePane = columns >= SIDE_PANE_MIN_COLUMNS;
+  const mainColumns = sidePane ? columns - SIDE_PANE_WIDTH : columns;
+  const width = Math.max(40, mainColumns - 2);
   const viewport = useRef(null);
   const { height } = useBoxMetrics(viewport);
   const lines = useTranscriptLines({
@@ -212,6 +213,7 @@ export function App({
       setView((v) => addInfo(v, (err as Error).message));
     }
   };
+  const spans = useTabBar(dashRows, columns, mouse, setTabs, () => void newTab());
   /** Bring a session forward: its tab, or a new tab for one open in another window. */
   const showSession = async (sessionId: string) => {
     if (tabs.tabs.some((t) => t.session.id === sessionId))
@@ -368,134 +370,156 @@ export function App({
         <Box flexShrink={0}>
           <TabBar spans={spans} />
         </Box>
-        <Box ref={viewport} flexDirection="column" flexGrow={1} flexShrink={1} overflow="hidden">
-          <Viewport lines={lines} height={height} scroll={scroll.scroll} unseen={scroll.unseen} />
-        </Box>
-        <Box flexDirection="column" flexShrink={0}>
-          <Pinned view={view} goal={sessionGoal(view, session)} />
-          {permission ? (
-            <PermissionPrompt
-              key={permission.requestId}
-              permission={permission}
-              maxLines={Math.max(6, Math.floor(rows / 2) - 8)}
-              width={width}
-              onAnswer={answerPermission}
-            />
-          ) : null}
-          {escalation && !permission ? (
-            <EscalationPrompt
-              key={escalation.requestId}
-              escalation={escalation}
-              onAnswer={answerEscalation}
-            />
-          ) : null}
-          {picking ? (
-            <SessionPicker
-              sessions={picking}
-              current={session.id}
-              onCancel={() => setPicking(undefined)}
-              onPick={(id) => {
-                setPicking(undefined);
-                void resume(slash, id);
-              }}
-            />
-          ) : null}
-          {rewinding ? (
-            <RewindPicker
-              checkpoints={rewinding}
-              onCancel={() => setRewinding(undefined)}
-              onRewind={(turnId, restore) => {
-                setRewinding(undefined);
-                void rewind(slash, turnId, restore);
-              }}
-            />
-          ) : null}
-          {typeof choosing === 'string' ? (
-            <RolePicker
-              role={choosing}
-              models={init.models}
-              roles={sessionRoles}
-              slash={slash}
-              onClose={() => setChoosing(undefined)}
-            />
-          ) : choosing ? (
-            <ChoicePicker
-              list={choosing}
-              onCancel={() => setChoosing(undefined)}
-              onPick={(text) => void runSlashCommand(slash, text)}
-            />
-          ) : null}
-          {setup.panel}
-          {dashboard ? (
-            <Dashboard
-              rows={dashRows}
-              onCancel={() => setDashboard(false)}
-              onNew={() => {
-                setDashboard(false);
-                void newTab();
-              }}
-              onClose={(sessionId) => setTabs((t) => closeTab(t, sessionId))}
-              onOpen={(sessionId) => {
-                setDashboard(false);
-                void showSession(sessionId);
-              }}
-            />
-          ) : null}
-          {(view.running || view.compacting) && !permission && !escalation ? (
-            <Working view={view} />
-          ) : null}
-          <Box borderStyle="round" borderColor={view.running ? 'gray' : theme.brand} paddingX={1}>
-            <PromptInput
-              focus={!permission && !escalation && !modal}
-              custom={custom}
-              resources={resources}
-              onInterrupt={interrupt}
-              onSubmitNow={(text, images) => send(text, 'interrupt', images)}
-              onNoImage={() =>
-                setView((v) =>
-                  addInfo(
-                    v,
-                    'No image on the clipboard. To attach an image file, drag it in or mention it with @.',
-                  ),
-                )
-              }
-              onCancel={() => {
-                if (!view.running) return;
-                // Esc with a prompt queued means "send it now", not "stop everything" (Ctrl+C is that).
-                const method = view.queue?.length ? 'session.sendQueued' : 'session.cancel';
-                client.request(method, { sessionId: session.id }).catch(() => {});
-              }}
-              recall={recall}
-              completions={completionSources(init)}
-              onTab={() => void cycleModel(slash, sessionRoles)}
-              onCloseTab={() => setTabs((t) => closeTab(t, session.id))}
-              busy={view.running}
-              history={history.list()}
-              root={init.workspaceRoot}
-              onSubmit={submit}
-              placeholder={
-                view.running
-                  ? 'Queue a message (enter) · send now (esc)'
-                  : 'Ask anything · / for commands · @ to mention a file'
-              }
-            />
+        <Box flexGrow={1} flexShrink={1} overflow="hidden">
+          <Box flexDirection="column" flexGrow={1} flexShrink={1} width={mainColumns}>
+            <Box
+              ref={viewport}
+              flexDirection="column"
+              flexGrow={1}
+              flexShrink={1}
+              overflow="hidden"
+            >
+              <Viewport
+                lines={lines}
+                height={height}
+                scroll={scroll.scroll}
+                unseen={scroll.unseen}
+              />
+            </Box>
+            <Box flexDirection="column" flexShrink={0}>
+              <Pinned view={view} goal={sessionGoal(view, session)} />
+              {permission ? (
+                <PermissionPrompt
+                  key={permission.requestId}
+                  permission={permission}
+                  maxLines={Math.max(6, Math.floor(rows / 2) - 8)}
+                  width={width}
+                  onAnswer={answerPermission}
+                />
+              ) : null}
+              {escalation && !permission ? (
+                <EscalationPrompt
+                  key={escalation.requestId}
+                  escalation={escalation}
+                  onAnswer={answerEscalation}
+                />
+              ) : null}
+              {picking ? (
+                <SessionPicker
+                  sessions={picking}
+                  current={session.id}
+                  onCancel={() => setPicking(undefined)}
+                  onPick={(id) => {
+                    setPicking(undefined);
+                    void resume(slash, id);
+                  }}
+                />
+              ) : null}
+              {rewinding ? (
+                <RewindPicker
+                  checkpoints={rewinding}
+                  onCancel={() => setRewinding(undefined)}
+                  onRewind={(turnId, restore) => {
+                    setRewinding(undefined);
+                    void rewind(slash, turnId, restore);
+                  }}
+                />
+              ) : null}
+              {typeof choosing === 'string' ? (
+                <RolePicker
+                  role={choosing}
+                  models={init.models}
+                  roles={sessionRoles}
+                  slash={slash}
+                  onClose={() => setChoosing(undefined)}
+                />
+              ) : choosing ? (
+                <ChoicePicker
+                  list={choosing}
+                  onCancel={() => setChoosing(undefined)}
+                  onPick={(text) => void runSlashCommand(slash, text)}
+                />
+              ) : null}
+              {setup.panel}
+              {dashboard ? (
+                <Dashboard
+                  rows={dashRows}
+                  onCancel={() => setDashboard(false)}
+                  onNew={() => {
+                    setDashboard(false);
+                    void newTab();
+                  }}
+                  onClose={(sessionId) => setTabs((t) => closeTab(t, sessionId))}
+                  onOpen={(sessionId) => {
+                    setDashboard(false);
+                    void showSession(sessionId);
+                  }}
+                />
+              ) : null}
+              {(view.running || view.compacting) && !permission && !escalation ? (
+                <Working view={view} />
+              ) : null}
+              <Box
+                borderStyle="round"
+                borderColor={view.running ? 'gray' : theme.brand}
+                paddingX={1}
+              >
+                <PromptInput
+                  focus={!permission && !escalation && !modal}
+                  custom={custom}
+                  resources={resources}
+                  onInterrupt={interrupt}
+                  onSubmitNow={(text, images) => send(text, 'interrupt', images)}
+                  onNoImage={() =>
+                    setView((v) =>
+                      addInfo(
+                        v,
+                        'No image on the clipboard. To attach an image file, drag it in or mention it with @.',
+                      ),
+                    )
+                  }
+                  onCancel={() => {
+                    if (!view.running) return;
+                    // Esc with a prompt queued means "send it now", not "stop everything" (Ctrl+C is that).
+                    const method = view.queue?.length ? 'session.sendQueued' : 'session.cancel';
+                    client.request(method, { sessionId: session.id }).catch(() => {});
+                  }}
+                  recall={recall}
+                  completions={completionSources(init)}
+                  onTab={() => void cycleModel(slash, sessionRoles)}
+                  onCloseTab={() => setTabs((t) => closeTab(t, session.id))}
+                  busy={view.running}
+                  history={history.list()}
+                  root={init.workspaceRoot}
+                  onSubmit={submit}
+                  placeholder={
+                    view.running
+                      ? 'Queue a message (enter) · send now (esc)'
+                      : 'Ask anything · / for commands · @ to mention a file'
+                  }
+                />
+              </Box>
+              {exitArmedAt !== undefined ? (
+                <Text color={theme.warning} dimColor>
+                  {'  '}Press Ctrl+C again to exit
+                </Text>
+              ) : null}
+              <StatusBar
+                session={session}
+                route={route}
+                review={review}
+                view={view}
+                usage={usage}
+                viewing={focusedRow?.agent}
+                current={
+                  currentModel
+                    ? { model: currentModel.ref.model, tier: currentModel.tier }
+                    : undefined
+                }
+              />
+            </Box>
           </Box>
-          {exitArmedAt !== undefined ? (
-            <Text color={theme.warning} dimColor>
-              {'  '}Press Ctrl+C again to exit
-            </Text>
-          ) : null}
-          <StatusBar
-            session={session}
-            route={route}
-            review={review}
-            view={view}
-            usage={usage}
-            viewing={focusedRow?.agent}
-            current={
-              currentModel ? { model: currentModel.ref.model, tier: currentModel.tier } : undefined
-            }
-          />
+          {sidePane ? <SidePane view={view} servers={servers} agentColors={agentColors} /> : null}
         </Box>
       </Box>
     </ThemeContext.Provider>

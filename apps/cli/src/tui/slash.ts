@@ -35,6 +35,7 @@ import {
   parseEffort,
   parseLevel,
   pickCopy,
+  resolveCommand,
   runGoalCommand,
   runReload,
   type SlashCommand,
@@ -62,7 +63,7 @@ Input: @ mentions a file (its contents are attached); paste freely: big pastes
        option/alt+enter, ctrl+j, or a trailing \\ adds a newline.
 Tabs: ctrl+t shows every session (open tabs, and ones working in other windows);
       ctrl+tab / ctrl+shift+tab, alt+←/→, alt+1…9, or a click switch tabs;
-      ctrl+w on an empty prompt closes one (it keeps running); /tab new opens one.
+      ctrl+w on an empty prompt closes one (it keeps running); /tab new opens one, or click the + on the tab bar.
       alt+↓ shows each subagent in turn, alt+↑ the session again; /model there
       picks the subagent model.
 Keys: during a turn, enter queues a message and esc sends it now (interrupting);
@@ -455,8 +456,9 @@ function mouseNotice(on: boolean): string {
 
 /** Run `/cmd args...`. */
 export function runSlashCommand(ctx: SlashContext, text: string): Promise<void> | void {
-  const [cmd = '', ...args] = text.slice(1).split(/\s+/);
+  const [typed = '', ...args] = text.slice(1).split(/\s+/);
+  const cmd = resolveCommand(typed)?.name ?? typed;
   const handler = HANDLERS[cmd];
-  if (!handler) return say(ctx, `unknown command /${cmd}; try /help`);
+  if (!handler) return say(ctx, `unknown command /${typed}; try /help`);
   return handler(ctx, args);
 }

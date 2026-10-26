@@ -6,6 +6,7 @@ import {
   formatCommands,
   isCustomCommand,
   matchCommands,
+  resolveCommand,
   SLASH_COMMANDS,
 } from './commands.ts';
 import { escalateNotice, formatReasoning, tailLines, toolLabel } from './format.ts';
@@ -45,8 +46,8 @@ test('formatCommands puts every description in one narrow column, long usages on
   const commands = commandsFor('tui');
   const text = formatCommands('tui');
   const columns = commands.map((c) => {
-    const line = text.split('\n').find((l) => l.endsWith(c.description)) ?? '';
-    return line.length - c.description.length;
+    const line = text.split('\n').find((l) => l.includes(c.description)) ?? '';
+    return line.indexOf(c.description);
   });
   expect(new Set(columns).size).toBe(1);
   expect(columns[0]).toBeLessThanOrEqual(30);
@@ -91,4 +92,10 @@ test('escalating says when it takes effect', () => {
 test("a coding agent CLI's tool calls read like Switchback's own", () => {
   expect(toolLabel('Bash', { command: 'bun test' })).toBe('$ bun test');
   expect(toolLabel('Edit', { file_path: 'src/a.ts' })).toBe('edit src/a.ts');
+});
+
+test('a command answers to its aliases, in the menu and in /help', () => {
+  expect(resolveCommand('mcps')?.name).toBe('mcp');
+  expect(matchCommands('mcps', 'tui')[0]?.name).toBe('mcp');
+  expect(formatCommands('tui')).toContain('(also /mcps)');
 });
